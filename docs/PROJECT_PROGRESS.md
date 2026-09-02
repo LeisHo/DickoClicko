@@ -50,6 +50,13 @@ Nothing in progress — everything below is done, verified, and pushed.
   resize corners out of frame. Fixed by clamping `left`/`top` against the
   panel's actual measured dimensions; verified with 2000px/3000px-overshoot
   drags landing exactly flush with the viewport edge in every direction.
+- Documented (CLAUDE.md + a source comment above `DEV_GROUPS`) that every
+  X/Y position slider pair shares one global origin — `(0,0)` at the
+  viewport's top-left, `100` = full width/height, matching `vw()`/`vh()`
+  exactly. `circleX`/`circleY` (currently the only X/Y pair in the app)
+  already conform; this pins the convention so any future position slider
+  follows it too, keeping raw values paste-compatible between same-axis
+  sliders.
 
 ## What's next
 

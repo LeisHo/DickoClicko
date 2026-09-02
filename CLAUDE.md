@@ -41,6 +41,12 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   px, so the layout stays proportionally correct on both desktop and mobile.
   Physics runs in pixel space each frame, re-derived from the %-based config
   (including on resize).
+- Every X/Y position slider pair shares one global origin: `(0,0)` is the
+  viewport's top-left corner, `100` is full width (X, `%vw`) / full height
+  (Y, `%vh`) — matching `vw()`/`vh()` exactly (`circleX`/`circleY` already
+  follow this). Any new position control must use the same scheme, so a raw
+  value copied from one X slider and pasted into another X slider (same for
+  Y) always lands on the identical screen point.
 - The built-in "Dev Panel" settings group (§12i) is judged device-specific
   (independent per tab), not shared, for the same reason the panel's own
   size/position already is — it's the panel's own chrome, being rendered

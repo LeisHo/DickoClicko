@@ -138,6 +138,11 @@ const DEV_MODE = (
    Dev-panel control config. Every *DEV* from the spec is one entry here.
    unit '%vw'/'%vh'/'%vmin' = percent of that viewport dimension.
    unit 'x' = dimensionless multiplier. unit 'ms' = milliseconds.
+   Every X/Y position pair (e.g. circleX/circleY) shares one global origin:
+   (0,0) = top-left of the viewport, 100 = full width (X, %vw) / full height
+   (Y, %vh) -- the same scheme vw()/vh() already use. Any new position
+   slider must follow this exact scheme so raw values copy/paste directly
+   between X sliders (and between Y sliders) and land on the same point.
 --------------------------------------------------------------------- */
 const DEV_GROUPS = [
   { title:'CIRCLE', controls:[

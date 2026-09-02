@@ -564,6 +564,18 @@ Verified:
 - node --check clean.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  03:32 AM EDT
+
+Added:
+- Documented a standing convention (CLAUDE.md + a comment above DEV_GROUPS
+  in index.html): every X/Y position slider pair shares one global origin
+  -- (0,0) at the viewport's top-left corner, 100 = full width (X, %vw) /
+  full height (Y, %vh), matching vw()/vh() exactly. circleX/circleY
+  (currently the app's only X/Y pair) already conform, so no code/behavior
+  changed; this pins the scheme so any future position slider follows it
+  too, keeping raw values copy/paste-compatible between same-axis sliders.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
