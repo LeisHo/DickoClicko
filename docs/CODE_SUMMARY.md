@@ -66,14 +66,19 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        solver) was tried first and caused a real, reproduced instability
        over long holds.
 
-ENDCAP_DESIGNS / drawEndcap() (data/Rope/End_Form1-*.svg, End_Form2-*.svg)
+ENDCAP_DESIGNS / drawEndcap() (data/Rope/End_Form1-*.svg, End_Form2-*.svg,
+data/Rope/End_Form3-*.svg)
     -> optional decorative shapes at the free/tip end of mainRope and every
        fallenPiece (render(), Endcap Design dropdown), replacing the plain
-       round cap entirely rather than stacking both. Embedded as Path2D
-       objects using each SVG path's own coordinates verbatim -- see
+       round cap entirely rather than stacking both. Each entry stores both
+       the raw `d` string AND a Path2D built from it (ENDCAP_WIDTHS needs
+       the raw string to measure each design's own true bbox width via a
+       throwaway SVG element -- Path2D itself can't be measured). See
        Gotchas for why the scale/anchor math uses ONE shared
        ENDCAP_ALIGNMENT reference (from data/Rope/End Alignment.svg) for
-       every design, not each path's own bbox. Filled with
+       every design, not each path's own bbox, and for End Emerge (its own
+       dev-panel group), which delays/scales-up a freshly-cut edge's
+       endcap instead of showing it immediately. Filled with
        cfg.ropeColor (not the SVGs' own authored white), so it always
        matches the rope; cfg.endcapHeight scales ONLY the local "down" axis
        (independent of the width-matching scale), stretching the cap
@@ -1145,3 +1150,135 @@ GOTCHAS
 - `damping`'s slider min moved from 0.5 to 0.7 (explicit request) -- the
   git-tracked default (0.999) was already well above the new floor, so no
   clamping was needed there.
+- **Dev panel group collapse/expand state is now captured and restored**
+  by Save/Copy/Reset, per the workspace's own §12e spec (it wasn't before
+  -- confirmed via direct code reading when the user asked). `getPanelOrder()`
+  now includes `collapsed: g.classList.contains('collapsed')` per group
+  alongside the existing row-order data; `applyOrder()` now does
+  `groupEl.classList.toggle('collapsed', !!g.collapsed)` when re-applying a
+  saved order. A saved order entry from before this change simply has no
+  `collapsed` key, which reads as `false` (expanded) -- the same default the
+  markup already starts at, so nothing needed backfilling in the
+  git-tracked settings file.
+- **Fall Delay removed as a standalone setting** -- explicit request: "set
+  the fall delay as the time it takes the cut line to cut through the
+  entire rope." `cutRopeAt()`/`cutPieceAt()`'s `pendingCut.delay` (the
+  deferred-split mechanism from 2 rounds ago) now always uses
+  `cutThroughDuration()` (`CUT_SWEEP_BASE_SEC / cfg.cutSpeed` -- the exact
+  inverse of how `cutSweep.progress` itself accumulates) instead of the
+  old `cfg.fallDelay`. Since this duration is always > 0 (cutSpeed's
+  slider floor is 0.2, never 0), the old `if (cfg.fallDelay > 0){...}
+  else performXSplit(idx)` branch in both functions collapsed to always
+  deferring -- the immediate-split code path no longer exists at all (a
+  real simplification, not just a rename). `data/processed/
+  dev-panel-settings.json`'s `fallDelay` key and its `ROPE CUT` order-list
+  entry were both removed.
+- **Double-click near the circle chopping the rope down to almost
+  nothing, "regardless of rope length"** -- confirmed as a real,
+  reproducible bug, not assumed from the report alone: pulled the user's
+  own live-saved settings from the git repo (`circleCutDistance: 9.5`,
+  `circleSize: 8`) and reproduced it via direct, timing-controlled
+  simulation (`performance.now()` stubbed, since this sandbox's
+  setTimeout is throttled ~15-1000x when the tab isn't the foreground
+  tab -- confirmed by observing a requested 60ms gap between two
+  simulated clicks actually elapse as ~1000-1850ms of real wall-clock
+  time; calling `onPointerDown`/`onPointerUp` directly with a fake,
+  incrementing `performance.now()` sidesteps this entirely). Root cause:
+  `cutRopeAt()`'s Circle Cut Distance guard (protects the anchor from
+  being cut too close to) and `isOnCircle()`'s own click-exclusion radius
+  are two INDEPENDENT thresholds that can drift apart -- with the
+  project's OLD default Circle Cut Distance (5%vmin = 40px) sitting
+  BELOW `isOnCircle`'s exclusion radius (64px at default Circle Size),
+  rope-point index 2 (55.4px from anchor at default segLen) is
+  unreachable (still inside the exclusion zone) but index 3 (83.1px) is
+  reachable AND clears the (too-small) Circle Cut Distance guard --
+  chopping a potentially-hundreds-of-px-long rope down to 3 segments.
+  Verified via direct simulation at 6 click offsets from the anchor (0,
+  16, 31.7, 63.4, 64.6, 83.2px): only 83.2px (the first point past BOTH
+  thresholds) scheduled a cut before the fix. Fixed with a shared
+  `circleExclusionRadius()` function (extracted from `isOnCircle()`'s own
+  inline calculation, so the two can never independently drift again) and
+  a `Math.max(vmin(cfg.circleCutDistance), circleExclusionRadius())`
+  floor in `cutRopeAt()`'s guard. **Known residual gap, disclosed rather
+  than silently left unmentioned:** with the user's OWN live Circle Cut
+  Distance (9.5%vmin = 76px), already comfortably above the 64px
+  exclusion radius, this fix changes nothing for their current config --
+  the exact same 83.2px/index-3 reproduction still schedules a cut there,
+  since 83.1px already clears their own 76px threshold. The underlying
+  cause there is segLen granularity (27.7px at default growth), not a
+  drifted threshold -- a genuinely different, smaller residual case,
+  flagged to the user rather than claimed as fully resolved.
+- **Rope End Curve Arc's minimum (0) now actually renders a flat/straight
+  end** -- explicit request. `strokeRopeCurve()`'s `ctx.lineCap` was
+  unconditionally `'round'` before, so even at Rope End Curve Arc 0 the
+  canvas stroke's own inherent (non-adjustable, fixed at thickness/2)
+  round cap still rounded the tip -- `ropeEndCurveArc`/`endArcMult` only
+  ever gated a SEPARATE filled arc circle drawn past the stroke, never the
+  stroke's own cap. Now `ctx.lineCap` is always `'butt'`, and ALL
+  roundedness comes from that same filled-arc mechanism, now drawable at
+  BOTH ends of the path independently (`strokeRopeCurve(points,
+  thicknessPx, color, endArcMult, startArcMult)`, the new optional 5th
+  param) -- necessary, not just tidier, because `ctx.lineCap` is one value
+  for the WHOLE stroked path, but a fallen piece's two ends (its own free/
+  growing tip vs. its own cut edge) can genuinely need different treatment
+  at the same time once End Emerge (below) is in play, which one shared
+  lineCap could never express. `mainRope`'s own `points[0]` is always the
+  anchor (covered by the circle graphic) so callers always pass `0` for
+  its `startArcMult`.
+- **New feature: End Emerge** (`END EMERGE` dev-panel group --
+  `endEmergeEnabled`, `endEmergeDelay`, `endEmergeSpeed`,
+  `endEmergeTweening`). When enabled, a freshly-cut edge's endcap doesn't
+  appear at full size the instant the real split happens (`performMainRopeSplit()`/
+  `performPieceSplit()`) -- it starts scaled down so its FULL bounding-box
+  width (not just its neck) equals the rope's own thickness, i.e.
+  visually indistinguishable from the rope's own end (rendered via the
+  normal Rope End Curve Arc treatment during this phase, per the fix
+  above), waits `endEmergeDelay`, then scales up to its real size over
+  `endEmergeSpeed`'s own duration, eased by `endEmergeTweening` (`linear`
+  / `easeIn` / `easeOut` / `easeInOut`, `EMERGE_TWEENS`). Key pieces:
+  - `ENDCAP_WIDTHS`: each design's TRUE bounding-box width (its widest
+    point, wider than `ENDCAP_ALIGNMENT.width`'s neck-only measurement),
+    computed ONCE at startup from each design's raw `d` string (now kept
+    alongside its `Path2D` in `ENDCAP_DESIGNS`, `{d, path}` instead of just
+    `{path}` -- Path2D itself has no bounding-box query) via a throwaway
+    real SVG `<path>` element's `getBBox()`. Deliberately NOT hand-measured
+    and hardcoded -- stays correct automatically no matter how many more
+    times the source SVGs get swapped, with zero added maintenance,
+    exactly the failure mode a hardcoded table would eventually hit.
+  - `newEmergeState()`/`tickEmerge()`/`emergeFactor()`: the same
+    delay-then-progress shape as `cutSweep`'s own mechanism, on the same
+    raw-wall-clock convention (not `dt`, so Rope Animation Speed doesn't
+    also secretly scale emergence). `emergeFactor()` reads as `1` (fully
+    emerged, immediate, matching pre-existing behavior exactly) whenever
+    End Emerge is off OR the entity's relevant emerge state was never
+    created -- so a rope/piece that's never been cut, or any cut made
+    while the feature is off, behaves completely unchanged.
+  - EVERY cut creates up to 2 independent emerge states, not one: the
+    remaining rope/piece's own tip (`tipEmerge` -- its `points[length-1]`
+    IS the fresh cut edge post-split) AND the newly-split-off piece's own
+    near/cut edge (`cutEdgeEmerge` -- its `points[0]`). A piece therefore
+    carries BOTH fields, since it can independently be the "upper"
+    (tipEmerge-relevant) half of some LATER cut if it's split again via
+    `cutPieceAt()`. Verified via direct simulation that a piece-on-piece
+    cut correctly populates both the parent's `tipEmerge` and the new
+    sub-piece's `cutEdgeEmerge` without disturbing the parent's own
+    pre-existing `cutEdgeEmerge` from ITS OWN original creation.
+  - `drawEndcap()`'s new `factor` param (default `1`, backward compatible)
+    interpolates between a `hiddenScale` (`thicknessPx / ENDCAP_WIDTHS[key]`)
+    and the existing `normalScale` (`thicknessPx / ENDCAP_ALIGNMENT.width`).
+    Because the anchor-shift translate stays the LAST transform call (an
+    existing, unchanged property -- see that function's own comment), the
+    shape's attachment point stays pinned exactly at the tip regardless of
+    scale, which is what gives "scales up and moves out to where it's
+    meant to be" for free with no separate position animation.
+  - Verified via direct frame-by-frame simulation (a short 0.1s delay +
+    fast 2x speed, for a quick observable timeline): factor reads exactly
+    `0` for the first ~6 frames post-split (matching the 0.1s delay at
+    60fps), then ramps smoothly from ~0.095 to `1.0` over frames 7-17
+    (matching `EMERGE_BASE_SEC(0.35)/speed(2) = 0.175s` ≈ 10.5 frames),
+    then holds at exactly `1` indefinitely after. A parallel run with
+    `endEmergeEnabled: false` confirmed `tipEmerge` stays `null` and
+    `emergeFactor` reads `1` immediately at the same split frame -- zero
+    behavior change for the feature-off case. A full 40-frame render()
+    pass (both the plain cut and a subsequent piece-on-piece cut) threw
+    no errors.

@@ -2184,6 +2184,134 @@ to fix, since it may simply be this design's intentional shoulder shape.
 node --check clean; 0 console errors.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  6:57 PM - 7:30 PM EDT
+
+A large bundled turn covering 6 explicit requests, all approved to proceed
+together ("do the other stuff and push"), plus one exploratory question
+answered without implementing (per its own "how difficult would it be"
+framing):
+
+1. Dev-panel group collapse/expand state is now captured and restored by
+   Save/Copy/Reset -- it wasn't before, despite the workspace's own §12e
+   spec requiring it (confirmed via direct code reading when asked, in
+   the prior turn). getPanelOrder() now records `collapsed:
+   g.classList.contains('collapsed')` per group; applyOrder() re-applies
+   it. Verified: collapsing 2 groups, capturing the order, expanding
+   everything back, then re-applying the captured order correctly
+   re-collapsed exactly those 2 groups.
+
+2. Removed Fall Delay as a standalone setting. Per explicit request
+   ("set the fall delay as the time it takes the cut line to cut through
+   the entire rope"), the pendingCut deferral (from 2 rounds ago) now
+   always uses `cutThroughDuration()` -- CUT_SWEEP_BASE_SEC / cfg.cutSpeed,
+   the exact inverse of how cutSweep.progress itself accumulates -- so
+   the piece-release delay can never drift out of sync with what the
+   sweep mark is visually showing. Since this duration is always > 0, the
+   old "instant split, no delay" code path in cutRopeAt()/cutPieceAt()
+   no longer exists at all -- a real simplification. Removed from the
+   dev panel and from data/processed/dev-panel-settings.json.
+
+3. Fixed a real, reproduced bug: double-clicking near (not literally on)
+   the circle could cut the rope down to only 2-3 segments regardless of
+   its total length. Did NOT just take the report at face value --
+   pulled the user's own live-saved settings from the git repo
+   (circleCutDistance 9.5, circleSize 8) via `git fetch`/`git show
+   origin/master:...`, then reproduced it via direct, timing-controlled
+   simulation. Hit a real environment issue along the way: this
+   sandbox's setTimeout is throttled by ~15-1000x when the tab isn't the
+   foreground tab (a requested 60ms gap between two simulated clicks
+   measured as ~1000-1850ms of real elapsed time) -- worked around by
+   stubbing performance.now() with a fake, manually-incremented clock and
+   calling onPointerDown/onPointerUp directly, rather than relying on
+   real setTimeout delays between simulated clicks. Root cause: Circle
+   Cut Distance (protects the anchor from being cut too close to) and
+   isOnCircle()'s own click-exclusion radius are two independent
+   thresholds that can drift apart -- with the project's OLD default
+   Circle Cut Distance (5%vmin=40px) sitting below isOnCircle's exclusion
+   radius (64px), rope-point index 3 (83.1px from anchor) clears the
+   (too-small) cut guard while index 2 (55.4px) is still unreachable
+   (inside the exclusion zone) -- so a click just past the circle chops a
+   potentially-hundreds-of-px rope down to 3 segments. Verified via
+   simulation at 6 click offsets (0/16/31.7/63.4/64.6/83.2px from
+   anchor): only 83.2px scheduled a cut before the fix. Fixed with a
+   shared circleExclusionRadius() function (extracted from isOnCircle()'s
+   own inline calc so the two can't independently drift again) and a
+   Math.max(circleCutDistance, circleExclusionRadius()) floor in
+   cutRopeAt()'s guard. Honestly disclosed a residual gap rather than
+   overstating the fix: with the user's OWN live Circle Cut Distance
+   (9.5%vmin=76px, already above the 64px exclusion radius), this fix
+   changes nothing for their current config -- the same 83.2px/index-3
+   reproduction still schedules a cut, since 83.1px already clears their
+   own 76px threshold. That residual case comes from segment-length
+   granularity (27.7px at default growth), a genuinely different,
+   smaller problem than the one just fixed -- flagged in
+   docs/PROJECT_PROGRESS.md's Open Questions rather than silently
+   left unmentioned.
+
+4. Rope End Curve Arc's minimum (0) now actually renders a flat/straight
+   end, per explicit request. strokeRopeCurve()'s ctx.lineCap was
+   unconditionally 'round' before -- the canvas stroke's own inherent,
+   non-adjustable round cap kept rounding the tip even at Rope End Curve
+   Arc 0, since that setting only ever gated a SEPARATE filled arc circle
+   drawn past the stroke, never the stroke's own cap. Now lineCap is
+   always 'butt', and all roundedness comes from that same filled-arc
+   mechanism -- now drawable independently at BOTH ends of the path
+   (strokeRopeCurve's new optional startArcMult param), needed (not just
+   tidier) because a fallen piece's two ends can require different
+   treatment at the same time once End Emerge (below) is active, which
+   one shared lineCap could never express.
+
+5. New feature: End Emerge (END EMERGE dev-panel group -- Enabled, Delay,
+   Speed, Tweening: Linear/Ease In/Ease Out/Ease In-Out). When enabled, a
+   freshly-cut edge's endcap doesn't appear at full size the instant the
+   real split happens -- it starts scaled down so its FULL bounding-box
+   width (not just its neck) matches the rope's own thickness, i.e.
+   visually indistinguishable from ("completely obscured by") the rope's
+   own end, waits the configured delay, then scales up to its real size
+   over the configured speed's own duration, eased by the selected
+   tweening curve. Applies independently to BOTH halves of every cut: the
+   remaining rope/piece's own tip (tipEmerge) and the newly-split-off
+   piece's own cut edge (cutEdgeEmerge) -- a piece carries both fields,
+   since it can later become the "upper" half of a further cutPieceAt()
+   split. Added ENDCAP_WIDTHS: each design's TRUE bounding-box width
+   (wider than ENDCAP_ALIGNMENT's neck-only measurement), computed ONCE
+   at startup from each design's raw `d` string (now kept alongside its
+   Path2D in ENDCAP_DESIGNS) via a throwaway real SVG <path> element's
+   getBBox() -- deliberately NOT hand-measured/hardcoded, so it stays
+   correct automatically no matter how many more times the source SVGs
+   get swapped. Verified via direct frame-by-frame simulation (a fast 0.1s
+   delay + 2x speed, for a short observable timeline): the emerge factor
+   read exactly 0 for the first ~6 frames (matching the 0.1s delay at
+   60fps), then ramped smoothly to 1.0 over the next ~10-11 frames
+   (matching EMERGE_BASE_SEC/speed = 0.175s), then held at 1 indefinitely.
+   A parallel run with the feature OFF confirmed zero behavior change --
+   tipEmerge stays null, emergeFactor reads 1 immediately at the same
+   split frame. A full 40-frame render() pass covering both a plain cut
+   and a subsequent piece-on-piece cut threw no errors.
+
+6. Answered (without implementing, since it was framed as a difficulty
+   question, not a build request): progressive cut-falling -- the cut-off
+   segment sagging/falling from the cut side while still attached by a
+   thinning uncut strip, snapping fully free only once the cut sweep
+   completes. Assessed as medium difficulty: weaken (not remove) the
+   distance constraint at exactly the cut segment as cutSweep.progress
+   advances, reusing the existing constraint-solver code with a
+   per-segment stiffness ramp -- flagged that this reintroduces some of
+   the "two loosely-connected things swinging together" complexity the
+   pendingCut redesign (2 rounds ago) specifically avoided, so it would
+   need its own careful swing-testing if built.
+
+Verified throughout via a temporary debug hook (window.__debugTMPropo,
+removed before commit, grep-confirmed 0 references) against a standalone
+static server. node --check clean at every checkpoint; settings JSON
+validated with a real parser. 0 console errors on a real page load (one
+unrelated stale ERR_CONNECTION_RESET from an earlier redundant reload
+attempt). Rebased/pulled cleanly against 3 concurrent live-Save commits
+that landed on the remote mid-turn (the user's own deployment saving
+settings) before editing data/processed/dev-panel-settings.json, so the
+edits apply on top of their current real values, not a stale local copy.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

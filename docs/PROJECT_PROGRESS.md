@@ -492,20 +492,58 @@ lost — verified via direct state inspection at the time.
   set), which at default thickness is a small enough offset (~2-3px) to
   stay inside the rope's own round-cap overlap — flagged to the user as
   an observation, not treated as a bug.
+- A large bundled turn: dev-panel group collapse/expand state is now
+  captured and restored by Save/Copy/Reset (previously it wasn't, despite
+  the workspace's own §12e spec). Fall Delay removed as a standalone
+  setting — it's now derived as the exact time the cut-line sweep takes
+  to cross the rope (`cutThroughDuration()`), so it can never drift out of
+  sync with what the sweep mark is visually showing. Fixed a real,
+  reproduced bug where a double-click near (not even literally on) the
+  circle could chop the rope down to a few segments regardless of its
+  total length — Circle Cut Distance and the circle's own click-exclusion
+  radius were independent thresholds that could drift apart; now floored
+  together. **Known residual gap**: with the user's own live Circle Cut
+  Distance (already larger than the exclusion radius), a smaller version
+  of the same symptom can still occur a bit further out, due to segment-
+  length granularity rather than a drifted threshold — flagged, not
+  silently claimed fixed. Rope End Curve Arc's minimum (0) now actually
+  renders a flat end (the canvas stroke's own inherent round cap was
+  overriding it before). Added a new feature, End Emerge (`END EMERGE`
+  dev-panel group): when enabled, a freshly-cut edge's endcap starts
+  hidden (scaled down to the rope's own width) and scales up into place
+  after a configurable delay, eased by a selectable tweening curve,
+  instead of appearing instantly — applies independently to both halves
+  of every cut. See CODE_SUMMARY's Gotchas for the full mechanism and how
+  each piece was verified (including a real setTimeout-throttling issue
+  in this sandbox's background tab that had to be worked around to test
+  the double-click fix reliably).
 
 ## What's next
 
-Nothing queued. Possible future directions the user mentioned but didn't
-commit to: a Three.js-based physics/collision upgrade, and restyling the
-rope's geometry to something more illustrative while keeping the same
-smooth animation (the physics/render split already makes this a rendering-
-only change — see CODE_SUMMARY's `strokeRopeCurve()` note).
+Nothing queued yet. Discussed but not approved: progressive cut-falling
+(the cut-off segment starts sagging/falling from the cut side while still
+attached by a thinning uncut strip, snapping fully free only once the cut
+sweep completes) — assessed as medium difficulty (weaken, not remove, the
+distance constraint at the cut segment as `cutSweep.progress` advances),
+waiting on the user's go-ahead before building it. Also, longer-standing:
+a Three.js-based physics/collision upgrade, and restyling the rope's
+geometry to something more illustrative while keeping the same smooth
+animation (the physics/render split already makes this a rendering-only
+change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
-None currently open. Tier 1 (Vercel/GitHub API Save) is now confirmed
-actually working end-to-end: 3 real "Update dev-panel-settings.json via
-Save Settings" commits landed on the remote from the user's own live
-deployment during this session (visible in git history as
-`fd36dfa`/`cb754f8`/`e741774`), resolving the previously-open blocker —
-no further diagnosis needed unless a new failure is reported.
+- **Double-click-near-circle has a known, disclosed residual gap.** The
+  reproduced bug (Circle Cut Distance smaller than the circle's own
+  click-exclusion radius) is fixed, but with the user's OWN live Circle
+  Cut Distance (9.5%vmin, already above the exclusion radius), a
+  double-click ~12-20px past their own configured safety margin can still
+  land on a low rope-point index (due to segment-length granularity, not
+  a drifted threshold) and leave a short remainder. Not fixed further
+  without direction from the user on how much extra margin is wanted —
+  see CODE_SUMMARY's Gotchas for the full mechanism.
+- Tier 1 (Vercel/GitHub API Save) is confirmed working end-to-end: 3 real
+  "Update dev-panel-settings.json via Save Settings" commits landed on the
+  remote from the user's own live deployment (visible in git history as
+  `fd36dfa`/`cb754f8`/`e741774`) — no further diagnosis needed unless a
+  new failure is reported.

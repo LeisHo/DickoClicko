@@ -26,11 +26,14 @@
     "clickDistance": 11.4,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 1,
-    "fallDelay": 0.5,
     "cutSpeed": 1.6,
     "endcapAtCutEnd": true,
     "cutSweepColor": "#ffffff",
     "cutSweepThickness": 0.2,
+    "endEmergeEnabled": false,
+    "endEmergeDelay": 0.3,
+    "endEmergeSpeed": 1.3,
+    "endEmergeTweening": "easeOut",
     "floorEnabled": true,
     "floorColor": "#ffffff",
     "floorThickness": 5,
@@ -110,11 +113,19 @@
         "clickDistance",
         "doubleClickThreshold",
         "ropeFallSpeed",
-        "fallDelay",
         "cutSpeed",
         "endcapAtCutEnd",
         "cutSweepColor",
         "cutSweepThickness"
+      ]
+    },
+    {
+      "key": "END EMERGE",
+      "settings": [
+        "endEmergeEnabled",
+        "endEmergeDelay",
+        "endEmergeSpeed",
+        "endEmergeTweening"
       ]
     },
     {

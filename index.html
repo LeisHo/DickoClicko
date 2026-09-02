@@ -236,11 +236,22 @@ const DEV_GROUPS = [
     { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8.9 },
     { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:180 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
-    { key:'fallDelay',       label:'Fall Delay',       type:'slider',   unit:'s',   min:0,   max:3, step:0.05, def:0 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1.3 },
     { key:'endcapAtCutEnd',  label:'Endcap At Cut End', type:'checkbox', def:true },
     { key:'cutSweepColor',     label:'Cut Sweep Color',     type:'color',  def:'#ffffff' },
     { key:'cutSweepThickness', label:'Cut Sweep Thickness', type:'slider', unit:'%vmin', min:0.1, max:5, step:0.1, def:0.2 },
+  ]},
+  { title:'END EMERGE', controls:[
+    { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:false },
+    { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:0.3 },
+    { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.2, max:5, step:0.1, def:1.3 },
+    { key:'endEmergeTweening', label:'End Emerge Tweening', type:'dropdown', def:'easeOut',
+      options:[
+        { value:'linear', label:'Linear' },
+        { value:'easeIn', label:'Ease In' },
+        { value:'easeOut', label:'Ease Out' },
+        { value:'easeInOut', label:'Ease In-Out' },
+      ] },
   ]},
   { title:'FLOOR', controls:[
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
@@ -647,6 +658,7 @@ let activeDeviceTab = isMobileClass() ? 'mobile' : 'desktop';
 function getPanelOrder(){
   return Array.from(document.querySelectorAll('#dpGroups > .dp-group')).map(g => ({
     key: g.dataset.key,
+    collapsed: g.classList.contains('collapsed'),
     settings: Array.from(g.querySelectorAll('.dp-row')).map(r => r.dataset.key),
   }));
 }
@@ -657,6 +669,7 @@ function applyOrder(order){
     const groupEl = groupsContainer.querySelector('.dp-group[data-key="' + CSS.escape(g.key) + '"]');
     if (!groupEl) return;
     groupsContainer.appendChild(groupEl);
+    groupEl.classList.toggle('collapsed', !!g.collapsed);
     const groupBody = groupEl.querySelector('.dp-group-body');
     (g.settings || []).forEach(k => {
       const rowEl = groupBody.querySelector('.dp-row[data-key="' + CSS.escape(k) + '"]');
@@ -1181,6 +1194,10 @@ function resetMainRope(){
     // smoothed tip-offset-from-anchor state (positionGrowingTip()) -- same
     // fresh-start reasoning as growDir.
     tipOffset: null,
+    // End Emerge state for this rope's own tip -- null means "fully
+    // emerged" (nothing's ever been cut off it yet, or it's a fresh
+    // rope), same convention as growDir/tipOffset.
+    tipEmerge: null,
   };
 }
 
@@ -1605,6 +1622,21 @@ function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex){
 
 const CUT_SWEEP_BASE_SEC = 0.35;
 
+// How long the cut-line sweep mark actually takes to travel across the full
+// rope thickness, at the current Cut Speed -- the exact inverse of how
+// cutSweep.progress accumulates each frame (`rawDt * cutSpeed /
+// CUT_SWEEP_BASE_SEC`), so a full progress 0->1 sweep takes exactly this
+// long. The piece being cut off doesn't actually separate until this much
+// time has passed (mainRope.pendingCut / piece.pendingCut, set below) --
+// replaces the old standalone Fall Delay dev control per explicit request
+// ("set the fall delay as the time it takes the cut line to cut through
+// the entire rope"), so the pending-separation delay is no longer an
+// independently-tunable number that could drift out of sync with what the
+// sweep mark is visually showing; it's now definitionally the same value.
+function cutThroughDuration(){
+  return CUT_SWEEP_BASE_SEC / cfg.cutSpeed;
+}
+
 // a perfectly vertical piece has no asymmetry to topple over on -- give it a
 // small random initial tilt (around its own top point) so gravity and the
 // floor collision naturally fold it into a heap instead of it standing
@@ -1631,20 +1663,42 @@ function topplePiece(points){
 }
 
 function cutRopeAt(hit, clickX, clickY){
-  // a cut is already pending (Fall Delay > 0, counting down) -- the rope
-  // hasn't actually separated yet, so there's nothing new to cut.
+  // a cut is already pending -- the rope hasn't actually separated yet
+  // (still counting down toward cutThroughDuration()), so there's nothing
+  // new to cut.
   if (mainRope.pendingCut) return;
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
   // refuse a cut whose TARGET point falls within Circle Cut Distance of the
-  // anchor -- a double-click landing just outside isOnCircle's own (smaller,
-  // hold-eligibility) margin can still target a rope point very close to the
-  // anchor, which reads as "double-clicking near the circle cuts the rope
-  // short" even though the press itself was technically off the circle.
-  // A dedicated, independently-tunable distance (not reused from
-  // isOnCircle) per explicit request, since the implicit reuse wasn't
-  // generous enough for real reported clicks.
+  // anchor -- a double-click landing just outside isOnCircle's own margin
+  // can still target a rope point very close to the anchor, which reads as
+  // "double-clicking near the circle cuts the rope short" even though the
+  // press itself was technically off the circle. A dedicated,
+  // independently-tunable distance (not reused from isOnCircle) per
+  // explicit request, since the implicit reuse wasn't generous enough for
+  // real reported clicks.
+  //
+  // Floored at isOnCircle's OWN exclusion radius (circleSize/2 + a fixed
+  // margin) rather than trusting Circle Cut Distance alone -- confirmed as
+  // a real, reproduced bug via direct testing against the user's actual
+  // saved settings (circleCutDistance 9.5%vmin, circleSize 8%vmin):
+  // isOnCircle's exclusion radius came out to 64px, but circleCutDistance
+  // was only 76px... which sounds MORE generous, except segLen (~27.7px at
+  // default growth) means rope point index 3 sits at 83.1px from the
+  // anchor -- just past BOTH thresholds, but still only 3 segments into a
+  // rope that could be hundreds of px long. A double-click landing just
+  // past the visible circle (which is smaller still, ~32px radius) could
+  // resolve to that point and cut the rope down to almost nothing,
+  // regardless of the rope's actual length -- exactly the reported "double
+  // click within the circle's diameter cuts near the minimum length"
+  // symptom, confirmed via direct simulation with the user's own settings
+  // (offset 83.2px from anchor: cut scheduled at idx 3, remaining length
+  // 83.1px, vs offsets 63.4/64.6px: correctly refused). Since the user's
+  // whole mental model is "circle-area clicks are for growing, never
+  // cutting," Circle Cut Distance can never be trusted to be smaller than
+  // the circle's own click-exclusion zone -- this floor guarantees that.
   const anchorForCut = circleAnchor();
-  if (Math.hypot(hit.x - anchorForCut.x, hit.y - anchorForCut.y) < vmin(cfg.circleCutDistance)) return;
+  const cutExclusionR = Math.max(vmin(cfg.circleCutDistance), circleExclusionRadius());
+  if (Math.hypot(hit.x - anchorForCut.x, hit.y - anchorForCut.y) < cutExclusionR) return;
   // refuse the cut entirely if it would leave the remaining (anchor-side)
   // rope shorter than the configured minimum — the rope stays whole rather
   // than being clamped to some other length the user didn't ask for.
@@ -1663,9 +1717,8 @@ function cutRopeAt(hit, clickX, clickY){
 
   // the cut sweep-mark belongs to the REMAINING rope (still hanging from the
   // circle), not the eventual falling piece -- anchorIndex pins it to idx,
-  // which stays the correct edge whether the split happens immediately
-  // (Fall Delay 0) or later (see pendingCut below); renderCutSweep tracks
-  // it live either way. A later cut overwrites this outright.
+  // which stays the correct edge for the whole time the cut is pending;
+  // renderCutSweep tracks it live. A later cut overwrites this outright.
   const half = vmin(cfg.ropeThickness) / 2;
   mainRope.cutSweep = {
     progress: 0,
@@ -1673,25 +1726,21 @@ function cutRopeAt(hit, clickX, clickY){
     startOffset: side > 0 ? half : -half,
     endOffset: side > 0 ? -half : half,
   };
-  if (cfg.fallDelay > 0){
-    // Defer the actual separation until the delay elapses -- the rope
-    // stays ONE physics chain (still fully solved by integrateChain, still
-    // pinned to the circle) instead of being split immediately into two
-    // independently-integrated chains that then have to be kept in sync
-    // by rigidly translating the piece to follow the parent's tip. That
-    // translate-to-follow approach was the previous implementation and it
-    // produced visible collision/seam artifacts when cut mid-swing --
-    // translating by the shortened parent's tip delta doesn't reproduce
-    // what the same point would have done had it stayed part of the
-    // original, undivided chain, since a shorter chain swings differently.
-    // Keeping it undivided sidesteps the mismatch entirely: nothing to
-    // desync because there are no two separate chains yet. idx stays a
-    // valid split point even if the rope keeps growing past it while the
-    // cut is pending.
-    mainRope.pendingCut = { idx, delay: cfg.fallDelay };
-    return;
-  }
-  performMainRopeSplit(idx);
+  // Defer the actual separation until the cut-line sweep has fully crossed
+  // the rope (cutThroughDuration()) -- the rope stays ONE physics chain
+  // (still fully solved by integrateChain, still pinned to the circle)
+  // instead of being split immediately into two independently-integrated
+  // chains that then have to be kept in sync by rigidly translating the
+  // piece to follow the parent's tip. That translate-to-follow approach
+  // was an earlier implementation and it produced visible collision/seam
+  // artifacts when cut mid-swing -- translating by the shortened parent's
+  // tip delta doesn't reproduce what the same point would have done had
+  // it stayed part of the original, undivided chain, since a shorter
+  // chain swings differently. Keeping it undivided sidesteps the mismatch
+  // entirely: nothing to desync because there are no two separate chains
+  // yet. idx stays a valid split point even if the rope keeps growing
+  // past it while the cut is pending.
+  mainRope.pendingCut = { idx, delay: cutThroughDuration() };
 }
 
 // Actually separates mainRope at idx into the remaining (anchor-side) rope
@@ -1717,15 +1766,23 @@ function performMainRopeSplit(idx){
   // biased toward wherever the rope was pointing pre-cut.
   mainRope.growDir = null;
   mainRope.tipOffset = null;
+  // mainRope's own tip IS the fresh cut edge now -- start its End Emerge
+  // countdown (a no-op read as "fully emerged" wherever End Emerge is
+  // off, per emergeFactor()'s own convention).
+  mainRope.tipEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
   setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
   if (lowerPoints.length >= 2){
     // Toppling (the initial random tilt) happens exactly at the moment of
-    // real separation -- with a Fall Delay this is now the same instant
-    // the piece starts actually falling, which is also the only instant
-    // toppling makes physical sense (a still-attached piece has no reason
-    // to tumble).
+    // real separation -- this is the same instant the piece starts
+    // actually falling, which is also the only instant toppling makes
+    // physical sense (a still-attached piece has no reason to tumble).
     topplePiece(lowerPoints);
-    fallenPieces.push({ points: lowerPoints, segLen: mainRope.segLen });
+    const piece = { points: lowerPoints, segLen: mainRope.segLen, tipEmerge: null };
+    // the new piece's OWN near/cut edge (points[0]) is its own fresh cut
+    // edge -- separate End Emerge state from mainRope's tipEmerge above,
+    // since it's a different entity's different end.
+    piece.cutEdgeEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
+    fallenPieces.push(piece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
 }
@@ -1758,13 +1815,9 @@ function cutPieceAt(pieceIndex, hit, clickX, clickY){
     startOffset: side > 0 ? half : -half,
     endOffset: side > 0 ? -half : half,
   };
-  if (cfg.fallDelay > 0){
-    // See cutRopeAt()'s identical pendingCut comment -- same deferred-split
-    // reasoning, just against this piece's own points instead of mainRope's.
-    piece.pendingCut = { idx, delay: cfg.fallDelay };
-    return;
-  }
-  performPieceSplit(piece, idx);
+  // See cutRopeAt()'s identical pendingCut comment -- same deferred-split
+  // reasoning, just against this piece's own points instead of mainRope's.
+  piece.pendingCut = { idx, delay: cutThroughDuration() };
 }
 
 // Actually separates `piece` at idx -- see performMainRopeSplit()'s
@@ -1772,9 +1825,14 @@ function cutPieceAt(pieceIndex, hit, clickX, clickY){
 function performPieceSplit(piece, idx){
   const lowerPoints = piece.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
   piece.points = piece.points.slice(0, idx + 1);
+  // `piece`'s own tip is now the fresh cut edge -- see
+  // performMainRopeSplit()'s identical reasoning.
+  piece.tipEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
   if (lowerPoints.length >= 2){
     topplePiece(lowerPoints);
-    fallenPieces.push({ points: lowerPoints, segLen: piece.segLen });
+    const newPiece = { points: lowerPoints, segLen: piece.segLen, tipEmerge: null };
+    newPiece.cutEdgeEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
+    fallenPieces.push(newPiece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
 }
@@ -1816,16 +1874,21 @@ function logClick(event, data){
   el.scrollTop = el.scrollHeight;
 }
 
+// a generous margin beyond the circle's own visual radius — a small
+// circleSize is an easy miss otherwise, and the rope renders on top of
+// (visually through) the circle right where it emerges, so a press that's
+// "clearly meant for the circle" needs real forgiveness, not pixel-exact
+// targeting. Shared by isOnCircle() (hold-to-grow eligibility) and
+// cutRopeAt()'s own Circle Cut Distance floor (see that comment) so the
+// two can never drift apart -- whatever counts as "on the circle" for
+// growing must also always count as "too close to cut."
+function circleExclusionRadius(){
+  return vmin(cfg.circleSize) / 2 + vmin(4);
+}
+
 function isOnCircle(x, y){
   const anchor = circleAnchor();
-  // a generous margin beyond the circle's own visual radius — a small
-  // circleSize is an easy miss otherwise, and the rope renders on top of
-  // (visually through) the circle right where it emerges, so a press that's
-  // "clearly meant for the circle" needs real forgiveness, not pixel-exact
-  // targeting. Gates both hold-to-grow eligibility and the rope's own
-  // exclusion zone (below), so the two stay consistent with each other.
-  const circleR = vmin(cfg.circleSize) / 2 + vmin(4);
-  return Math.hypot(x - anchor.x, y - anchor.y) <= circleR;
+  return Math.hypot(x - anchor.x, y - anchor.y) <= circleExclusionRadius();
 }
 
 function hitTestRope(x, y){
@@ -2031,13 +2094,22 @@ function update(rawDt){
     }
   });
 
+  // End Emerge -- same raw-wall-clock, cosmetic-timer treatment as
+  // cutSweep just above; a no-op per-tick when there's no active emerge
+  // state (nothing cut yet, or End Emerge is off).
+  tickEmerge(mainRope.tipEmerge, rawDt);
+  fallenPieces.forEach(piece => {
+    tickEmerge(piece.tipEmerge, rawDt);
+    tickEmerge(piece.cutEdgeEmerge, rawDt);
+  });
+
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeFallSpeed;
   fallenPieces.forEach(piece => {
     integrateChain(piece.points, piece.segLen, dt, fallGravity, -1);
-    // A piece-on-piece cut (cutPieceAt) with Fall Delay > 0 hasn't actually
-    // split `piece` yet -- same pendingCut deferral as mainRope's, checked
-    // after this piece's own integration above so the split happens
-    // against this frame's already-updated positions, identically to how
+    // A piece-on-piece cut (cutPieceAt) hasn't actually split `piece` yet
+    // -- same pendingCut deferral as mainRope's, checked after this
+    // piece's own integration above so the split happens against this
+    // frame's already-updated positions, identically to how
     // mainRope's pendingCut is resolved after ITS integration. A newly
     // split-off lower piece pushed here starts getting its own
     // integrateChain() from next frame's pass over fallenPieces.
@@ -2100,9 +2172,23 @@ function update(rawDt){
   }
 }
 
-function strokeRopeCurve(points, thicknessPx, color, endArcMult){
+function strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult){
+  if (startArcMult === undefined) startArcMult = 0;
   ctx.strokeStyle = color; ctx.fillStyle = color;
-  ctx.lineWidth = thicknessPx; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = thicknessPx; ctx.lineJoin = 'round';
+  // Always a flat (butt) cap on the stroke itself now -- it used to be
+  // unconditionally 'round', so even at Rope End Curve Arc's minimum (0)
+  // the stroke's own inherent round cap still rounded the tip off (only
+  // the SEPARATE filled arc below was ever gated by endArcMult). Per
+  // explicit request ("when I set Rope End Curve Arc, I want the end of
+  // the rope to be a straight line"), all roundedness now comes ONLY from
+  // the independently-sized arc circles drawn below, at each end
+  // separately -- necessary because ctx.lineCap is a single value for the
+  // WHOLE stroked path, but a piece's two ends (its free/growing tip vs
+  // its own cut edge) can need genuinely different treatment at the same
+  // time (e.g. mid-emergence at one end, fully settled at the other) —
+  // something one shared lineCap could never express.
+  ctx.lineCap = 'butt';
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
   const n = points.length;
@@ -2141,6 +2227,16 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult){
     ctx.arc(tip.x, tip.y, (thicknessPx / 2) * endArcMult, 0, Math.PI * 2);
     ctx.fill();
   }
+  // startArcMult mirrors endArcMult at points[0] instead of points[n-1] --
+  // only meaningful for a fallen piece's own free cut edge (mainRope's
+  // points[0] is the anchor, always covered by the circle graphic, so
+  // callers pass 0 there and this block is skipped).
+  if (startArcMult > 0){
+    const base = points[0];
+    ctx.beginPath();
+    ctx.arc(base.x, base.y, (thicknessPx / 2) * startArcMult, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 /* ---------------------------------------------------------------------
@@ -2168,21 +2264,96 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult){
 --------------------------------------------------------------------- */
 const ENDCAP_ALIGNMENT = { width: 96.06 - 41.57, topCenterX: (41.57 + 96.06) / 2, topY: 80.26 };
 const ENDCAP_DESIGNS = {
-  'form1-02': { path: new Path2D('M45.87,80.26h-4.3c.03,4.51.23,9,.68,13.56l1.04,5.17c3.14,14.81,11.02,21.92,17.66,34.23.46.86,1.43,1.32,2.38,1.1,1.37-.31,3.48-1.5,5.76-1.55,1.91-.04,3.8,1.16,5.1,1.51.99.27,2.02-.19,2.49-1.09,6.55-12.46,14.45-19.39,17.69-34.21l1.04-5.24c.41-4.53.6-8.99.64-13.48h-4.31') },
-  'form1-03': { path: new Path2D('M96.06,80.26h-54.49c1.19,5.2-4.07,15.61.05,29.44,5.87,19.67,16.15,21.38,19.1,32.44.29,1.09,1.41,1.54,2.35,1.29,1.35-.36,3.48-1.53,5.74-1.58,2.26.06,4.39,1.22,5.74,1.58.94.25,2.06-.2,2.35-1.29,2.95-11.06,13.24-12.77,19.1-32.44,4.12-13.82-1.14-24.24.05-29.44Z') },
-  'form1-04': { path: new Path2D('M41.57,80.26s.08,1.47-.08,3.29c-.18,2.02-1.25,6.67-1.25,6.67,0,0-.97,5.75-1.1,7.69-.34,4.99.25,10,.73,15.06l1.12,5.75c3.37,16.4,11.83,24.3,18.97,37.89.52.98,1.74,1.42,2.82,1.04,1.51-.53,3.76-1.14,6.15-1.19,2.42.05,4.61.68,6.05,1.21,1.01.37,2.15-.05,2.63-.98,7.15-13.63,15.64-21.54,19.02-37.96l1.12-5.75c.49-5.06,1.08-10.06.73-15.06-.13-1.94-1.1-7.69-1.1-7.69,0,0-1.08-4.64-1.25-6.67-.16-1.82-.08-3.29-.08-3.29') },
-  'form1-05': { path: new Path2D('M97.6,91.72s-1.48-5.86-1.66-7.98c-.16-1.91.37-3.49.37-3.49h-54.74s.53,1.57.37,3.49c-.18,2.12-1.66,7.98-1.66,7.98,0,0-5.64,14.32-1.34,29.81,2.11,7.62,5.35,13.27,9.45,19.4,4.37,6.54,9.2,13.57,11.74,18.64.52,1.03,2.21,2.1,3.36,2,2.28-.19,3.06-2.11,5.45-2.17,2.39.06,3.17,1.98,5.45,2.17,1.15.1,2.84-.97,3.36-2,2.54-5.07,7.38-12.1,11.74-18.64,4.1-6.13,7.33-11.79,9.45-19.4,4.3-15.49-1.34-29.81-1.34-29.81Z') },
-  'form1-06': { path: new Path2D('M97.6,97.83c-.8-2.3-1.48-7.18-1.66-9.78-.16-2.35.37-7.8.37-7.8h-54.74s.53,5.45.37,7.8c-.18,2.6-.86,7.48-1.66,9.78-2.66,7.63-6.36,13.78-2.87,33.01,1.67,9.19,6.95,17.63,12.13,25.5,4.94,7.5,8.05,14.9,10.6,21.12.52,1.27,2.21,2.57,3.36,2.45,2.28-.23,3.06-2.59,5.45-2.66,2.39.07,3.17,2.43,5.45,2.66,1.15.12,2.84-1.18,3.36-2.45,2.54-6.22,5.66-13.62,10.6-21.12,5.18-7.87,10.46-16.31,12.13-25.5,3.49-19.23-.21-25.38-2.87-33.01Z') },
-  'form1-c': { path: new Path2D('M97.66,95.62c-1.12-2.17-2.52-5.17-2.87-9.77-.09-1.22.56-3.09,1.02-4,.23-.45.24-1.6.24-1.6h-54.49s.02,1.15.24,1.6c.46.91,1.11,2.78,1.02,4-.35,4.6-1.75,7.6-2.87,9.77-3.04,5.86-4.72,16.04-1.02,25.91,2.78,7.4,6.17,12.7,12.13,16.94,8.26,5.87,6.52,8.46,9.06,13.53.52,1.03,2.21,2.1,3.36,2,2.24-.19,3.04-2.03,5.32-2.15,2.29.12,3.09,1.97,5.32,2.15,1.15.1,2.84-.97,3.36-2,2.54-5.07.81-7.66,9.06-13.53,5.96-4.24,9.35-9.53,12.13-16.94,3.7-9.87,2.02-20.06-1.02-25.91Z') },
-  'form2-07': { path: new Path2D('M41.57,80.26c-.06,11.13,1.09,20.66,6.01,30.73,5.02,10.27,1.58,12.65,6.76,18.14,3.1,3.28,5.23,2.11,8.74.72,2.59-1.02,3.85-1.74,5.62-1.9h.24s0,0,0,0c1.77.16,3.02.88,5.62,1.9,3.5,1.38,5.64,2.56,8.74-.72,5.18-5.49,1.74-7.87,6.76-18.14,4.92-10.07,6.07-19.6,6.01-30.73h-54.49Z') },
-  'form2-08': { path: new Path2D('M98.46,96.05s-.51-5.77-1.07-8.5c-.16-.79-.83-3.34-1.09-4.08-.04-.13-.35-.98-.39-1.45-.07-.85.15-1.51.15-1.76h-54.49c0,.26.22.91.15,1.76-.04.47-.35,1.32-.39,1.45-.25.75-.92,3.29-1.09,4.08-.56,2.73-1.07,8.5-1.07,8.5-.06,10.58.28,20.58,6.87,29.21,6.91,9.04,3.69,12.02,9.15,17.24,3.27,3.12,6.7,2.39,9.22.69,2.04-1.38,2.04-1.63,3.89-1.86.13-.02.51-.03.51-.03,0,0,.39.02.51.03,1.86.23,1.85.47,3.89,1.86,2.52,1.71,5.95,2.43,9.22-.69,5.46-5.22,2.24-8.2,9.15-17.24,6.6-8.63,6.93-18.63,6.87-29.21Z') },
-  'form2-09': { path: new Path2D('M97.54,97.96c-.04-2.29-.22-6.05-.78-8.97-.16-.84-.84-3.01-1.1-3.81-.04-.14-.25-1.61-.06-2.07.48-1.21.47-2.58.47-2.85h-27.25s-.51,0-.51,0h-26.73c0,.28-.01,1.64.47,2.85.18.47-.02,1.94-.06,2.07-.25.8-.94,2.97-1.1,3.81-.56,2.92-.74,6.68-.78,8.97-.26,14.43,1.13,22.65,7.79,30.72,8.85,10.72,5.71,15.58,10.21,18.45,2.81,1.79,4.28,1.46,6.51.02,2.12-1.36,1.91-2.68,3.76-2.92.1-.01.34-.03.45-.03.11,0,.36.02.45.03,1.86.24,1.64,1.56,3.76,2.92,2.23,1.44,3.7,1.77,6.51-.02,4.5-2.86,1.36-7.72,10.21-18.45,6.66-8.07,8.04-16.3,7.79-30.72Z') },
-  'form2-10': { path: new Path2D('M98.82,100.14c-.18-2.67-.91-4.91-1.46-8.33-.16-.99-.82-4.18-1.07-5.12-.04-.16-.35-1.23-.39-1.82-.07-1.07.14-4.29.14-4.62h-54.49c0,.32.21,3.55.14,4.62-.04.59-.34,1.65-.39,1.82-.25.94-.91,4.13-1.07,5.12-.55,3.42-1.28,5.66-1.46,8.33-.91,13.25-1.27,25.13,7.16,36.54,9.45,12.79,7.41,18.64,11.83,21.99,2.76,2.1,4.01,2.17,6.2.48,2.08-1.6,2-2.04,3.82-2.33.12-.02.51-.04.51-.04,0,0,.38.02.51.04.12-.02.51-.04.51-.04,0,0,.38.02.51.04,1.82.29,1.74.73,3.82,2.33,2.19,1.69,3.44,1.61,6.2-.48,4.41-3.36,2.38-9.21,11.83-21.99,8.42-11.4,8.07-23.29,7.16-36.54Z') },
-  'form2-11': { path: new Path2D('M99.37,109.51c-.43-2.95-2.51-10.8-3.32-14.73-.22-1.09-.83-4.54-.66-9.23.07-1.86.74-3.4.67-5.3h-54.49c-.08,1.89.6,3.43.67,5.3.17,4.69-.44,8.14-.66,9.23-.81,3.93-2.88,11.77-3.32,14.73-1.57,10.69-.89,24.31,8.68,35,11.23,12.54,6.65,19.6,11.15,23.35,2.81,2.34,4.09,2.42,6.32.54,2.12-1.79,2.04-2.28,3.89-2.6.09-.02.34-.04.45-.04.04,0,.06,0,.06,0,0,0,.22.02.38.03.05,0,.1.01.13.02,1.86.32,1.78.81,3.89,2.6,2.23,1.88,3.51,1.8,6.32-.54,4.5-3.75-.08-10.82,11.15-23.35,9.57-10.69,10.26-24.31,8.68-35Z') },
-  'form2-c': { path: new Path2D('M97.58,99.77c-1.93-6.02-5.17-7.02-4.15-13.47.18-1.11,1.04-2.5,1.85-3.77.64-1,.78-2.15.78-2.28h-54.49c0,.13.13,1.27.78,2.28.81,1.27,1.68,2.66,1.85,3.77,1.02,6.45-2.22,7.45-4.15,13.47-3.73,11.65-3.11,21.94,5.91,32.42,4.47,5.2,7.66,8.37,8.86,10.88,1.44,3.01.56,4.95,2.97,6.63,2.76,1.93,4.01,2,6.2.45,2.08-1.47,2-1.88,3.82-2.14.12-.02.51-.04.51-.04,0,0,.38.02.51.04h0c.12-.02.51-.04.51-.04,0,0,.38.02.51.04,1.82.26,1.74.67,3.82,2.14,2.19,1.55,3.44,1.48,6.2-.45,2.41-1.68,1.53-3.62,2.97-6.63,1.2-2.51,4.38-5.68,8.86-10.88,9.02-10.48,9.64-20.77,5.91-32.42Z') },
-  'form3-01': { path: new Path2D('M104.04,92.17c-.22-2.45.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.05,0-.09,0-.14,0s-.09,0-.14,0c-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.85,13.25-10.07,15.7-.95,10.44,4.88,20.81,4.88,20.81,5.44,16.42,13.54,23.83,20.6,39.08.49,1.06,1.82,1.12,3.06,1.08,3.21-.11,3.63-3.18,6.68-3.18s3.47,3.07,6.68,3.18c1.25.04,2.58-.02,3.06-1.08,7.06-15.25,15.17-22.66,20.6-39.08,0,0,5.82-10.37,4.88-20.81Z') },
-  'form3-02': { path: new Path2D('M103.9,92.17c-.11-2.46.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.02,0-.05,0-.07,0-.02,0-.05,0-.07,0-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.96,13.24-10.07,15.7-.78,17.11,4.2,24.68,4.2,24.68,10.98,20.51,15.32,11.91,21.28,29.51.95,2.79,4.02,1.98,4.98,1.18,2.15-1.8,1.73-3.25,4.7-3.27,2.97.02,2.55,1.47,4.7,3.27.96.8,4.03,1.62,4.98-1.18,5.96-17.59,10.3-8.99,21.28-29.51,0,0,4.98-7.57,4.2-24.68Z') },
+  'form1-02': { d: 'M45.87,80.26h-4.3c.03,4.51.23,9,.68,13.56l1.04,5.17c3.14,14.81,11.02,21.92,17.66,34.23.46.86,1.43,1.32,2.38,1.1,1.37-.31,3.48-1.5,5.76-1.55,1.91-.04,3.8,1.16,5.1,1.51.99.27,2.02-.19,2.49-1.09,6.55-12.46,14.45-19.39,17.69-34.21l1.04-5.24c.41-4.53.6-8.99.64-13.48h-4.31', path: new Path2D('M45.87,80.26h-4.3c.03,4.51.23,9,.68,13.56l1.04,5.17c3.14,14.81,11.02,21.92,17.66,34.23.46.86,1.43,1.32,2.38,1.1,1.37-.31,3.48-1.5,5.76-1.55,1.91-.04,3.8,1.16,5.1,1.51.99.27,2.02-.19,2.49-1.09,6.55-12.46,14.45-19.39,17.69-34.21l1.04-5.24c.41-4.53.6-8.99.64-13.48h-4.31') },
+  'form1-03': { d: 'M96.06,80.26h-54.49c1.19,5.2-4.07,15.61.05,29.44,5.87,19.67,16.15,21.38,19.1,32.44.29,1.09,1.41,1.54,2.35,1.29,1.35-.36,3.48-1.53,5.74-1.58,2.26.06,4.39,1.22,5.74,1.58.94.25,2.06-.2,2.35-1.29,2.95-11.06,13.24-12.77,19.1-32.44,4.12-13.82-1.14-24.24.05-29.44Z', path: new Path2D('M96.06,80.26h-54.49c1.19,5.2-4.07,15.61.05,29.44,5.87,19.67,16.15,21.38,19.1,32.44.29,1.09,1.41,1.54,2.35,1.29,1.35-.36,3.48-1.53,5.74-1.58,2.26.06,4.39,1.22,5.74,1.58.94.25,2.06-.2,2.35-1.29,2.95-11.06,13.24-12.77,19.1-32.44,4.12-13.82-1.14-24.24.05-29.44Z') },
+  'form1-04': { d: 'M41.57,80.26s.08,1.47-.08,3.29c-.18,2.02-1.25,6.67-1.25,6.67,0,0-.97,5.75-1.1,7.69-.34,4.99.25,10,.73,15.06l1.12,5.75c3.37,16.4,11.83,24.3,18.97,37.89.52.98,1.74,1.42,2.82,1.04,1.51-.53,3.76-1.14,6.15-1.19,2.42.05,4.61.68,6.05,1.21,1.01.37,2.15-.05,2.63-.98,7.15-13.63,15.64-21.54,19.02-37.96l1.12-5.75c.49-5.06,1.08-10.06.73-15.06-.13-1.94-1.1-7.69-1.1-7.69,0,0-1.08-4.64-1.25-6.67-.16-1.82-.08-3.29-.08-3.29', path: new Path2D('M41.57,80.26s.08,1.47-.08,3.29c-.18,2.02-1.25,6.67-1.25,6.67,0,0-.97,5.75-1.1,7.69-.34,4.99.25,10,.73,15.06l1.12,5.75c3.37,16.4,11.83,24.3,18.97,37.89.52.98,1.74,1.42,2.82,1.04,1.51-.53,3.76-1.14,6.15-1.19,2.42.05,4.61.68,6.05,1.21,1.01.37,2.15-.05,2.63-.98,7.15-13.63,15.64-21.54,19.02-37.96l1.12-5.75c.49-5.06,1.08-10.06.73-15.06-.13-1.94-1.1-7.69-1.1-7.69,0,0-1.08-4.64-1.25-6.67-.16-1.82-.08-3.29-.08-3.29') },
+  'form1-05': { d: 'M97.6,91.72s-1.48-5.86-1.66-7.98c-.16-1.91.37-3.49.37-3.49h-54.74s.53,1.57.37,3.49c-.18,2.12-1.66,7.98-1.66,7.98,0,0-5.64,14.32-1.34,29.81,2.11,7.62,5.35,13.27,9.45,19.4,4.37,6.54,9.2,13.57,11.74,18.64.52,1.03,2.21,2.1,3.36,2,2.28-.19,3.06-2.11,5.45-2.17,2.39.06,3.17,1.98,5.45,2.17,1.15.1,2.84-.97,3.36-2,2.54-5.07,7.38-12.1,11.74-18.64,4.1-6.13,7.33-11.79,9.45-19.4,4.3-15.49-1.34-29.81-1.34-29.81Z', path: new Path2D('M97.6,91.72s-1.48-5.86-1.66-7.98c-.16-1.91.37-3.49.37-3.49h-54.74s.53,1.57.37,3.49c-.18,2.12-1.66,7.98-1.66,7.98,0,0-5.64,14.32-1.34,29.81,2.11,7.62,5.35,13.27,9.45,19.4,4.37,6.54,9.2,13.57,11.74,18.64.52,1.03,2.21,2.1,3.36,2,2.28-.19,3.06-2.11,5.45-2.17,2.39.06,3.17,1.98,5.45,2.17,1.15.1,2.84-.97,3.36-2,2.54-5.07,7.38-12.1,11.74-18.64,4.1-6.13,7.33-11.79,9.45-19.4,4.3-15.49-1.34-29.81-1.34-29.81Z') },
+  'form1-06': { d: 'M97.6,97.83c-.8-2.3-1.48-7.18-1.66-9.78-.16-2.35.37-7.8.37-7.8h-54.74s.53,5.45.37,7.8c-.18,2.6-.86,7.48-1.66,9.78-2.66,7.63-6.36,13.78-2.87,33.01,1.67,9.19,6.95,17.63,12.13,25.5,4.94,7.5,8.05,14.9,10.6,21.12.52,1.27,2.21,2.57,3.36,2.45,2.28-.23,3.06-2.59,5.45-2.66,2.39.07,3.17,2.43,5.45,2.66,1.15.12,2.84-1.18,3.36-2.45,2.54-6.22,5.66-13.62,10.6-21.12,5.18-7.87,10.46-16.31,12.13-25.5,3.49-19.23-.21-25.38-2.87-33.01Z', path: new Path2D('M97.6,97.83c-.8-2.3-1.48-7.18-1.66-9.78-.16-2.35.37-7.8.37-7.8h-54.74s.53,5.45.37,7.8c-.18,2.6-.86,7.48-1.66,9.78-2.66,7.63-6.36,13.78-2.87,33.01,1.67,9.19,6.95,17.63,12.13,25.5,4.94,7.5,8.05,14.9,10.6,21.12.52,1.27,2.21,2.57,3.36,2.45,2.28-.23,3.06-2.59,5.45-2.66,2.39.07,3.17,2.43,5.45,2.66,1.15.12,2.84-1.18,3.36-2.45,2.54-6.22,5.66-13.62,10.6-21.12,5.18-7.87,10.46-16.31,12.13-25.5,3.49-19.23-.21-25.38-2.87-33.01Z') },
+  'form1-c': { d: 'M97.66,95.62c-1.12-2.17-2.52-5.17-2.87-9.77-.09-1.22.56-3.09,1.02-4,.23-.45.24-1.6.24-1.6h-54.49s.02,1.15.24,1.6c.46.91,1.11,2.78,1.02,4-.35,4.6-1.75,7.6-2.87,9.77-3.04,5.86-4.72,16.04-1.02,25.91,2.78,7.4,6.17,12.7,12.13,16.94,8.26,5.87,6.52,8.46,9.06,13.53.52,1.03,2.21,2.1,3.36,2,2.24-.19,3.04-2.03,5.32-2.15,2.29.12,3.09,1.97,5.32,2.15,1.15.1,2.84-.97,3.36-2,2.54-5.07.81-7.66,9.06-13.53,5.96-4.24,9.35-9.53,12.13-16.94,3.7-9.87,2.02-20.06-1.02-25.91Z', path: new Path2D('M97.66,95.62c-1.12-2.17-2.52-5.17-2.87-9.77-.09-1.22.56-3.09,1.02-4,.23-.45.24-1.6.24-1.6h-54.49s.02,1.15.24,1.6c.46.91,1.11,2.78,1.02,4-.35,4.6-1.75,7.6-2.87,9.77-3.04,5.86-4.72,16.04-1.02,25.91,2.78,7.4,6.17,12.7,12.13,16.94,8.26,5.87,6.52,8.46,9.06,13.53.52,1.03,2.21,2.1,3.36,2,2.24-.19,3.04-2.03,5.32-2.15,2.29.12,3.09,1.97,5.32,2.15,1.15.1,2.84-.97,3.36-2,2.54-5.07.81-7.66,9.06-13.53,5.96-4.24,9.35-9.53,12.13-16.94,3.7-9.87,2.02-20.06-1.02-25.91Z') },
+  'form2-07': { d: 'M41.57,80.26c-.06,11.13,1.09,20.66,6.01,30.73,5.02,10.27,1.58,12.65,6.76,18.14,3.1,3.28,5.23,2.11,8.74.72,2.59-1.02,3.85-1.74,5.62-1.9h.24s0,0,0,0c1.77.16,3.02.88,5.62,1.9,3.5,1.38,5.64,2.56,8.74-.72,5.18-5.49,1.74-7.87,6.76-18.14,4.92-10.07,6.07-19.6,6.01-30.73h-54.49Z', path: new Path2D('M41.57,80.26c-.06,11.13,1.09,20.66,6.01,30.73,5.02,10.27,1.58,12.65,6.76,18.14,3.1,3.28,5.23,2.11,8.74.72,2.59-1.02,3.85-1.74,5.62-1.9h.24s0,0,0,0c1.77.16,3.02.88,5.62,1.9,3.5,1.38,5.64,2.56,8.74-.72,5.18-5.49,1.74-7.87,6.76-18.14,4.92-10.07,6.07-19.6,6.01-30.73h-54.49Z') },
+  'form2-08': { d: 'M98.46,96.05s-.51-5.77-1.07-8.5c-.16-.79-.83-3.34-1.09-4.08-.04-.13-.35-.98-.39-1.45-.07-.85.15-1.51.15-1.76h-54.49c0,.26.22.91.15,1.76-.04.47-.35,1.32-.39,1.45-.25.75-.92,3.29-1.09,4.08-.56,2.73-1.07,8.5-1.07,8.5-.06,10.58.28,20.58,6.87,29.21,6.91,9.04,3.69,12.02,9.15,17.24,3.27,3.12,6.7,2.39,9.22.69,2.04-1.38,2.04-1.63,3.89-1.86.13-.02.51-.03.51-.03,0,0,.39.02.51.03,1.86.23,1.85.47,3.89,1.86,2.52,1.71,5.95,2.43,9.22-.69,5.46-5.22,2.24-8.2,9.15-17.24,6.6-8.63,6.93-18.63,6.87-29.21Z', path: new Path2D('M98.46,96.05s-.51-5.77-1.07-8.5c-.16-.79-.83-3.34-1.09-4.08-.04-.13-.35-.98-.39-1.45-.07-.85.15-1.51.15-1.76h-54.49c0,.26.22.91.15,1.76-.04.47-.35,1.32-.39,1.45-.25.75-.92,3.29-1.09,4.08-.56,2.73-1.07,8.5-1.07,8.5-.06,10.58.28,20.58,6.87,29.21,6.91,9.04,3.69,12.02,9.15,17.24,3.27,3.12,6.7,2.39,9.22.69,2.04-1.38,2.04-1.63,3.89-1.86.13-.02.51-.03.51-.03,0,0,.39.02.51.03,1.86.23,1.85.47,3.89,1.86,2.52,1.71,5.95,2.43,9.22-.69,5.46-5.22,2.24-8.2,9.15-17.24,6.6-8.63,6.93-18.63,6.87-29.21Z') },
+  'form2-09': { d: 'M97.54,97.96c-.04-2.29-.22-6.05-.78-8.97-.16-.84-.84-3.01-1.1-3.81-.04-.14-.25-1.61-.06-2.07.48-1.21.47-2.58.47-2.85h-27.25s-.51,0-.51,0h-26.73c0,.28-.01,1.64.47,2.85.18.47-.02,1.94-.06,2.07-.25.8-.94,2.97-1.1,3.81-.56,2.92-.74,6.68-.78,8.97-.26,14.43,1.13,22.65,7.79,30.72,8.85,10.72,5.71,15.58,10.21,18.45,2.81,1.79,4.28,1.46,6.51.02,2.12-1.36,1.91-2.68,3.76-2.92.1-.01.34-.03.45-.03.11,0,.36.02.45.03,1.86.24,1.64,1.56,3.76,2.92,2.23,1.44,3.7,1.77,6.51-.02,4.5-2.86,1.36-7.72,10.21-18.45,6.66-8.07,8.04-16.3,7.79-30.72Z', path: new Path2D('M97.54,97.96c-.04-2.29-.22-6.05-.78-8.97-.16-.84-.84-3.01-1.1-3.81-.04-.14-.25-1.61-.06-2.07.48-1.21.47-2.58.47-2.85h-27.25s-.51,0-.51,0h-26.73c0,.28-.01,1.64.47,2.85.18.47-.02,1.94-.06,2.07-.25.8-.94,2.97-1.1,3.81-.56,2.92-.74,6.68-.78,8.97-.26,14.43,1.13,22.65,7.79,30.72,8.85,10.72,5.71,15.58,10.21,18.45,2.81,1.79,4.28,1.46,6.51.02,2.12-1.36,1.91-2.68,3.76-2.92.1-.01.34-.03.45-.03.11,0,.36.02.45.03,1.86.24,1.64,1.56,3.76,2.92,2.23,1.44,3.7,1.77,6.51-.02,4.5-2.86,1.36-7.72,10.21-18.45,6.66-8.07,8.04-16.3,7.79-30.72Z') },
+  'form2-10': { d: 'M98.82,100.14c-.18-2.67-.91-4.91-1.46-8.33-.16-.99-.82-4.18-1.07-5.12-.04-.16-.35-1.23-.39-1.82-.07-1.07.14-4.29.14-4.62h-54.49c0,.32.21,3.55.14,4.62-.04.59-.34,1.65-.39,1.82-.25.94-.91,4.13-1.07,5.12-.55,3.42-1.28,5.66-1.46,8.33-.91,13.25-1.27,25.13,7.16,36.54,9.45,12.79,7.41,18.64,11.83,21.99,2.76,2.1,4.01,2.17,6.2.48,2.08-1.6,2-2.04,3.82-2.33.12-.02.51-.04.51-.04,0,0,.38.02.51.04.12-.02.51-.04.51-.04,0,0,.38.02.51.04,1.82.29,1.74.73,3.82,2.33,2.19,1.69,3.44,1.61,6.2-.48,4.41-3.36,2.38-9.21,11.83-21.99,8.42-11.4,8.07-23.29,7.16-36.54Z', path: new Path2D('M98.82,100.14c-.18-2.67-.91-4.91-1.46-8.33-.16-.99-.82-4.18-1.07-5.12-.04-.16-.35-1.23-.39-1.82-.07-1.07.14-4.29.14-4.62h-54.49c0,.32.21,3.55.14,4.62-.04.59-.34,1.65-.39,1.82-.25.94-.91,4.13-1.07,5.12-.55,3.42-1.28,5.66-1.46,8.33-.91,13.25-1.27,25.13,7.16,36.54,9.45,12.79,7.41,18.64,11.83,21.99,2.76,2.1,4.01,2.17,6.2.48,2.08-1.6,2-2.04,3.82-2.33.12-.02.51-.04.51-.04,0,0,.38.02.51.04.12-.02.51-.04.51-.04,0,0,.38.02.51.04,1.82.29,1.74.73,3.82,2.33,2.19,1.69,3.44,1.61,6.2-.48,4.41-3.36,2.38-9.21,11.83-21.99,8.42-11.4,8.07-23.29,7.16-36.54Z') },
+  'form2-11': { d: 'M99.37,109.51c-.43-2.95-2.51-10.8-3.32-14.73-.22-1.09-.83-4.54-.66-9.23.07-1.86.74-3.4.67-5.3h-54.49c-.08,1.89.6,3.43.67,5.3.17,4.69-.44,8.14-.66,9.23-.81,3.93-2.88,11.77-3.32,14.73-1.57,10.69-.89,24.31,8.68,35,11.23,12.54,6.65,19.6,11.15,23.35,2.81,2.34,4.09,2.42,6.32.54,2.12-1.79,2.04-2.28,3.89-2.6.09-.02.34-.04.45-.04.04,0,.06,0,.06,0,0,0,.22.02.38.03.05,0,.1.01.13.02,1.86.32,1.78.81,3.89,2.6,2.23,1.88,3.51,1.8,6.32-.54,4.5-3.75-.08-10.82,11.15-23.35,9.57-10.69,10.26-24.31,8.68-35Z', path: new Path2D('M99.37,109.51c-.43-2.95-2.51-10.8-3.32-14.73-.22-1.09-.83-4.54-.66-9.23.07-1.86.74-3.4.67-5.3h-54.49c-.08,1.89.6,3.43.67,5.3.17,4.69-.44,8.14-.66,9.23-.81,3.93-2.88,11.77-3.32,14.73-1.57,10.69-.89,24.31,8.68,35,11.23,12.54,6.65,19.6,11.15,23.35,2.81,2.34,4.09,2.42,6.32.54,2.12-1.79,2.04-2.28,3.89-2.6.09-.02.34-.04.45-.04.04,0,.06,0,.06,0,0,0,.22.02.38.03.05,0,.1.01.13.02,1.86.32,1.78.81,3.89,2.6,2.23,1.88,3.51,1.8,6.32-.54,4.5-3.75-.08-10.82,11.15-23.35,9.57-10.69,10.26-24.31,8.68-35Z') },
+  'form2-c': { d: 'M97.58,99.77c-1.93-6.02-5.17-7.02-4.15-13.47.18-1.11,1.04-2.5,1.85-3.77.64-1,.78-2.15.78-2.28h-54.49c0,.13.13,1.27.78,2.28.81,1.27,1.68,2.66,1.85,3.77,1.02,6.45-2.22,7.45-4.15,13.47-3.73,11.65-3.11,21.94,5.91,32.42,4.47,5.2,7.66,8.37,8.86,10.88,1.44,3.01.56,4.95,2.97,6.63,2.76,1.93,4.01,2,6.2.45,2.08-1.47,2-1.88,3.82-2.14.12-.02.51-.04.51-.04,0,0,.38.02.51.04h0c.12-.02.51-.04.51-.04,0,0,.38.02.51.04,1.82.26,1.74.67,3.82,2.14,2.19,1.55,3.44,1.48,6.2-.45,2.41-1.68,1.53-3.62,2.97-6.63,1.2-2.51,4.38-5.68,8.86-10.88,9.02-10.48,9.64-20.77,5.91-32.42Z', path: new Path2D('M97.58,99.77c-1.93-6.02-5.17-7.02-4.15-13.47.18-1.11,1.04-2.5,1.85-3.77.64-1,.78-2.15.78-2.28h-54.49c0,.13.13,1.27.78,2.28.81,1.27,1.68,2.66,1.85,3.77,1.02,6.45-2.22,7.45-4.15,13.47-3.73,11.65-3.11,21.94,5.91,32.42,4.47,5.2,7.66,8.37,8.86,10.88,1.44,3.01.56,4.95,2.97,6.63,2.76,1.93,4.01,2,6.2.45,2.08-1.47,2-1.88,3.82-2.14.12-.02.51-.04.51-.04,0,0,.38.02.51.04h0c.12-.02.51-.04.51-.04,0,0,.38.02.51.04,1.82.26,1.74.67,3.82,2.14,2.19,1.55,3.44,1.48,6.2-.45,2.41-1.68,1.53-3.62,2.97-6.63,1.2-2.51,4.38-5.68,8.86-10.88,9.02-10.48,9.64-20.77,5.91-32.42Z') },
+  'form3-01': { d: 'M104.04,92.17c-.22-2.45.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.05,0-.09,0-.14,0s-.09,0-.14,0c-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.85,13.25-10.07,15.7-.95,10.44,4.88,20.81,4.88,20.81,5.44,16.42,13.54,23.83,20.6,39.08.49,1.06,1.82,1.12,3.06,1.08,3.21-.11,3.63-3.18,6.68-3.18s3.47,3.07,6.68,3.18c1.25.04,2.58-.02,3.06-1.08,7.06-15.25,15.17-22.66,20.6-39.08,0,0,5.82-10.37,4.88-20.81Z', path: new Path2D('M104.04,92.17c-.22-2.45.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.05,0-.09,0-.14,0s-.09,0-.14,0c-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.85,13.25-10.07,15.7-.95,10.44,4.88,20.81,4.88,20.81,5.44,16.42,13.54,23.83,20.6,39.08.49,1.06,1.82,1.12,3.06,1.08,3.21-.11,3.63-3.18,6.68-3.18s3.47,3.07,6.68,3.18c1.25.04,2.58-.02,3.06-1.08,7.06-15.25,15.17-22.66,20.6-39.08,0,0,5.82-10.37,4.88-20.81Z') },
+  'form3-02': { d: 'M103.9,92.17c-.11-2.46.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.02,0-.05,0-.07,0-.02,0-.05,0-.07,0-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.96,13.24-10.07,15.7-.78,17.11,4.2,24.68,4.2,24.68,10.98,20.51,15.32,11.91,21.28,29.51.95,2.79,4.02,1.98,4.98,1.18,2.15-1.8,1.73-3.25,4.7-3.27,2.97.02,2.55,1.47,4.7,3.27.96.8,4.03,1.62,4.98-1.18,5.96-17.59,10.3-8.99,21.28-29.51,0,0,4.98-7.57,4.2-24.68Z', path: new Path2D('M103.9,92.17c-.11-2.46.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.02,0-.05,0-.07,0-.02,0-.05,0-.07,0-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.96,13.24-10.07,15.7-.78,17.11,4.2,24.68,4.2,24.68,10.98,20.51,15.32,11.91,21.28,29.51.95,2.79,4.02,1.98,4.98,1.18,2.15-1.8,1.73-3.25,4.7-3.27,2.97.02,2.55,1.47,4.7,3.27.96.8,4.03,1.62,4.98-1.18,5.96-17.59,10.3-8.99,21.28-29.51,0,0,4.98-7.57,4.2-24.68Z') },
 };
+
+// Each design's own true bounding-box width in SVG units (its widest point,
+// not just ENDCAP_ALIGNMENT's neck width) -- needed by End Emerge (below)
+// to compute a "hidden" scale that shrinks the ENTIRE shape down to the
+// rope's own thickness, not just its neck. Computed ONCE at startup from
+// each design's raw `d` string via a throwaway SVG <path> element (Path2D
+// itself exposes no bounding-box query), rather than hand-measuring and
+// hardcoding a table of numbers -- keeps this correct automatically no
+// matter how many times the source SVGs get swapped/updated, with zero
+// extra maintenance.
+const ENDCAP_WIDTHS = (function(){
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.style.position = 'absolute'; svg.style.width = '0'; svg.style.height = '0'; svg.style.overflow = 'hidden';
+  document.body.appendChild(svg);
+  const widths = {};
+  for (const key in ENDCAP_DESIGNS){
+    const p = document.createElementNS(svgNS, 'path');
+    p.setAttribute('d', ENDCAP_DESIGNS[key].d);
+    svg.appendChild(p);
+    widths[key] = p.getBBox().width;
+    svg.removeChild(p);
+  }
+  document.body.removeChild(svg);
+  return widths;
+})();
+
+/* ---------------------------------------------------------------------
+   End Emerge -- when enabled (End Emerge Enabled), a freshly-cut edge's
+   endcap doesn't appear at full size the instant the real split happens.
+   Instead it starts scaled down to exactly the rope's own thickness (so
+   it's visually indistinguishable from -- "completely obscured by" -- the
+   rope's own end, rendered via the normal Rope End Curve Arc treatment),
+   waits End Emerge Delay, then scales up to its real size over End Emerge
+   Speed's own duration, eased by End Emerge Tweening. Applies to BOTH
+   halves of every cut: the remaining rope/piece's own new tip (its
+   `tipEmerge`), and the newly-split-off piece's own new near/cut edge
+   (its `cutEdgeEmerge`) -- see performMainRopeSplit()/performPieceSplit(),
+   the only two places that create these states, since those are the only
+   two places a genuinely NEW cut edge is ever created.
+--------------------------------------------------------------------- */
+const EMERGE_BASE_SEC = 0.35;
+const EMERGE_TWEENS = {
+  linear: t => t,
+  easeIn: t => t * t,
+  easeOut: t => 1 - (1 - t) * (1 - t),
+  easeInOut: t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+};
+
+function newEmergeState(){
+  return { delayRemaining: cfg.endEmergeDelay, progress: 0 };
+}
+
+// advances one emerge state by rawDt -- same raw-wall-clock convention as
+// cutSweep's own progress (a cosmetic timer, not part of the physics dt),
+// so Rope Animation Speed doesn't also secretly slow/speed emergence.
+function tickEmerge(emerge, rawDt){
+  if (!emerge || emerge.progress >= 1) return;
+  if (emerge.delayRemaining > 0){
+    emerge.delayRemaining = Math.max(0, emerge.delayRemaining - rawDt);
+    return;
+  }
+  emerge.progress = Math.min(1, emerge.progress + rawDt * cfg.endEmergeSpeed / EMERGE_BASE_SEC);
+}
+
+// 0 = fully hidden (rope-width scale), 1 = fully emerged (normal scale).
+// Undefined/missing emerge state (nothing has been cut yet, or End Emerge
+// is off and the state was never created) always reads as 1 -- normal,
+// immediate, full-size rendering, i.e. "what we have now."
+function emergeFactor(emerge){
+  if (!cfg.endEmergeEnabled || !emerge) return 1;
+  if (emerge.delayRemaining > 0) return 0;
+  const ease = EMERGE_TWEENS[cfg.endEmergeTweening] || EMERGE_TWEENS.linear;
+  return ease(emerge.progress);
+}
 
 // direction of the LAST segment (second-to-last point -> tip), normalized;
 // falls back to straight down for a degenerate (<2 point) chain.
@@ -2194,16 +2365,27 @@ function tipDirection(points){
   return { x: dx / len, y: dy / len };
 }
 
-function drawEndcap(points, thicknessPx, designKey, color, heightMult){
+function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
   const design = ENDCAP_DESIGNS[designKey];
   if (!design) return;
+  if (factor === undefined) factor = 1;
   const dir = tipDirection(points);
   const tip = points[points.length - 1];
   // rotates local "down" (0,1) to (dir.x,dir.y); derived from the standard
   // rotation matrix (x cosθ - y sinθ, x sinθ + y cosθ) solved for
   // (-sinθ,cosθ) = (dir.x,dir.y).
   const angle = Math.atan2(-dir.x, dir.y);
-  const scale = thicknessPx / ENDCAP_ALIGNMENT.width;
+  // `factor` (End Emerge) interpolates between a "hidden" scale -- where
+  // the design's own FULL bounding-box width (ENDCAP_WIDTHS, its widest
+  // point) equals the rope's thickness, i.e. the whole shape tucked inside
+  // the rope's own width -- and the normal scale, where only the design's
+  // NECK (ENDCAP_ALIGNMENT.width, the alignment line) matches the rope's
+  // thickness, letting the shape's actual widest point bulge out past it
+  // as authored. factor==1 (the default, and always the case when End
+  // Emerge is off) reduces this to exactly the old unconditional `scale`.
+  const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
+  const hiddenScale = thicknessPx / (ENDCAP_WIDTHS[designKey] || ENDCAP_ALIGNMENT.width);
+  const scale = hiddenScale + (normalScale - hiddenScale) * factor;
   ctx.save();
   ctx.translate(tip.x, tip.y);
   ctx.rotate(angle);
@@ -2214,7 +2396,10 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult){
   // canvas transforms compose in reverse call order), the anchor point
   // (topCenterX,topY) always lands at local (0,0) regardless of scale --
   // any scale factor leaves the origin fixed -- so the cap's top edge stays
-  // exactly at the tip no matter how much vertical stretch is applied.
+  // exactly at the tip no matter how much vertical stretch (heightMult) or
+  // emergence shrink (factor) is applied -- which is also exactly what
+  // gives End Emerge its "scales up and moves out from the tip" look for
+  // free, with no separate position animation needed.
   ctx.scale(scale, scale * heightMult);
   ctx.translate(-ENDCAP_ALIGNMENT.topCenterX, -ENDCAP_ALIGNMENT.topY);
   ctx.fillStyle = color;
@@ -2227,11 +2412,12 @@ function renderCutSweep(entity){
   const t = sweep.progress;
   const off = sweep.startOffset + (sweep.endOffset - sweep.startOffset) * t;
   // anchored to entity.points[sweep.anchorIndex] -- the point the cut
-  // actually landed on. With a Fall Delay (cfg.fallDelay) in effect, the
-  // entity isn't split at cut time (see cutRopeAt/cutPieceAt's pendingCut
-  // deferral) so anchorIndex generally is NOT pts.length-1 yet -- it only
-  // becomes the entity's true last point once the deferred split actually
-  // happens, at which point Math.min below just naturally resolves to it.
+  // actually landed on. The entity isn't split at cut time (see
+  // cutRopeAt/cutPieceAt's pendingCut deferral, now always active since
+  // the pending delay is cutThroughDuration(), never 0) so anchorIndex
+  // generally is NOT pts.length-1 yet -- it only becomes the entity's true
+  // last point once the deferred split actually happens, at which point
+  // Math.min below just naturally resolves to it.
   // Still tracks live physics either way, same reasoning as before: the
   // entity keeps moving/rotating after the cut, so a snapshotted position
   // or direction would visibly stop tracking that motion.
@@ -2276,13 +2462,29 @@ function render(){
 
   const thickness = vmin(cfg.ropeThickness);
   // an SVG endcap replaces the plain round cap entirely (drawn separately,
-  // below) rather than stacking both at the tip.
-  const roundCapMult = cfg.endcapDesign === 'none' ? cfg.ropeEndCurveArc : 0;
-  fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, roundCapMult));
-  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, roundCapMult);
-  if (cfg.endcapDesign !== 'none'){
-    fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight));
-    drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight);
+  // below) rather than stacking both at the tip -- EXCEPT while End Emerge
+  // has that endcap still hidden/mid-emergence, in which case the rope's
+  // own Rope End Curve Arc treatment fills in at that specific end instead
+  // ("the end of the rope will be the regular end set by the arc curve
+  // setting" until the endcap actually emerges there). Each end of each
+  // entity has its OWN independent emerge factor, since a piece's two ends
+  // (its own free/growing tip vs its own cut edge) can be at different
+  // points in their respective emergence -- see strokeRopeCurve()'s own
+  // comment for why this can't be expressed via a single shared lineCap.
+  const hasEndcap = cfg.endcapDesign !== 'none';
+  const mainTipFactor = emergeFactor(mainRope.tipEmerge);
+  const mainArcMult = (hasEndcap && mainTipFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
+  fallenPieces.forEach(piece => {
+    const tipFactor = emergeFactor(piece.tipEmerge);
+    const cutFactor = emergeFactor(piece.cutEdgeEmerge);
+    const tipArcMult = (hasEndcap && tipFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
+    const cutArcMult = (hasEndcap && cfg.endcapAtCutEnd && cutFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
+    strokeRopeCurve(piece.points, thickness, cfg.ropeColor, tipArcMult, cutArcMult);
+  });
+  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, mainArcMult);
+  if (hasEndcap){
+    fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge)));
+    drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, mainTipFactor);
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
     // points array before reusing drawEndcap() puts that cut point at
@@ -2291,13 +2493,15 @@ function render(){
     // so the cap is correctly positioned AND oriented at the severed end
     // with no separate code path needed.
     if (cfg.endcapAtCutEnd){
-      // No separate "has it started falling yet" gate needed here anymore:
-      // with Fall Delay > 0, a piece doesn't exist in fallenPieces at all
-      // until the deferred split actually happens (cutRopeAt/cutPieceAt's
-      // pendingCut, resolved in update()) -- so by the time a piece is here
-      // to iterate over, it has, by construction, already started falling.
+      // No separate "has it started falling yet" gate needed here: a piece
+      // doesn't exist in fallenPieces at all until the deferred split
+      // actually happens (cutRopeAt/cutPieceAt's pendingCut, resolved in
+      // update()) -- so by the time a piece is here to iterate over, it
+      // has, by construction, already started falling. Its OWN
+      // cutEdgeEmerge (separate from tipEmerge above) governs how far
+      // along ITS emergence is.
       fallenPieces.forEach(piece => {
-        drawEndcap([...piece.points].reverse(), thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight);
+        drawEndcap([...piece.points].reverse(), thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.cutEdgeEmerge));
       });
     }
   }
