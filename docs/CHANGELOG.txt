@@ -2078,6 +2078,48 @@ node --check clean throughout. No console errors on a real page load
 reload attempt, not from index.html or any of its own resources).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  5:14 PM - 5:23 PM EDT
+
+"I removed the End svgs and added a whole set of new ones. Incorporate all
+the new End SVGs" -- the user had removed data/Rope/End1.svg through
+End4.svg and added a new 12-file set: data/Rope/End_Form1-02.svg through
+-06.svg plus End_Form1-C.svg (a "Form 1" family), and End_Form2-07.svg
+through -11.svg plus End_Form2-C.svg (a "Form 2" family). Read all 12 new
+SVGs directly and extracted each one's <path> `d` attribute verbatim into
+a new ENDCAP_DESIGNS entry, keyed by the lowercased file suffix
+('form1-02' ... 'form1-c', 'form2-07' ... 'form2-c') -- replacing the
+previous end1-end4 keys entirely, per the existing architecture's own
+documented rule ("a new design gets only a `path` entry", CLAUDE.md
+Gotchas). Confirmed ENDCAP_ALIGNMENT itself needed no change: every one of
+the 12 new SVGs embeds the exact same reference <line> (41.57,80.26 to
+96.06,80.26) as data/Rope/End Alignment.svg, so they're already authored
+against the shared frame drawEndcap()'s transform math expects. Updated
+the Endcap Design dropdown's 13 options (None + the 12 new designs,
+labeled "Form 1 - 02" etc.) and moved its default from the now-deleted
+'end3' to 'form1-c' (both the DEV_GROUPS hardcoded default and
+data/processed/dev-panel-settings.json's git-tracked default -- the old
+value would have silently no-op'd via drawEndcap()'s `if (!design)
+return;` guard rather than crashing, so this needed an explicit fix, not
+just leaving it to fail loudly). Verified via a temporary debug hook
+(window.__debugTMPropo, removed before commit, grep-confirmed 0
+references): requestAnimationFrame doesn't fire in this sandbox's Browser
+pane (confirmed via a blank/never-drawn canvas check -- the pane reports
+itself as not visually displayed/composited, which Chromium throttles rAF
+for), so canvas verification required manually forcing update()+render()
+calls rather than relying on the app's own loop. All 12 designs rendered
+without throwing, each producing a distinct, non-zero rope-colored pixel
+count (sampled across the full canvas) confirming real, differing
+geometry rather than a silently-empty path; 'none' mode also verified
+still working; a fresh page load confirmed cfg.endcapDesign boots to the
+new 'form1-c' default from the git-tracked settings file. Committed
+alongside the user's own already-made SVG file changes (4 deletions + 12
+additions) rather than leaving them uncommitted -- the code and the
+assets it depends on ship together. node --check clean. data/Rope/
+Untitled-1.ai (the evident Illustrator source for this design set) and
+datalog/ left untouched, per this session's standing practice of not
+touching another concurrent session's own working files.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

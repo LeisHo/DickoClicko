@@ -462,6 +462,20 @@ lost — verified via direct state inspection at the time.
   including a smaller contributing bug found and fixed along the way
   (the growing tip wasn't fully excluded from `integrateChain()`'s basic
   physics step, despite the code's own comment claiming it was).
+- Endcap art fully replaced: the user removed the original End1-End4
+  source SVGs and supplied a new 12-design set (`data/Rope/
+  End_Form1-02.svg` through `-06.svg` + `End_Form1-C.svg`, and
+  `End_Form2-07.svg` through `-11.svg` + `End_Form2-C.svg`). All 12 wired
+  into `ENDCAP_DESIGNS`, the Endcap Design dropdown rebuilt with 13
+  options (None + all 12), and the default moved from the now-deleted
+  `'end3'` to `'form1-c'` (both the hardcoded default and the git-tracked
+  settings default). `ENDCAP_ALIGNMENT` needed no change — the new SVGs
+  already embed the same shared reference line the existing transform
+  math expects. Verified all 12 render without error and produce distinct
+  geometry via a forced update()+render() pass (this sandbox's Browser
+  pane doesn't composite frames, so `requestAnimationFrame` never fires
+  here — direct calls were needed instead of relying on the app's own
+  loop).
 
 ## What's next
 

@@ -66,7 +66,7 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        solver) was tried first and caused a real, reproduced instability
        over long holds.
 
-ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg, End3.svg, End4.svg)
+ENDCAP_DESIGNS / drawEndcap() (data/Rope/End_Form1-*.svg, End_Form2-*.svg)
     -> optional decorative shapes at the free/tip end of mainRope and every
        fallenPiece (render(), Endcap Design dropdown), replacing the plain
        round cap entirely rather than stacking both. Embedded as Path2D
@@ -1097,3 +1097,27 @@ GOTCHAS
      frame-extracted and inspected around its actual cut and growth
      phases to ground the investigation in what the video showed, rather
      than relying on the physics simulation alone.
+- The original End1-End4 endcap source SVGs were removed and replaced
+  wholesale with a new 12-design set: `data/Rope/End_Form1-02.svg`
+  through `-06.svg` plus `End_Form1-C.svg` (Form 1 family), and
+  `End_Form2-07.svg` through `-11.svg` plus `End_Form2-C.svg` (Form 2
+  family) -- `ENDCAP_DESIGNS` keys are the lowercased file suffix
+  (`'form1-02'`, ..., `'form1-c'`, `'form2-07'`, ..., `'form2-c'`), and
+  the dropdown's default (`endcapDesign`, both the `DEV_GROUPS` hardcoded
+  `def` and `data/processed/dev-panel-settings.json`'s git-tracked
+  default) moved from the now-nonexistent `'end3'` to `'form1-c'` --
+  picked as a like-for-like replacement (previously the 3rd/most-refined
+  design in a small set; now the flagship of the first family) since the
+  user didn't specify a preference and it's a one-click dropdown change
+  either way. `ENDCAP_ALIGNMENT` itself needed NO change: every one of
+  the 12 new source SVGs embeds the exact same reference `<line>`
+  (x1=41.57, y1=80.26, x2=96.06, y2=80.26) as `data/Rope/End Alignment.svg`
+  (confirmed by reading all 12 files directly), so they're already
+  authored against the same shared frame the existing transform math in
+  `drawEndcap()` expects -- per the standing Gotcha above ("a new design
+  gets only a `path` entry"), that's exactly what was added, nothing else
+  in the rendering pipeline needed touching. `data/Rope/Untitled-1.ai`
+  (the source Illustrator file another concurrent session is evidently
+  iterating the design set from) and `data/Rope/End Alignment.svg` itself
+  were left untouched, same as this session's standing practice of never
+  touching that other session's own files.
