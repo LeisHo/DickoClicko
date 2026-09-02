@@ -1843,6 +1843,25 @@ hold-to-grow (initially misreported as doing nothing, then corrected by
 the user in the same turn).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  1:24 PM EDT
+
+Applied §12m's "set defaults" merge to a fresh pasted Copy Settings dump
+-- 8 of 35 values changed from the prior defaults (Rope Length, Gravity
+Strength, Rope Weight, Intensity Ceiling, Minimum Rope Length, Circle
+Cut Distance, Rope Fall Speed, Cut Speed). O and G were identical for
+every field this round, so every changed field resolved directly to the
+pasted value P. The new "fallDelay" field (added this same session,
+predating this paste) wasn't in P at all -- kept at its current default
+(0) rather than touched by the merge, and inserted into the
+git-tracked log's ROPE CUT order between Rope Fall Speed and Cut Speed,
+matching its position in DEV_GROUPS. Updated both DEV_GROUPS' def:
+values in index.html and data/processed/dev-panel-settings.json.
+Verified live: all 9 relevant cfg values (8 changed + fallDelay)
+matched exactly after a real boot-time load via a temporary debug hook
+(window.__debugTMPropo, removed before commit, grep-confirmed 0
+references). node --check clean.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
