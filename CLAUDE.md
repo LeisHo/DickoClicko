@@ -160,15 +160,22 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   violent segLen-mismatch bounce the first time anything calls
   `setMainRopeTotalLength()` (dragging the slider, or a saved settings reload
   at boot). See `docs/CODE_SUMMARY.md` Gotchas for the full mechanism.
-- Rope growth's smooth appearance depends on `mainRope.tipGrowLen` and
-  `integrateChain()`'s `tipSegLen` override — the last segment's rest length
-  rises continuously via the ordinary constraint solver instead of the rope
-  sitting still and then jumping a whole segment into place. Any future
-  change to growth mechanics must keep advancing `tipGrowLen` every frame
-  (never in whole-point jumps) and must reset it to `segLen` after any
-  direct/instant length change (slider, saved-settings reload, cut) — see
-  `docs/CODE_SUMMARY.md` Gotchas for the full mechanism and how it was
-  verified.
+- Rope growth's smooth appearance depends on `mainRope.tipGrowLen`, rising
+  every frame (never in whole-point jumps), and `positionGrowingTip()`
+  placing the tip directly from it. **The growing tip must NEVER be fed
+  into `integrateChain()`'s iterative distance-constraint solver as a
+  moving rest-length target** — that was the first version built, and over
+  a real multi-second hold it acted as a sustained forcing function that
+  compounded into a violently tangled rope (confirmed by a real user video
+  and a 900-frame reproduction: segment lengths up to 2.93x rest length,
+  points folding back on themselves). The tip must stay excluded from the
+  constraint solve (`integrateChain()`'s `skipLastSegment`) and be
+  positioned directly instead, with zero implied velocity. Any future
+  change to growth mechanics must keep advancing `tipGrowLen` every frame,
+  reset it to `segLen` after any direct/instant length change (slider,
+  saved-settings reload, cut), and keep the growing tip OUT of the
+  constraint solver — see `docs/CODE_SUMMARY.md` Gotchas for the full
+  mechanism and how both the bug and the fix were verified.
 - A charged hold's Click-And-Hold-Distance gate (and the punch's aim) must
   be computed from the pointer's position AT RELEASE, not from the
   press-time `info.hit` — that field is frozen at `onPointerDown` and never

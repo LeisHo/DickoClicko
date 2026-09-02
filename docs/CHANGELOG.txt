@@ -685,6 +685,62 @@ Verified:
   commit (grep-confirmed 0 references).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  05:22 AM EDT
+
+Fixed:
+- Rope extension going wild after several seconds of continuous
+  hold-to-grow, reported with a user-supplied screen recording
+  (datalog/Recording 2026-09-02 050757.mp4) -- the rope visibly whipped/
+  tangled around the anchor briefly, then partially self-corrected;
+  extensions after a cut acted "more normal" but still showed a faint
+  bounce on the growing tip. Root cause: the immediately-prior smooth-
+  extension fix (previous entry) fed the growing tip's continuously-rising
+  target length into integrateChain()'s ordinary iterative distance-
+  constraint solver as an override for the last segment's rest length.
+  Over a sustained hold this acted as a persistent forcing function --
+  CONSTRAINT_ITERATIONS is fixed at 6 and DAMPING=0.99 barely dissipates
+  anything per frame, so residual correction error compounded over
+  hundreds of frames. Reproduced directly: a 900-frame (15s) continuous-
+  growth simulation showed segment lengths reaching 2.93x rest length and
+  points folding back on themselves in Y (a genuinely tangled chain, not
+  normal swinging).
+
+  Fixed by never letting the growing tip enter the constraint solver at
+  all. integrateChain() gained a skipLastSegment param that shortens its
+  constraint loop by one, excluding the tip's segment entirely; a new
+  positionGrowingTip() (called after integrateChain() in update()) places
+  the tip directly every frame instead, using a new tipGrowDirection()
+  helper that reads the SETTLED chain's own local tangent (the segment
+  before the growing one -- never the tip's own current, about-to-be-
+  overwritten position) and sets the tip's oldx/oldy to match its new
+  position (zero implied velocity, so it can never accumulate momentum of
+  its own). The rest of the chain (everything up to the second-to-last
+  point) is completely unaffected and behaves exactly as before.
+
+Verified:
+- Re-ran the same 900-frame/15s stress test that exposed the bug (with
+  cfg.ropeLength explicitly reset to a small value first -- an earlier
+  attempt at this same check left a stale, much larger ropeLength from a
+  prior test call and produced a misleading "still bad" reading before
+  this was caught): 0 non-monotonic points across the full run (every
+  point strictly further from the anchor than the last), vs. many with
+  the constraint-based approach. Worst single segment-length ratio
+  dropped to a smooth, gradually-rising 1.36x by 15s -- a separate, much
+  milder, likely pre-existing property of a fixed-iteration solver on a
+  very long chain, not a tangle.
+- Re-verified the smoothness fix itself still holds with the new
+  kinematic approach: the tip segment's length tracks the exact per-frame
+  growth amount every single frame (an exact sawtooth), including with an
+  initial sideways swing velocity applied.
+- Verified via a REAL dispatched pointerdown/pointerup gesture (not just
+  direct growRope()/update() calls), held for a simulated 15s: 0
+  non-monotonic points, and the growing flag correctly turns off on
+  release.
+- 0 console errors on a clean shipped-code reload.
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

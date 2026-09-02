@@ -75,14 +75,23 @@ Nothing in progress — everything below is done, verified, and pushed.
   no-op.
 - Fixed rope-extension animation "stepping" (growth only advanced in
   whole-segment jumps — around 25px at defaults — with nothing visibly
-  moving in between). Growth now advances a new `mainRope.tipGrowLen`
-  field every frame, and `integrateChain()`'s new `tipSegLen` override lets
-  the existing distance-constraint solver naturally pull the tip out to
-  match it each frame — the same mechanism already used for every other
-  segment, just with a continuously-rising target for this one. Verified
-  live (gravity/swing on, floor disabled to isolate the mechanism): the
-  tip segment's length tracked the exact per-frame growth amount, frame by
-  frame, in a clean sawtooth, with zero frames of no movement.
+  moving in between), and then fixed a MORE serious regression the first
+  attempt at that fix introduced: over a real multi-second hold, the rope
+  would violently whip/tangle before self-correcting (confirmed via a
+  user-supplied screen recording and a 900-frame/15s direct reproduction).
+  Root cause: feeding the growing tip's rising target length into the
+  ordinary iterative constraint solver acted as a sustained forcing
+  function that a 6-iteration, lightly-damped solver couldn't fully
+  dissipate — residual error compounded over hundreds of frames into a
+  real tangle (segment lengths measured up to 2.93x rest length, points
+  folding back on themselves instead of hanging straight down). Fixed by
+  excluding the growing tip from the constraint solve entirely and
+  positioning it directly each frame instead (from the settled chain's own
+  local direction, zero implied velocity) — smoothness is unaffected (an
+  exact sawtooth matching the per-frame growth amount, same as before) but
+  the tangling is gone: the same 900-frame stress test now shows 0
+  non-monotonic points throughout, verified via both direct physics calls
+  and a real dispatched pointerdown/pointerup gesture held 15s.
 - Fixed click-and-hold not firing when the user pressed away from the rope
   and moved toward it before releasing ("click and hold anywhere, then
   release within the tolerance distance"). The Click-And-Hold-Distance

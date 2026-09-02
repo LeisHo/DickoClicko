@@ -827,7 +827,7 @@ function nearestPointOnRope(px, py, points){
   return best;
 }
 
-function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, tipSegLen){
+function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastSegment){
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex) continue;
     const p = points[i];
@@ -837,22 +837,28 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, tipSegLen
     p.x += vx;
     p.y += vy + gravityAccel * dt * dt;
   }
-  // tipSegLen, when given, overrides the LAST segment's rest length instead
-  // of segLen -- this is what makes rope growth read as smooth, continuous
-  // motion instead of the rope sitting still for several frames and then
-  // snapping a whole new segment into place. mainRope.tipGrowLen rises from
-  // 0 to segLen every frame as growRope() accumulates growth, and the
-  // ordinary distance-constraint solver below naturally pulls the tip out to
-  // match that rising target each frame -- the same mechanism that already
-  // holds every other segment at rest length, just with a moving target for
-  // this one segment, so there's nothing extra to fight or correct.
+  // skipLastSegment excludes the LAST segment from distance-constraint
+  // solving entirely -- used while that segment is a growing tip (see
+  // positionGrowingTip()) so the solver never tries to enforce a stale full
+  // segLen against it. An earlier version instead gave the solver a rising
+  // "tipSegLen" target for that one segment every frame; that continuously
+  // moving target acted as a sustained forcing function on the solver, and
+  // with only CONSTRAINT_ITERATIONS=6 sweeps and DAMPING=0.99 barely
+  // dissipating anything, residual correction error compounded over many
+  // seconds of holding into a real, reproduced bug: after ~4-15s of
+  // continuous growth the tip (and nearby segments) built up a large,
+  // visibly wild swing -- confirmed by a direct simulation showing segment
+  // lengths reaching 2.9x their rest length and points folding back on
+  // themselves, not just normal swinging. Now the growing tip is placed
+  // directly (see positionGrowingTip()), never entering the iterative
+  // solver at all, so it can't inject anything into it.
+  const segCount = points.length - 1 - (skipLastSegment ? 1 : 0);
   for (let iter = 0; iter < CONSTRAINT_ITERATIONS; iter++){
-    for (let i = 0; i < points.length - 1; i++){
+    for (let i = 0; i < segCount; i++){
       const a = points[i], b = points[i + 1];
-      const restLen = (tipSegLen !== undefined && i === points.length - 2) ? tipSegLen : segLen;
       const dx = b.x - a.x, dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 0.0001;
-      const diff = (dist - restLen) / dist;
+      const diff = (dist - segLen) / dist;
       const aFixed = i === pinnedIndex, bFixed = (i + 1) === pinnedIndex;
       const offX = dx * diff * 0.5, offY = dy * diff * 0.5;
       if (!aFixed){ a.x += offX; a.y += offY; }
@@ -883,6 +889,36 @@ function pileRepulsion(all){
 --------------------------------------------------------------------- */
 let growing = false;
 
+// direction to extend the tip in: the settled rope's own local tangent
+// (from the point BEFORE prev, to prev) -- deliberately not derived from the
+// tip's own current position, which is what's being placed and would make
+// the direction circular/dependent on wherever the tip last happened to be.
+function tipGrowDirection(pts){
+  const n = pts.length;
+  const prev = pts[n - 2] || pts[0];
+  const beforePrev = pts[n - 3] || pts[0];
+  let dx = prev.x - beforePrev.x, dy = prev.y - beforePrev.y;
+  const dlen = Math.hypot(dx, dy) || 1;
+  return { x: dx / dlen, y: dy / dlen, prev };
+}
+
+// Places the currently-growing tip segment directly, every frame, instead of
+// letting it participate in the iterative constraint solve (see
+// integrateChain()'s skipLastSegment for why). oldx/oldy are set to match,
+// so the tip carries zero implied velocity — it can never accumulate
+// momentum of its own, only ever reflecting mainRope.tipGrowLen and the
+// settled chain's current direction. A no-op once tipGrowLen has reached a
+// full segLen (fully committed, ordinary physics point from here on).
+function positionGrowingTip(){
+  if (mainRope.tipGrowLen >= mainRope.segLen) return;
+  const pts = mainRope.points;
+  const dir = tipGrowDirection(pts);
+  const tip = pts[pts.length - 1];
+  tip.x = dir.prev.x + dir.x * mainRope.tipGrowLen;
+  tip.y = dir.prev.y + dir.y * mainRope.tipGrowLen;
+  tip.oldx = tip.x; tip.oldy = tip.y;
+}
+
 function growRope(dtSeconds){
   const targetSeg = vh(TARGET_SEG_LEN_VH);
   const growth = vh(cfg.ropeGrowthRate) * dtSeconds;
@@ -891,28 +927,21 @@ function growRope(dtSeconds){
   // (see setMainRopeTotalLength), so that product only changes in whole-point
   // jumps and would silently discard any growth accumulated since the last one.
   mainRope.totalLength += growth;
-  // Unlike setMainRopeTotalLength() (used for direct sets, which snap
-  // straight to the target point count), growth advances the LAST segment's
-  // target length continuously via tipGrowLen -- integrateChain() then pulls
-  // the tip out to match it every frame through the ordinary constraint
-  // solver, which is what reads as smooth motion instead of the rope sitting
-  // still and then jumping a whole segment at once. Only once tipGrowLen
-  // actually reaches a full targetSeg do we commit: fix the just-finished
-  // segment at exactly targetSeg (clamping away any single-frame overshoot)
-  // and start a fresh, zero-length tip carrying the overshoot forward as its
-  // own head start, so no accumulated growth is ever lost. The while loop
-  // covers a growth rate high enough to complete more than one segment in a
-  // single frame.
+  // tipGrowLen rises continuously every frame (never in whole-point jumps);
+  // positionGrowingTip() (called after integrateChain() in update()) is what
+  // actually reveals that as smooth motion. Once it reaches a full targetSeg
+  // we commit: fix the just-finished segment at exactly targetSeg (clamping
+  // away any single-frame overshoot) and start a fresh, zero-length tip,
+  // carrying the overshoot forward into its own tipGrowLen so no
+  // accumulated growth is lost. The while loop covers a growth rate high
+  // enough to complete more than one segment in a single frame.
   mainRope.tipGrowLen += growth;
   while (mainRope.tipGrowLen >= targetSeg){
     const pts = mainRope.points;
-    const prev = pts[pts.length - 2] || pts[0];
+    const dir = tipGrowDirection(pts);
     const tip = pts[pts.length - 1];
-    let dx = tip.x - prev.x, dy = tip.y - prev.y;
-    const dlen = Math.hypot(dx, dy) || 1;
-    dx /= dlen; dy /= dlen;
-    tip.x = prev.x + dx * targetSeg;
-    tip.y = prev.y + dy * targetSeg;
+    tip.x = dir.prev.x + dir.x * targetSeg;
+    tip.y = dir.prev.y + dir.y * targetSeg;
     tip.oldx = tip.x; tip.oldy = tip.y;
     pts.push({ x: tip.x, y: tip.y, oldx: tip.x, oldy: tip.y });
     mainRope.tipGrowLen -= targetSeg;
@@ -1144,7 +1173,9 @@ function update(rawDt){
   mainRope.points[0].x = circleAnchor().x;
   mainRope.points[0].y = circleAnchor().y;
   if (growing) growRope(rawDt);
-  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0, mainRope.tipGrowLen);
+  const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
+  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0, hasPartialTip);
+  if (hasPartialTip) positionGrowingTip();
 
   // cutProgress only drives the cosmetic sweep-mark overlay now (render()) —
   // it never gates a piece's own physics, so a piece cut mid-swing keeps

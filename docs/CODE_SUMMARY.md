@@ -52,10 +52,14 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        mainRope.tipGrowLen is a THIRD piece of state: how far the LAST
        segment currently reaches toward a full TARGET_SEG_LEN_VH (always
        full except mid-growth, when growRope() advances it 0->targetSeg
-       every frame and integrateChain() uses it as that one segment's
-       live rest-length target instead of segLen -- see Gotchas for why
-       this is what makes growth read as smooth motion instead of
-       whole-segment jumps).
+       every frame). Unlike every other segment, the growing tip is NOT
+       solved by integrateChain()'s iterative distance constraint at all --
+       positionGrowingTip() places it directly each frame, in the settled
+       chain's own local direction (tipGrowDirection()), with zero implied
+       velocity (oldx/oldy set to match). See Gotchas for why a constraint-
+       based version of this (a continuously-rising target fed into the
+       solver) was tried first and caused a real, reproduced instability
+       over long holds.
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle
@@ -186,32 +190,57 @@ GOTCHAS
 - Rope growth reads as smooth, continuous extension, not the whole-segment
   jumps it used to (the rope sitting visibly still for several frames, then
   snapping ~1 targetSeg length -- around 25px at current defaults -- into
-  place all at once). `integrateChain()` takes an optional `tipSegLen` param
-  that overrides just the LAST segment's rest length (`i === points.length
-  - 2` in the constraint loop); `growRope()` advances `mainRope.tipGrowLen`
-  by that frame's growth every frame (never in whole-point jumps), and the
-  ordinary distance-constraint solver -- the same one that already holds
-  every other segment at rest length -- naturally pulls the tip out to
-  match the rising target each frame, with nothing extra to fight or
-  correct. Only once `tipGrowLen` actually reaches a full `targetSeg` does
-  `growRope()` commit: it fixes the just-finished segment at exactly
-  `targetSeg` (clamping away any single-frame overshoot from a high growth
-  rate), pushes a fresh zero-length tip point, and carries the overshoot
-  forward into the new tip's own `tipGrowLen` so no accumulated growth is
-  ever lost (a `while` loop covers a growth rate fast enough to complete
-  more than one segment in a single frame). `resetMainRope()` and
-  `setMainRopeTotalLength()` (direct sets: slider drag, saved-settings
-  reload, cut) always set `tipGrowLen = segLen` (fully committed, no
-  growth-in-progress tip) -- `growRope()` is the ONLY place that lets it sit
-  below that. Verified live: with gravity/swing on and the floor disabled to
-  isolate the mechanism, the tip segment's measured length tracked the
-  per-frame growth amount (1.8px/frame at defaults) exactly, frame by
-  frame, in a clean sawtooth up to targetSeg and back — zero frames where it
-  held still while `tipGrowLen` was still rising. (Testing this against a
-  rope resting on a floor pile gave a misleadingly constant reading at
-  first -- floor/pile-repulsion physics, unrelated to this fix, dominates
-  the tip's position once it's piled up; disable `floorEnabled` when
-  re-verifying this specific mechanism in isolation.)
+  place all at once). `growRope()` advances `mainRope.tipGrowLen` by that
+  frame's growth every frame (never in whole-point jumps); once it reaches a
+  full `targetSeg`, `growRope()` commits: fixes the just-finished segment at
+  exactly `targetSeg` (clamping away any single-frame overshoot), pushes a
+  fresh zero-length tip point, and carries the overshoot forward into the
+  new tip's own `tipGrowLen` so no accumulated growth is lost (a `while`
+  loop covers a growth rate fast enough to complete more than one segment
+  in a single frame). `resetMainRope()`/`setMainRopeTotalLength()` (direct
+  sets: slider drag, saved-settings reload, cut) always set `tipGrowLen =
+  segLen` (fully committed) -- `growRope()` is the only place that lets it
+  sit below that.
+- **The growing tip must be placed directly (`positionGrowingTip()`),
+  NEVER fed into `integrateChain()`'s iterative distance-constraint solver
+  as a moving rest-length target.** A first version did exactly that (an
+  optional `tipSegLen` param overriding the last segment's rest length,
+  with the ordinary solver pulling the tip out to match a target that rose
+  every frame) -- it looked correct in short tests (a rising target
+  produces a perfect sawtooth in the tip segment's own length, and that
+  alone was thoroughly verified), but a real user video of an extended
+  hold-to-grow session showed the rope violently whipping/tangling after
+  several seconds, self-correcting, and behaving noticeably better (though
+  still with a faint tip wobble) after a cut reset the point count. A
+  15-second, 900-frame direct reproduction confirmed the mechanism: a
+  continuously-rising target fed into a solver limited to
+  `CONSTRAINT_ITERATIONS=6`, damped only by `DAMPING=0.99` (barely any
+  energy loss per frame), acts as a sustained forcing function -- residual
+  correction error compounds over hundreds of frames into a large,
+  non-monotonic tangle (segment lengths measured up to 2.93x rest length,
+  points folding back on themselves in Y instead of hanging straight down).
+  Fixed by excluding the growing tip from the constraint solve entirely
+  (`integrateChain()`'s `skipLastSegment` shortens its loop by one) and
+  positioning it directly every frame instead: `tipGrowDirection()` reads
+  the SETTLED chain's own local tangent (the segment before `prev`, never
+  the tip's own current/about-to-be-overwritten position), and the tip is
+  placed at `prev + direction * tipGrowLen` with `oldx/oldy` set to match
+  (zero implied velocity -- it can never accumulate momentum of its own).
+  The rest of the chain is completely unaffected and behaves exactly as
+  before. Re-verified the same 900-frame/15s stress test (with `cfg.
+  ropeLength` explicitly reset first -- a stale large value left over from
+  a prior test call inflated an earlier run to 137+ points and produced a
+  misleading "still bad" reading before this was caught): 0 non-monotonic
+  points across the full run (vs. many with the old approach), and the
+  worst single segment-length ratio dropped to a smooth, gradually-rising
+  1.36x by 15s -- a separate, much milder, likely pre-existing property of
+  a fixed-iteration solver applied to a very long chain, not a tangle.
+  Re-ran the tip-smoothness sawtooth check against the new kinematic
+  version too: still an exact match to the per-frame growth amount, every
+  frame, including with an initial sideways swing applied. Also verified
+  via a REAL dispatched pointerdown/pointerup gesture (not just direct
+  `growRope()`/`update()` calls) held for a simulated 15s: 0 non-monotonic
+  points, and `growing` correctly flips false on release.
 - The Click-And-Hold-Distance gate on a charged hold's release must be
   computed from the RELEASE position (`e.clientX/e.clientY` in
   `onPointerUp`), not from `info.hit` -- `info.hit` is captured once at
