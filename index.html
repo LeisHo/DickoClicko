@@ -77,6 +77,11 @@
     width:40px; height:22px; border:1px solid #3a3a4a; border-radius:4px; background:none; padding:0;
   }
   .dp-row input[type=checkbox] { width:16px; height:16px; }
+  .dp-dropdown {
+    flex:1 1 auto; min-width:0; font-size:11px;
+    background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
+    padding:2px 4px;
+  }
 
   .dp-resize { position:absolute; z-index:10; }
   .dp-resize-n, .dp-resize-s { left:8px; right:8px; height:8px; cursor:ns-resize; }
@@ -157,6 +162,12 @@ const DEV_GROUPS = [
       onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
+    { key:'endcapDesign',   label:'Endcap Design',     type:'dropdown', def:'none',
+      options:[
+        { value:'none', label:'None (plain round cap)' },
+        { value:'end1', label:'End 1' },
+        { value:'end2', label:'End 2' },
+      ] },
   ]},
   { title:'CLICK', controls:[
     { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8 },
@@ -442,6 +453,21 @@ function buildRow(ctrl){
     cb.addEventListener('change', () => { cfg[ctrl.key] = cb.checked; });
     row.appendChild(cb);
     numEls[ctrl.key] = { type:'checkbox' };
+  } else if (ctrl.type === 'dropdown') {
+    const select = document.createElement('select');
+    select.className = 'dp-dropdown';
+    ctrl.options.forEach(opt => {
+      const optionEl = document.createElement('option');
+      optionEl.value = opt.value; optionEl.textContent = opt.label;
+      select.appendChild(optionEl);
+    });
+    select.value = ctrl.def;
+    select.addEventListener('change', () => {
+      cfg[ctrl.key] = select.value;
+      if (ctrl.onChange) ctrl.onChange(select.value);
+    });
+    row.appendChild(select);
+    numEls[ctrl.key] = { type:'dropdown' };
   }
   return row;
 }
@@ -582,6 +608,11 @@ function applyValues(values){
       cfg[ctrl.key] = v;
       const input = document.querySelector('.dp-row[data-key="' + CSS.escape(ctrl.key) + '"] input[type=checkbox]');
       if (input) input.checked = v;
+    } else if (ctrl.type === 'dropdown'){
+      cfg[ctrl.key] = v;
+      const select = document.querySelector('.dp-row[data-key="' + CSS.escape(ctrl.key) + '"] select');
+      if (select) select.value = v;
+      if (ctrl.onChange) ctrl.onChange(v);
     }
   }));
 }
@@ -1228,6 +1259,67 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult){
   }
 }
 
+/* ---------------------------------------------------------------------
+   Rope endcaps -- optional decorative shapes (data/Rope/End1.svg,
+   End2.svg) drawn at the free/tip end of the main rope and every fallen
+   piece, replacing the plain round cap when selected (Endcap Design dev
+   control). Embedded as Path2D objects (this is a single-file app, no
+   external asset loading) using the SVG paths' own coordinates verbatim;
+   width/topY/topCenterX below are each path's real geometric bounding box
+   (via getBBox() in a real browser DOM), NOT the SVG's own oversized
+   viewBox (129.7x183.44 for both -- far bigger than the actual drawn
+   shape) -- using the viewBox for scaling would make the cap render far
+   smaller than intended relative to the rope's thickness. Both source
+   SVGs are authored pointing straight down, with their flat top edge
+   (topY, spanning the path's x-range centered at topCenterX) as the edge
+   that meets the rope -- drawEndcap() re-derives that same relationship
+   at render time: translate so the tip point is the origin, rotate so
+   local "down" (the authored direction) matches the tip segment's actual
+   current direction, scale uniformly so the cap's width matches the
+   rope's current thickness, then shift the path so its own top-center
+   point lands exactly on that origin.
+--------------------------------------------------------------------- */
+const ENDCAP_DESIGNS = {
+  end1: {
+    path: new Path2D('M38.6,59.26c-.05,7.84,1.01,14.56,5.54,21.66,4.62,7.24,1.46,8.92,6.22,12.79,2.85,2.31,4.82,1.49,8.04.51,2.39-.72,3.54-1.23,5.17-1.34h.22s0,0,0,0c1.63.11,2.78.62,5.17,1.34,3.22.98,5.19,1.8,8.04-.51,4.77-3.87,1.6-5.55,6.22-12.79,4.53-7.1,5.59-13.82,5.54-21.66h-50.16Z'),
+    width: 50.163330078125, topY: 59.2599983215332, topCenterX: 63.68000030517578,
+  },
+  end2: {
+    path: new Path2D('M42,89.45h-4.26c.03,3.87.23,7.72.67,11.63l1.02,4.44c3.23,13.22,11.54,19.29,18.27,30.66,0,0,3.38-.91,7.28-.98,3.38-.06,6.69,1.06,6.69,1.06,6.63-11.59,14.99-17.49,18.33-30.74l1.03-4.49c.41-3.89.6-7.71.64-11.56h-4.27'),
+    width: 53.93000030517578, topY: 89.44999694824219, topCenterX: 64.70499801635742,
+  },
+};
+
+// direction of the LAST segment (second-to-last point -> tip), normalized;
+// falls back to straight down for a degenerate (<2 point) chain.
+function tipDirection(points){
+  if (points.length < 2) return { x: 0, y: 1 };
+  const a = points[points.length - 2], b = points[points.length - 1];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: dx / len, y: dy / len };
+}
+
+function drawEndcap(points, thicknessPx, designKey){
+  const design = ENDCAP_DESIGNS[designKey];
+  if (!design) return;
+  const dir = tipDirection(points);
+  const tip = points[points.length - 1];
+  // rotates local "down" (0,1) to (dir.x,dir.y); derived from the standard
+  // rotation matrix (x cosθ - y sinθ, x sinθ + y cosθ) solved for
+  // (-sinθ,cosθ) = (dir.x,dir.y).
+  const angle = Math.atan2(-dir.x, dir.y);
+  const scale = thicknessPx / design.width;
+  ctx.save();
+  ctx.translate(tip.x, tip.y);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+  ctx.translate(-design.topCenterX, -design.topY);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill(design.path);
+  ctx.restore();
+}
+
 function renderCutSweep(piece){
   const t = piece.cutProgress;
   const off = piece.cutStartOffset + (piece.cutEndOffset - piece.cutStartOffset) * t;
@@ -1263,8 +1355,15 @@ function render(){
   ctx.fill();
 
   const thickness = vmin(cfg.ropeThickness);
-  fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc));
-  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc);
+  // an SVG endcap replaces the plain round cap entirely (drawn separately,
+  // below) rather than stacking both at the tip.
+  const roundCapMult = cfg.endcapDesign === 'none' ? cfg.ropeEndCurveArc : 0;
+  fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, roundCapMult));
+  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, roundCapMult);
+  if (cfg.endcapDesign !== 'none'){
+    fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign));
+    drawEndcap(mainRope.points, thickness, cfg.endcapDesign);
+  }
   fallenPieces.forEach(piece => { if (piece.cutProgress < 1) renderCutSweep(piece); });
 }
 

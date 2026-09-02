@@ -182,6 +182,13 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   updates, so checking it at release ignores any movement during the hold
   entirely. This was a real, previously-shipped bug (see
   `docs/CODE_SUMMARY.md` Gotchas).
+- `ENDCAP_DESIGNS`' scale/anchor geometry (`width`/`topY`/`topCenterX`) must
+  come from each SVG path's real `getBBox()`, never the source SVGs' own
+  `viewBox` — the two are very different for `data/Rope/End1.svg`/`End2.svg`
+  (a `129.7x183.44` viewBox around an actual drawn shape of only ~50x36 /
+  ~54x47), and scaling by the viewBox would render the cap far smaller than
+  the rope's actual thickness. See `docs/CODE_SUMMARY.md` Gotchas for the
+  full transform math and how it was verified.
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to

@@ -106,6 +106,17 @@ Nothing in progress — everything below is done, verified, and pushed.
   defaults (Rope Length, Click And Hold Distance, Rope Animation Speed,
   Minimum Rope Length, Cut Speed) — every value already fit its slider's
   existing range, no expansion needed.
+- Added optional rope endcaps: 2 user-supplied SVG designs
+  (data/Rope/End1.svg, End2.svg), selectable via a new "Endcap Design"
+  dropdown (ROPE group) — the first dropdown control this project has
+  needed, so dropdown support was added to the dev-panel framework itself
+  (buildDevPanel(), applyValues()), alongside the existing slider/color/
+  checkbox types. The selected cap renders at the free/tip end of the main
+  rope and every fallen piece (replacing the plain round cap, not stacked
+  with it), scaled so its width matches the rope's current thickness and
+  rotated to continue in whatever direction the rope tip currently points
+  — verified correct via direct pixel inspection of the rendered canvas,
+  both hanging straight down and forced sideways.
 
 ## What's next
 

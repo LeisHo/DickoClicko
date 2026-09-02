@@ -26,6 +26,11 @@ DEV_GROUPS (config array: one entry per *D*/*DC* from the spec)
        The exception is ropeLength/ropeGrowthRate, which go through
        setMainRopeTotalLength() instead of a direct per-frame read
        (see Gotchas).
+    -> control types: slider, color, checkbox, dropdown (added for
+       Endcap Design -- the first project setting needing a fixed set of
+       named choices rather than a continuous/boolean value). A dropdown
+       entry needs `options:[{value,label},...]` alongside the usual
+       key/label/def; cfg[key] holds the selected option's `value` string.
 
 circleAnchor() / vw() / vh() / vmin()
     -> convert cfg's %-based position/size values to CSS pixels each frame,
@@ -60,6 +65,14 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        based version of this (a continuously-rising target fed into the
        solver) was tried first and caused a real, reproduced instability
        over long holds.
+
+ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg)
+    -> optional decorative shapes at the free/tip end of mainRope and every
+       fallenPiece (render(), Endcap Design dropdown), replacing the plain
+       round cap entirely rather than stacking both. Embedded as Path2D
+       objects using each SVG path's own coordinates verbatim -- see
+       Gotchas for why the scale/anchor math uses each path's real
+       getBBox(), not the SVGs' own (much larger) viewBox.
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle
@@ -401,3 +414,26 @@ GOTCHAS
   `javascript_tool`, not by watching the live animation. A real browser tab
   (visible, foregrounded) runs the `requestAnimationFrame` loop normally;
   this only affects how this specific environment was used to test it.
+- `ENDCAP_DESIGNS`' `width`/`topY`/`topCenterX` for each SVG must come from
+  the PATH's real `getBBox()` (measured in a real browser DOM, e.g. a tiny
+  scratch HTML page loaded via the dev server), never the source SVGs' own
+  `viewBox` (`0 0 129.7 183.44` for both `data/Rope/End1.svg` and
+  `End2.svg` -- far bigger than the actual drawn shape, whose real bbox is
+  only ~50x36 and ~54x47 respectively). Scaling by the viewBox width would
+  make the cap render much smaller than the rope's actual thickness.
+  `drawEndcap()`'s transform order matters: translate to the tip, rotate,
+  scale, THEN translate by `-topCenterX,-topY` (applied last so it acts
+  first on the path's own local coordinates) -- this is what makes the
+  path's flat top-center edge (not the SVG's origin, not the bbox center)
+  the pivot that lands exactly on the tip point. The rotation angle
+  (`Math.atan2(-dir.x, dir.y)`) maps local "down" (both SVGs' authored
+  orientation) onto the tip segment's actual current direction, so the cap
+  reorients correctly even when the rope is swinging or hangs at an angle
+  -- confirmed via a direct pixel scan of the rendered canvas (not just
+  code review): with the tip segment forced to point straight down, the
+  cap's white pixels appeared directly below the tip; forced to point
+  right instead, the same white pixels appeared to the right of the tip.
+  Both `mainRope` and every `fallenPieces` entry share the exact same
+  `drawEndcap()` call in `render()` -- there is no special-casing for
+  cut pieces, so a fresh cut's remaining tip picks up the cap
+  automatically, with no extra code needed.

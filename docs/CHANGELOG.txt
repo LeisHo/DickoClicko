@@ -741,6 +741,49 @@ Verified:
   commit (grep-confirmed 0 references).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  05:37 AM EDT
+
+Added:
+- Rope endcaps: 2 user-supplied SVG designs (data/Rope/End1.svg,
+  End2.svg), selectable via a new "Endcap Design" dropdown in the ROPE
+  group ("None (plain round cap)" / "End 1" / "End 2"). Added dropdown as
+  a new dev-panel control type (buildDevPanel(), applyValues()) -- the
+  first setting this project has needed with a fixed set of named choices
+  rather than a continuous/boolean value; other control types (slider,
+  color, checkbox) were unaffected. The selected cap draws at the free/tip
+  end of the main rope and every fallen piece (render() calls the same
+  drawEndcap() for both -- no special-casing needed for a cut piece's own
+  tip to pick it up automatically), REPLACING the plain round cap entirely
+  rather than stacking with it (endArcMult forced to 0 when a design is
+  selected). Embedded both SVG paths as Path2D objects with their real
+  bounding-box geometry (measured via a real browser DOM's getBBox(), not
+  the SVGs' own far-larger 129.7x183.44 viewBox) so the cap scales to
+  match the rope's current thickness exactly by width, and rotates to
+  continue in the tip segment's actual current direction (not just
+  straight down) via translate/rotate/scale/anchor-shift in that order.
+
+Verified:
+- Live in the Browser pane: the Endcap Design dropdown renders with all 3
+  options and updates cfg on change.
+- Direct pixel inspection of the rendered canvas (getImageData, since
+  requestAnimationFrame doesn't run in this testing environment): with
+  the rope hanging straight down, a vertical scan below the tip showed
+  rope-brown color transitioning cleanly to solid white (the cap) then to
+  background -- confirming correct anchor position, extension direction,
+  and color. With the tip segment artificially forced to point sideways
+  instead, a horizontal scan showed the same white region now extending
+  in that direction -- confirming the rotation math correctly reorients
+  the cap to the rope's actual current direction, not a fixed "down".
+- Regression: with Endcap Design left at "None", the tip still shows the
+  original rope-colored round cap (unaffected pixel colors), confirming
+  the SVG addition didn't change existing default behavior.
+- 0 console errors on a clean shipped-code reload.
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references); scratch probe file
+  (svgprobe_tmp.html, used only to read getBBox() for both SVGs) deleted
+  before commit.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
