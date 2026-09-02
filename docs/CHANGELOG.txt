@@ -86,6 +86,77 @@ Verified:
   dev-mode gate (only the localhost branch was exercised live).
 
 --------------------------------------------------------------------------------
+2026-09-01  -  11:15 PM - 11:34 PM EDT
+
+Brought the dev panel in line with a new workspace-wide standard (parent
+CLAUDE.md Section 12, added after the initial build, generalizing this
+project's own original dev-panel work) and added a new directional cut
+animation, per explicit request.
+
+Added:
+- Dev panel: resizable from all 4 edges and all 4 corners (was one corner
+  handle); a separate collapse-whole-panel button (top-right) distinct from
+  D-key hide; titled plainly "DEV"; Copy/Save/Reset buttons (+R key),
+  persisting to localStorage; drag-to-reorder for both collapsible groups
+  and individual settings within a group, with that order captured by
+  Copy/Save/Reset.
+- Desktop/Mobile tabs on the dev panel (per an update to CLAUDE.md Section
+  12f partway through this session): the panel's own size/position is
+  independent per tab and switches immediately on tab click, regardless of
+  the browser's actual current width -- lets the mobile panel layout be
+  previewed/tuned without physically resizing the window. Every functional
+  setting in this project is judged shared between the tabs (not
+  device-split), since §12f's rationale for splitting is mainly fixed-px
+  values, and every control here is already %/vmin-based.
+- Every slider's typed-input auto-expand (previously max-only, and only for
+  future defaults) now expands whichever bound (min or max) is crossed, by
+  +/-20% of the typed value, on direct user typing in either direction.
+- Cut Speed dev control (ROPE CUT group) and a directional cut-sweep
+  animation: double-clicking to cut now freezes the lower piece in place
+  and plays a sweep mark across the rope's thickness, in the direction the
+  click came from (right-of-rope -> sweeps right-to-left, left-of-rope ->
+  left-to-right, determined via the signed perpendicular-to-tangent side of
+  the click so it's correct even if the rope is swung off-vertical), before
+  releasing the piece to fall -- rate set by Cut Speed.
+
+Fixed:
+- `setPointerCapture` can throw `NotFoundError` for a pointerId the browser
+  doesn't consider "active" -- hit directly while testing the new
+  drag-to-reorder feature (synthetic PointerEvents dispatched for testing
+  all triggered it) and confirmed via MDN to also be a real possibility in
+  production. An uncaught throw there was aborting the rest of the
+  pointerdown handler before its move/up listeners were even attached,
+  silently breaking the feature. Fixed by wrapping every capture call in a
+  shared `tryCapture()` helper and moving every drag/resize/reorder
+  handler's move/up listeners onto `window` (not the captured element), so
+  the feature keeps working even when capture itself fails.
+
+Verified:
+- Every new dev-panel behavior (8-direction resize, D-key hide with an
+  input-focus guard so it doesn't hijack typing, whole-panel collapse,
+  group and setting drag-reorder, Copy/Save/Reset round-tripping both
+  values+order and per-tab panel geometry, Desktop/Mobile tab switching
+  changing the live panel geometry independent of actual viewport width,
+  both-directions auto-expanding slider range) via direct DOM/localStorage
+  inspection and dispatched PointerEvent/KeyboardEvent sequences through
+  javascript_tool -- this session's headless Browser-pane tab doesn't
+  composite frames (requestAnimationFrame throttled), so a temporary debug
+  hook (window.__debugTMP) exposing internal state/functions was used again
+  for the cut-animation physics specifically, then removed before commit
+  (grep-confirmed clean).
+- Cut-sweep direction confirmed both ways (right-click -> sweeps right to
+  left, left-click -> left to right) and confirmed the frozen piece truly
+  doesn't move (position identical across many stepped frames) until
+  cutProgress reaches 1, then releases and falls normally; confirmed Cut
+  Speed scales the release time proportionally (5x speed released in ~4
+  frames vs ~20 frames at the default speed).
+- node --check clean on the extracted inline script throughout, both before
+  and after removing the debug hook.
+- Not verified: real touch input on an actual mobile device, and the
+  ?dev=1/production-hostname branch of the dev-mode gate (unchanged from
+  the initial build's same limitation).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

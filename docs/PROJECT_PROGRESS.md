@@ -18,14 +18,30 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — initial build is done and pushed.
+Nothing in progress — dev-panel §12 retrofit + directional cut animation are
+done, verified, and ready to push.
 
 ## Recently completed
 
 - Initial build: circle + rope rendering, verlet rope physics (punch, hold-
   to-grow, double-click-to-cut), floor collision + piling, full dev panel
-  with all spec'd controls, dev-mode gating. Functionally verified (see
-  docs/PROJECT_SUMMARY.md's Current State).
+  with all spec'd controls, dev-mode gating.
+- Dev panel brought in line with the workspace-wide §12 standard (added
+  after the initial build): all-4-edge/corner resize, D-key hide + separate
+  collapse button, Copy/Save/Reset (+R key), drag-to-reorder groups/settings
+  with persisted order, Desktop/Mobile tabs (panel geometry independent per
+  tab; every setting judged shared since all are already %/vmin-based), and
+  a real both-directions auto-expanding slider range on typed input.
+- Directional cut animation: cutting now freezes the lower piece and plays a
+  sweep mark across the rope's thickness in the direction the click came
+  from (right-of-rope click -> sweeps right-to-left, and vice versa) before
+  releasing it to fall, at a rate set by the new Cut Speed dev control.
+- Found and fixed a real robustness bug while testing the above:
+  `setPointerCapture` can throw (`NotFoundError`) for a pointerId the
+  browser doesn't consider active, which would silently abort a drag/resize/
+  reorder handler before its move/up listeners even attach — now guarded
+  everywhere via `tryCapture()`, with listeners on `window` rather than the
+  captured element so capture failing doesn't break the feature.
 
 ## What's next
 

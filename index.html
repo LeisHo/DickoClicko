@@ -12,24 +12,48 @@
   #devPanel {
     position:fixed; top:10px; right:10px;
     width:min(320px, calc(100vw - 20px));
-    max-height:88vh; overflow-y:auto;
+    max-height:88vh; min-width:220px; min-height:140px;
     background:rgba(18,18,26,0.94); color:#e8e8f0;
     font:12px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
     border:1px solid #3a3a4a; border-radius:8px;
     z-index:9999; user-select:none;
     box-shadow:0 6px 24px rgba(0,0,0,0.5);
+    display:flex; flex-direction:column;
   }
   #devPanel.hidden { display:none; }
+  #devPanel.dp-collapsed .dp-body,
+  #devPanel.dp-collapsed .dp-resize { display:none; }
   .dp-header {
     padding:8px 10px; font-weight:600; font-size:13px;
     background:#25253a; border-radius:8px 8px 0 0;
     cursor:grab; touch-action:none;
-    display:flex; justify-content:space-between; align-items:center;
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+    flex:0 0 auto;
   }
   .dp-header:active { cursor:grabbing; }
-  .dp-body { padding:4px 8px 10px; }
+  .dp-title { letter-spacing:.06em; }
+  #dpFps { flex:1 1 auto; opacity:.6; font-weight:400; font-size:10px; }
+  .dp-icon-btn {
+    flex:0 0 auto; width:18px; height:18px; line-height:16px; text-align:center;
+    background:#3a3a4a; color:#e8e8f0; border:none; border-radius:3px;
+    cursor:pointer; font-size:12px; padding:0;
+  }
+  .dp-body { padding:4px 8px 10px; overflow-y:auto; flex:1 1 auto; min-height:0; }
+  .dp-actions { display:flex; gap:6px; padding:2px 2px 8px; }
+  .dp-actions button {
+    flex:1 1 auto; background:#3a3a4a; color:#e8e8f0; border:none; border-radius:4px;
+    padding:5px 4px; font-size:11px; cursor:pointer;
+  }
+  .dp-actions button:active { background:#4a4a5e; }
+  .dp-tabs { display:flex; gap:4px; padding:6px 2px 0; }
+  .dp-tab-btn {
+    flex:1 1 auto; background:#25253a; color:#9a9ab0; border:none; border-radius:4px;
+    padding:5px 4px; font-size:11px; cursor:pointer;
+  }
+  .dp-tab-btn.active { background:#3a3a4a; color:#e8e8f0; font-weight:600; }
   .dp-group { border-top:1px solid #33333f; }
   .dp-group:first-child { border-top:none; }
+  .dp-group.dp-dragging, .dp-row.dp-dragging { opacity:.4; }
   .dp-group-header {
     padding:7px 2px; font-weight:600; font-size:11px; letter-spacing:.04em;
     color:#a9b4ff; cursor:pointer; display:flex; align-items:center; gap:6px;
@@ -37,8 +61,12 @@
   .dp-group-header .arrow { transition:transform .15s; font-size:9px; }
   .dp-group.collapsed .arrow { transform:rotate(-90deg); }
   .dp-group.collapsed .dp-group-body { display:none; }
+  .dp-drag-handle {
+    flex:0 0 auto; cursor:grab; color:#666; touch-action:none; padding:0 2px;
+  }
+  .dp-drag-handle:active { cursor:grabbing; }
   .dp-row { display:flex; align-items:center; gap:6px; padding:3px 2px; }
-  .dp-row label { flex:0 0 auto; width:118px; font-size:11px; color:#c9c9d8; }
+  .dp-row label { flex:0 0 auto; width:112px; font-size:11px; color:#c9c9d8; }
   .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:#7d8cff; }
   .dp-num {
     flex:0 0 auto; width:52px; text-align:right; font-size:11px;
@@ -49,19 +77,47 @@
     width:40px; height:22px; border:1px solid #3a3a4a; border-radius:4px; background:none; padding:0;
   }
   .dp-row input[type=checkbox] { width:16px; height:16px; }
-  #devResize {
-    position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize;
-    background:linear-gradient(135deg, transparent 50%, #55556a 50%);
-    border-radius:0 0 8px 0;
-  }
+
+  .dp-resize { position:absolute; z-index:10; }
+  .dp-resize-n, .dp-resize-s { left:8px; right:8px; height:8px; cursor:ns-resize; }
+  .dp-resize-n { top:-4px; } .dp-resize-s { bottom:-4px; }
+  .dp-resize-e, .dp-resize-w { top:8px; bottom:8px; width:8px; cursor:ew-resize; }
+  .dp-resize-e { right:-4px; } .dp-resize-w { left:-4px; }
+  .dp-resize-ne, .dp-resize-nw, .dp-resize-se, .dp-resize-sw { width:14px; height:14px; }
+  .dp-resize-ne { top:-4px; right:-4px; cursor:nesw-resize; }
+  .dp-resize-nw { top:-4px; left:-4px; cursor:nwse-resize; }
+  .dp-resize-se { bottom:-4px; right:-4px; cursor:nwse-resize; }
+  .dp-resize-sw { bottom:-4px; left:-4px; cursor:nesw-resize; }
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas>
 <div id="devPanel" class="hidden">
-  <div class="dp-header" id="dpHeader"><span>Dicko Clicko — Dev</span><span id="dpFps">--fps</span></div>
-  <div class="dp-body" id="dpBody"></div>
-  <div id="devResize"></div>
+  <div class="dp-header" id="dpHeader">
+    <span class="dp-title">DEV</span>
+    <span id="dpFps">--fps</span>
+    <button type="button" class="dp-icon-btn" id="dpCollapseBtn" title="Collapse">–</button>
+  </div>
+  <div class="dp-body" id="dpBody">
+    <div class="dp-tabs" id="dpTabs">
+      <button type="button" class="dp-tab-btn" data-tab="desktop">Desktop</button>
+      <button type="button" class="dp-tab-btn" data-tab="mobile">Mobile</button>
+    </div>
+    <div class="dp-actions">
+      <button type="button" id="dpCopyBtn">Copy</button>
+      <button type="button" id="dpSaveBtn">Save</button>
+      <button type="button" id="dpResetBtn">Reset</button>
+    </div>
+    <div id="dpGroups"></div>
+  </div>
+  <div class="dp-resize dp-resize-n" data-dir="n"></div>
+  <div class="dp-resize dp-resize-s" data-dir="s"></div>
+  <div class="dp-resize dp-resize-e" data-dir="e"></div>
+  <div class="dp-resize dp-resize-w" data-dir="w"></div>
+  <div class="dp-resize dp-resize-ne" data-dir="ne"></div>
+  <div class="dp-resize dp-resize-nw" data-dir="nw"></div>
+  <div class="dp-resize dp-resize-se" data-dir="se"></div>
+  <div class="dp-resize dp-resize-sw" data-dir="sw"></div>
 </div>
 
 <script>
@@ -111,6 +167,7 @@ const DEV_GROUPS = [
   ]},
   { title:'ROPE CUT', controls:[
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
+    { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#4a4a4a' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:1.5 },
@@ -132,18 +189,68 @@ DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = c.def));
 --------------------------------------------------------------------- */
 const numEls = {};
 function buildDevPanel(){
-  const body = document.getElementById('dpBody');
+  const body = document.getElementById('dpGroups');
   DEV_GROUPS.forEach(group => {
     const g = document.createElement('div');
     g.className = 'dp-group';
+    g.dataset.key = group.title;
     const h = document.createElement('div');
     h.className = 'dp-group-header';
-    h.innerHTML = '<span class="arrow">▼</span><span>' + group.title + '</span>';
+    h.innerHTML = '<span class="dp-drag-handle">⠿</span><span class="arrow">▼</span><span>' + group.title + '</span>';
     const gb = document.createElement('div');
     gb.className = 'dp-group-body';
-    h.addEventListener('click', () => g.classList.toggle('collapsed'));
+    h.addEventListener('click', e => {
+      if (e.target.closest('.dp-drag-handle')) return;
+      g.classList.toggle('collapsed');
+    });
     group.controls.forEach(ctrl => gb.appendChild(buildRow(ctrl)));
     g.appendChild(h); g.appendChild(gb); body.appendChild(g);
+  });
+  makeReorderable(body, 'dp-group', 'dp-drag-handle');
+  DEV_GROUPS.forEach(group => {
+    const gb = body.querySelector('.dp-group[data-key="' + CSS.escape(group.title) + '"] .dp-group-body');
+    makeReorderable(gb, 'dp-row', 'dp-row-handle');
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Drag-to-reorder (groups, and settings within a group) — pointer-based
+   so it works the same on touch and mouse.
+--------------------------------------------------------------------- */
+function makeReorderable(container, itemClass, handleClass){
+  let dragEl = null;
+  container.addEventListener('pointerdown', e => {
+    const handle = e.target.closest('.' + handleClass);
+    if (!handle || !container.contains(handle)) return;
+    const item = handle.closest('.' + itemClass);
+    if (!item || item.parentElement !== container) return;
+    e.preventDefault();
+    dragEl = item;
+    dragEl.classList.add('dp-dragging');
+    tryCapture(handle, e.pointerId);
+
+    function move(ev){
+      if (!dragEl) return;
+      const siblings = Array.from(container.children).filter(c => c.classList.contains(itemClass) && c !== dragEl);
+      for (const sib of siblings){
+        const r = sib.getBoundingClientRect();
+        const mid = r.top + r.height / 2;
+        if (ev.clientY < mid){
+          container.insertBefore(dragEl, sib);
+          break;
+        } else if (sib === siblings[siblings.length - 1]){
+          container.appendChild(dragEl);
+        }
+      }
+    }
+    function up(){
+      if (dragEl) dragEl.classList.remove('dp-dragging');
+      dragEl = null;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   });
 }
 
@@ -161,6 +268,11 @@ function round(v, d){ const m = Math.pow(10,d); return Math.round(v*m)/m; }
 function buildRow(ctrl){
   const row = document.createElement('div');
   row.className = 'dp-row';
+  row.dataset.key = ctrl.key;
+  const handle = document.createElement('span');
+  handle.className = 'dp-row-handle dp-drag-handle';
+  handle.textContent = '⠿';
+  row.appendChild(handle);
   const label = document.createElement('label');
   label.textContent = ctrl.label;
   row.appendChild(label);
@@ -178,9 +290,12 @@ function buildRow(ctrl){
       v = parseFloat(v);
       if (isNaN(v)) return;
       cfg[ctrl.key] = v;
-      // slider handle visually clamps to its own range; the typed value is
-      // still the real value used by the sim (per project convention)
-      slider.value = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), v));
+      // §12h: typing beyond the current bound actually expands that bound
+      // (typed value ± 20%), not just a visual clamp of the slider handle.
+      let mn = parseFloat(slider.min), mx = parseFloat(slider.max);
+      if (v > mx) { slider.max = v + Math.max(Math.abs(v), Math.abs(mx - mn), 1) * 0.2; }
+      if (v < mn) { slider.min = v - Math.max(Math.abs(v), Math.abs(mx - mn), 1) * 0.2; }
+      slider.value = v;
       numInput.value = round(v, 3);
       if (ctrl.onChange) ctrl.onChange(v);
     }
@@ -210,34 +325,206 @@ function buildRow(ctrl){
    Dev panel drag + resize (chrome only — not subject to the %-unit rule,
    which applies to the animation's own position/size controls)
 --------------------------------------------------------------------- */
+function tryCapture(el, pointerId){
+  try { el.setPointerCapture(pointerId); } catch (err) { /* no active pointer to capture — window-level listeners below still work */ }
+}
+
 function initPanelDrag(){
   const panel = document.getElementById('devPanel');
   const header = document.getElementById('dpHeader');
-  let dragging = false, startX, startY, startLeft, startTop;
   header.addEventListener('pointerdown', e => {
-    dragging = true; header.setPointerCapture(e.pointerId);
+    if (e.target.closest('.dp-icon-btn')) return;
+    tryCapture(header, e.pointerId);
     const r = panel.getBoundingClientRect();
-    startX = e.clientX; startY = e.clientY; startLeft = r.left; startTop = r.top;
+    const startX = e.clientX, startY = e.clientY, startLeft = r.left, startTop = r.top;
     panel.style.right = 'auto';
-  });
-  header.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    panel.style.left = Math.max(0, Math.min(window.innerWidth - 40, startLeft + (e.clientX - startX))) + 'px';
-    panel.style.top = Math.max(0, Math.min(window.innerHeight - 40, startTop + (e.clientY - startY))) + 'px';
-  });
-  header.addEventListener('pointerup', () => dragging = false);
 
-  const resizer = document.getElementById('devResize');
-  let resizing = false, rStartX, rStartY, rStartW;
-  resizer.addEventListener('pointerdown', e => {
-    resizing = true; resizer.setPointerCapture(e.pointerId);
-    rStartX = e.clientX; rStartY = e.clientY; rStartW = panel.getBoundingClientRect().width;
+    function move(ev){
+      panel.style.left = Math.max(0, Math.min(window.innerWidth - 40, startLeft + (ev.clientX - startX))) + 'px';
+      panel.style.top = Math.max(0, Math.min(window.innerHeight - 40, startTop + (ev.clientY - startY))) + 'px';
+    }
+    function up(){ window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   });
-  resizer.addEventListener('pointermove', e => {
-    if (!resizing) return;
-    panel.style.width = Math.max(220, Math.min(window.innerWidth - 20, rStartW + (e.clientX - rStartX))) + 'px';
+}
+
+/* All 4 edges + all 4 corners resizable, per §12c. */
+function initResizeHandles(){
+  const panel = document.getElementById('devPanel');
+  document.querySelectorAll('.dp-resize').forEach(handle => {
+    const dir = handle.dataset.dir;
+    handle.addEventListener('pointerdown', e => {
+      tryCapture(handle, e.pointerId);
+      const sx = e.clientX, sy = e.clientY;
+      const startRect = panel.getBoundingClientRect();
+      panel.style.right = 'auto';
+
+      function move(ev){
+        const dx = ev.clientX - sx, dy = ev.clientY - sy;
+        let { left, top, width, height } = startRect;
+        const minW = 220, minH = 140;
+        if (dir.includes('e')) width = Math.max(minW, Math.min(window.innerWidth - left, startRect.width + dx));
+        if (dir.includes('s')) height = Math.max(minH, Math.min(window.innerHeight - top, startRect.height + dy));
+        if (dir.includes('w')) { width = Math.max(minW, startRect.width - dx); left = startRect.left + (startRect.width - width); }
+        if (dir.includes('n')) { height = Math.max(minH, startRect.height - dy); top = startRect.top + (startRect.height - height); }
+        panel.style.width = width + 'px';
+        panel.style.height = height + 'px';
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+      }
+      function up(){ window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); }
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
   });
-  resizer.addEventListener('pointerup', () => resizing = false);
+}
+
+/* ---------------------------------------------------------------------
+   Copy / Save / Reset settings (§12d), reorderable-group/setting order
+   captured alongside values (§12e), panel size/position saved separately
+   per device class (§12f).
+--------------------------------------------------------------------- */
+const SETTINGS_KEY = 'dickoClicko.devSettings';
+const GEOM_KEY_PREFIX = 'dickoClicko.devPanelGeom.';
+const isMobileClass = () => window.matchMedia('(max-width: 767px)').matches;
+// which tab (Desktop/Mobile, §12f) is active — the panel's own geometry keys off
+// this explicit selection, not the live viewport, so it can be previewed/tuned
+// without actually resizing the browser. Every functional setting in this
+// project is already %/vmin-based (§12a), so none of them need to be
+// device-split — only the panel's own chrome (§12c) does, per §12f's own text.
+let activeDeviceTab = isMobileClass() ? 'mobile' : 'desktop';
+
+function getPanelOrder(){
+  return Array.from(document.querySelectorAll('#dpGroups > .dp-group')).map(g => ({
+    key: g.dataset.key,
+    settings: Array.from(g.querySelectorAll('.dp-row')).map(r => r.dataset.key),
+  }));
+}
+
+function applyOrder(order){
+  const groupsContainer = document.getElementById('dpGroups');
+  (order || []).forEach(g => {
+    const groupEl = groupsContainer.querySelector('.dp-group[data-key="' + CSS.escape(g.key) + '"]');
+    if (!groupEl) return;
+    groupsContainer.appendChild(groupEl);
+    const groupBody = groupEl.querySelector('.dp-group-body');
+    (g.settings || []).forEach(k => {
+      const rowEl = groupBody.querySelector('.dp-row[data-key="' + CSS.escape(k) + '"]');
+      if (rowEl) groupBody.appendChild(rowEl);
+    });
+  });
+}
+
+function applyValues(values){
+  DEV_GROUPS.forEach(group => group.controls.forEach(ctrl => {
+    if (!(ctrl.key in (values || {}))) return;
+    const v = values[ctrl.key];
+    const el = numEls[ctrl.key];
+    if (ctrl.type === 'slider'){
+      cfg[ctrl.key] = v;
+      if (v > parseFloat(el.slider.max)) el.slider.max = v;
+      if (v < parseFloat(el.slider.min)) el.slider.min = v;
+      el.slider.value = v; el.numInput.value = round(v, 3);
+      if (ctrl.onChange) ctrl.onChange(v);
+    } else if (ctrl.type === 'color'){
+      cfg[ctrl.key] = v;
+      const input = document.querySelector('.dp-row[data-key="' + CSS.escape(ctrl.key) + '"] input[type=color]');
+      if (input) input.value = v;
+    } else if (ctrl.type === 'checkbox'){
+      cfg[ctrl.key] = v;
+      const input = document.querySelector('.dp-row[data-key="' + CSS.escape(ctrl.key) + '"] input[type=checkbox]');
+      if (input) input.checked = v;
+    }
+  }));
+}
+
+function getPanelGeometry(){
+  const r = document.getElementById('devPanel').getBoundingClientRect();
+  return { left: r.left, top: r.top, width: r.width, height: r.height };
+}
+
+function applyPanelGeometry(geom){
+  if (!geom) return;
+  const panel = document.getElementById('devPanel');
+  panel.style.right = 'auto';
+  panel.style.left = geom.left + 'px';
+  panel.style.top = geom.top + 'px';
+  panel.style.width = geom.width + 'px';
+  panel.style.height = geom.height + 'px';
+}
+
+function currentGeomKey(){ return GEOM_KEY_PREFIX + activeDeviceTab; }
+
+function saveSettings(){
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ values: { ...cfg }, order: getPanelOrder() }));
+    localStorage.setItem(currentGeomKey(), JSON.stringify(getPanelGeometry()));
+  } catch (err) { /* localStorage unavailable — dev-only convenience, fail silently */ }
+}
+
+function resetSettings(){
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (err) { saved = null; }
+  if (saved){
+    applyOrder(saved.order);
+    applyValues(saved.values);
+  }
+  let geom = null;
+  try { geom = JSON.parse(localStorage.getItem(currentGeomKey())); } catch (err) { geom = null; }
+  applyPanelGeometry(geom);
+}
+
+function copySettings(){
+  const current = activeDeviceTab;
+  const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
+  let otherGeom = null;
+  try { otherGeom = JSON.parse(localStorage.getItem(GEOM_KEY_PREFIX + other)); } catch (err) { otherGeom = null; }
+  const snapshot = {
+    values: { ...cfg },
+    order: getPanelOrder(),
+    panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
+  };
+  const text = JSON.stringify(snapshot, null, 2);
+  const btn = document.getElementById('dpCopyBtn');
+  const flash = msg => { const orig = btn.textContent; btn.textContent = msg; setTimeout(() => btn.textContent = orig, 900); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => flash('Copied!')).catch(() => flash('Copy failed'));
+  } else {
+    flash('Copy failed');
+  }
+}
+
+function initDeviceTabs(){
+  const buttons = document.querySelectorAll('.dp-tab-btn');
+  function refreshActive(){
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === activeDeviceTab));
+  }
+  buttons.forEach(b => b.addEventListener('click', () => {
+    activeDeviceTab = b.dataset.tab;
+    refreshActive();
+    let geom = null;
+    try { geom = JSON.parse(localStorage.getItem(currentGeomKey())); } catch (err) { geom = null; }
+    applyPanelGeometry(geom); // preview that tab's saved panel geometry, even without actually resizing the browser
+  }));
+  refreshActive();
+}
+
+function initDevPanelChrome(){
+  document.getElementById('dpCopyBtn').addEventListener('click', copySettings);
+  document.getElementById('dpSaveBtn').addEventListener('click', saveSettings);
+  document.getElementById('dpResetBtn').addEventListener('click', resetSettings);
+  document.getElementById('dpCollapseBtn').addEventListener('click', () => {
+    const panel = document.getElementById('devPanel');
+    panel.classList.toggle('dp-collapsed');
+    document.getElementById('dpCollapseBtn').textContent = panel.classList.contains('dp-collapsed') ? '+' : '–';
+  });
+  window.addEventListener('keydown', e => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.key === 'd' || e.key === 'D') document.getElementById('devPanel').classList.toggle('hidden');
+    else if (e.key === 'r' || e.key === 'R') resetSettings();
+  });
 }
 
 /* ---------------------------------------------------------------------
@@ -380,26 +667,53 @@ function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex){
   }
 }
 
-function cutRopeAt(hit){
+const CUT_SWEEP_BASE_SEC = 0.35;
+
+function releasePiece(piece){
+  // a perfectly vertical piece has no asymmetry to topple over on — give it a
+  // small random initial tilt (around its own cut-point end) so gravity and
+  // the floor collision naturally fold it into a heap instead of it standing
+  // there as a rigid straight column. Applied at release time (not at the
+  // moment of cutting) so the piece still looks attached while the cut
+  // sweep is playing.
+  const angle = (Math.random() - 0.5) * 0.6;
+  const pivot = piece.points[0];
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  for (let i = 1; i < piece.points.length; i++){
+    const p = piece.points[i];
+    const dx = p.x - pivot.x, dy = p.y - pivot.y;
+    p.x = pivot.x + dx * cosA - dy * sinA;
+    p.y = pivot.y + dx * sinA + dy * cosA;
+    p.oldx = p.x; p.oldy = p.y;
+  }
+  piece.frozen = false;
+}
+
+function cutRopeAt(hit, clickX, clickY){
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
+  const a = mainRope.points[idx - 1], b = mainRope.points[idx];
+  let tx = b.x - a.x, ty = b.y - a.y;
+  const tlen = Math.hypot(tx, ty) || 1;
+  tx /= tlen; ty /= tlen;
+  // perpendicular to the rope's local tangent, oriented so (1,0) is screen-right
+  // when the rope hangs straight down (tangent (0,1)) — used to tell which side
+  // of the rope the click landed on, so the cut sweep runs the direction the
+  // user actually clicked from, not just a fixed screen-left/right assumption.
+  const nx = ty, ny = -tx;
+  const side = (clickX - hit.x) * nx + (clickY - hit.y) * ny;
+
   const lowerPoints = mainRope.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
   mainRope.points = mainRope.points.slice(0, idx + 1);
   if (lowerPoints.length >= 2){
-    // a perfectly vertical piece has no asymmetry to topple over on — give it a
-    // small random initial tilt (around its own cut-point end) so gravity and
-    // the floor collision naturally fold it into a heap instead of it standing
-    // there as a rigid straight column.
-    const angle = (Math.random() - 0.5) * 0.6;
-    const pivot = lowerPoints[0];
-    const cosA = Math.cos(angle), sinA = Math.sin(angle);
-    for (let i = 1; i < lowerPoints.length; i++){
-      const p = lowerPoints[i];
-      const dx = p.x - pivot.x, dy = p.y - pivot.y;
-      p.x = pivot.x + dx * cosA - dy * sinA;
-      p.y = pivot.y + dx * sinA + dy * cosA;
-      p.oldx = p.x; p.oldy = p.y;
-    }
-    fallenPieces.push({ points: lowerPoints, segLen: mainRope.segLen });
+    const half = vmin(cfg.ropeThickness) / 2;
+    const piece = {
+      points: lowerPoints, segLen: mainRope.segLen,
+      frozen: true, cutProgress: 0,
+      cutPoint: { x: hit.x, y: hit.y }, cutNx: nx, cutNy: ny,
+      cutStartOffset: side > 0 ? half : -half,
+      cutEndOffset: side > 0 ? -half : half,
+    };
+    fallenPieces.push(piece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
 }
@@ -446,7 +760,7 @@ function onPointerUp(e){
   if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
     clearTimeout(pendingClick.timer);
     pendingClick = null;
-    cutRopeAt(info.hit);
+    cutRopeAt(info.hit, info.x, info.y);
   } else {
     if (pendingClick) clearTimeout(pendingClick.timer);
     pendingClick = {
@@ -478,21 +792,28 @@ function update(rawDt){
   if (growing) growRope(rawDt);
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0);
 
+  fallenPieces.forEach(piece => {
+    if (piece.frozen){
+      piece.cutProgress += rawDt * cfg.cutSpeed / CUT_SWEEP_BASE_SEC;
+      if (piece.cutProgress >= 1){ piece.cutProgress = 1; releasePiece(piece); }
+    }
+  });
+
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeWeight * cfg.ropeFallSpeed;
-  fallenPieces.forEach(piece => integrateChain(piece.points, piece.segLen, dt, fallGravity, -1));
+  fallenPieces.forEach(piece => { if (!piece.frozen) integrateChain(piece.points, piece.segLen, dt, fallGravity, -1); });
 
   if (cfg.floorEnabled){
     const fY = floorY();
-    fallenPieces.forEach(piece => piece.points.forEach(p => {
+    fallenPieces.forEach(piece => { if (!piece.frozen) piece.points.forEach(p => {
       if (p.y > fY){
         p.y = fY;
         p.oldx = p.x - (p.x - p.oldx) * 0.3;
         p.oldy = p.y;
       }
-    }));
+    }); });
     pileRepulsion();
   } else {
-    fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < window.innerHeight * 1.5));
+    fallenPieces = fallenPieces.filter(piece => piece.frozen || piece.points.some(p => p.y < window.innerHeight * 1.5));
   }
 }
 
@@ -516,6 +837,20 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult){
   }
 }
 
+function renderCutSweep(piece){
+  const t = piece.cutProgress;
+  const off = piece.cutStartOffset + (piece.cutEndOffset - piece.cutStartOffset) * t;
+  const x1 = piece.cutPoint.x + piece.cutNx * piece.cutStartOffset, y1 = piece.cutPoint.y + piece.cutNy * piece.cutStartOffset;
+  const x2 = piece.cutPoint.x + piece.cutNx * off, y2 = piece.cutPoint.y + piece.cutNy * off;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(2, vmin(cfg.ropeThickness) * 0.35);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
 function render(){
   ctx.fillStyle = cfg.backgroundColor;
   ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
@@ -529,6 +864,7 @@ function render(){
   const thickness = vmin(cfg.ropeThickness);
   fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc));
   strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc);
+  fallenPieces.forEach(piece => { if (piece.frozen) renderCutSweep(piece); });
 
   const anchor = circleAnchor();
   ctx.beginPath();
@@ -562,6 +898,10 @@ if (DEV_MODE){
   document.getElementById('devPanel').classList.remove('hidden');
   buildDevPanel();
   initPanelDrag();
+  initResizeHandles();
+  initDevPanelChrome();
+  initDeviceTabs();
+  resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 }
 requestAnimationFrame(loop);
 
