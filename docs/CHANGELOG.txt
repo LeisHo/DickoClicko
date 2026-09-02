@@ -256,6 +256,67 @@ Verified:
   limitation carried from earlier entries).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  1:43 AM - 1:49 AM EDT
+
+Fixed 2 more real issues from the user's own hands-on testing, added a
+Minimum Rope Length control, and prepared 2 new sliders (Click Hold Max
+Duration, Intensity Ceiling) for a charged-punch-on-release mechanic whose
+exact interaction with the existing click-hold-to-grow behavior is being
+clarified with the user before implementation.
+
+Fixed:
+- The rope's grown/extended portion behaved like a stiff stick instead of a
+  flexible rope, and couldn't be cut at all. Root cause: mainRope's point
+  count was fixed at 14 for the rope's entire life -- growing it just
+  stretched those same 14 points further and further apart, so a long rope
+  had very few "joints" relative to its length (looks/behaves stiff) and
+  its visually-smoothed curve (drawn between increasingly sparse, distant
+  points) increasingly diverged from the straight-line segments
+  hitTestRope() actually tests clicks against. Fixed by replacing the
+  direct segLen-only growth/resize path with setMainRopeTotalLength(),
+  which adds (or removes) points to hold a roughly constant segment density
+  (TARGET_SEG_LEN_VH, matching the rope's own default density) as the total
+  length changes -- new points extend along the current tip's tangent
+  direction rather than appearing at the same spot. Both growRope() and the
+  Rope Length slider's onChange now go through this.
+- Growing the rope until it hit the floor just piled through it with no
+  reaction -- the main rope (still attached to the circle) never had floor
+  collision or pile-repulsion at all, only cut-off pieces did. Fixed by
+  including mainRope's own points in the same floor-clamp and
+  pileRepulsion() pass every frame, alongside every fallen piece's points
+  (pileRepulsion() now takes an explicit points array instead of building
+  one from fallenPieces internally).
+
+Added:
+- Minimum Rope Length dev control (ROPE CUT group): cutRopeAt() now refuses
+  a cut entirely (no change at all, rope stays whole) if it would leave the
+  anchor-side remainder shorter than this value, per explicit request.
+- Click Hold Max Duration and Intensity Ceiling dev controls, requested
+  for a new mechanic: hold-and-release scales punch intensity by how long
+  the click was held (up to the ceiling at the max duration). Not yet
+  wired to any behavior -- clarifying with the user first how this
+  interacts with the existing click-hold-to-grow gesture, since as
+  literally described both are triggered by the same click-and-hold input.
+
+Verified:
+- Grew the rope by 2 simulated seconds (default rate) and confirmed point
+  count increased from 14 to 23 while segLen stayed close to its original
+  ~24.9px density (24.5px) -- density held roughly constant instead of the
+  segments stretching.
+- Cut a point well within the newly-grown extension (index 20 of 23,
+  outside the original 14-point span) and confirmed it registered as a hit
+  and cut correctly -- previously unreachable.
+- Grew the rope far past the floor, ran it to rest, and confirmed every
+  point clamped to floorY (max overshoot ~0.17px) with points spreading
+  across a ~250px range of x-positions at the floor rather than stacking in
+  a rigid vertical line -- confirms real piling, not clipping through.
+- Confirmed Minimum Rope Length actually refuses a too-short cut (identical
+  fallen-piece count and main-rope point count before/after) and still
+  allows a cut beyond the minimum on the same rope.
+- node --check clean on the extracted inline script; debug hook removed
+  before commit (grep-confirmed).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

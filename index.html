@@ -149,7 +149,7 @@ const DEV_GROUPS = [
   { title:'ROPE', controls:[
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:1.4 },
     { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:90, step:1,   def:45,
-      onChange: v => { if (mainRope) mainRope.segLen = vh(v) / (mainRope.points.length - 1); } },
+      onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
   ]},
@@ -168,6 +168,7 @@ const DEV_GROUPS = [
   { title:'ROPE CUT', controls:[
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
+    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:1, max:30, step:0.5, def:8 },
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#4a4a4a' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:1.5 },
@@ -683,6 +684,16 @@ const CONSTRAINT_ITERATIONS = 6;
 const DAMPING = 0.99;
 const HOLD_THRESHOLD_MS = 180;
 const MAX_FALLEN_PIECES = 60;
+// target segment length (as %vh, matching the default rope's own density) —
+// growth/manual-length-change ADD points to hold roughly this density rather
+// than stretching a fixed point count further apart. A fixed point count
+// over a growing length gets sparser and sparser, which both looks and
+// behaves like a stiff stick instead of a rope (too few joints to bend at),
+// and — since hit-testing walks the same straight-line segments — makes the
+// visually-curved (smoothed) rope increasingly miss its own hit-test
+// geometry the longer/sparser it gets, which is why an extended piece
+// stopped being cuttable.
+const TARGET_SEG_LEN_VH = 45 / (POINT_COUNT - 1);
 
 function makeChain(n, x, y, segLen){
   const pts = [];
@@ -700,6 +711,27 @@ function resetMainRope(){
     points: makeChain(POINT_COUNT, anchor.x, anchor.y, totalLen / (POINT_COUNT - 1)),
     segLen: totalLen / (POINT_COUNT - 1),
   };
+}
+
+function setMainRopeTotalLength(newTotalPx){
+  const targetSeg = vh(TARGET_SEG_LEN_VH);
+  const desiredCount = Math.max(2, Math.round(newTotalPx / targetSeg) + 1);
+  const pts = mainRope.points;
+  if (desiredCount > pts.length){
+    const prev = pts[pts.length - 2] || pts[0];
+    const tip = pts[pts.length - 1];
+    let dx = tip.x - prev.x, dy = tip.y - prev.y;
+    const dlen = Math.hypot(dx, dy) || 1;
+    dx /= dlen; dy /= dlen;
+    while (pts.length < desiredCount){
+      const last = pts[pts.length - 1];
+      const nx = last.x + dx * targetSeg, ny = last.y + dy * targetSeg;
+      pts.push({ x: nx, y: ny, oldx: nx, oldy: ny });
+    }
+  } else if (desiredCount < pts.length){
+    pts.length = Math.max(2, desiredCount);
+  }
+  mainRope.segLen = newTotalPx / (pts.length - 1);
 }
 
 function circleAnchor(){
@@ -749,9 +781,7 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex){
   }
 }
 
-function pileRepulsion(){
-  const all = [];
-  fallenPieces.forEach(piece => piece.points.forEach(p => all.push(p)));
+function pileRepulsion(all){
   const minSep = Math.max(2, vmin(cfg.ropeThickness) * 1.15);
   for (let i = 0; i < all.length; i++){
     for (let j = i + 1; j < all.length; j++){
@@ -776,7 +806,7 @@ let growing = false;
 function growRope(dtSeconds){
   const growth = vh(cfg.ropeGrowthRate) * dtSeconds;
   const newTotalPx = mainRope.segLen * (mainRope.points.length - 1) + growth;
-  mainRope.segLen = newTotalPx / (mainRope.points.length - 1);
+  setMainRopeTotalLength(newTotalPx);
   setCfg('ropeLength', newTotalPx / window.innerHeight * 100);
 }
 
@@ -797,6 +827,11 @@ const CUT_SWEEP_BASE_SEC = 0.35;
 
 function cutRopeAt(hit, clickX, clickY){
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
+  // refuse the cut entirely if it would leave the remaining (anchor-side)
+  // rope shorter than the configured minimum — the rope stays whole rather
+  // than being clamped to some other length the user didn't ask for.
+  const remainingLen = idx * mainRope.segLen;
+  if (remainingLen < vh(cfg.minRopeLength)) return;
   const a = mainRope.points[idx - 1], b = mainRope.points[idx];
   let tx = b.x - a.x, ty = b.y - a.y;
   const tlen = Math.hypot(tx, ty) || 1;
@@ -943,15 +978,20 @@ function update(rawDt){
   fallenPieces.forEach(piece => integrateChain(piece.points, piece.segLen, dt, fallGravity, -1));
 
   if (cfg.floorEnabled){
+    // the main rope (still attached to the circle) collides with the floor
+    // too, not just cut-off pieces — otherwise growing it long enough to
+    // reach the floor just clips straight through with no reaction at all.
     const fY = floorY();
-    fallenPieces.forEach(piece => piece.points.forEach(p => {
+    const allPoints = mainRope.points.slice();
+    fallenPieces.forEach(piece => allPoints.push(...piece.points));
+    allPoints.forEach(p => {
       if (p.y > fY){
         p.y = fY;
         p.oldx = p.x - (p.x - p.oldx) * 0.3;
         p.oldy = p.y;
       }
-    }));
-    pileRepulsion();
+    });
+    pileRepulsion(allPoints);
   } else {
     fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < window.innerHeight * 1.5));
   }

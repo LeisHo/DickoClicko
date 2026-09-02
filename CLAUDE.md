@@ -92,3 +92,18 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   showing whatever the *previous* tab's live panel style/position happened
   to be instead of resetting; caught by explicitly testing a tab with no
   saved state after the other tab had unsaved live changes.
+- The rope's point count is NOT fixed — growing/resizing it goes through
+  `setMainRopeTotalLength()`, which adds/removes points to hold a roughly
+  constant segment density, not just a fixed 14 points stretched further
+  apart. A fixed count was the real cause of two real user-reported bugs at
+  once: the grown rope acting stiff (too few joints over its length) and
+  its extended portion not being cuttable (the smoothed render curve
+  diverging from hit-testing's straight-line segments as points got
+  sparser). Anything that changes the rope's total length needs to go
+  through this function, never assign `segLen` directly against the
+  existing point count.
+- The main rope collides with and piles on the floor too, not just cut-off
+  pieces — `pileRepulsion()` takes an explicit points array now (mainRope's
+  points concatenated with every fallen piece's), not just fallenPieces.
+  Before this, growing the rope past the floor just clipped straight
+  through with no reaction at all.

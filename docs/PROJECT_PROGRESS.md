@@ -18,32 +18,35 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — everything below is done, verified, and pushed.
+Deciding, with the user, exactly what the new "Click Hold Max Duration" /
+"Intensity Ceiling" charged-punch-on-release mechanic should do to the
+existing click-hold-to-grow behavior before implementing it — as literally
+described the two seem to conflict (both are triggered by the same
+click-and-hold gesture).
 
 ## Recently completed
 
 - Full build: circle + rope verlet physics (punch, hold-to-grow,
   double-click-to-cut with a directional cut-sweep animation and a Cut Speed
   control), floor collision + piling, full dev panel compliant with the
-  workspace's §12 standard (resize/hide/collapse, Copy/Save/Reset,
-  drag-to-reorder, Desktop/Mobile tabs, the built-in "Dev Panel"
-  appearance-settings group, both-direction auto-expanding sliders).
-- Real-usage bug reports from the user, fixed and verified:
-  - Double-click-to-cut intermittently "just stopped working" — root cause
-    was a stale `holdTimer` race in the pointer gesture state machine (see
-    CODE_SUMMARY Gotchas); fixed by always clearing it at the start of a new
-    pointerdown.
-  - Cutting the rope while it was already mid-swing caused a visible freeze
-    before the swing continued — the cut-sweep animation was pausing the cut
-    piece's physics for its own duration; fixed so the sweep is purely
-    cosmetic and the piece keeps moving continuously (inheriting its swing
-    velocity) from the moment of the cut.
-  - The rope now renders on top of the circle (was behind it).
+  workspace's §12 standard.
+- Real-usage bug reports from the user, fixed and verified: double-click-
+  to-cut intermittently stopping working (stale holdTimer race), a visible
+  freeze when cutting the rope mid-swing (the cut-sweep animation was
+  pausing the piece's physics), and the rope rendering behind the circle.
+- More real-usage reports, fixed and verified: the rope acting stick-stiff
+  once extended, and its extended portion not being cuttable — both traced
+  to the same root cause (a fixed 14-point count just got stretched thinner
+  as the rope grew, instead of gaining points to hold a constant segment
+  density); the main rope now also collides with and piles on the floor
+  (previously only cut-off pieces did); added a Minimum Rope Length slider
+  that refuses a cut that would leave the remainder shorter than it.
 
 ## What's next
 
-Nothing queued. Possible future direction the user mentioned but didn't
-commit to: a Three.js-based physics/collision upgrade.
+Land on the hold-charge-punch design with the user, implement it. Beyond
+that, nothing queued — possible future direction the user mentioned but
+didn't commit to: a Three.js-based physics/collision upgrade.
 
 ## Open questions / blockers
 

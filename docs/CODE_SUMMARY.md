@@ -23,8 +23,9 @@ DEV_GROUPS (config array: one entry per *D*/*DC* from the spec)
     -> buildDevPanel() generates the panel DOM from DEV_GROUPS
     -> every render/physics read of a tunable value reads cfg[key] directly,
        each frame -- so most sliders are "live" with zero extra wiring.
-       The two exceptions are ropeLength and ropeGrowthRate, which don't
-       drive the rope's segment length directly every frame (see Gotchas).
+       The exception is ropeLength/ropeGrowthRate, which go through
+       setMainRopeTotalLength() instead of a direct per-frame read
+       (see Gotchas).
 
 circleAnchor() / vw() / vh() / vmin()
     -> convert cfg's %-based position/size values to CSS pixels each frame,
@@ -38,15 +39,24 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        moving continuously from the very next frame, inheriting whatever
        velocity it had at the moment of the cut (see Gotchas -- an earlier
        version froze it during the cut-sweep animation and that was wrong).
+       mainRope's own point COUNT is not fixed -- setMainRopeTotalLength()
+       adds/removes points to hold a roughly constant segment length
+       (TARGET_SEG_LEN_VH) as the rope grows/shrinks, so a long rope stays
+       just as flexible (and just as accurately hit-testable) as a short
+       one, instead of a fixed 14 points getting stretched thinner and
+       thinner into something stick-stiff (see Gotchas).
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle
     2. grow mainRope if a hold-to-grow gesture is active
+       (setMainRopeTotalLength(), adds points as needed)
     3. advance every not-yet-fully-swept piece's cutProgress (cosmetic only)
     4. integrateChain() for mainRope, then for every fallenPieces entry
        (its own gravity scale)
-    5. floor collision (clamp to floorY) + pileRepulsion() across all
-       fallen-piece points, if the floor is enabled; otherwise cull pieces
+    5. floor collision (clamp to floorY) + pileRepulsion() across
+       mainRope's points AND every fallen-piece's points together, if the
+       floor is enabled -- the main rope collides with and piles on the
+       floor too, not just cut-off pieces; otherwise cull fallen pieces
        once they've fallen well below the viewport
 
 render() each frame: background -> floor -> circle -> main rope -> fallen
@@ -91,17 +101,39 @@ GOTCHAS
   the code can't yet know a second click won't follow. That delay is the
   intended tradeoff of this disambiguation approach, not a bug.
 - `ropeLength`'s slider does NOT drive the rope's current segment length on
-  its own every frame -- `mainRope.segLen` is deliberately decoupled from
-  `cfg.ropeLength` after the rope is created, because hold-to-grow and
-  cutting both need to change the *effective* length/point-count without a
-  manually-dragged slider snapping it back to the full default. Dragging the
-  `Rope Length` slider calls its `onChange` hook, which rescales
-  `mainRope.segLen` using the rope's *current* point count (so it still
-  works correctly on an already-cut remainder, without regenerating the
-  chain). Any new dev control whose value needs to affect an in-flight
-  simulation state (not just a per-frame render/physics read) needs the same
-  `onChange`-hook treatment -- see `ropeLength`'s entry in `DEV_GROUPS` for
-  the pattern.
+  its own every frame -- `mainRope`'s point count/`segLen` are deliberately
+  decoupled from `cfg.ropeLength` after the rope is created, because
+  hold-to-grow and cutting both need to change the *effective*
+  length/point-count without a manually-dragged slider snapping it back to
+  the full default. Dragging the `Rope Length` slider calls its `onChange`
+  hook, which calls `setMainRopeTotalLength()` using the rope's *current*
+  point count as the base (so it still works correctly on an already-cut
+  remainder, without regenerating the chain). Any new dev control whose
+  value needs to affect an in-flight simulation state (not just a per-frame
+  render/physics read) needs the same `onChange`-hook treatment -- see
+  `ropeLength`'s entry in `DEV_GROUPS` for the pattern.
+- `setMainRopeTotalLength(newTotalPx)` is what both `growRope()` and the
+  `Rope Length` slider's `onChange` call -- it never just stretches the
+  existing points; it computes how many points *should* exist to hold
+  `TARGET_SEG_LEN_VH` and adds new ones (extending along the current tip's
+  tangent direction, not just plopped at the same spot) or truncates as
+  needed. A fixed point count that only got stretched further apart as the
+  rope grew was the real cause of two real bugs the user reported: the
+  grown rope behaving like a stiff stick (too few joints over the length to
+  bend realistically) and its extended portion not being cuttable (the
+  visually-smoothed curve, drawn between increasingly sparse/distant points,
+  increasingly diverges from the straight-line segments `hitTestRope()`
+  actually tests against).
+- `cutRopeAt()` refuses the cut entirely (returns with no change at all) if
+  it would leave the anchor-side remainder shorter than `cfg.minRopeLength`
+  -- it does not clamp the cut point to the minimum, the rope just stays
+  whole.
+- `pileRepulsion(points)` takes an explicit points array now (previously
+  built it internally from `fallenPieces` only) -- `update()` passes
+  `mainRope.points` concatenated with every fallen piece's points, so a
+  long main rope resting on the floor piles/spreads against itself and
+  against already-cut pieces the same way cut pieces pile against each
+  other.
 - A perfectly vertical cut piece has no asymmetry to fall over on, so
   `cutRopeAt()` applies a small random initial tilt (rotated around the
   piece's own cut-point end), applied *immediately* at cut time -- without
