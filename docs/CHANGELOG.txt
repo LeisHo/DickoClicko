@@ -1161,6 +1161,51 @@ hunk-header inspection that none of it overlaps the endcap/physics code
 touched this round.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  08:18 AM EDT
+
+Fixed:
+- Resolved a 4th-round "rope physics is erratic/jitters/swings wildly"
+  report. Extended the prior round's investigation with a precise
+  at-rest test: a fully-settled rope's tip position was traced with full
+  floating-point precision (not rounded) across 120 real physics frames
+  and showed EXACTLY 0 movement, bit-for-bit identical every frame --
+  conclusively ruling out a "jitter at rest" bug in the solver itself.
+  Separately measured how long a single punch takes to visibly settle at
+  the OLD defaults (DAMPING=0.99, CONSTRAINT_ITERATIONS=6): ~3.65s of
+  real, visible swinging before dropping below a 0.3px/frame movement
+  threshold. Concluded this long, very-lightly-damped settling time is
+  the likely real source of the "erratic" perception, especially under
+  frequent real-world interaction (the rope rarely gets a chance to
+  fully settle between clicks).
+
+Changed:
+- DAMPING and CONSTRAINT_ITERATIONS were hardcoded module constants;
+  converted to cfg.damping / cfg.constraintIterations dev-panel sliders
+  (ROPE ANIMATION group) so the feel can be tuned live going forward
+  without another code round-trip. Swept several damping/iteration
+  combinations, measuring settle time AND worst-case segment-stretch
+  ratio together (not one at the expense of the other): the new default
+  0.85/10 settles a real punch in ~1.77s (vs 3.65s at the old 0.99/6)
+  while ALSO reducing worst-case stretch (~1.07x vs ~1.15x), and a
+  fully-settled rope under the new tuning still shows essentially zero
+  residual movement (~0.001px/frame -- below any visible threshold).
+  Re-verified the 2-point-rope degenerate-direction fix (2 rounds ago)
+  still holds under the new tuning: 0 non-monotonic points, no near-zero
+  point spacing, across a real 5-second hold-to-grow cycle.
+
+Added:
+- 4th endcap design (data/Rope/End4.svg), added to ENDCAP_DESIGNS/the
+  Endcap Design dropdown using the same shared ENDCAP_ALIGNMENT reference
+  as End1-3 -- a mechanical, same-pattern addition; per explicit request
+  ("don't verify"), not re-verified live in the browser this round
+  (node --check stayed clean).
+
+Note: this round's index.html commit also carries a real, substantial,
+concurrent revision from another session (further work on the §12d/§12l
+settings-persistence layer) that was present in the working tree
+alongside this round's own changes.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

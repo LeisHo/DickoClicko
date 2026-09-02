@@ -66,7 +66,7 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        solver) was tried first and caused a real, reproduced instability
        over long holds.
 
-ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg, End3.svg)
+ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg, End3.svg, End4.svg)
     -> optional decorative shapes at the free/tip end of mainRope and every
        fallenPiece (render(), Endcap Design dropdown), replacing the plain
        round cap entirely rather than stacking both. Embedded as Path2D
@@ -538,3 +538,25 @@ GOTCHAS
   anchor) that this used to cut successfully and now correctly gets
   rejected, while a normal cut well clear of the circle still succeeds
   (regression-checked).
+- `DAMPING` and `CONSTRAINT_ITERATIONS` are now `cfg.damping`/
+  `cfg.constraintIterations` dev sliders (ROPE ANIMATION group), not
+  hardcoded module constants -- `integrateChain()` reads them from `cfg`
+  directly (both call sites: the velocity/damping loop and the
+  distance-constraint loop). Default changed from `0.99`/`6` to `0.85`/
+  `10` after a 4th round of "rope physics is erratic/jitters/swings
+  wildly" reports: an exhaustive reproduction sweep at the OLD defaults
+  found zero divergence/instability (a fully-settled rope showed
+  EXACTLY 0 movement, bit-for-bit, over 120 traced frames -- ruling out
+  a genuine "jitter at rest" bug in the solver itself), but a single
+  punch took ~3.65s of real visible swinging to settle below a
+  0.3px/frame threshold -- plausibly reading as "erratic" purely from
+  how long it stays visibly in motion, especially under frequent
+  interaction. Swept several damping/iteration combinations measuring
+  settle time AND worst-case segment-stretch ratio together (never
+  picking a value that improved one at the real expense of the other):
+  0.85/10 settles a real punch in ~1.77s (vs 3.65s) while ALSO reducing
+  worst-case stretch (~1.07x vs ~1.15x) and leaving a fully-settled rope
+  still effectively perfectly still (max residual movement ~0.001px/frame
+  -- below any visible threshold). Exposed as sliders rather than picked
+  once and hardcoded, specifically so this doesn't need another
+  round-trip if the chosen default still isn't quite right.

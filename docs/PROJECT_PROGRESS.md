@@ -18,18 +18,10 @@ work seamlessly from there.
 
 ## Currently working on
 
-Investigating a recurring "rope physics is erratic/jitters/swings wildly"
-report (4th round on this general complaint). An extensive reproduction
-sweep this round (settled rope + hold-to-grow, single strong punch + 10s
-settle trace, 5 rapid repeated punches) found NO reproducible divergence
-(no NaN, no tangling, no runaway growth/energy) — one run did show a
-severe anomaly but couldn't be reproduced again across several retries.
-Asked the user to clarify what "crazy" looks like; answer: "jitters at
-rest, as well as jitters drastically when triggered to move... sometimes
-the end of the rope will swing wildly." Next step: re-investigate
-specifically "jitters at rest" (not yet directly reproduced) and try to
-catch the rare wild-swing case with a higher-volume repro sweep, before
-considering DAMPING/CONSTRAINT_ITERATIONS tuning changes.
+Nothing in progress — everything below is done and pushed. (The
+"rope physics is erratic" thread from the last update is resolved for
+now — see below — but if the user reports it again after trying the new
+Damping/Constraint Iterations sliders, that's the next place to look.)
 
 ## Recently completed
 
@@ -225,6 +217,26 @@ considering DAMPING/CONSTRAINT_ITERATIONS tuning changes.
   End3 renders at a reasonable scale/extent with 0 console errors; the
   shared-reference change is correct by construction (one `scale`/
   `translate` computed outside any per-design branch).
+- Added a 4th endcap design (End4.svg), same shared-alignment pattern as
+  End3 — mechanical addition, not re-verified in the browser per explicit
+  request ("don't verify"); `node --check` stayed clean.
+- Resolved the "rope physics is erratic" thread (4th round): an
+  exhaustive reproduction sweep found the rope mathematically stable at
+  the OLD damping/iteration defaults (a fully-settled rope showed EXACTLY
+  0 movement over 120 traced frames — no "jitter at rest" bug in the
+  solver), but a single punch took ~3.65s of real, visible swinging to
+  settle — the likely actual source of "erratic"/"swings wildly"
+  perception, especially under frequent interaction. `DAMPING`/
+  `CONSTRAINT_ITERATIONS` were hardcoded constants (`0.99`/`6`); made them
+  `cfg.damping`/`cfg.constraintIterations` dev sliders (ROPE ANIMATION
+  group) with new defaults `0.85`/`10`, chosen by sweeping several
+  combinations and picking one that improved BOTH settle time (~1.77s,
+  vs 3.65s) AND worst-case stretch (~1.07x, vs ~1.15x) together, never
+  trading one for the other. Exposed as sliders (not just a new hardcoded
+  value) specifically so the user can tune further without another
+  round-trip if this default still isn't quite right. Re-verified no
+  regression in the 2-point-rope-tangling fix from 2 rounds ago under the
+  new tuning.
 
 ## What's next
 

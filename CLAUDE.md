@@ -238,6 +238,13 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   independent, directly user-tunable slider. Don't go back to reusing
   `isOnCircle()` here. See `docs/CODE_SUMMARY.md` Gotchas for the
   reproduction.
+- `DAMPING`/`CONSTRAINT_ITERATIONS` are `cfg.damping`/
+  `cfg.constraintIterations` dev sliders now (default `0.85`/`10`), not
+  hardcoded constants — changed after extensive testing showed the OLD
+  defaults (`0.99`/`6`) were mathematically stable (zero jitter measured
+  at true rest) but left a punch visibly swinging for ~3.65s, which is
+  the likely real cause behind repeated "rope physics is erratic" reports.
+  See `docs/CODE_SUMMARY.md` Gotchas for the full sweep of tested values.
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to

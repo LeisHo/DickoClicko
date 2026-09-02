@@ -169,6 +169,7 @@ const DEV_GROUPS = [
         { value:'end1', label:'End 1' },
         { value:'end2', label:'End 2' },
         { value:'end3', label:'End 3' },
+        { value:'end4', label:'End 4' },
       ] },
     { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1 },
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:2.8 },
@@ -185,6 +186,8 @@ const DEV_GROUPS = [
     { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1 },
     { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:1.2 },
     { key:'ropeWeight',      label:'Rope Weight',          type:'slider', unit:'x', min:0.1, max:5, step:0.1, def:1 },
+    { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.5, max:0.999, step:0.001, def:0.85 },
+    { key:'constraintIterations', label:'Constraint Iterations', type:'slider', unit:'x', min:1, max:20, step:1, def:10 },
   ]},
   { title:'ROPE GROWTH', controls:[
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
@@ -886,8 +889,6 @@ const vmin = pct => Math.min(window.innerWidth, window.innerHeight) * pct / 100;
    Fallen pieces: unpinned independent chains, inherit velocity at cut time.
 --------------------------------------------------------------------- */
 const POINT_COUNT = 14;
-const CONSTRAINT_ITERATIONS = 6;
-const DAMPING = 0.99;
 const HOLD_THRESHOLD_MS = 180;
 const MAX_FALLEN_PIECES = 60;
 // target segment length (as %vh, matching the default rope's own density) —
@@ -1010,8 +1011,8 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex) continue;
     const p = points[i];
-    const vx = (p.x - p.oldx) * DAMPING;
-    const vy = (p.y - p.oldy) * DAMPING;
+    const vx = (p.x - p.oldx) * cfg.damping;
+    const vy = (p.y - p.oldy) * cfg.damping;
     p.oldx = p.x; p.oldy = p.y;
     p.x += vx;
     p.y += vy + gravityAccel * dt * dt;
@@ -1022,8 +1023,10 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
   // segLen against it. An earlier version instead gave the solver a rising
   // "tipSegLen" target for that one segment every frame; that continuously
   // moving target acted as a sustained forcing function on the solver, and
-  // with only CONSTRAINT_ITERATIONS=6 sweeps and DAMPING=0.99 barely
-  // dissipating anything, residual correction error compounded over many
+  // with only 6 constraint-solve sweeps and 0.99 damping (the original
+  // hardcoded values -- both are now cfg.constraintIterations/cfg.damping
+  // dev sliders) barely dissipating anything, residual correction error
+  // compounded over many
   // seconds of holding into a real, reproduced bug: after ~4-15s of
   // continuous growth the tip (and nearby segments) built up a large,
   // visibly wild swing -- confirmed by a direct simulation showing segment
@@ -1032,7 +1035,7 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
   // directly (see positionGrowingTip()), never entering the iterative
   // solver at all, so it can't inject anything into it.
   const segCount = points.length - 1 - (skipLastSegment ? 1 : 0);
-  for (let iter = 0; iter < CONSTRAINT_ITERATIONS; iter++){
+  for (let iter = 0; iter < cfg.constraintIterations; iter++){
     for (let i = 0; i < segCount; i++){
       const a = points[i], b = points[i + 1];
       const dx = b.x - a.x, dy = b.y - a.y;
@@ -1462,6 +1465,7 @@ const ENDCAP_DESIGNS = {
   end1: { path: new Path2D('M38.6,59.26c-.05,7.84,1.01,14.56,5.54,21.66,4.62,7.24,1.46,8.92,6.22,12.79,2.85,2.31,4.82,1.49,8.04.51,2.39-.72,3.54-1.23,5.17-1.34h.22s0,0,0,0c1.63.11,2.78.62,5.17,1.34,3.22.98,5.19,1.8,8.04-.51,4.77-3.87,1.6-5.55,6.22-12.79,4.53-7.1,5.59-13.82,5.54-21.66h-50.16Z') },
   end2: { path: new Path2D('M42,89.45h-4.26c.03,3.87.23,7.72.67,11.63l1.02,4.44c3.23,13.22,11.54,19.29,18.27,30.66,0,0,3.38-.91,7.28-.98,3.38-.06,6.69,1.06,6.69,1.06,6.63-11.59,14.99-17.49,18.33-30.74l1.03-4.49c.41-3.89.6-7.71.64-11.56h-4.27') },
   end3: { path: new Path2D('M41.57,80.26s.08,1.54-.08,3.46c-.18,2.12-1.25,7-1.25,7,0,0-.97,6.04-1.1,8.07-.34,5.24.25,10.49.73,15.8l1.12,6.03c3.52,17.96,12.57,26.21,19.9,41.66,0,0,3.68-1.23,7.93-1.33,4.24.1,7.93,1.33,7.93,1.33,7.32-15.45,16.38-23.7,19.9-41.66l1.12-6.03c.49-5.31,1.08-10.56.73-15.8-.13-2.03-1.1-8.07-1.1-8.07,0,0-1.08-4.87-1.25-7-.16-1.91-.08-3.46-.08-3.46') },
+  end4: { path: new Path2D('M96.31,80.26c0,.2-.22.72-.15,1.4.04.37.35,1.05.4,1.15.26.59.94,2.61,1.1,3.24.57,2.17.55,6.75.55,6.75.06,8.39-1.17,15.58-6.43,23.17-5.37,7.75-1.69,9.54-7.23,13.68-3.31,2.47-5.6,1.59-9.35.55-2.77-.77-4.12-1.31-6.01-1.43h-.26s-.26,0-.26,0c-1.89.12-3.23.66-6.01,1.43-3.75,1.04-6.03,1.93-9.35-.55-5.54-4.14-1.86-5.93-7.23-13.68-5.26-7.59-6.49-14.78-6.43-23.17,0,0-.03-4.58.55-6.75.16-.63.84-2.65,1.1-3.24.04-.1.36-.78.4-1.15.07-.68-.15-1.19-.15-1.4h54.75Z') },
 };
 
 // direction of the LAST segment (second-to-last point -> tip), normalized;
@@ -1595,6 +1599,7 @@ if (DEV_MODE){
   resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 }
 requestAnimationFrame(loop);
+
 
 })();
 </script>
