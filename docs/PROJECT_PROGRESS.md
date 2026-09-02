@@ -401,6 +401,13 @@ lost — verified via direct state inspection at the time.
   visual separation between coils than before — see CODE_SUMMARY's
   Gotchas for the full investigation and what a proper follow-up fix
   would need.
+- Added a "Fall Delay" slider (ROPE CUT group, 0-3s, default 0): a
+  cut-off piece stays frozen for this long before falling normally.
+  Fixed a real rendering bug reported directly ("the last ~20px end
+  seems to be a stiff piece"): `strokeRopeCurve()`'s final segment
+  always rendered as a straight line regardless of physics — now curves
+  through to the actual tip like every other segment. Verified both via
+  a temporary debug hook.
 
 ## What's next
 

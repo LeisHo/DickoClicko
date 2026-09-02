@@ -227,6 +227,7 @@ const DEV_GROUPS = [
     { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8.9 },
     { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:180 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1.3 },
+    { key:'fallDelay',       label:'Fall Delay',       type:'slider',   unit:'s',   min:0,   max:3, step:0.05, def:0 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:2.1 },
     { key:'endcapAtCutEnd',  label:'Endcap At Cut End', type:'checkbox', def:true },
     { key:'cutSweepColor',     label:'Cut Sweep Color',     type:'color',  def:'#ffffff' },
@@ -1540,13 +1541,16 @@ function cutRopeAt(hit, clickX, clickY){
     endOffset: side > 0 ? -half : half,
   };
   if (lowerPoints.length >= 2){
-    // Applied immediately, same frame as the cut — the piece keeps moving
-    // under normal physics from the very next frame, it is never paused;
-    // the sweep mark above is a purely cosmetic overlay, it doesn't gate
-    // the piece's motion at all (a piece cut while the rope is already
-    // mid-swing must keep swinging, not visibly freeze).
+    // Toppling (the initial random tilt) is always applied immediately,
+    // same frame as the cut, regardless of Fall Delay — it's a one-time
+    // pose, not ongoing motion. Fall Delay (cfg.fallDelay, ROPE CUT group)
+    // only gates when the piece STARTS actually falling (update()'s own
+    // fallenPieces integrateChain call skips a piece while its own
+    // fallDelay is still counting down) -- the sweep mark above is a
+    // purely cosmetic overlay, it doesn't gate anything, and still plays
+    // out on its own timeline regardless of Fall Delay.
     topplePiece(lowerPoints);
-    const piece = { points: lowerPoints, segLen: mainRope.segLen };
+    const piece = { points: lowerPoints, segLen: mainRope.segLen, fallDelay: cfg.fallDelay };
     fallenPieces.push(piece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
@@ -1584,7 +1588,7 @@ function cutPieceAt(pieceIndex, hit, clickX, clickY){
   };
   if (lowerPoints.length >= 2){
     topplePiece(lowerPoints);
-    fallenPieces.push({ points: lowerPoints, segLen: piece.segLen });
+    fallenPieces.push({ points: lowerPoints, segLen: piece.segLen, fallDelay: cfg.fallDelay });
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
 }
@@ -1829,7 +1833,20 @@ function update(rawDt){
   });
 
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeWeight * cfg.ropeFallSpeed;
-  fallenPieces.forEach(piece => integrateChain(piece.points, piece.segLen, dt, fallGravity, -1));
+  fallenPieces.forEach(piece => {
+    // Fall Delay (cfg.fallDelay at cut time, ROPE CUT group): the piece
+    // stays completely frozen -- no gravity, no constraint solving, no
+    // motion at all -- until its own countdown reaches 0, then falls
+    // normally from that point on. Ticks down on `dt` (respects Rope
+    // Animation Speed, same as the physics it's gating), not raw wall-clock
+    // time, so slowing/speeding overall animation also slows/speeds the
+    // delay consistently.
+    if (piece.fallDelay > 0){
+      piece.fallDelay = Math.max(0, piece.fallDelay - dt);
+      return;
+    }
+    integrateChain(piece.points, piece.segLen, dt, fallGravity, -1);
+  });
 
   if (cfg.floorEnabled){
     // the main rope (still attached to the circle) collides with the floor
@@ -1885,14 +1902,37 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult){
   ctx.lineWidth = thicknessPx; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
-  for (let i = 1; i < points.length - 1; i++){
-    const midX = (points[i].x + points[i+1].x) / 2, midY = (points[i].y + points[i+1].y) / 2;
-    ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+  const n = points.length;
+  if (n === 2){
+    // nothing to curve through -- a single segment is just a straight line.
+    ctx.lineTo(points[1].x, points[1].y);
+  } else {
+    // Every interior point curves through itself toward the MIDPOINT of
+    // itself and its neighbor (the standard smooth-curve-through-a-
+    // polyline technique) -- EXCEPT the last one, which curves all the
+    // way to the actual tip coordinate instead of a midpoint, since
+    // there's no point past the tip to average with. An earlier version
+    // used `ctx.lineTo(tip)` for that final leg instead, which always drew
+    // a dead-straight line for roughly the last half-to-full segment
+    // length regardless of the rope's actual physics state -- reported as
+    // "the last ~20px end seems to be a stiff piece" (an almost exact
+    // match for one segLen, ~24.9px at default settings). Confirmed as a
+    // pure rendering artifact, not real stiffness: nothing in the physics
+    // (constraints, bendStiffness, growth) singles out the tip's own
+    // segment for extra rigidity outside of active growth (see
+    // integrateChain()'s bendEnd, which only excludes the tip while a
+    // partial segment is still growing). Curving through the actual tip
+    // coordinate instead removes the straight leg entirely.
+    for (let i = 1; i < n - 1; i++){
+      const isLast = i === n - 2;
+      const ex = isLast ? points[i+1].x : (points[i].x + points[i+1].x) / 2;
+      const ey = isLast ? points[i+1].y : (points[i].y + points[i+1].y) / 2;
+      ctx.quadraticCurveTo(points[i].x, points[i].y, ex, ey);
+    }
   }
-  const tip = points[points.length - 1];
-  ctx.lineTo(tip.x, tip.y);
   ctx.stroke();
 
+  const tip = points[n - 1];
   if (endArcMult > 0){
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, (thicknessPx / 2) * endArcMult, 0, Math.PI * 2);

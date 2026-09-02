@@ -834,6 +834,25 @@ GOTCHAS
   for that would need `pileRepulsion()` to skip chain-adjacent pairs
   rather than being removed outright; flagged as a follow-up if dense
   piling's visual clumping becomes its own complaint.
+- `strokeRopeCurve()`'s final segment now curves through to the actual
+  tip coordinate instead of `ctx.lineTo()`-ing there. Reported as "the
+  last ~20px end seems to be a stiff piece" -- confirmed as a pure
+  rendering artifact (every OTHER segment uses `ctx.quadraticCurveTo()`
+  through each point toward the MIDPOINT of it and its neighbor, but the
+  final leg was always a dead-straight line from the last midpoint to
+  the tip, roughly one segLen regardless of any physics setting -- an
+  exact match for the reported span). Fixed by having the last loop
+  iteration target `points[i+1]` (the real tip) instead of a midpoint.
+  `n === 2` (a single segment, nothing to curve through) still renders as
+  a plain `lineTo()`, unchanged.
+- New "Fall Delay" slider (`cfg.fallDelay`, ROPE CUT group, 0-3s, default
+  0): a cut-off piece is captured with `fallDelay: cfg.fallDelay` at cut
+  time (`cutRopeAt()`/`cutPieceAt()`) and stays completely frozen -- the
+  fallenPieces loop in `update()` skips its `integrateChain()` call
+  entirely while `piece.fallDelay > 0`, only counting it down against
+  `dt` -- until it falls normally from that point on. Toppling (the
+  initial random tilt) and the cut-sweep mark are both unaffected, same
+  as before -- neither was ever gated by physics timing.
 - The double-click-cut sweep-mark's perpendicular direction is recomputed
   FRESH every `renderCutSweep()` call from `tipDirection(entity.points)`,
   not read from a `nx,ny` pair stored on the `cutSweep` object at cut time

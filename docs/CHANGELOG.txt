@@ -1802,6 +1802,47 @@ removing it outright; flagged as a follow-up if that becomes its own
 complaint.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  1:14 PM - 1:20 PM EDT
+
+Added, per explicit request: "Fall Delay" slider (ROPE CUT group,
+0-3s, default 0) -- a cut-off rope segment now stays completely frozen
+(no gravity, no constraint solving) for this many seconds after being
+cut, before falling normally. Captured onto the piece object at cut
+time (cutRopeAt()/cutPieceAt()) and counted down in update() against
+`dt` (respects Rope Animation Speed); the piece's own toppling tilt and
+cut-sweep mark are unaffected, both still play out immediately/on their
+own timeline regardless of the delay.
+
+Fixed, per direct report ("the last 20px end seems to be a stiff
+piece... entire rope should act like a rope without any stiffening"):
+strokeRopeCurve() always rendered its final segment as a straight
+ctx.lineTo() while every other segment used a smooth quadratic curve --
+a pure rendering artifact (confirmed nothing in the physics singles out
+the tip's segment for extra rigidity outside active growth), present
+regardless of any dev-panel setting, spanning roughly one segment
+length (~20-25px at default Rope Thickness) -- an exact match for the
+report. Fixed by curving the final segment through to the actual tip
+coordinate instead of stopping at a midpoint and lineTo-ing the rest.
+
+Verified: node --check clean. Live-tested via a temporary debug hook
+(window.__debugTMPropo, removed before commit, grep-confirmed 0
+references): a synthetic piece with fallDelay=0.5 stayed at its exact
+starting Y for the first ~30 frames (0.5s at 60fps), then began falling
+immediately once the countdown hit 0 (Y rising 103->151->255->396 over
+the next 30 frames, correct accelerating-under-gravity shape); render()
+ran clean with no errors for both a 2-point piece (exercising the
+new n===2 straight-line branch) and an 8-point piece (exercising the
+curve-to-tip branch).
+
+Also clarified via direct user testing, no code change needed:
+double-clicking within the circle bounds cuts the rope down to Minimum
+Rope Length -- expected given Circle Cut Distance's current default (0
+as of the last "set defaults" bake, since raised back up in a later
+dump); click-and-hold within the circle bounds correctly triggers
+hold-to-grow (initially misreported as doing nothing, then corrected by
+the user in the same turn).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
