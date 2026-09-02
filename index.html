@@ -176,6 +176,8 @@ const DEV_GROUPS = [
   ]},
   { title:'MECHANICS', controls:[
     { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:300 },
+    { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
+    { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:4 },
   ]},
   { title:'UI', controls:[
     { key:'backgroundColor', label:'Background Color', type:'color', def:'#1a1a2e' },
@@ -885,50 +887,81 @@ function cutRopeAt(hit, clickX, clickY){
 }
 
 /* ---------------------------------------------------------------------
-   Input: click(punch) / hold(grow) / double-click(cut) disambiguation.
+   Input: click(punch) / hold(grow or charge) / double-click(cut).
+   Which hold behavior applies depends on WHERE the hold starts:
+   - hold starting on the circle -> grows the rope (existing behavior).
+   - hold starting on the rope -> charges punch intensity, fired on release
+     (Click Hold Max Duration / Intensity Ceiling); a quick tap on the rope
+     still goes through the normal punch/double-click-to-cut path below.
    Double-click is hand-rolled (not the native dblclick event) because a
    native click would otherwise fire before a dblclick is recognized —
    the spec requires a double click to never trigger a single click.
 --------------------------------------------------------------------- */
-let downInfo = null;   // {x,y,hit,isHold}
+let downInfo = null;   // {mode:'circle'} or {mode:'rope', x,y,hit,startTime,charging}
 let holdTimer = null;
 let pendingClick = null; // {hit,timer}
 
-function hitTestRope(x, y){
+function isOnCircle(x, y){
   const anchor = circleAnchor();
   const circleR = vmin(cfg.circleSize) / 2;
-  if (Math.hypot(x - anchor.x, y - anchor.y) <= circleR) return null; // clicking the circle itself doesn't count
+  return Math.hypot(x - anchor.x, y - anchor.y) <= circleR;
+}
+
+function hitTestRope(x, y){
+  if (isOnCircle(x, y)) return null; // clicking the circle itself never counts as a rope hit
   const hit = nearestPointOnRope(x, y, mainRope.points);
   return hit.dist <= vmin(cfg.clickDistance) ? hit : null;
 }
 
 function onPointerDown(e){
   const x = e.clientX, y = e.clientY;
-  const hit = hitTestRope(x, y);
-  if (!hit) return;
   // defensive: a pointerdown that never reaches onPointerUp/pointercancel
   // (dropped event, capture stolen by another element, etc.) would otherwise
   // leave its holdTimer's reference overwritten but the timer itself still
   // pending — it would later fire against a LATER click's downInfo and mark
-  // that later click as a false hold, silently swallowing it (skipping both
-  // punch and cut). Clearing here guarantees at most one holdTimer is ever
-  // live at a time.
+  // that later click as a false hold, silently swallowing it. Clearing here
+  // guarantees at most one holdTimer is ever live at a time.
   clearTimeout(holdTimer);
-  downInfo = { x, y, hit, isHold:false };
+
+  if (isOnCircle(x, y)){
+    downInfo = { mode: 'circle' };
+    holdTimer = setTimeout(() => {
+      if (!downInfo || downInfo.mode !== 'circle') return;
+      growing = true;
+    }, HOLD_THRESHOLD_MS);
+    return;
+  }
+
+  const hit = hitTestRope(x, y);
+  if (!hit){ downInfo = null; return; }
+  downInfo = { mode: 'rope', x, y, hit, startTime: performance.now(), charging: false };
   holdTimer = setTimeout(() => {
-    if (!downInfo) return;
-    downInfo.isHold = true;
-    growing = true;
+    if (!downInfo || downInfo.mode !== 'rope') return;
+    downInfo.charging = true;
   }, HOLD_THRESHOLD_MS);
 }
 
 function onPointerUp(e){
   if (!downInfo) return;
   clearTimeout(holdTimer);
-  growing = false;
   const info = downInfo;
   downInfo = null;
-  if (info.isHold) return;
+
+  if (info.mode === 'circle'){
+    growing = false;
+    return;
+  }
+
+  if (info.charging){
+    // held long enough to start charging -- fires immediately on release
+    // (no double-click wait; a genuine hold was never a double-click
+    // attempt), intensity scaled linearly by total hold time up to the
+    // ceiling at Click Hold Max Duration.
+    const heldMs = performance.now() - info.startTime;
+    const t = Math.min(1, heldMs / cfg.clickHoldMaxDuration);
+    applyPunch(mainRope.points, info.hit, info.x, info.y, t * cfg.intensityCeiling, 0);
+    return;
+  }
 
   const now = performance.now();
   if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){

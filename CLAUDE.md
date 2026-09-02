@@ -107,3 +107,9 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   points concatenated with every fallen piece's), not just fallenPieces.
   Before this, growing the rope past the floor just clipped straight
   through with no reaction at all.
+- Hold-to-grow only triggers for a hold that *starts* on the circle
+  (`isOnCircle()`, checked once at pointerdown) — a hold starting on the
+  rope charges punch intensity instead (fires on release, scaled by hold
+  duration up to Intensity Ceiling at Click Hold Max Duration). The two are
+  mutually exclusive per gesture by design, per explicit clarification from
+  the user after the original spec read as ambiguous between them.

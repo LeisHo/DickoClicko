@@ -18,35 +18,38 @@ work seamlessly from there.
 
 ## Currently working on
 
-Deciding, with the user, exactly what the new "Click Hold Max Duration" /
-"Intensity Ceiling" charged-punch-on-release mechanic should do to the
-existing click-hold-to-grow behavior before implementing it — as literally
-described the two seem to conflict (both are triggered by the same
-click-and-hold gesture).
+Nothing in progress — everything below is done, verified, and pushed.
 
 ## Recently completed
 
-- Full build: circle + rope verlet physics (punch, hold-to-grow,
-  double-click-to-cut with a directional cut-sweep animation and a Cut Speed
-  control), floor collision + piling, full dev panel compliant with the
-  workspace's §12 standard.
-- Real-usage bug reports from the user, fixed and verified: double-click-
-  to-cut intermittently stopping working (stale holdTimer race), a visible
-  freeze when cutting the rope mid-swing (the cut-sweep animation was
-  pausing the piece's physics), and the rope rendering behind the circle.
-- More real-usage reports, fixed and verified: the rope acting stick-stiff
-  once extended, and its extended portion not being cuttable — both traced
-  to the same root cause (a fixed 14-point count just got stretched thinner
-  as the rope grew, instead of gaining points to hold a constant segment
-  density); the main rope now also collides with and piles on the floor
-  (previously only cut-off pieces did); added a Minimum Rope Length slider
-  that refuses a cut that would leave the remainder shorter than it.
+- Full build: circle + rope verlet physics, floor collision + piling, full
+  dev panel compliant with the workspace's §12 standard.
+- A run of real-usage bug reports from the user, fixed and verified: cut
+  intermittently stopping working (stale holdTimer race), a freeze cutting
+  mid-swing, the rope rendering behind the circle, the rope acting
+  stick-stiff once extended and its extended portion not being cuttable
+  (both traced to a fixed point count that just stretched thinner instead
+  of gaining points), the main rope not colliding with/piling on the floor.
+  Added a Minimum Rope Length slider (refuses a cut that would leave the
+  remainder shorter than it).
+- Hold-gesture split, per explicit clarification: a hold starting on the
+  circle grows the rope (as before); a hold starting on the rope now
+  charges punch intensity instead, firing immediately on release, scaled
+  by hold duration up to a new Intensity Ceiling at Click Hold Max
+  Duration. A quick tap on the rope is unaffected (still the existing
+  punch/double-click-to-cut path).
 
 ## What's next
 
-Land on the hold-charge-punch design with the user, implement it. Beyond
-that, nothing queued — possible future direction the user mentioned but
-didn't commit to: a Three.js-based physics/collision upgrade.
+Nothing queued. Possible future directions the user mentioned but didn't
+commit to: a Three.js-based physics/collision upgrade, and restyling the
+rope's geometry to something more illustrative while keeping the same
+smooth animation (the physics/render split already makes this a rendering-
+only change — see CODE_SUMMARY's `strokeRopeCurve()` note).
+
+## Open questions / blockers
+
+None currently open.
 
 ## Open questions / blockers
 

@@ -317,6 +317,41 @@ Verified:
   before commit (grep-confirmed).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  1:55 AM - 2:00 AM EDT
+
+Wired up the Click Hold Max Duration / Intensity Ceiling mechanic from the
+previous entry, per the user's clarification: hold-to-grow now only
+triggers when the hold starts on the circle; a hold starting on the rope
+instead charges punch intensity, fired on release.
+
+Added:
+- Gesture dispatch now branches at pointerdown on WHERE the hold starts
+  (isOnCircle()), not just whether it's on the rope. A hold on the circle
+  grows the rope exactly as before. A hold on the rope charges instead:
+  no punch fires until release, intensity scaled linearly from 0 up to
+  Intensity Ceiling as total hold time goes from 0 to Click Hold Max
+  Duration (clamped at the ceiling beyond that) -- fires immediately on
+  release, skipping the double-click wait entirely, since a genuine hold
+  was never a double-click attempt. A quick tap on the rope is completely
+  unaffected -- still goes through the existing punch/double-click-to-cut
+  disambiguation.
+
+Verified:
+- Holding on the circle grows the rope (ropeLength increased by exactly the
+  expected amount over a measured duration) and does not charge a punch.
+- Holding on the rope does NOT grow it (growing stayed false throughout).
+- A hold released well past Click Hold Max Duration produced an impulse
+  matching vh(1.0)*intensityCeiling to the exact decimal (-28.8 for
+  ceiling=4 at 720px height) -- confirms the ceiling clamp is exact, not
+  approximate.
+- A partial hold (400ms of an 800ms max) produced a real, smaller,
+  correctly-directional impulse, consistent with the same linear formula
+  already confirmed exact at the ceiling.
+- Regression: quick double-click on the rope still cuts correctly,
+  unaffected by the gesture-dispatch changes.
+- node --check clean; debug hook removed before commit (grep-confirmed).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

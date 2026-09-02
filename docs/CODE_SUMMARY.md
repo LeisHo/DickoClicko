@@ -69,6 +69,15 @@ ever mutates `cfg`, `mainRope`, or `fallenPieces`, which the next `update()`/
 `render()` picks up. Rope pieces once cut into `fallenPieces` are never
 reattached to `mainRope`.
 
+Physics and rendering are already fully separate -- `strokeRopeCurve()` is
+the only place that turns a chain's `{x,y}` points into pixels, and it never
+reads or writes physics state. Restyling the rope to something other than a
+stroked line (an SVG/image-based segment, a sprite chain, etc.) is a
+render-only change: swap what `strokeRopeCurve()` (and the equivalent draw
+call for fallen pieces) does with the same `points` array it already
+receives every frame: it stays exactly as smooth as it is now, since the
+verlet simulation producing those points doesn't change at all.
+
 Dev panel persistence (`saveSettings()`/`resetSettings()`/`copySettings()`):
 setting *values* and the *group/row order* are one shared blob
 (`localStorage['dickoClicko.devSettings']`) since every control in this
@@ -83,6 +92,17 @@ same way, so `panelStyle{}` rides inside that same per-tab geometry blob
 (`getPanelGeometry()`'s `.style` field) rather than living in `cfg`; applied
 live via CSS custom properties (`--dp-title-size`, `--dp-bg`, etc.) set on
 `#devPanel` by `applyPanelStyle()`.
+
+Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
+applies is decided by WHERE the hold starts, checked once at pointerdown
+(`isOnCircle()`) -- a hold starting on the circle grows the rope (existing
+`growing`/`growRope()` path); a hold starting on the rope charges punch
+intensity instead (`downInfo.charging`, flipped by the same `holdTimer`
+used to detect "hold" at all) and fires the punch immediately on release,
+intensity scaled linearly from 0 to `cfg.intensityCeiling` as total hold
+time goes from 0 to `cfg.clickHoldMaxDuration` (clamped at 1x beyond that).
+A quick tap on the rope (never reaches `charging`) is unaffected -- still
+goes through the existing double-click-threshold punch/cut disambiguation.
 
 --------------------------------------------------------------------------------
 UNTOUCHABLE SYSTEMS
