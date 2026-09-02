@@ -32,24 +32,26 @@ circleAnchor() / vw() / vh() / vmin()
 
 mainRope (module state, point[0] pinned to circleAnchor())
 fallenPieces[] (module state, one entry per cut-off rope segment)
-    -> both are arrays of {x,y,oldx,oldy} verlet points, advanced each frame
-       by integrateChain() (gravity + distance constraints) in update() --
-       except a piece still mid-cut-sweep (piece.frozen), which is skipped
-       by integration/floor-collision/pile-repulsion entirely (see below).
+    -> both are arrays of {x,y,oldx,oldy} verlet points, advanced every
+       single frame by integrateChain() (gravity + distance constraints) in
+       update() -- a freshly-cut piece is NEVER paused/gated; it keeps
+       moving continuously from the very next frame, inheriting whatever
+       velocity it had at the moment of the cut (see Gotchas -- an earlier
+       version froze it during the cut-sweep animation and that was wrong).
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle
     2. grow mainRope if a hold-to-grow gesture is active
-    3. advance any frozen piece's cutProgress; releasePiece() it once done
-    4. integrateChain() for mainRope, then for every non-frozen fallenPieces
-       entry (its own gravity scale)
+    3. advance every not-yet-fully-swept piece's cutProgress (cosmetic only)
+    4. integrateChain() for mainRope, then for every fallenPieces entry
+       (its own gravity scale)
     5. floor collision (clamp to floorY) + pileRepulsion() across all
-       non-frozen fallen-piece points, if the floor is enabled; otherwise
-       cull pieces (frozen ones exempted) once fallen well below the viewport
+       fallen-piece points, if the floor is enabled; otherwise cull pieces
+       once they've fallen well below the viewport
 
-render() each frame: background -> floor -> fallen pieces -> main rope ->
-cut-sweep mark for any still-frozen piece -> circle (circle drawn last so
-the rope visually emerges from behind it).
+render() each frame: background -> floor -> circle -> main rope -> fallen
+pieces -> cut-sweep mark for any piece still mid-sweep (circle drawn
+*before* the rope so the rope renders on top of it, not behind).
 ```
 
 Input (click/hold/double-click) never touches rendering directly -- it only
@@ -101,13 +103,38 @@ GOTCHAS
   `onChange`-hook treatment -- see `ropeLength`'s entry in `DEV_GROUPS` for
   the pattern.
 - A perfectly vertical cut piece has no asymmetry to fall over on, so
-  `releasePiece()` applies a small random initial tilt (rotated around the
-  piece's own cut-point end) -- without this, a piece cut from an undisturbed
-  hanging rope stands on the floor as a rigid straight column instead of
-  settling into a heap. Applied at *release* time (when `cutProgress` reaches
-  1), not at the moment of cutting -- applying it earlier would make the
-  piece visibly snap into a tilted pose before the cut-sweep animation even
-  finishes, contradicting the "still looks attached while cutting" effect.
+  `cutRopeAt()` applies a small random initial tilt (rotated around the
+  piece's own cut-point end), applied *immediately* at cut time -- without
+  this, a piece cut from an undisturbed hanging rope stands on the floor as
+  a rigid straight column instead of settling into a heap. Both the current
+  position AND the old (previous-frame) position are rotated by the same
+  angle around the same pivot -- rotating position alone and resetting
+  oldx/oldy to match would zero out whatever velocity the point already had
+  from an in-progress swing, which is exactly the "freezes mid-swing" bug an
+  earlier version of this had (see CHANGELOG).
+- The cut-sweep animation (`cutProgress`, driven by the Cut Speed dev
+  control) is a purely cosmetic overlay (`renderCutSweep()`, anchored to the
+  piece's own *live* `points[0]` position every frame, not a remembered
+  static point) -- it must never gate a piece's physics. An earlier version
+  froze the piece (skipped its integration/floor-collision/pile-repulsion)
+  for the sweep's duration, which visibly paused a rope that was already
+  mid-swing when cut -- exactly what the sweep animation must NOT do.
+- `onPointerDown` clears any existing `holdTimer` before starting a new one.
+  Without this, a pointerdown that never reaches a matching pointerup/
+  pointercancel (a dropped event, or any interaction that doesn't cleanly
+  round-trip) leaves its `holdTimer` reference orphaned once the *next*
+  pointerdown overwrites the `holdTimer` variable -- the orphaned timer
+  still fires ~180ms after its own (stale) pointerdown, and its callback
+  reads the then-current (now different) `downInfo` and marks it as a false
+  hold, silently swallowing whatever click was actually in progress (both
+  punch and cut return early on `info.isHold`). This is the actual root
+  cause behind an intermittent "double-click-to-cut just stops working"
+  report. The fix itself was verified afterward by reproducing the race
+  scenario (an orphaned pointerdown followed by real clicks landing in its
+  180ms window) in an isolated async test and confirming the click still
+  resolves correctly -- the pre-fix code was not separately re-tested to
+  confirm it actually reproduces the corruption, so this is the identified
+  mechanism and a verified fix, not a verified-then-fixed repro.
 - `applyPanelGeometry(null)` deliberately resets panel position/size/style to
   their defaults rather than being a no-op -- needed so switching to a
   Desktop/Mobile tab with nothing saved yet doesn't silently keep showing

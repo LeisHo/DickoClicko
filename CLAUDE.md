@@ -67,12 +67,24 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   the rest of the handler and the feature stops working; drag/resize/reorder
   all attach their move/up listeners to `window` rather than the captured
   element specifically so they keep working even when capture itself fails.
-- The double-click-to-cut animation freezes the cut-off piece in place
-  (`piece.frozen`, skipped by `integrateChain`/floor collision/pile
-  repulsion) until its sweep animation (`cutProgress`, driven by the Cut
-  Speed dev control) finishes — the piece's random toppling tilt
-  (`releasePiece()`) is applied at that release moment, not at the cut
-  itself, so it still looks attached to the main rope while the sweep plays.
+- The double-click-to-cut sweep animation (`cutProgress`, driven by the Cut
+  Speed dev control) is purely cosmetic — it must never pause the cut piece's
+  own physics. A cut piece keeps integrating (falling/swinging) from the
+  very next frame, inheriting whatever velocity it already had; the toppling
+  tilt applied at cut time rotates both the current AND the previous-frame
+  position around the same pivot (not just the current position), so it adds
+  a topple bias without zeroing out that inherited velocity. An earlier
+  version froze the piece for the sweep's duration, which visibly paused the
+  rope for a moment when cutting mid-swing — confirmed as a real bug by the
+  user, not intended behavior.
+- `onPointerDown` clears any existing `holdTimer` before starting a new one
+  — the actual root cause behind an intermittent "double-click-to-cut stops
+  working" report. Without this, a pointerdown that never gets a matching
+  pointerup (any dropped/non-round-tripping event) orphans its timer once
+  the next pointerdown overwrites the `holdTimer` variable; the orphaned
+  timer still fires later against whatever `downInfo` is current *then*,
+  marking an unrelated in-progress click as a false hold and silently
+  swallowing it (both punch and cut return early on `info.isHold`).
 - `applyPanelGeometry(null)` is a meaningful call (reset panel
   position/size/style to their CSS/JS defaults), not a no-op -- it's what
   runs when the active Desktop/Mobile tab has nothing saved yet. An earlier

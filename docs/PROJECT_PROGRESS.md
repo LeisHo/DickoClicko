@@ -18,41 +18,27 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — dev-panel §12 retrofit (including the built-in "Dev
-Panel" settings group added to the spec mid-session) + directional cut
-animation are done, verified, and ready to push.
+Nothing in progress — everything below is done, verified, and pushed.
 
 ## Recently completed
 
-- Initial build: circle + rope rendering, verlet rope physics (punch, hold-
-  to-grow, double-click-to-cut), floor collision + piling, full dev panel
-  with all spec'd controls, dev-mode gating.
-- Dev panel brought in line with the workspace-wide §12 standard (added
-  after the initial build): all-4-edge/corner resize, D-key hide + separate
-  collapse button, Copy/Save/Reset (+R key), drag-to-reorder groups/settings
-  with persisted order, Desktop/Mobile tabs (panel geometry independent per
-  tab; every setting judged shared since all are already %/vmin-based), and
-  a real both-directions auto-expanding slider range on typed input.
-- Directional cut animation: cutting now freezes the lower piece and plays a
-  sweep mark across the rope's thickness in the direction the click came
-  from (right-of-rope click -> sweeps right-to-left, and vice versa) before
-  releasing it to fall, at a rate set by the new Cut Speed dev control.
-- Found and fixed a real robustness bug while testing the above:
-  `setPointerCapture` can throw (`NotFoundError`) for a pointerId the
-  browser doesn't consider active, which would silently abort a drag/resize/
-  reorder handler before its move/up listeners even attach — now guarded
-  everywhere via `tryCapture()`, with listeners on `window` rather than the
-  captured element so capture failing doesn't break the feature.
-- Built-in "Dev Panel" settings group (workspace §12i, added to the standard
-  mid-session): 9 controls for the panel's own title/tab/group/label/body
-  font sizes, opacity, and background/title/non-title text colors, applied
-  live via CSS custom properties. Judged device-specific (independent per
-  Desktop/Mobile tab) for the same reason panel geometry already is.
-- Found and fixed a second real bug while verifying that: switching to a tab
-  with nothing saved yet was silently keeping the *other* tab's live
-  geometry/style instead of resetting to defaults, because
-  `applyPanelGeometry(null)` used to be a no-op — it's now a meaningful
-  "reset to defaults" call.
+- Full build: circle + rope verlet physics (punch, hold-to-grow,
+  double-click-to-cut with a directional cut-sweep animation and a Cut Speed
+  control), floor collision + piling, full dev panel compliant with the
+  workspace's §12 standard (resize/hide/collapse, Copy/Save/Reset,
+  drag-to-reorder, Desktop/Mobile tabs, the built-in "Dev Panel"
+  appearance-settings group, both-direction auto-expanding sliders).
+- Real-usage bug reports from the user, fixed and verified:
+  - Double-click-to-cut intermittently "just stopped working" — root cause
+    was a stale `holdTimer` race in the pointer gesture state machine (see
+    CODE_SUMMARY Gotchas); fixed by always clearing it at the start of a new
+    pointerdown.
+  - Cutting the rope while it was already mid-swing caused a visible freeze
+    before the swing continued — the cut-sweep animation was pausing the cut
+    piece's physics for its own duration; fixed so the sweep is purely
+    cosmetic and the piece keeps moving continuously (inheriting its swing
+    velocity) from the moment of the cut.
+  - The rope now renders on top of the circle (was behind it).
 
 ## What's next
 

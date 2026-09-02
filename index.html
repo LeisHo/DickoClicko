@@ -795,26 +795,6 @@ function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex){
 
 const CUT_SWEEP_BASE_SEC = 0.35;
 
-function releasePiece(piece){
-  // a perfectly vertical piece has no asymmetry to topple over on — give it a
-  // small random initial tilt (around its own cut-point end) so gravity and
-  // the floor collision naturally fold it into a heap instead of it standing
-  // there as a rigid straight column. Applied at release time (not at the
-  // moment of cutting) so the piece still looks attached while the cut
-  // sweep is playing.
-  const angle = (Math.random() - 0.5) * 0.6;
-  const pivot = piece.points[0];
-  const cosA = Math.cos(angle), sinA = Math.sin(angle);
-  for (let i = 1; i < piece.points.length; i++){
-    const p = piece.points[i];
-    const dx = p.x - pivot.x, dy = p.y - pivot.y;
-    p.x = pivot.x + dx * cosA - dy * sinA;
-    p.y = pivot.y + dx * sinA + dy * cosA;
-    p.oldx = p.x; p.oldy = p.y;
-  }
-  piece.frozen = false;
-}
-
 function cutRopeAt(hit, clickX, clickY){
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
   const a = mainRope.points[idx - 1], b = mainRope.points[idx];
@@ -831,11 +811,36 @@ function cutRopeAt(hit, clickX, clickY){
   const lowerPoints = mainRope.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
   mainRope.points = mainRope.points.slice(0, idx + 1);
   if (lowerPoints.length >= 2){
+    // a perfectly vertical piece has no asymmetry to topple over on — give it
+    // a small random initial tilt (around its own cut-point end) so gravity
+    // and the floor collision naturally fold it into a heap instead of it
+    // standing there as a rigid straight column. Applied immediately, same
+    // frame as the cut — the piece keeps moving under normal physics from
+    // the very next frame, it is never paused; the sweep mark below is a
+    // purely cosmetic overlay, it doesn't gate the piece's motion at all
+    // (a piece cut while the rope is already mid-swing must keep swinging,
+    // not visibly freeze).
+    const angle = (Math.random() - 0.5) * 0.6;
+    const pivot = lowerPoints[0];
+    const cosA = Math.cos(angle), sinA = Math.sin(angle);
+    for (let i = 1; i < lowerPoints.length; i++){
+      const p = lowerPoints[i];
+      // rotate both the current AND old position by the same angle around the
+      // same pivot, so the rotation only adds a topple bias — it does NOT
+      // zero out whatever velocity the point already had from an in-progress
+      // swing (rotating position but resetting oldx/oldy to match would kill
+      // that momentum, which is exactly the "shouldn't freeze mid-swing" bug).
+      const dx = p.x - pivot.x, dy = p.y - pivot.y;
+      const odx = p.oldx - pivot.x, ody = p.oldy - pivot.y;
+      p.x = pivot.x + dx * cosA - dy * sinA;
+      p.y = pivot.y + dx * sinA + dy * cosA;
+      p.oldx = pivot.x + odx * cosA - ody * sinA;
+      p.oldy = pivot.y + odx * sinA + ody * cosA;
+    }
     const half = vmin(cfg.ropeThickness) / 2;
     const piece = {
       points: lowerPoints, segLen: mainRope.segLen,
-      frozen: true, cutProgress: 0,
-      cutPoint: { x: hit.x, y: hit.y }, cutNx: nx, cutNy: ny,
+      cutProgress: 0, cutNx: nx, cutNy: ny,
       cutStartOffset: side > 0 ? half : -half,
       cutEndOffset: side > 0 ? -half : half,
     };
@@ -866,6 +871,14 @@ function onPointerDown(e){
   const x = e.clientX, y = e.clientY;
   const hit = hitTestRope(x, y);
   if (!hit) return;
+  // defensive: a pointerdown that never reaches onPointerUp/pointercancel
+  // (dropped event, capture stolen by another element, etc.) would otherwise
+  // leave its holdTimer's reference overwritten but the timer itself still
+  // pending — it would later fire against a LATER click's downInfo and mark
+  // that later click as a false hold, silently swallowing it (skipping both
+  // punch and cut). Clearing here guarantees at most one holdTimer is ever
+  // live at a time.
+  clearTimeout(holdTimer);
   downInfo = { x, y, hit, isHold:false };
   holdTimer = setTimeout(() => {
     if (!downInfo) return;
@@ -918,28 +931,29 @@ function update(rawDt){
   if (growing) growRope(rawDt);
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0);
 
+  // cutProgress only drives the cosmetic sweep-mark overlay now (render()) —
+  // it never gates a piece's own physics, so a piece cut mid-swing keeps
+  // swinging/falling continuously from the very next frame, same as any
+  // other fallen piece.
   fallenPieces.forEach(piece => {
-    if (piece.frozen){
-      piece.cutProgress += rawDt * cfg.cutSpeed / CUT_SWEEP_BASE_SEC;
-      if (piece.cutProgress >= 1){ piece.cutProgress = 1; releasePiece(piece); }
-    }
+    if (piece.cutProgress < 1) piece.cutProgress = Math.min(1, piece.cutProgress + rawDt * cfg.cutSpeed / CUT_SWEEP_BASE_SEC);
   });
 
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeWeight * cfg.ropeFallSpeed;
-  fallenPieces.forEach(piece => { if (!piece.frozen) integrateChain(piece.points, piece.segLen, dt, fallGravity, -1); });
+  fallenPieces.forEach(piece => integrateChain(piece.points, piece.segLen, dt, fallGravity, -1));
 
   if (cfg.floorEnabled){
     const fY = floorY();
-    fallenPieces.forEach(piece => { if (!piece.frozen) piece.points.forEach(p => {
+    fallenPieces.forEach(piece => piece.points.forEach(p => {
       if (p.y > fY){
         p.y = fY;
         p.oldx = p.x - (p.x - p.oldx) * 0.3;
         p.oldy = p.y;
       }
-    }); });
+    }));
     pileRepulsion();
   } else {
-    fallenPieces = fallenPieces.filter(piece => piece.frozen || piece.points.some(p => p.y < window.innerHeight * 1.5));
+    fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < window.innerHeight * 1.5));
   }
 }
 
@@ -966,8 +980,12 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult){
 function renderCutSweep(piece){
   const t = piece.cutProgress;
   const off = piece.cutStartOffset + (piece.cutEndOffset - piece.cutStartOffset) * t;
-  const x1 = piece.cutPoint.x + piece.cutNx * piece.cutStartOffset, y1 = piece.cutPoint.y + piece.cutNy * piece.cutStartOffset;
-  const x2 = piece.cutPoint.x + piece.cutNx * off, y2 = piece.cutPoint.y + piece.cutNy * off;
+  // anchored to the piece's own current cut-edge point (points[0]), not a
+  // static remembered position — the piece keeps moving under normal
+  // physics, so the mark must track it rather than floating in place.
+  const cutPoint = piece.points[0];
+  const x1 = cutPoint.x + piece.cutNx * piece.cutStartOffset, y1 = cutPoint.y + piece.cutNy * piece.cutStartOffset;
+  const x2 = cutPoint.x + piece.cutNx * off, y2 = cutPoint.y + piece.cutNy * off;
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = Math.max(2, vmin(cfg.ropeThickness) * 0.35);
   ctx.lineCap = 'round';
@@ -987,16 +1005,16 @@ function render(){
     ctx.fillRect(0, fY, window.innerWidth, vh(cfg.floorThickness));
   }
 
-  const thickness = vmin(cfg.ropeThickness);
-  fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc));
-  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc);
-  fallenPieces.forEach(piece => { if (piece.frozen) renderCutSweep(piece); });
-
   const anchor = circleAnchor();
   ctx.beginPath();
   ctx.arc(anchor.x, anchor.y, vmin(cfg.circleSize) / 2, 0, Math.PI * 2);
   ctx.fillStyle = cfg.circleColor;
   ctx.fill();
+
+  const thickness = vmin(cfg.ropeThickness);
+  fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc));
+  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc);
+  fallenPieces.forEach(piece => { if (piece.cutProgress < 1) renderCutSweep(piece); });
 }
 
 let lastTime = performance.now();

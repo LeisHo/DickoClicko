@@ -201,6 +201,61 @@ Verified:
 - node --check clean on the extracted inline script.
 
 --------------------------------------------------------------------------------
+2026-09-01  -  11:48 PM - 11:55 PM EDT
+
+Fixed 3 real issues from the user's own hands-on testing of the previous
+entries' work.
+
+Fixed:
+- Double-click-to-cut intermittently "just stopped working" after a few
+  uses. Root cause: onPointerDown never cleared a prior holdTimer before
+  starting a new one -- a pointerdown that never got a matching pointerup
+  (any dropped/non-round-tripping event) orphaned its timer once the next
+  pointerdown overwrote the holdTimer variable; the orphaned timer still
+  fired later against whatever downInfo was current *then*, marking an
+  unrelated in-progress click as a false hold and silently swallowing it
+  (both punch and cut return early on info.isHold). Fixed by always
+  clearing holdTimer at the top of onPointerDown.
+- Cutting the rope while it was already mid-swing caused a visible freeze
+  for a split moment before the swing continued -- reported directly by the
+  user ("it should be getting cut while swinging, that shouldn't happen").
+  Root cause: the cut-sweep animation added in the previous entry froze the
+  cut piece's physics (skipped integration/floor-collision/pile-repulsion)
+  for the sweep's duration. Fixed by making the sweep purely cosmetic --
+  cutRopeAt() now applies the toppling tilt immediately (rotating both the
+  current AND previous-frame position around the same pivot, so the tilt
+  adds a topple bias without zeroing out whatever velocity the piece
+  already had from the swing) and the piece integrates normally from the
+  very next frame; the sweep mark (renderCutSweep()) now tracks the piece's
+  own live points[0] position every frame instead of a static remembered
+  point, since the piece is moving under it the whole time.
+- The rope was rendering behind the circle; swapped render() to draw the
+  circle first and the rope on top, per explicit request.
+
+Verified:
+- Render order: sampled the actual canvas pixel at the circle's center
+  after one manual render -- came back exactly the rope's color (was
+  exactly the circle's color before the fix), while a pixel at the circle's
+  edge (off the rope's line) still came back the circle's color, confirming
+  the rope draws on top only where they actually overlap.
+- Mid-swing cut: punched the rope, let it build up real swing velocity
+  (confirmed non-zero via the verlet position-delta), cut it mid-swing, and
+  traced the cut piece's position for 10 consecutive frames immediately
+  after -- smooth continuous movement every frame, no plateau, confirming
+  the freeze is gone and the piece genuinely inherits its swing momentum.
+- Stale-timer race: reproduced the exact scenario in an isolated
+  self-timed async test (an orphaned pointerdown with no matching pointerup,
+  a real quick click shortly after, then the orphaned timer's ~180ms window
+  elapsing, then a real double-click) and confirmed the double-click still
+  resolves correctly into a cut afterward. The pre-fix code was not
+  separately re-tested to directly confirm it reproduces the corruption --
+  this verifies the fix, not a before/after repro.
+- node --check clean on the extracted inline script.
+- Not verified: real touch input on an actual mobile device, and the
+  ?dev=1/production-hostname branch of the dev-mode gate (unchanged
+  limitation carried from earlier entries).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
