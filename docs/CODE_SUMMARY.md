@@ -162,26 +162,53 @@ tab-switch handler use to preview the *other* device's saved panel geometry
 before any save/reset in a fresh page load, the "other" tab's geometry is
 simply unknown (`null`, i.e. CSS default) until a real read succeeds.
 
-§12l's "no server, opened directly as a local file" exception (added
-2026-09-02): `GIT_LOG_WRITABLE` gates `saveSettings()`/`resetSettings()`
-between the git-log path above and a `SESSION_FALLBACK_KEY` `sessionStorage`
-fallback. Gated on PROTOCOL, not just API capability (corrected same day,
-per explicit user clarification -- the original version checked only
-`'showSaveFilePicker' in window`, which stayed true even when this page was
-opened as a bare local file in a browser that happens to support the API,
-so it would have still triggered the native save-file picker/disk write in
-exactly the case the exception exists to avoid): `GIT_LOG_WRITABLE =
-location.protocol !== 'file:' && 'showSaveFilePicker' in window` -- false
-both when there's genuinely no server behind the page (`file://`, matching
-`DEV_MODE`'s own protocol check just above) AND when the browser lacks the
-API entirely (Firefox/Safari), true only when served (http/https,
-including a local dev server) with the API present. `sessionStorage`, not
-`localStorage`, deliberately: it's gone the moment the tab closes, so it
-can never become the persistent "separate browser-local default" §12d/§12l
-otherwise bans -- it exists only so a Save made in this mode has anything
-for that same tab's own Reset to read back. The Save button says "Saved
-(session only)" in this mode, never "Saved!", so it's never mistaken for a
-real git-log write.
+Save/Reset are a 3-tier fallback chain (added to in full 2026-09-02), each
+tier covering what the one before it can't:
+
+1. **Vercel/GitHub API** (`writeSettingsViaApi()`/`readSettingsViaApi()`,
+   `api/save-settings.js`) -- a serverless function commits straight to
+   `data/processed/dev-panel-settings.json` via GitHub's Contents API,
+   authenticated with a `GITHUB_TOKEN` env var and gated by a shared
+   `DEV_PANEL_SAVE_SECRET` (sent as the `X-Dev-Panel-Secret` header --
+   NOT a real secret, it ships in the client source same as CLICKO's
+   identical mechanism; it exists only to stop a random visitor spamming
+   commits). The ONLY tier that works from a device with no filesystem of
+   its own (a phone visiting the deployed site with `?dev=1`). Reads are
+   simpler than writes: once committed, the settings file is just an
+   ordinary static asset, so `readSettingsViaApi()` is a plain
+   `fetch('/data/processed/dev-panel-settings.json')` -- no server
+   function needed for that half, so it works on ANY server (a local
+   static file server too, not just Vercel), which is why Reset tries it
+   first regardless of whether the Vercel function is actually configured
+   yet. Both are skipped entirely on `location.protocol === 'file:'`
+   (nothing to fetch/POST to at all). **Requires the Vercel project's
+   `GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET` env vars to actually be set
+   before writes do anything -- see README.md's setup section; until
+   then Save silently falls through to tier 2/3, which is expected, not
+   a bug.**
+2. **File System Access API** (`GIT_LOG_WRITABLE`,
+   `getGitSettingsFileHandle()`) -- direct local disk write via a native
+   picker. Gated on PROTOCOL, not just API capability (corrected
+   2026-09-02, per explicit user clarification -- checking only
+   `'showSaveFilePicker' in window` alone stayed true even when opened as
+   a bare local file in a browser that happens to support the API, so it
+   would have still triggered the native picker/disk write in exactly the
+   case tier 1's absence and this tier's own exclusion both exist to
+   avoid): `GIT_LOG_WRITABLE = DEV_MODE && location.protocol !== 'file:'
+   && 'showSaveFilePicker' in window` -- false for a bare local file, a
+   browser lacking the API (Firefox/Safari), or outside DEV_MODE; true
+   only when served (http/https, including a local dev server) with the
+   API present and the dev panel itself visible.
+3. **Local save prompt + `SESSION_FALLBACK_KEY` `sessionStorage`**
+   (`downloadSettingsAsFile()`) -- last resort when neither tier above
+   reached the git-tracked log at all. `sessionStorage`, not
+   `localStorage`, deliberately: it's gone the moment the tab closes, so
+   it can never become the persistent "separate browser-local default"
+   §12d/§12l otherwise bans -- it exists only so a Save made in this mode
+   has anything for that same tab's own Reset to read back. The Save
+   button says "Saved to repo!" (tier 1), "Saved!" (tier 2), or "Saved
+   (session only)" (tier 3) -- never a generic "Saved!" for tier 3, so
+   it's never mistaken for a real git-log write.
 
 Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
 applies is decided by WHERE the hold starts, checked once at pointerdown

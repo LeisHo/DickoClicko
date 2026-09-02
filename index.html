@@ -708,20 +708,37 @@ function applyPanelGeometry(geom){
 /* ---------------------------------------------------------------------
    §12l/§12d: Save Settings writes ONLY to a git-tracked settings log
    (data/processed/dev-panel-settings.json) — there is deliberately no
-   separate browser-local default alongside it (per an explicit correction
-   to §12d/§12l: an earlier version of this project wrote to both, which
-   was wrong). Reset restores from that same file, not from any local
-   default. A static page can't silently write/read an arbitrary disk
-   path, so this uses the File System Access API: the FIRST Save on a
-   given browser prompts a native save dialog (navigate to
-   data/processed/, use the suggested filename); the resulting handle is
-   persisted in IndexedDB so every later Save/Reset reuses it with no
-   dialog. Reading at boot never prompts (no user gesture exists yet) —
-   it only succeeds if this browser already silently holds read
-   permission on a previously-picked handle (queryPermission, which never
-   shows UI), otherwise the panel just starts at hardcoded defaults, same
-   as a browser that's never saved here at all. Chromium-only
-   (Firefox/Safari lack the API) and feature-detected throughout.
+   persistent browser-local default alongside it. Reset restores from that
+   same file, not from any local default. Three tiers, tried in order,
+   each covering what the one before it can't:
+
+   1. Vercel/GitHub API (writeSettingsViaApi()/readSettingsViaApi() above)
+      — a serverless function (api/save-settings.js) commits straight to
+      the repo via GitHub's Contents API. The ONLY tier that works from a
+      device with no filesystem access of its own (e.g. a phone visiting
+      the deployed site with ?dev=1). Tried whenever a real server is
+      behind the page at all (not file://) — reads always try this first
+      (a plain fetch of the already-committed static file, so it works
+      from any server including a local one), writes fall through to
+      Tier 2 if this fails (not deployed as Vercel, network error, or the
+      function's env vars genuinely aren't configured yet).
+   2. File System Access API (GIT_LOG_WRITABLE, getGitSettingsFileHandle()
+      below) — direct local disk write via a native picker. The FIRST
+      Save on a given browser prompts that dialog (navigate to
+      data/processed/, use the suggested filename); the resulting handle
+      is persisted in IndexedDB so every later Save/Reset reuses it with
+      no dialog. Reading at boot never prompts (no user gesture exists
+      yet) — it only succeeds if this browser already silently holds read
+      permission on a previously-picked handle (queryPermission, which
+      never shows UI). Chromium-only (Firefox/Safari lack the API) and
+      feature-detected throughout.
+   3. Local save prompt + sessionStorage (downloadSettingsAsFile() above,
+      SESSION_FALLBACK_KEY below) — last resort when neither of the above
+      reached the git-tracked log at all (§12l's "no server, opened
+      directly as a local file" exception, or a browser lacking both
+      capabilities). Never a persistent local default — sessionStorage is
+      gone the moment the tab closes, so it exists only so a Save made in
+      this mode has anything for that same tab's own Reset to read back.
 --------------------------------------------------------------------- */
 const GIT_SETTINGS_FILENAME = 'dev-panel-settings.json';
 const IDB_NAME = 'dickoClicko';
@@ -732,6 +749,65 @@ const IDB_HANDLE_KEY = 'gitSettingsFileHandle';
 // panel geometry without re-reading the file — there is no localStorage
 // fallback for any of this anymore.
 let lastLoadedSnapshot = null;
+
+// Shared anti-abuse token for /api/save-settings -- NOT a real secret (it
+// ships in this public page's source, same as every other client-side
+// value here); it exists only to keep a random visitor from spamming
+// commits to the repo. Must match the DEV_PANEL_SAVE_SECRET env var set on
+// the Vercel project -- see README.md for setup. Reuses the exact same
+// value CLICKO already uses, since this is one workspace-wide shared
+// secret (CLAUDE.md §12l), not a per-project one.
+const DEV_PANEL_SAVE_SECRET = 'PkrbMti03M6xm3FEThYXa8gGW_08BOGj';
+
+// Tier 1 of Save/Reset (see saveSettings()/resetSettings() below): a
+// Vercel serverless function (api/save-settings.js) that commits straight
+// to data/processed/dev-panel-settings.json via GitHub's Contents API.
+// This is the ONLY tier that works from a device with no local filesystem
+// access of its own (a phone visiting the deployed site with ?dev=1
+// appended) -- Tier 2's File System Access picker would just save to some
+// location on THAT visitor's own disk, unrelated to this repo. Reading is
+// simpler than writing: once committed, the settings file is just an
+// ordinary static asset, so Reset fetches it directly rather than needing
+// its own API route.
+async function writeSettingsViaApi(data){
+  try {
+    const resp = await fetch('/api/save-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dev-Panel-Secret': DEV_PANEL_SAVE_SECRET },
+      body: JSON.stringify(data),
+    });
+    const body = await resp.json().catch(() => ({}));
+    return resp.ok && body.ok === true;
+  } catch (err) {
+    return false; // offline, not deployed as a Vercel function, CORS, etc.
+  }
+}
+async function readSettingsViaApi(){
+  try {
+    const resp = await fetch('/data/processed/dev-panel-settings.json', { cache: 'no-store' });
+    if (!resp.ok) return null; // e.g. 404 before the file exists yet, or not served at all
+    return await resp.json();
+  } catch (err) {
+    return null;
+  }
+}
+
+// Tier 3 last resort (see saveSettings() below): when nothing above
+// reached the git-tracked log at all, hand the user a real file they can
+// save themselves, via the browser's ordinary download mechanism -- works
+// everywhere a normal file:// page runs, unlike the File System Access
+// API's native picker.
+function downloadSettingsAsFile(data){
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = GIT_SETTINGS_FILENAME;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 // §12l's scope: gated on DEV_MODE, not just protocol/API capability -- the
 // native save-file picker/disk write only makes sense against a real local
@@ -833,7 +909,7 @@ async function readGitSettingsLog(){
   }
 }
 
-function saveSettings(){
+async function saveSettings(){
   const current = activeDeviceTab;
   const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
   const otherGeom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[other] : null;
@@ -850,34 +926,63 @@ function saveSettings(){
     setTimeout(() => btn.textContent = orig, 900);
   };
 
-  if (!GIT_LOG_WRITABLE){
-    // no server/File-System-Access handle to write the git log through --
-    // §12l's file:// exception: fall back to this tab's own sessionStorage
-    // rather than failing outright, and say so honestly rather than
-    // claiming a real git-log save.
-    try {
-      sessionStorage.setItem(SESSION_FALLBACK_KEY, JSON.stringify(snapshot));
+  // Tier 1: Vercel/GitHub API -- works from any device (see the big comment
+  // above), so try it whenever a real server is behind the page at all.
+  if (location.protocol !== 'file:'){
+    const apiOk = await writeSettingsViaApi(snapshot);
+    if (apiOk){
       lastLoadedSnapshot = snapshot;
-      flash('Saved (session only)');
-    } catch (err) {
-      flash('Save failed');
+      flash('Saved to repo!');
+      return;
     }
-    return;
   }
 
-  writeGitSettingsLog(snapshot).then(ok => {
-    if (ok) lastLoadedSnapshot = snapshot;
-    flash(ok ? 'Saved!' : 'Save failed');
-  });
+  // Tier 2: direct local disk write via the File System Access API.
+  if (GIT_LOG_WRITABLE){
+    const ok = await writeGitSettingsLog(snapshot);
+    if (ok){
+      lastLoadedSnapshot = snapshot;
+      flash('Saved!');
+      return;
+    }
+    // fall through to Tier 3 rather than reporting outright failure -- the
+    // picker may have just been cancelled, and the user still gets SOME
+    // way to preserve this Save.
+  }
+
+  // Tier 3: nothing above reached the git-tracked log at all -- §12l's "no
+  // server, opened directly as a local file" exception. Hand the user a
+  // real downloadable file AND stash it in this tab's own sessionStorage
+  // (never a persistent local default), rather than failing outright, and
+  // say so honestly rather than claiming a real git-log save.
+  try {
+    downloadSettingsAsFile(snapshot);
+    sessionStorage.setItem(SESSION_FALLBACK_KEY, JSON.stringify(snapshot));
+    lastLoadedSnapshot = snapshot;
+    flash('Saved (session only)');
+  } catch (err) {
+    flash('Save failed');
+  }
 }
 
 async function resetSettings(){
-  let snap;
-  if (!GIT_LOG_WRITABLE){
-    try { snap = JSON.parse(sessionStorage.getItem(SESSION_FALLBACK_KEY)); } catch (err) { snap = null; }
-  } else {
+  let snap = null;
+
+  // Tier 1: the git-tracked settings log is just a static asset once
+  // committed, so a plain fetch works on ANY server (local dev server or a
+  // real Vercel deployment) -- no picker/permission dance needed for reads.
+  if (location.protocol !== 'file:'){
+    snap = await readSettingsViaApi();
+  }
+  // Tier 2: this browser's own previously-granted File System Access handle.
+  if (!snap && GIT_LOG_WRITABLE){
     snap = await readGitSettingsLog();
   }
+  // Tier 3: this tab's own sessionStorage fallback.
+  if (!snap){
+    try { snap = JSON.parse(sessionStorage.getItem(SESSION_FALLBACK_KEY)); } catch (err) { snap = null; }
+  }
+
   lastLoadedSnapshot = snap;
   if (snap){
     applyOrder(snap.order);

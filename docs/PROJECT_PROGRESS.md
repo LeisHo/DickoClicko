@@ -362,6 +362,23 @@ lost — verified via direct state inspection at the time.
   a normal `https:` origin that was passing the old check even though
   there's no locally-tracked repo file on that visitor's machine to save
   through.
+- Added a Vercel/GitHub-API write path (`api/save-settings.js`, adapted
+  from CLICKO's already-working version) as the new preferred Tier 1 for
+  Save/Reset, ahead of the existing File System Access API (now Tier 2)
+  and the local-save-prompt + sessionStorage fallback (Tier 3) — the only
+  tier that works from a device with no filesystem of its own (a phone
+  visiting the deployed site with `?dev=1`). Reads are a plain fetch of
+  the already-committed static JSON file (works on any server, not just
+  Vercel); writes need the real serverless function. Documented the
+  required `GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET` Vercel env vars in
+  README.md. Verified via a temporary debug hook against a standalone
+  static server: boot-time Reset correctly loaded the real committed
+  settings via the new Tier 1 fetch, `writeSettingsViaApi()` correctly
+  failed against a plain static server (no real function there) and fell
+  through the full chain to Tier 3, and a subsequent Reset correctly
+  preferred Tier 1's real value over the Tier 3 session marker. Could not
+  verify a real end-to-end write through an actual deployed Vercel
+  function — see Open questions below.
 
 ## What's next
 
@@ -373,4 +390,12 @@ only change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
-None currently open.
+- **Vercel project not yet created/configured for this repo.** The new
+  `api/save-settings.js` is written and pushed, but no Vercel project
+  exists for DICKOCLICKO yet, so `GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET`
+  aren't set anywhere real — Tier 1 writes will always fail until this is
+  done (falling through to Tier 2/3, not a bug). This requires the user's
+  own Vercel account access; see README.md's "Dev panel settings sync"
+  section for the exact steps. (Confirmed via GitHub's own commit history
+  that CLICKO's identical setup has the same gap — its Vercel function
+  has never actually fired for a real write either.)
