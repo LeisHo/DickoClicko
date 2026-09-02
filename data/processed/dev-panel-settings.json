@@ -42,6 +42,7 @@
   "order": [
     {
       "key": "DEV PANEL",
+      "collapsed": true,
       "settings": [
         "titleFontSize",
         "tabFontSize",
@@ -56,12 +57,14 @@
     },
     {
       "key": "UI",
+      "collapsed": true,
       "settings": [
         "backgroundColor"
       ]
     },
     {
       "key": "CIRCLE",
+      "collapsed": true,
       "settings": [
         "circleSize",
         "circleX",
@@ -71,6 +74,7 @@
     },
     {
       "key": "ROPE",
+      "collapsed": true,
       "settings": [
         "endcapDesign",
         "endcapHeight",
@@ -82,6 +86,7 @@
     },
     {
       "key": "CLICK",
+      "collapsed": false,
       "settings": [
         "clickIntensity",
         "holdDistance"
@@ -89,6 +94,7 @@
     },
     {
       "key": "ROPE ANIMATION",
+      "collapsed": false,
       "settings": [
         "bendStiffness",
         "ropeAnimSpeed",
@@ -99,6 +105,7 @@
     },
     {
       "key": "ROPE GROWTH",
+      "collapsed": false,
       "settings": [
         "ropeGrowthRate",
         "clickHoldMaxDuration",
@@ -107,6 +114,7 @@
     },
     {
       "key": "ROPE CUT",
+      "collapsed": false,
       "settings": [
         "minRopeLength",
         "circleCutDistance",
@@ -121,6 +129,7 @@
     },
     {
       "key": "END EMERGE",
+      "collapsed": false,
       "settings": [
         "endEmergeEnabled",
         "endEmergeDelay",
@@ -130,6 +139,7 @@
     },
     {
       "key": "FLOOR",
+      "collapsed": false,
       "settings": [
         "floorEnabled",
         "floorColor",
