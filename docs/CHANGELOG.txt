@@ -1973,6 +1973,111 @@ ratio metrics above were both measured directly, not estimated. No
 console errors throughout.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  2:48 PM - 3:13 PM EDT
+
+Three related reports, all addressed in one pass:
+
+1. "Collision issues with cutting while the rope is swinging -- why don't
+   you initiate the actual separation of rope segments after the fall
+   delay" -- the PREVIOUS Fall Delay implementation (prior entry) split
+   mainRope's points array into two independent chains immediately at cut
+   time, then rigidly translated the falling piece to follow the parent's
+   tip each frame during the delay. That translate-to-follow approach
+   doesn't reproduce true continuity: a shortened parent rope swings
+   differently than the original undivided rope did, so the piece's
+   translated position could visibly diverge/collide with where it
+   "should" be. Redesigned: cutRopeAt()/cutPieceAt() now defer the actual
+   array split via a `pendingCut` ({idx, delay}) stored on mainRope or the
+   piece being cut -- the rope stays ONE physics chain, fully solved by
+   the normal integrateChain() call, until the delay counts down to 0 in
+   update(), at which point the real split (performMainRopeSplit()/
+   performPieceSplit()) happens using that frame's already-integrated
+   positions. Toppling (the one-time random tumble) now happens at the
+   real separation instant too, which is also the only instant it makes
+   physical sense (a still-attached piece has no reason to tumble). The
+   cosmetic cut-sweep mark still starts immediately at cut time (unchanged,
+   purely visual) via a new cutSweep.anchorIndex field so it tracks the
+   pending cut point correctly whether or not the real split has happened
+   yet. A second cut attempt while one is already pending is rejected.
+   Continuity across the eventual split is now correct BY CONSTRUCTION:
+   the piece's cloned starting point is an exact copy of the shared
+   boundary point's values at split time, so there is no discontinuity to
+   produce a collision artifact in the first place.
+
+2. "Cut-end endcap hidden in render() while piece.fallDelay > 0 -- this
+   doesn't look implemented" -- the gate itself was correctly wired (code
+   inspection confirmed it), but with change #1 above it's now moot: a
+   piece can no longer exist in fallenPieces while still delayed (it isn't
+   created until the real split happens, which only happens once the delay
+   has fully elapsed), so the per-frame fallDelay check in render() was
+   dead code and has been removed -- endcapAtCutEnd alone now fully
+   controls whether the cap appears, with no additional timing gate needed.
+
+3. "Extension jitter is much better but still noticeable" -- root-caused
+   to TWO separate, previously-unaddressed bugs in the growing-tip code,
+   found via frame-by-frame tracing of the angle between the newly-
+   committed segment and the brand-new growing segment (not just tip
+   position/acceleration, which the prior fix already covered):
+   (a) integrateChain()'s basic per-point Verlet step excluded only the
+   pinned anchor, not the growing tip -- so the fresh, near-zero-length
+   tip pushed by growRope() still got a real gravity+inherited-velocity
+   kick on its first frame, which positionGrowingTip()'s smoothing then
+   only partially corrected. Fixed by also excluding the growing-tip index
+   from that loop when skipLastSegment is set, matching what the function
+   already claimed to do. This alone reduced the worst-case kink from
+   ~180 degrees to ~162 -- better, not fixed.
+   (b) The real cause: positionGrowingTip() smoothed the tip's ABSOLUTE
+   position toward a target, but the point it's anchored to (dir.prev, the
+   just-finalized neighbor) can itself move several px during a commit
+   frame (it inherits the outgoing segment's velocity, then gets
+   constraint-solved as a real point for the first time). The tip's own
+   smoothing, working from its stale pre-move position at a 0.25 factor,
+   barely followed that move, leaving the tip's new segment pointing in a
+   near-arbitrary direction relative to its anchor. Since drawEndcap()
+   orients the endcap graphic directly off this exact segment's direction,
+   that reads as the endcap visibly snapping/spinning at the tip on every
+   commit during real swinging. Fixed by restructuring positionGrowingTip()
+   to smooth a relative OFFSET-from-anchor (mainRope.tipOffset, reset to
+   {0,0} by growRope() every time a new tip is pushed) instead of an
+   absolute position -- the anchor's own current position is now always
+   applied in full, every frame, with zero lag, while only the small
+   growing offset itself is smoothed.
+
+Verified via a temporary debug hook (window.__debugTMPropo, removed before
+commit, grep-confirmed 0 references) against a standalone static server:
+- Change #1: default Fall Delay (0) reproduces the old immediate-split
+  behavior exactly (regression check); with Fall Delay > 0, the rope
+  measurably stays undivided and tracks a real swing continuously through
+  the whole delay (max per-frame jump at the pending cut point ~4.25px,
+  matching the applied swing velocity, no discontinuity); a second cut
+  attempt mid-delay is correctly rejected; the real split fires at the
+  correct countdown boundary and mainRope/piece continuity across it was
+  confirmed by object-identity argument (the piece's first point is a
+  direct clone of the boundary point's own values at that instant).
+- Change #3: the angle-kink metric (degrees between consecutive segment
+  directions at the tip, frame to frame) dropped from a worst case of
+  179.89 (before any fix this round) to 5.57 over a 2s swinging+growing
+  test with the user's own saved settings (bendStiffness 0.07,
+  ropeAnimSpeed 1.1, gravityStrength 1.9, ropeWeight 1.9, damping 0.999,
+  constraintIterations 6, ropeGrowthRate 15), average kink dropped from
+  18.33 to 0.42; tip acceleration and segment-length-ratio stability (max
+  ~1.1x) both remained healthy, confirming no regression against last
+  round's fixes. A combined 5s stress test (stronger swing + continuous
+  growth + a mid-test cut with Fall Delay 0.6s) held max segment ratio
+  1.132, max kink 9.30/avg 0.66, and completed the deferred cut/split
+  correctly alongside the growth -- all three of today's fixes verified
+  working together with no interaction bugs.
+- Real-video analysis: the user's own new screencap (datalog/Recording
+  2026-09-02 144811.mp4) was frame-extracted and inspected around its
+  actual cut (~9.0-9.9s) and growth (~10.3s onward) phases to ground the
+  investigation in what the video actually showed, rather than relying on
+  the physics simulation alone.
+
+node --check clean throughout. No console errors on a real page load
+(only a stale, unrelated ERR_CONNECTION_RESET from an earlier redundant
+reload attempt, not from index.html or any of its own resources).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

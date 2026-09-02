@@ -1169,6 +1169,9 @@ function resetMainRope(){
     // it fresh from the first real measurement rather than carrying over
     // whatever direction the PREVIOUS mainRope object happened to end on.
     growDir: null,
+    // smoothed tip-offset-from-anchor state (positionGrowingTip()) -- same
+    // fresh-start reasoning as growDir.
+    tipOffset: null,
   };
 }
 
@@ -1239,8 +1242,30 @@ function nearestPointOnRope(px, py, points){
 }
 
 function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastSegment){
+  // skipLastSegment also excludes the growing-tip POINT itself (not just its
+  // segment's distance/bend constraints, handled further below) from this
+  // basic Verlet step -- positionGrowingTip() places it directly every
+  // frame and owns its oldx/oldy entirely, so it's meant to never enter the
+  // solver at all (see that function's own comment). This loop was the one
+  // place that claim didn't hold: it only ever excluded pinnedIndex, so the
+  // fresh, near-zero-length tip pushed by growRope() still got a real
+  // gravity+velocity kick here on its very first frame (inheriting prev's
+  // velocity, per growRope()'s own "start it moving, not at rest" fix) --
+  // positionGrowingTip() then only partially (its own 0.25-1.0 smoothing
+  // ramp) pulled it back toward the intended kinematic position, leaving a
+  // real residual displacement that's tiny in absolute px but huge relative
+  // to that segment's own near-zero length, i.e. a large swing in its local
+  // direction. Confirmed via direct frame-by-frame tracing during a
+  // swinging+growing simulation: the angle between the newly-committed
+  // segment and the brand-new growing one flipped by up to ~180 degrees
+  // right at commit, decaying back over the next several frames as the
+  // segment grew long enough to dilute the residual -- reproducing the
+  // user's "still extends in a jittery fashion" report even after the
+  // separate tip-position-smoothing fix above. Excluding the tip here
+  // entirely removes the kick at its source.
+  const tipIndex = skipLastSegment ? points.length - 1 : -1;
   for (let i = 0; i < points.length; i++){
-    if (i === pinnedIndex) continue;
+    if (i === pinnedIndex || i === tipIndex) continue;
     const p = points[i];
     const vx = (p.x - p.oldx) * cfg.damping;
     const vy = (p.y - p.oldy) * cfg.damping;
@@ -1420,21 +1445,32 @@ function positionGrowingTip(){
   const pts = mainRope.points;
   const dir = tipGrowDirection(pts);
   const tip = pts[pts.length - 1];
-  const targetX = dir.prev.x + dir.x * mainRope.tipGrowLen;
-  const targetY = dir.prev.y + dir.y * mainRope.tipGrowLen;
-  // Smoothed toward the raw target instead of snapping straight to it.
-  // dir.prev is a real physics point still subject to the constraint
-  // solver's own ordinary per-frame "breathing", and every time a segment
-  // completes dir.prev's IDENTITY switches to the just-finalized point --
-  // both effects are individually small, but anchoring the tip's ABSOLUTE
-  // position directly to dir.prev every frame showed them through 1:1
-  // (confirmed via frame-by-frame tracing: real, reproducible non-monotonic
-  // steps at every single commit boundary, not just visually-suspected
-  // jitter). Smoothing spreads each such step over a few frames instead of
-  // rendering it as one visible snap. tipGrowLen/totalLength (the actual
-  // growth accounting) are untouched -- only the rendered pixel position
-  // lags slightly behind the true target, which is imperceptible against a
-  // steady ~2px/frame growth rate.
+  // The tip's position is anchor (dir.prev, a real physics point) PLUS a
+  // smoothed OFFSET -- not a smoothed absolute position. mainRope.tipOffset
+  // (reset to {0,0} by growRope() every time a new tip is pushed) is what
+  // gets smoothed toward the raw target offset below; dir.prev's own
+  // CURRENT position is always applied in full, every frame, with no lag.
+  // An earlier version smoothed the absolute (dir.prev + offset) position
+  // directly, which meant the tip only partially followed dir.prev when
+  // dir.prev itself moved -- and dir.prev moves for real reasons every
+  // commit frame (it inherits the outgoing segment's velocity, per
+  // growRope()'s own comment, then gets constraint-solved against ITS OWN
+  // neighbor for the first time as an ordinary point). Confirmed via direct
+  // frame-by-frame tracing: at a commit frame with real swing velocity
+  // present, dir.prev moved several px while the tip -- still smoothing
+  // from its stale pre-move position at a 0.25 factor -- barely followed,
+  // leaving the tip's new segment pointing in a near-arbitrary direction
+  // (measured up to ~180 degrees off the established growth direction).
+  // Because drawEndcap() orients the endcap graphic off exactly this
+  // segment's direction (see its own tipDirection() call), that reads as
+  // the endcap visibly snapping/spinning at the tip on every commit during
+  // real swinging -- reproducing the user's "still extends in a jittery
+  // fashion" report, distinct from (and not fixed by) the earlier
+  // acceleration-spike fix above, which addressed the tip's ABSOLUTE
+  // position/velocity continuity but not this anchor-tracking gap.
+  const targetOffX = dir.x * mainRope.tipGrowLen;
+  const targetOffY = dir.y * mainRope.tipGrowLen;
+  if (!mainRope.tipOffset) mainRope.tipOffset = { x: targetOffX, y: targetOffY };
   //
   // The smoothing factor itself RAMPS UP toward 1 as this segment nears
   // completion (tipGrowLen -> segLen), rather than staying flat at 0.25 the
@@ -1456,8 +1492,10 @@ function positionGrowingTip(){
   // was added for 2 rounds ago.
   const frac = mainRope.tipGrowLen / mainRope.segLen;
   const smoothing = Math.max(0.25, frac);
-  tip.x += (targetX - tip.x) * smoothing;
-  tip.y += (targetY - tip.y) * smoothing;
+  mainRope.tipOffset.x += (targetOffX - mainRope.tipOffset.x) * smoothing;
+  mainRope.tipOffset.y += (targetOffY - mainRope.tipOffset.y) * smoothing;
+  tip.x = dir.prev.x + mainRope.tipOffset.x;
+  tip.y = dir.prev.y + mainRope.tipOffset.y;
   tip.oldx = tip.x; tip.oldy = tip.y;
 }
 
@@ -1531,6 +1569,12 @@ function growRope(dtSeconds){
     }
     tip.oldx = tip.x - vx; tip.oldy = tip.y - vy;
     pts.push({ x: tip.x, y: tip.y, oldx: tip.x - vx, oldy: tip.y - vy });
+    // the new tip starts exactly coincident with its own anchor (the point
+    // just pushed from) -- zero offset -- so positionGrowingTip()'s offset
+    // smoothing (see its own comment) starts from the correct zero point
+    // instead of inheriting whatever offset was accumulating for the
+    // segment that just finished.
+    mainRope.tipOffset = { x: 0, y: 0 };
     mainRope.tipGrowLen -= targetSeg;
     firstCommitThisFrame = false;
   }
@@ -1578,6 +1622,9 @@ function topplePiece(points){
 }
 
 function cutRopeAt(hit, clickX, clickY){
+  // a cut is already pending (Fall Delay > 0, counting down) -- the rope
+  // hasn't actually separated yet, so there's nothing new to cut.
+  if (mainRope.pendingCut) return;
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
   // refuse a cut whose TARGET point falls within Circle Cut Distance of the
   // anchor -- a double-click landing just outside isOnCircle's own (smaller,
@@ -1605,6 +1652,43 @@ function cutRopeAt(hit, clickX, clickY){
   const nx = ty, ny = -tx;
   const side = (clickX - hit.x) * nx + (clickY - hit.y) * ny;
 
+  // the cut sweep-mark belongs to the REMAINING rope (still hanging from the
+  // circle), not the eventual falling piece -- anchorIndex pins it to idx,
+  // which stays the correct edge whether the split happens immediately
+  // (Fall Delay 0) or later (see pendingCut below); renderCutSweep tracks
+  // it live either way. A later cut overwrites this outright.
+  const half = vmin(cfg.ropeThickness) / 2;
+  mainRope.cutSweep = {
+    progress: 0,
+    anchorIndex: idx,
+    startOffset: side > 0 ? half : -half,
+    endOffset: side > 0 ? -half : half,
+  };
+  if (cfg.fallDelay > 0){
+    // Defer the actual separation until the delay elapses -- the rope
+    // stays ONE physics chain (still fully solved by integrateChain, still
+    // pinned to the circle) instead of being split immediately into two
+    // independently-integrated chains that then have to be kept in sync
+    // by rigidly translating the piece to follow the parent's tip. That
+    // translate-to-follow approach was the previous implementation and it
+    // produced visible collision/seam artifacts when cut mid-swing --
+    // translating by the shortened parent's tip delta doesn't reproduce
+    // what the same point would have done had it stayed part of the
+    // original, undivided chain, since a shorter chain swings differently.
+    // Keeping it undivided sidesteps the mismatch entirely: nothing to
+    // desync because there are no two separate chains yet. idx stays a
+    // valid split point even if the rope keeps growing past it while the
+    // cut is pending.
+    mainRope.pendingCut = { idx, delay: cfg.fallDelay };
+    return;
+  }
+  performMainRopeSplit(idx);
+}
+
+// Actually separates mainRope at idx into the remaining (anchor-side) rope
+// and a new fallen piece -- called immediately from cutRopeAt() when Fall
+// Delay is 0, or from update() once a pendingCut's delay has elapsed.
+function performMainRopeSplit(idx){
   const lowerPoints = mainRope.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
   mainRope.points = mainRope.points.slice(0, idx + 1);
   // keep the persisted real total (and its dev-panel display) in sync with
@@ -1623,40 +1707,16 @@ function cutRopeAt(hit, clickX, clickY){
   // so the next hold-to-grow should measure fresh rather than starting
   // biased toward wherever the rope was pointing pre-cut.
   mainRope.growDir = null;
+  mainRope.tipOffset = null;
   setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
-  // the cut sweep-mark belongs to the REMAINING rope (still hanging from the
-  // circle), not the falling piece — it's anchored to mainRope's own new
-  // cut-edge point (its current last point), so it tracks the remaining
-  // rope's swing, not the piece's. A later cut overwrites this outright,
-  // same as how a piece cut mid-swing keeps moving from the very next frame.
-  const half = vmin(cfg.ropeThickness) / 2;
-  mainRope.cutSweep = {
-    progress: 0,
-    startOffset: side > 0 ? half : -half,
-    endOffset: side > 0 ? -half : half,
-  };
   if (lowerPoints.length >= 2){
-    // Toppling (the initial random tilt) is always applied immediately,
-    // same frame as the cut, regardless of Fall Delay — it's a one-time
-    // pose, not ongoing motion. Fall Delay (cfg.fallDelay, ROPE CUT group)
-    // only gates when the piece STARTS actually falling (update()'s own
-    // fallenPieces integrateChain call skips a piece while its own
-    // fallDelay is still counting down) -- the sweep mark above is a
-    // purely cosmetic overlay, it doesn't gate anything, and still plays
-    // out on its own timeline regardless of Fall Delay.
+    // Toppling (the initial random tilt) happens exactly at the moment of
+    // real separation -- with a Fall Delay this is now the same instant
+    // the piece starts actually falling, which is also the only instant
+    // toppling makes physical sense (a still-attached piece has no reason
+    // to tumble).
     topplePiece(lowerPoints);
-    // delayParent/delayAnchorPrev: while fallDelay is still counting down,
-    // update()'s fallenPieces loop rigidly translates this piece by
-    // whatever the parent's own current tip has moved each frame -- so a
-    // piece cut mid-swing keeps swinging together with whatever it was cut
-    // from (per explicit request) instead of hanging motionless in empty
-    // space during the delay. mainRope.points[last] IS lowerPoints[0]'s
-    // position at this exact moment (the shared boundary point the cut
-    // just split at), so that's the correct starting reference.
-    const parentTip = mainRope.points[mainRope.points.length - 1];
-    const piece = { points: lowerPoints, segLen: mainRope.segLen, fallDelay: cfg.fallDelay,
-      delayParent: mainRope, delayAnchorPrev: { x: parentTip.x, y: parentTip.y } };
-    fallenPieces.push(piece);
+    fallenPieces.push({ points: lowerPoints, segLen: mainRope.segLen });
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
 }
@@ -1669,7 +1729,7 @@ function cutRopeAt(hit, clickX, clickY){
 // "lower" half becomes a brand-new fallen piece with no mark of its own.
 function cutPieceAt(pieceIndex, hit, clickX, clickY){
   const piece = fallenPieces[pieceIndex];
-  if (!piece) return;
+  if (!piece || piece.pendingCut) return;
   const idx = Math.max(1, Math.min(hit.index, piece.points.length - 2));
   const upperLen = idx * piece.segLen;
   const lowerLen = (piece.points.length - 1 - idx) * piece.segLen;
@@ -1682,23 +1742,30 @@ function cutPieceAt(pieceIndex, hit, clickX, clickY){
   const nx = ty, ny = -tx;
   const side = (clickX - hit.x) * nx + (clickY - hit.y) * ny;
 
-  const lowerPoints = piece.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
-  piece.points = piece.points.slice(0, idx + 1);
-
   const half = vmin(cfg.ropeThickness) / 2;
   piece.cutSweep = {
     progress: 0,
+    anchorIndex: idx,
     startOffset: side > 0 ? half : -half,
     endOffset: side > 0 ? -half : half,
   };
+  if (cfg.fallDelay > 0){
+    // See cutRopeAt()'s identical pendingCut comment -- same deferred-split
+    // reasoning, just against this piece's own points instead of mainRope's.
+    piece.pendingCut = { idx, delay: cfg.fallDelay };
+    return;
+  }
+  performPieceSplit(piece, idx);
+}
+
+// Actually separates `piece` at idx -- see performMainRopeSplit()'s
+// identical role for mainRope.
+function performPieceSplit(piece, idx){
+  const lowerPoints = piece.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
+  piece.points = piece.points.slice(0, idx + 1);
   if (lowerPoints.length >= 2){
     topplePiece(lowerPoints);
-    // See cutRopeAt()'s identical comment -- here the "parent" is the
-    // UPPER remaining half of the piece being split (still `piece`, still
-    // in fallenPieces under its own existing identity), not mainRope.
-    const parentTip = piece.points[piece.points.length - 1];
-    fallenPieces.push({ points: lowerPoints, segLen: piece.segLen, fallDelay: cfg.fallDelay,
-      delayParent: piece, delayAnchorPrev: { x: parentTip.x, y: parentTip.y } });
+    fallenPieces.push({ points: lowerPoints, segLen: piece.segLen });
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
 }
@@ -1927,6 +1994,19 @@ function update(rawDt){
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0, hasPartialTip);
   if (hasPartialTip) positionGrowingTip();
 
+  // A Fall Delay > 0 cut hasn't actually split mainRope yet (see
+  // cutRopeAt's pendingCut) -- it just integrated as one whole chain above,
+  // identically to an uncut rope. Once the countdown elapses, perform the
+  // real split now, using this frame's already-updated positions.
+  if (mainRope.pendingCut){
+    mainRope.pendingCut.delay -= dt;
+    if (mainRope.pendingCut.delay <= 0){
+      const idx = mainRope.pendingCut.idx;
+      mainRope.pendingCut = null;
+      performMainRopeSplit(idx);
+    }
+  }
+
   // cutSweep.progress only drives the cosmetic sweep-mark overlay now
   // (render()) — it never gates anything's own physics, so a piece cut
   // mid-swing keeps swinging/falling continuously from the very next frame.
@@ -1944,35 +2024,22 @@ function update(rawDt){
 
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeWeight * cfg.ropeFallSpeed;
   fallenPieces.forEach(piece => {
-    // Fall Delay (cfg.fallDelay at cut time, ROPE CUT group): the piece
-    // gets no gravity/constraint solving of its own -- no independent
-    // physics -- until its own countdown reaches 0, then falls normally
-    // from that point on. Ticks down on `dt` (respects Rope Animation
-    // Speed, same as the physics it's gating), not raw wall-clock time, so
-    // slowing/speeding overall animation also slows/speeds the delay
-    // consistently. While still delayed, per explicit request the piece
-    // isn't just left hanging motionless in empty space -- it rigidly
-    // translates by however far its delayParent's own current tip (the
-    // rope it was cut from -- mainRope, or the upper remaining half of
-    // another piece for a piece-on-piece cut) moved THIS frame, so a piece
-    // cut mid-swing keeps swinging together with whatever it was cut from.
-    // Translation only, no rotation -- the piece's own shape (set once at
-    // topplePiece() time) never changes during the delay, only its
-    // position. Both x/y AND oldx/oldy shift together so no velocity is
-    // falsely injected the moment the piece is actually released.
-    if (piece.fallDelay > 0){
-      piece.fallDelay = Math.max(0, piece.fallDelay - dt);
-      if (piece.delayParent){
-        const parentTip = piece.delayParent.points[piece.delayParent.points.length - 1];
-        const dx = parentTip.x - piece.delayAnchorPrev.x, dy = parentTip.y - piece.delayAnchorPrev.y;
-        if (dx || dy){
-          piece.points.forEach(p => { p.x += dx; p.y += dy; p.oldx += dx; p.oldy += dy; });
-        }
-        piece.delayAnchorPrev.x = parentTip.x; piece.delayAnchorPrev.y = parentTip.y;
-      }
-      return;
-    }
     integrateChain(piece.points, piece.segLen, dt, fallGravity, -1);
+    // A piece-on-piece cut (cutPieceAt) with Fall Delay > 0 hasn't actually
+    // split `piece` yet -- same pendingCut deferral as mainRope's, checked
+    // after this piece's own integration above so the split happens
+    // against this frame's already-updated positions, identically to how
+    // mainRope's pendingCut is resolved after ITS integration. A newly
+    // split-off lower piece pushed here starts getting its own
+    // integrateChain() from next frame's pass over fallenPieces.
+    if (piece.pendingCut){
+      piece.pendingCut.delay -= dt;
+      if (piece.pendingCut.delay <= 0){
+        const idx = piece.pendingCut.idx;
+        piece.pendingCut = null;
+        performPieceSplit(piece, idx);
+      }
+    }
   });
 
   if (cfg.floorEnabled){
@@ -2137,25 +2204,26 @@ function renderCutSweep(entity){
   const sweep = entity.cutSweep;
   const t = sweep.progress;
   const off = sweep.startOffset + (sweep.endOffset - sweep.startOffset) * t;
-  // anchored to the entity's OWN current cut-edge point (its last point),
-  // not a static remembered position — mainRope/the piece keeps moving
-  // under normal physics, so the mark must track IT, not whatever fell (or
-  // split) away from it.
+  // anchored to entity.points[sweep.anchorIndex] -- the point the cut
+  // actually landed on. With a Fall Delay (cfg.fallDelay) in effect, the
+  // entity isn't split at cut time (see cutRopeAt/cutPieceAt's pendingCut
+  // deferral) so anchorIndex generally is NOT pts.length-1 yet -- it only
+  // becomes the entity's true last point once the deferred split actually
+  // happens, at which point Math.min below just naturally resolves to it.
+  // Still tracks live physics either way, same reasoning as before: the
+  // entity keeps moving/rotating after the cut, so a snapshotted position
+  // or direction would visibly stop tracking that motion.
   const pts = entity.points;
-  const cutPoint = pts[pts.length - 1];
-  // the perpendicular (nx,ny) is recomputed FRESH from the entity's
-  // CURRENT tangent every frame, not a direction snapshotted once at cut
-  // time -- the entity keeps swinging/rotating after the cut, and a frozen
-  // normal made the mark visibly stop tracking that rotation (reported:
-  // "should follow the rotation and position of the end it was cut from
-  // instead of staying static"). Same tangent->normal convention as the
-  // cut-time calculation (tipDirection() returns the same "toward
-  // increasing index" tangent cutRopeAt/cutPieceAt derived nx/ny from), so
-  // the sweep still runs from the same physical edge it started at.
-  // startOffset/endOffset are pure magnitudes (±half the rope thickness),
-  // so this is always exactly rope-thickness long at full sweep, one edge
-  // to the other, regardless of rotation.
-  const dir = tipDirection(pts);
+  const idx = Math.min(sweep.anchorIndex, pts.length - 1);
+  const cutPoint = pts[idx];
+  // tangent at the anchor point (idx-1 -> idx), recomputed fresh every
+  // frame -- same "toward increasing index" convention cutRopeAt/
+  // cutPieceAt derived nx/ny from, so the sweep runs from the same
+  // physical edge it started at even while the entity keeps swinging.
+  const a = pts[Math.max(0, idx - 1)], b = pts[idx];
+  const tdx = b.x - a.x, tdy = b.y - a.y;
+  const tlen = Math.hypot(tdx, tdy) || 1;
+  const dir = { x: tdx / tlen, y: tdy / tlen };
   const nx = dir.y, ny = -dir.x;
   const x1 = cutPoint.x + nx * sweep.startOffset, y1 = cutPoint.y + ny * sweep.startOffset;
   const x2 = cutPoint.x + nx * off, y2 = cutPoint.y + ny * off;
@@ -2201,15 +2269,12 @@ function render(){
     // so the cap is correctly positioned AND oriented at the severed end
     // with no separate code path needed.
     if (cfg.endcapAtCutEnd){
-      // Only once the piece has actually started falling (Fall Delay, ROPE
-      // CUT group, has fully counted down to 0) -- per explicit request,
-      // the cut-end cap shouldn't appear the instant the cut happens if the
-      // piece is still sitting frozen. Purely a render-time gate; doesn't
-      // touch fallDelay's own countdown in update() at all. With the
-      // default Fall Delay (0), this is a no-op -- the cap still appears
-      // immediately, same as before.
+      // No separate "has it started falling yet" gate needed here anymore:
+      // with Fall Delay > 0, a piece doesn't exist in fallenPieces at all
+      // until the deferred split actually happens (cutRopeAt/cutPieceAt's
+      // pendingCut, resolved in update()) -- so by the time a piece is here
+      // to iterate over, it has, by construction, already started falling.
       fallenPieces.forEach(piece => {
-        if (piece.fallDelay > 0) return;
         drawEndcap([...piece.points].reverse(), thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight);
       });
     }

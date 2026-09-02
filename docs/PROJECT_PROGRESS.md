@@ -428,22 +428,40 @@ lost — verified via direct state inspection at the time.
   unaffected; a throwaway test copy with `IS_LOCAL_CONTEXT` forced false
   confirmed Save stops immediately with an honest error, no local prompt
   of any kind.
-- Fall Delay refinements, both per explicit request: the cut-end endcap
-  now stays hidden until a delayed piece actually starts falling
-  (render-time gate on `piece.fallDelay`); a delayed piece cut mid-swing
-  now rigidly tracks whatever it was cut from (`delayParent`) instead of
-  hanging motionless, decoupling cleanly once released. Also fixed a
-  real, separate "still jittery" extension bug specific to growing while
-  mid-swing (independent of the earlier floor/pileRepulsion fix) —
-  found real periodic velocity spikes at every segment-commit boundary
-  via direct acceleration tracing; fixed with two changes together
-  (`growRope()` no longer snaps the tip at commit, and
-  `positionGrowingTip()`'s smoothing now ramps up as the segment nears
-  completion) — max acceleration dropped 50→10, and segment-length
-  stability came out *better* than the original pre-fix baseline. See
-  CODE_SUMMARY's Gotchas for the full investigation, including a first
-  attempt that fixed the spikes but regressed segment-length stability
-  before landing on the final two-part fix.
+- Fall Delay now defers the ACTUAL rope/piece separation until the delay
+  elapses, rather than splitting immediately and rigidly translating the
+  falling piece to follow its parent. The translate-to-follow approach
+  (previous design) produced real visible collision/seam artifacts when
+  cut mid-swing, since a shortened parent rope swings differently than the
+  original undivided one did — reported directly as "collision issues
+  with cutting while the rope is swinging." Now `cutRopeAt()`/
+  `cutPieceAt()` store a `pendingCut` and the rope/piece stays ONE
+  physics chain (fully solved by the normal constraint loop) until
+  `update()`'s countdown hits 0, at which point the real split happens
+  using that frame's already-integrated positions — continuity across the
+  split now holds by construction, not by a runtime translation trying to
+  approximate it. The cut-end-endcap-hidden-until-falling behavior from
+  last round is now automatic rather than a separate gate: a piece simply
+  can't exist yet while still delayed.
+- Fixed a second, distinct cause of "extension still jittery" (previous
+  round's acceleration-spike fix helped but the user reported it was
+  "much better but still noticeable"): the growing tip's rendered ANGLE
+  (not just its position) could swing wildly at the moment a segment
+  committed, because `positionGrowingTip()` smoothed the tip's absolute
+  position but the point it's anchored to can itself move several px
+  during that same frame — the tip's smoothing didn't track that anchor
+  move, leaving the new segment pointing in a near-arbitrary direction.
+  Since the endcap graphic is oriented directly off that segment's
+  direction, this read as the endcap visibly snapping/spinning at the tip
+  on every commit during real swinging. Fixed by smoothing a relative
+  offset-from-anchor instead of an absolute position, so the anchor's own
+  current position is always applied in full with zero lag. Measured
+  worst-case angle instability dropped from ~180° to ~5.6° (average
+  ~18°→~0.4°) over a real swinging+growing test using the user's own
+  saved settings. See CODE_SUMMARY's Gotchas for the full investigation,
+  including a smaller contributing bug found and fixed along the way
+  (the growing tip wasn't fully excluded from `integrateChain()`'s basic
+  physics step, despite the code's own comment claiming it was).
 
 ## What's next
 

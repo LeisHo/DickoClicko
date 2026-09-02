@@ -985,3 +985,115 @@ GOTCHAS
   ("Save failed: HTTP 501" against this environment's own static test
   server, which naturally lacks the real API route) and never attempts
   Tier 2/3 at all.
+- Fall Delay cutting no longer splits `mainRope.points`/a piece's `points`
+  into two independent chains immediately at cut time. That approach (the
+  previous entry above) rigidly translated the falling piece to follow its
+  "delayParent"'s tip each frame, but a shortened parent rope genuinely
+  swings differently than the original undivided rope did, so the
+  translated piece could visibly diverge from where it should be --
+  reported as "collision issues with cutting while the rope is swinging."
+  Now `cutRopeAt()`/`cutPieceAt()` store a `pendingCut` (`{idx, delay}`) on
+  `mainRope`/the piece instead of splitting right away; the rope stays ONE
+  physics chain, fully solved by the normal `integrateChain()` call, for
+  the whole delay. `update()` ticks `pendingCut.delay` down each frame and
+  calls `performMainRopeSplit(idx)`/`performPieceSplit(piece, idx)` (the
+  actual array-slicing logic, unchanged from before) the instant it
+  reaches 0, using that frame's already-integrated positions. `delayParent`
+  /`delayAnchorPrev` and the whole per-frame rigid-translation block in
+  `update()` are gone -- no longer needed since there's nothing to keep in
+  sync until the real split happens. `topplePiece()` (the one-time random
+  tumble) now also happens at that same real-separation instant, which is
+  also the only instant it makes physical sense (a still-attached piece
+  has no reason to tumble). A second cut attempt while one is already
+  pending is rejected (`if (mainRope.pendingCut) return;` /
+  `if (!piece || piece.pendingCut) return;`). Continuity across the
+  eventual split holds BY CONSTRUCTION, not by any runtime check: the new
+  piece's first point is a direct clone of the shared boundary point's
+  x/y/oldx/oldy at the exact instant of the split, so there's no gap for a
+  collision artifact to come from. Verified: default Fall Delay (0)
+  reproduces the old immediate-split behavior exactly (mainRope shortens
+  the same frame, `pendingCut` stays null); with Fall Delay > 0 and real
+  swing velocity applied, the rope measurably stays undivided through the
+  whole delay (max per-frame jump at the pending cut point ~4.25px,
+  matching the swing, no discontinuity) and the real split fires at the
+  correct countdown boundary.
+- `renderCutSweep()`'s anchor point is no longer always `entity.points[
+  points.length-1]`. With Fall Delay deferring the real split (previous
+  entry), the entity isn't actually shortened at cut time, so its true
+  last point is the wrong place to anchor the cosmetic cut-sweep mark --
+  it needs to track the PENDING cut point instead, which is some interior
+  index until the real split happens. `cutRopeAt()`/`cutPieceAt()` now
+  store `cutSweep.anchorIndex = idx`, and `renderCutSweep()` reads
+  `pts[Math.min(sweep.anchorIndex, pts.length-1)]` (and derives its
+  tangent from that same index's neighbor) instead of unconditionally
+  using the last point -- this resolves correctly both before the real
+  split (anchorIndex is an interior index) and after (anchorIndex now
+  equals pts.length-1, same as the old behavior).
+- `render()`'s cut-end endcap no longer has a `piece.fallDelay > 0` gate.
+  With the pendingCut redesign above, a piece can't exist in
+  `fallenPieces` at all while still delayed -- it isn't created until the
+  real split happens, which only happens once the delay has fully
+  elapsed. Per-piece `fallDelay` itself no longer exists (pieces are
+  always created already fully "released"). The gate was reported as
+  looking unimplemented; code inspection confirmed it WAS wired correctly,
+  it was just testing a condition (`piece.fallDelay > 0`) that, under the
+  redesign, can now never be true for anything actually in the array --
+  removed as dead code rather than left in place.
+- Extension jitter ("much better but still noticeable" after the prior
+  round's acceleration-spike fix) had TWO further, previously-unaddressed
+  causes, found via frame-by-frame tracing of the ANGLE between the
+  newly-committed segment and the brand-new growing segment (a metric the
+  prior round's tip-position/acceleration tracing didn't cover):
+  1. `integrateChain()`'s basic per-point Verlet loop (`for (let i=0; i<
+     points.length; i++)`) excluded only `pinnedIndex` -- NOT the growing
+     tip, despite the function's own comment claiming the growing tip
+     "never enters the iterative solver at all." Only the SECOND loop
+     (distance/bend constraints) actually respected `skipLastSegment`. So
+     the fresh, near-zero-length tip pushed by `growRope()` still got a
+     real gravity+inherited-velocity kick on its very first frame, which
+     `positionGrowingTip()`'s own smoothing then only partially corrected.
+     Fixed by adding a `tipIndex = skipLastSegment ? points.length-1 : -1`
+     exclusion alongside `pinnedIndex`. This alone reduced the worst-case
+     kink from ~180 degrees to ~162 (measured) -- a real improvement, but
+     not the dominant cause.
+  2. The dominant cause: `positionGrowingTip()` smoothed the tip's
+     ABSOLUTE position toward a target (`tip.x += (targetX - tip.x) *
+     smoothing`), but `dir.prev` (the point the tip is anchored to, the
+     just-finalized neighbor) can itself move several px during the SAME
+     commit frame -- it inherits the outgoing segment's velocity (an
+     existing, intentional mechanism, see `growRope()`'s own comment on
+     that), then gets constraint-solved as an ordinary point for the
+     first time. Direct tracing showed exactly this: at a commit frame
+     with real swing velocity present, `dir.prev` moved several px while
+     the tip -- still smoothing from its OWN stale pre-move position at a
+     0.25 factor -- barely followed, leaving the new segment (dir.prev ->
+     tip) pointing in a near-arbitrary direction (measured up to ~180
+     degrees off the established growth direction) relative to its
+     anchor. Because `drawEndcap()` orients the whole endcap graphic
+     directly off this exact segment's direction (`tipDirection(points)`,
+     the last two points), this reads as the endcap visibly snapping/
+     spinning at the tip on every single commit during real swinging --
+     the actual visible "jitter." Fixed by restructuring
+     `positionGrowingTip()` to smooth a RELATIVE offset-from-anchor
+     (`mainRope.tipOffset`) instead of an absolute position: `dir.prev`'s
+     own current position is now always applied in FULL every frame (zero
+     lag, since it's real physics and the tip must render attached to
+     it), while only the small growing offset itself (`growDir *
+     tipGrowLen`) is smoothed. `growRope()` resets `mainRope.tipOffset =
+     {x:0,y:0}` every time a new tip point is pushed (it starts exactly
+     coincident with its anchor, so the offset really is 0 at that
+     instant); `resetMainRope()`/`cutRopeAt()`'s post-cut reset both null
+     it out alongside `growDir`, same fresh-start reasoning. Verified via
+     the angle-kink metric (degrees between consecutive segment
+     directions at the tip, frame to frame) over a 2s swinging+growing
+     test using the user's own saved settings: worst case dropped from
+     179.89 (with only fix 1 above applied) to 5.57, average from 18.33 to
+     0.42. A combined 5s stress test (stronger swing + continuous growth +
+     a mid-test cut with Fall Delay 0.6s, exercising all of today's fixes
+     together) held max segment-length ratio 1.132 and max kink 9.30/avg
+     0.66, with the deferred cut/split completing correctly alongside the
+     growth -- no interaction bugs between the three fixes. The user's own
+     new screencap (`datalog/Recording 2026-09-02 144811.mp4`) was also
+     frame-extracted and inspected around its actual cut and growth
+     phases to ground the investigation in what the video showed, rather
+     than relying on the physics simulation alone.
