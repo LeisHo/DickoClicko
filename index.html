@@ -180,6 +180,7 @@ const DEV_GROUPS = [
     { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8.9 },
     { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.6 },
     { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:22 },
+    { key:'flickDistanceThreshold', label:'Click And Hold Flick Distance Threshold', type:'slider', unit:'%vmin', min:0, max:20, step:0.1, def:0 },
   ]},
   { title:'ROPE ANIMATION', controls:[
     { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1 },
@@ -190,9 +191,12 @@ const DEV_GROUPS = [
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
   ]},
   { title:'ROPE CUT', controls:[
-    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.4, max:30, step:0.5, def:0.5 },
+    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.5 },
+    { key:'circleCutDistance', label:'Circle Cut Distance', type:'slider', unit:'%vmin', min:0, max:30, step:0.5, def:10 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
+  ]},
+  { title:'FLOOR', controls:[
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#ffffff' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:5 },
@@ -1140,15 +1144,16 @@ const CUT_SWEEP_BASE_SEC = 0.35;
 
 function cutRopeAt(hit, clickX, clickY){
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
-  // refuse a cut whose TARGET point falls within the circle's own margin
-  // (isOnCircle()) -- a double-click landing just outside that margin
-  // (still "on the rope" by hit-testing, but visually right at/around the
-  // circle) used to be able to cut extremely close to the anchor, which
-  // reads as "double-clicking near the circle cuts the rope short" even
-  // though the press itself was technically off the circle. Reuses the
-  // same margin already tuned for hold-to-grow eligibility rather than
-  // inventing a new threshold.
-  if (isOnCircle(hit.x, hit.y)) return;
+  // refuse a cut whose TARGET point falls within Circle Cut Distance of the
+  // anchor -- a double-click landing just outside isOnCircle's own (smaller,
+  // hold-eligibility) margin can still target a rope point very close to the
+  // anchor, which reads as "double-clicking near the circle cuts the rope
+  // short" even though the press itself was technically off the circle.
+  // A dedicated, independently-tunable distance (not reused from
+  // isOnCircle) per explicit request, since the implicit reuse wasn't
+  // generous enough for real reported clicks.
+  const anchorForCut = circleAnchor();
+  if (Math.hypot(hit.x - anchorForCut.x, hit.y - anchorForCut.y) < vmin(cfg.circleCutDistance)) return;
   // refuse the cut entirely if it would leave the remaining (anchor-side)
   // rope shorter than the configured minimum — the rope stays whole rather
   // than being clamped to some other length the user didn't ask for.
@@ -1321,6 +1326,13 @@ function onPointerUp(e){
     // over it, matching the reported "click and hold doesn't work."
     const releaseHit = nearestPointOnRope(e.clientX, e.clientY, mainRope.points);
     if (releaseHit.dist > vmin(cfg.holdDistance)) return;
+    // Click And Hold Flick Distance Threshold: the pointer must actually
+    // travel at least this far from where the hold started to release
+    // before it counts as a deliberate flick -- a hold released essentially
+    // in place (0 default = no minimum, existing behavior unchanged) won't
+    // fire just because it was held long enough.
+    const dragDist = Math.hypot(e.clientX - info.x, e.clientY - info.y);
+    if (dragDist < vmin(cfg.flickDistanceThreshold)) return;
     const heldMs = now - info.startTime;
     const t = Math.min(1, heldMs / cfg.clickHoldMaxDuration);
     // Intensity Ceiling stacks ON TOP of Click Intensity, not in place of it

@@ -505,14 +505,28 @@ GOTCHAS
   immediately; after, `minPairDist` never dropped below ~22px (targetSeg
   ~32px) across all 5 cycles, with 0 non-monotonic points throughout.
 - `cutRopeAt()` refuses a cut whose TARGET point (`hit.x,hit.y`, not the
-  press position) falls within `isOnCircle()`'s margin, on top of the
-  existing `minRopeLength` guard. A double-click landing just outside the
-  circle's margin (registering as a normal rope click at press time, per
-  `onPointerDown`'s own `isOnCircle` check) can still target a rope point
-  that IS within that margin -- e.g. a click offset mostly sideways from
-  the circle, whose nearest point on the (vertical) rope still projects
-  close to the anchor in Y. Confirmed via a targeted reproduction
-  (`isOnCircleAtClick:false`, `hitWasOnCircle:true`) that this used to cut
-  successfully and now correctly gets rejected, while a normal cut well
-  clear of the circle still succeeds (regression-checked). Reuses the
-  existing `isOnCircle` margin rather than a new threshold.
+  press position) falls within `cfg.circleCutDistance` of the anchor, on
+  top of the existing `minRopeLength` guard. A double-click landing just
+  outside `isOnCircle()`'s own (smaller, hold-eligibility) margin can
+  still target a rope point well within the circle's zone -- e.g. a click
+  offset mostly sideways from the circle, whose nearest point on the
+  (vertical) rope still projects close to the anchor in Y. This was
+  originally implemented by reusing `isOnCircle()`'s own margin directly,
+  but that turned out not to be generous enough for real reported clicks
+  (the user hit this same failure mode twice more after that fix shipped)
+  -- replaced with `circleCutDistance`, an independent, directly
+  user-tunable dev slider, decoupled from `isOnCircle()`'s own radius so
+  it can be set more generously without also changing hold-to-grow
+  eligibility. Confirmed via a targeted reproduction
+  (`isOnCircleAtClick:false`, hit within `circleCutDistance` of the
+  anchor) that this used to cut successfully and now correctly gets
+  rejected, while a normal cut well clear of the circle still succeeds
+  (regression-checked).
+- `cfg.flickDistanceThreshold` (CLICK group, default `0`) gates a charged
+  hold's release on how far the pointer traveled from press to release,
+  independent of `cfg.holdDistance` (which gates on distance from the
+  ROPE at release, not on drag distance). Default `0` preserves the
+  original behavior exactly (a hold released essentially in place still
+  fires) -- verified a ~1px release is blocked once the threshold is
+  raised above it, and a release exceeding the threshold still fires with
+  the same displacement magnitude as before the gate was added.

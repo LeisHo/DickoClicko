@@ -143,16 +143,16 @@ Nothing in progress — everything below is done, verified, and pushed.
   rather than silently overridden either way.
 - Fixed: double-clicking near (but not literally on) the circle could
   still target a rope point within the circle's own margin and cut there
-  — reported twice ("double click within the bounds of the circle... cut
-  at the shortest length possible"). The initial diagnosis (this was just
-  the cut mechanism correctly reacting to the newly-lowered Minimum Rope
-  Length) turned out to be incomplete once the user reiterated it as a
-  real problem — `cutRopeAt()` now also refuses a cut whose TARGET point
-  falls within `isOnCircle()`'s margin, regardless of Minimum Rope Length.
-  Verified: a click offset sideways from the circle (so the press itself
-  reads as rope-mode) whose nearest rope point still lands within the
-  margin now correctly gets rejected; a normal cut well clear of the
-  circle still succeeds.
+  — reported three times total ("double click within the bounds of the
+  circle... cut at the shortest length possible"). Round 1's diagnosis
+  ("just Minimum Rope Length reacting correctly") was real but incomplete;
+  round 2 fixed it by reusing `isOnCircle()`'s margin in `cutRopeAt()`,
+  which still wasn't generous enough for the user's actual clicks. Round 3
+  replaced that reuse with a dedicated, independently-tunable "Circle Cut
+  Distance" dev slider (default 10 %vmin) per explicit request — verified
+  a click offset sideways from the circle whose nearest rope point still
+  lands within that distance now correctly gets rejected, while a normal
+  cut well clear of the circle still succeeds.
 - Fixed a real tangling bug: cutting the rope down to just 2 points (a
   near-anchor cut) and then repeatedly using hold-to-grow produced a
   tight, physically-wrong knot right at the circle — confirmed via a
@@ -180,6 +180,17 @@ Nothing in progress — everything below is done, verified, and pushed.
   not page code. Verified the write path, the IndexedDB handle round-trip,
   and — the property that actually matters — that a failed/unavailable
   git-log write never blocks or affects the localStorage save.
+- Minimum Rope Length's slider range widened to 0.1-15 %vh (was 0.4-30),
+  default unchanged at 0.5, per explicit request.
+- Added a "Click And Hold Flick Distance Threshold" slider (CLICK group,
+  default 0 = no minimum, preserving prior behavior exactly): gates a
+  charged hold's release on how far the pointer actually traveled from
+  press to release, independent of Click And Hold Distance (which gates
+  on distance from the rope at release, not on drag distance). Verified
+  both directions: a release under the threshold is blocked, one above it
+  still fires with the same displacement magnitude as before.
+- Moved Floor Enabled/Color/Thickness/Height out of ROPE CUT into their
+  own new "FLOOR" group, per explicit request.
 
 ## What's next
 

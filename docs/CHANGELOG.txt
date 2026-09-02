@@ -967,6 +967,56 @@ Verified:
   documented API usage patterns, not a live end-to-end file write.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  07:29 AM EDT
+
+Fixed:
+- Double-clicking near (but not literally on) the circle could still cut
+  the rope very short -- reported a THIRD time after 2 earlier fix
+  attempts. Round 2's fix (cutRopeAt() reusing isOnCircle()'s own margin
+  to reject a too-close cut target) turned out to still not be generous
+  enough for the user's real clicks. Replaced the implicit reuse with a
+  dedicated, independently user-tunable "Circle Cut Distance" dev slider
+  (ROPE CUT group, default 10 %vmin, measured directly from the anchor
+  rather than derived from isOnCircle()'s own radius) per explicit
+  request. Verified the same targeted click-offset-sideways reproduction
+  used in round 2 still correctly gets rejected under the new mechanism,
+  a normal cut well clear of the circle still succeeds, and a genuine
+  dead-center double-click on the circle remains safe (unaffected,
+  confirmed by regression check -- that path never reaches cutRopeAt()
+  at all).
+
+Added:
+- "Click And Hold Flick Distance Threshold" slider (CLICK group, default
+  0 = no minimum, preserving prior behavior exactly): gates a charged
+  hold's release on how far the pointer actually traveled from press to
+  release position, independent of the existing Click And Hold Distance
+  (which gates on distance from the rope at release, not on drag
+  distance). Verified: a ~1px release is blocked once the threshold is
+  raised above it (0 displacement, vs. the expected punch); a release
+  whose drag distance exceeds the threshold still fires with the same
+  displacement magnitude measured before this gate existed.
+- Minimum Rope Length's slider range widened to 0.1-15 %vh (previously
+  0.4-30), default left unchanged at 0.5, per explicit request.
+- Moved Floor Enabled/Color/Thickness/Height out of the ROPE CUT group
+  into their own new "FLOOR" group, per explicit request. Purely a
+  DEV_GROUPS reorganization -- cfg population and floor collision logic
+  are unaffected (both are keyed by setting name, not by which group
+  declares it).
+
+Verified:
+- Live in the Browser pane: all 3 new/moved controls render in their
+  correct groups (CLICK: flickDistanceThreshold; ROPE CUT: minRopeLength,
+  circleCutDistance; new FLOOR group: floorEnabled/floorColor/
+  floorThickness/floorHeight) via a direct DOM query of every
+  .dp-group's .dp-row children, not just visual inspection.
+- 0 console errors on a clean shipped-code reload (a network-request
+  check confirmed the final reload was 200 OK; console noise from 2
+  earlier flaky navigate() calls was the same already-documented
+  Browser-pane transient, not a real app error).
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

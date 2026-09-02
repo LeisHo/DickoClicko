@@ -228,12 +228,15 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   right at the circle after cutting short and regrowing) — see
   `docs/CODE_SUMMARY.md` Gotchas for the full mechanism and reproduction.
 - `cutRopeAt()` refuses a cut whose TARGET point (not the press position)
-  falls within `isOnCircle()`'s margin — a double-click can register as a
-  normal rope click (press itself outside the circle) while still
-  targeting a rope point that IS within the circle's zone. This was a
-  real, reported bug ("double click within the bounds of the circle...
-  cut at the shortest length possible") — see `docs/CODE_SUMMARY.md`
-  Gotchas for the reproduction.
+  falls within `cfg.circleCutDistance` of the anchor — a double-click can
+  register as a normal rope click (press itself outside the circle) while
+  still targeting a rope point well within the circle's zone. This was a
+  real, reported bug, reported TWICE ("double click within the bounds of
+  the circle... cut at the shortest length possible") — the first fix
+  reused `isOnCircle()`'s own margin, which wasn't generous enough; now an
+  independent, directly user-tunable slider. Don't go back to reusing
+  `isOnCircle()` here. See `docs/CODE_SUMMARY.md` Gotchas for the
+  reproduction.
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to
