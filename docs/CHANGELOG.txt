@@ -157,6 +157,50 @@ Verified:
   the initial build's same limitation).
 
 --------------------------------------------------------------------------------
+2026-09-01  -  11:36 PM - 11:42 PM EDT
+
+Added the built-in "Dev Panel" settings group, per an update to the parent
+CLAUDE.md's §12 standard (Section 12i, added mid-session after the previous
+entry's retrofit was already pushed).
+
+Added:
+- A "Dev Panel" collapsible group, always first, in both Desktop and Mobile
+  tabs: 9 controls for the panel's own chrome -- Dev Panel Title / Tab /
+  Group Title / Settings Title / Body font sizes, Dev Panel Opacity, and
+  Background / Title Text / Non-Title Text colors. Applied live via CSS
+  custom properties (--dp-title-size, --dp-bg, etc.) set on #devPanel.
+  Judged device-specific (independent per Desktop/Mobile tab), for the same
+  "positioned within two different-shaped viewports" reasoning §12f already
+  applies to the panel's own geometry -- so panelStyle{} persists inside the
+  same per-tab geometry blob (getPanelGeometry()'s new .style field) rather
+  than in cfg.
+
+Fixed:
+- Switching to a Desktop/Mobile tab with nothing saved yet was silently
+  keeping the *other* tab's live panel geometry/style rather than resetting
+  to defaults, because applyPanelGeometry(null) used to just return early.
+  Found immediately while verifying the new Dev Panel group (set a red,
+  20px title on the Desktop tab, saved, switched to Mobile, and it was
+  still showing red/20px instead of the default). Fixed by making
+  applyPanelGeometry(null) a real "reset to defaults" call instead of a
+  no-op, for both position/size and panelStyle -- this also makes the
+  Reset button/R-key correctly clear an unsaved manual panel move/resize
+  now, which it should always have done.
+
+Verified:
+- Live style application (font-size and color changes take effect
+  immediately) and the full Copy/Save/Reset round-trip for the new group's
+  values, confirmed independently per Desktop/Mobile tab (including the
+  no-saved-state-yet case, post-fix) -- via direct DOM/computed-style/
+  localStorage inspection through javascript_tool, same as the rest of this
+  session's dev-panel testing.
+- Background-color + opacity combine correctly into the panel's actual
+  rendered rgba() background.
+- The new group participates correctly in drag-to-reorder and appears first
+  by default, alongside the existing project-specific groups.
+- node --check clean on the extracted inline script.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

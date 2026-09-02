@@ -41,6 +41,11 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   px, so the layout stays proportionally correct on both desktop and mobile.
   Physics runs in pixel space each frame, re-derived from the %-based config
   (including on resize).
+- The built-in "Dev Panel" settings group (§12i) is judged device-specific
+  (independent per tab), not shared, for the same reason the panel's own
+  size/position already is — it's the panel's own chrome, being rendered
+  within two different-shaped viewports. Persisted alongside panel geometry
+  (`panelStyle` in `getPanelGeometry()`/`applyPanelGeometry()`), not in `cfg`.
 
 ## Gotchas
 
@@ -68,3 +73,10 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   Speed dev control) finishes — the piece's random toppling tilt
   (`releasePiece()`) is applied at that release moment, not at the cut
   itself, so it still looks attached to the main rope while the sweep plays.
+- `applyPanelGeometry(null)` is a meaningful call (reset panel
+  position/size/style to their CSS/JS defaults), not a no-op -- it's what
+  runs when the active Desktop/Mobile tab has nothing saved yet. An earlier
+  version returned early on a falsy `geom`, which left a freshly-clicked tab
+  showing whatever the *previous* tab's live panel style/position happened
+  to be instead of resetting; caught by explicitly testing a tab with no
+  saved state after the other tab had unsaved live changes.

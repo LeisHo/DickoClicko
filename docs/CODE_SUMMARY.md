@@ -65,7 +65,12 @@ own size/position is two independent blobs keyed by `activeDeviceTab`
 (`'dickoClicko.devPanelGeom.desktop'` / `'...mobile'`), switched by clicking
 the Desktop/Mobile tab buttons -- independent of the actual live viewport
 width, so the panel's mobile layout can be previewed without resizing the
-real browser window.
+real browser window. The built-in "Dev Panel" group (§12i: font sizes,
+opacity, colors for the panel's own chrome) is judged device-specific the
+same way, so `panelStyle{}` rides inside that same per-tab geometry blob
+(`getPanelGeometry()`'s `.style` field) rather than living in `cfg`; applied
+live via CSS custom properties (`--dp-title-size`, `--dp-bg`, etc.) set on
+`#devPanel` by `applyPanelStyle()`.
 
 --------------------------------------------------------------------------------
 UNTOUCHABLE SYSTEMS
@@ -103,6 +108,10 @@ GOTCHAS
   1), not at the moment of cutting -- applying it earlier would make the
   piece visibly snap into a tilted pose before the cut-sweep animation even
   finishes, contradicting the "still looks attached while cutting" effect.
+- `applyPanelGeometry(null)` deliberately resets panel position/size/style to
+  their defaults rather than being a no-op -- needed so switching to a
+  Desktop/Mobile tab with nothing saved yet doesn't silently keep showing
+  whatever the other tab's live (possibly unsaved) geometry/style was.
 - Every `el.setPointerCapture(pointerId)` call is wrapped in `tryCapture()`
   (try/catch) and every drag/resize/reorder handler attaches its move/up
   listeners to `window`, not the captured element -- `setPointerCapture`

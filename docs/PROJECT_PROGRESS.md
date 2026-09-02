@@ -18,8 +18,9 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — dev-panel §12 retrofit + directional cut animation are
-done, verified, and ready to push.
+Nothing in progress — dev-panel §12 retrofit (including the built-in "Dev
+Panel" settings group added to the spec mid-session) + directional cut
+animation are done, verified, and ready to push.
 
 ## Recently completed
 
@@ -42,6 +43,16 @@ done, verified, and ready to push.
   reorder handler before its move/up listeners even attach — now guarded
   everywhere via `tryCapture()`, with listeners on `window` rather than the
   captured element so capture failing doesn't break the feature.
+- Built-in "Dev Panel" settings group (workspace §12i, added to the standard
+  mid-session): 9 controls for the panel's own title/tab/group/label/body
+  font sizes, opacity, and background/title/non-title text colors, applied
+  live via CSS custom properties. Judged device-specific (independent per
+  Desktop/Mobile tab) for the same reason panel geometry already is.
+- Found and fixed a second real bug while verifying that: switching to a tab
+  with nothing saved yet was silently keeping the *other* tab's live
+  geometry/style instead of resetting to defaults, because
+  `applyPanelGeometry(null)` used to be a no-op — it's now a meaningful
+  "reset to defaults" call.
 
 ## What's next
 

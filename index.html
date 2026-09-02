@@ -13,8 +13,8 @@
     position:fixed; top:10px; right:10px;
     width:min(320px, calc(100vw - 20px));
     max-height:88vh; min-width:220px; min-height:140px;
-    background:rgba(18,18,26,0.94); color:#e8e8f0;
-    font:12px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
+    background:var(--dp-bg, rgba(18,18,26,0.94)); color:var(--dp-text-color, #c9c9d8);
+    font:var(--dp-body-size, 12px)/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
     border:1px solid #3a3a4a; border-radius:8px;
     z-index:9999; user-select:none;
     box-shadow:0 6px 24px rgba(0,0,0,0.5);
@@ -24,14 +24,14 @@
   #devPanel.dp-collapsed .dp-body,
   #devPanel.dp-collapsed .dp-resize { display:none; }
   .dp-header {
-    padding:8px 10px; font-weight:600; font-size:13px;
+    padding:8px 10px; font-weight:600;
     background:#25253a; border-radius:8px 8px 0 0;
     cursor:grab; touch-action:none;
     display:flex; justify-content:space-between; align-items:center; gap:8px;
     flex:0 0 auto;
   }
   .dp-header:active { cursor:grabbing; }
-  .dp-title { letter-spacing:.06em; }
+  .dp-title { letter-spacing:.06em; font-size:var(--dp-title-size, 13px); color:var(--dp-title-color, #e8e8f0); }
   #dpFps { flex:1 1 auto; opacity:.6; font-weight:400; font-size:10px; }
   .dp-icon-btn {
     flex:0 0 auto; width:18px; height:18px; line-height:16px; text-align:center;
@@ -48,15 +48,15 @@
   .dp-tabs { display:flex; gap:4px; padding:6px 2px 0; }
   .dp-tab-btn {
     flex:1 1 auto; background:#25253a; color:#9a9ab0; border:none; border-radius:4px;
-    padding:5px 4px; font-size:11px; cursor:pointer;
+    padding:5px 4px; font-size:var(--dp-tab-size, 11px); cursor:pointer;
   }
   .dp-tab-btn.active { background:#3a3a4a; color:#e8e8f0; font-weight:600; }
   .dp-group { border-top:1px solid #33333f; }
   .dp-group:first-child { border-top:none; }
   .dp-group.dp-dragging, .dp-row.dp-dragging { opacity:.4; }
   .dp-group-header {
-    padding:7px 2px; font-weight:600; font-size:11px; letter-spacing:.04em;
-    color:#a9b4ff; cursor:pointer; display:flex; align-items:center; gap:6px;
+    padding:7px 2px; font-weight:600; font-size:var(--dp-group-size, 11px); letter-spacing:.04em;
+    color:var(--dp-text-color, #c9c9d8); cursor:pointer; display:flex; align-items:center; gap:6px;
   }
   .dp-group-header .arrow { transition:transform .15s; font-size:9px; }
   .dp-group.collapsed .arrow { transform:rotate(-90deg); }
@@ -66,7 +66,7 @@
   }
   .dp-drag-handle:active { cursor:grabbing; }
   .dp-row { display:flex; align-items:center; gap:6px; padding:3px 2px; }
-  .dp-row label { flex:0 0 auto; width:112px; font-size:11px; color:#c9c9d8; }
+  .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); color:var(--dp-text-color, #c9c9d8); }
   .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:#7d8cff; }
   .dp-num {
     flex:0 0 auto; width:52px; text-align:right; font-size:11px;
@@ -183,6 +183,125 @@ const DEV_GROUPS = [
 
 const cfg = {};
 DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = c.def));
+
+/* ---------------------------------------------------------------------
+   §12i: built-in "Dev Panel" settings group — the panel's own text sizing/
+   opacity/colors, standing scaffolding (not project-specific). Device-
+   specific like the panel's own geometry (§12c/§12f), not shared, since
+   it's the same "positioned within two differently-shaped viewports"
+   rationale — stored/persisted alongside panel geometry, not in cfg.
+--------------------------------------------------------------------- */
+const PANEL_STYLE_CONTROLS = [
+  { key:'titleFontSize', label:'Dev Panel Title Font Size',          min:9,  max:22, step:1,    def:13 },
+  { key:'tabFontSize',   label:'Desktop/Mobile Tab Font Size',       min:8,  max:18, step:1,    def:11 },
+  { key:'groupFontSize', label:'Collapsible Group Title Font Size',  min:8,  max:18, step:1,    def:11 },
+  { key:'labelFontSize', label:'Settings Title Font Size',           min:8,  max:18, step:1,    def:11 },
+  { key:'bodyFontSize',  label:'Body Text Font Size',                min:8,  max:18, step:1,    def:12 },
+  { key:'opacity',       label:'Dev Panel Opacity',                  min:0.2,max:1,  step:0.02, def:0.94 },
+];
+const PANEL_STYLE_COLOR_CONTROLS = [
+  { key:'bgColor',    label:'Dev Panel Background Color',      def:'#12121e' },
+  { key:'titleColor', label:'Dev Panel Title Text Color',      def:'#e8e8f0' },
+  { key:'textColor',  label:'Dev Panel Non-Title Text Color',  def:'#c9c9d8' },
+];
+const panelStyle = {};
+PANEL_STYLE_CONTROLS.forEach(c => panelStyle[c.key] = c.def);
+PANEL_STYLE_COLOR_CONTROLS.forEach(c => panelStyle[c.key] = c.def);
+
+function hexToRgba(hex, alpha){
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
+function applyPanelStyle(){
+  const panel = document.getElementById('devPanel');
+  panel.style.setProperty('--dp-title-size', panelStyle.titleFontSize + 'px');
+  panel.style.setProperty('--dp-tab-size', panelStyle.tabFontSize + 'px');
+  panel.style.setProperty('--dp-group-size', panelStyle.groupFontSize + 'px');
+  panel.style.setProperty('--dp-label-size', panelStyle.labelFontSize + 'px');
+  panel.style.setProperty('--dp-body-size', panelStyle.bodyFontSize + 'px');
+  panel.style.setProperty('--dp-bg', hexToRgba(panelStyle.bgColor, panelStyle.opacity));
+  panel.style.setProperty('--dp-title-color', panelStyle.titleColor);
+  panel.style.setProperty('--dp-text-color', panelStyle.textColor);
+}
+
+const panelStyleNumEls = {};
+function buildPanelStyleGroup(){
+  const g = document.createElement('div');
+  g.className = 'dp-group';
+  g.dataset.key = 'DEV PANEL';
+  const h = document.createElement('div');
+  h.className = 'dp-group-header';
+  h.innerHTML = '<span class="dp-drag-handle">⠿</span><span class="arrow">▼</span><span>Dev Panel</span>';
+  const gb = document.createElement('div');
+  gb.className = 'dp-group-body';
+  h.addEventListener('click', e => { if (!e.target.closest('.dp-drag-handle')) g.classList.toggle('collapsed'); });
+
+  PANEL_STYLE_CONTROLS.forEach(ctrl => {
+    const row = document.createElement('div');
+    row.className = 'dp-row'; row.dataset.key = ctrl.key;
+    const handle = document.createElement('span'); handle.className = 'dp-row-handle dp-drag-handle'; handle.textContent = '⠿';
+    const label = document.createElement('label'); label.textContent = ctrl.label;
+    const slider = document.createElement('input'); slider.type = 'range';
+    slider.min = ctrl.min; slider.max = ctrl.max; slider.step = ctrl.step; slider.value = panelStyle[ctrl.key];
+    const numInput = document.createElement('input'); numInput.type = 'text'; numInput.className = 'dp-num'; numInput.value = panelStyle[ctrl.key];
+    function apply(v){
+      v = parseFloat(v);
+      if (isNaN(v)) return;
+      panelStyle[ctrl.key] = v;
+      let mn = parseFloat(slider.min), mx = parseFloat(slider.max);
+      if (v > mx) slider.max = v + Math.max(Math.abs(v), Math.abs(mx - mn), 1) * 0.2;
+      if (v < mn) slider.min = v - Math.max(Math.abs(v), Math.abs(mx - mn), 1) * 0.2;
+      slider.value = v; numInput.value = round(v, 3);
+      applyPanelStyle();
+    }
+    slider.addEventListener('input', () => apply(slider.value));
+    numInput.addEventListener('change', () => apply(numInput.value));
+    numInput.addEventListener('keydown', e => { if (e.key === 'Enter') numInput.blur(); });
+    row.appendChild(handle); row.appendChild(label); row.appendChild(slider); row.appendChild(numInput);
+    gb.appendChild(row);
+    panelStyleNumEls[ctrl.key] = { slider, numInput };
+  });
+
+  PANEL_STYLE_COLOR_CONTROLS.forEach(ctrl => {
+    const row = document.createElement('div');
+    row.className = 'dp-row'; row.dataset.key = ctrl.key;
+    const handle = document.createElement('span'); handle.className = 'dp-row-handle dp-drag-handle'; handle.textContent = '⠿';
+    const label = document.createElement('label'); label.textContent = ctrl.label;
+    const color = document.createElement('input'); color.type = 'color'; color.value = panelStyle[ctrl.key];
+    color.addEventListener('input', () => { panelStyle[ctrl.key] = color.value; applyPanelStyle(); });
+    row.appendChild(handle); row.appendChild(label); row.appendChild(color);
+    gb.appendChild(row);
+    panelStyleNumEls[ctrl.key] = { color };
+  });
+
+  g.appendChild(h); g.appendChild(gb);
+  const container = document.getElementById('dpGroups');
+  container.insertBefore(g, container.firstChild);
+  makeReorderable(gb, 'dp-row', 'dp-row-handle');
+}
+
+function applyPanelStyleValues(saved){
+  // always resolve every field (falling back to its default), so switching to
+  // a tab with nothing saved yet resets away from whatever the previously
+  // active tab happened to be showing, rather than silently keeping it.
+  PANEL_STYLE_CONTROLS.forEach(ctrl => {
+    const v = (saved && ctrl.key in saved) ? saved[ctrl.key] : ctrl.def;
+    panelStyle[ctrl.key] = v;
+    const el = panelStyleNumEls[ctrl.key];
+    el.slider.min = ctrl.min; el.slider.max = ctrl.max;
+    if (v > ctrl.max) el.slider.max = v;
+    if (v < ctrl.min) el.slider.min = v;
+    el.slider.value = v; el.numInput.value = round(v, 3);
+  });
+  PANEL_STYLE_COLOR_CONTROLS.forEach(ctrl => {
+    const v = (saved && ctrl.key in saved) ? saved[ctrl.key] : ctrl.def;
+    panelStyle[ctrl.key] = v;
+    panelStyleNumEls[ctrl.key].color.value = v;
+  });
+  applyPanelStyle();
+}
 
 /* ---------------------------------------------------------------------
    Dev panel build-out
@@ -441,17 +560,24 @@ function applyValues(values){
 
 function getPanelGeometry(){
   const r = document.getElementById('devPanel').getBoundingClientRect();
-  return { left: r.left, top: r.top, width: r.width, height: r.height };
+  return { left: r.left, top: r.top, width: r.width, height: r.height, style: { ...panelStyle } };
 }
 
 function applyPanelGeometry(geom){
-  if (!geom) return;
+  // geom === null means "nothing saved for this tab" — reset to the CSS
+  // default rather than silently leaving whatever the other tab had applied.
   const panel = document.getElementById('devPanel');
-  panel.style.right = 'auto';
-  panel.style.left = geom.left + 'px';
-  panel.style.top = geom.top + 'px';
-  panel.style.width = geom.width + 'px';
-  panel.style.height = geom.height + 'px';
+  if (geom){
+    panel.style.right = 'auto';
+    panel.style.left = geom.left + 'px';
+    panel.style.top = geom.top + 'px';
+    panel.style.width = geom.width + 'px';
+    panel.style.height = geom.height + 'px';
+  } else {
+    panel.style.left = ''; panel.style.top = ''; panel.style.right = '';
+    panel.style.width = ''; panel.style.height = '';
+  }
+  applyPanelStyleValues(geom && geom.style);
 }
 
 function currentGeomKey(){ return GEOM_KEY_PREFIX + activeDeviceTab; }
@@ -897,6 +1023,8 @@ resetMainRope();
 if (DEV_MODE){
   document.getElementById('devPanel').classList.remove('hidden');
   buildDevPanel();
+  buildPanelStyleGroup();
+  applyPanelStyle();
   initPanelDrag();
   initResizeHandles();
   initDevPanelChrome();
