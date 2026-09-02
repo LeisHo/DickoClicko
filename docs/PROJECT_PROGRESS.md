@@ -485,6 +485,13 @@ lost — verified via direct state inspection at the time.
   to the old combined product (3.61) so the rope's actual behavior is
   unchanged, not just similar. `Damping`'s slider minimum moved from 0.5
   to 0.7, both per explicit request.
+- Added 2 more endcap designs: `form3-01`/`form3-02` (`data/Rope/
+  End_Form3-01.svg`/`-02.svg`), a new "Form 3" family — 14 designs total
+  now. Both verified rendering correctly; their bbox top sits ~3.93 SVG
+  units above the alignment line (unlike the flush-aligned Form1/Form2
+  set), which at default thickness is a small enough offset (~2-3px) to
+  stay inside the rope's own round-cap overlap — flagged to the user as
+  an observation, not treated as a bug.
 
 ## What's next
 

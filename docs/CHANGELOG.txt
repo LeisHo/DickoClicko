@@ -2161,6 +2161,29 @@ settings JSON validated with a real JSON parser (not just eyeballed); 0
 console errors on a fresh page load.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  6:26 PM - 6:29 PM EDT
+
+"I added 2 new SVGs. incorporate and push" -- found data/Rope/
+End_Form3-01.svg and End_Form3-02.svg (a new "Form 3" family, first of
+its kind) via `git status`. Added both to ENDCAP_DESIGNS ('form3-01',
+'form3-02') and the Endcap Design dropdown (2 new options appended after
+Form 2 - C, total now 15: None + 14 designs). Verified via a temporary
+debug hook (removed before commit, grep-confirmed 0 references): both
+render without error with distinct non-zero rope-colored pixel counts.
+Also checked each design's actual bounding-box top edge against the
+ENDCAP_ALIGNMENT reference line (80.26) directly, same as the original
+12-design verification -- found a real, worth-noting difference from
+every prior design: both Form 3 shapes' top edge sits ~3.93 SVG units
+ABOVE the alignment line (offset -3.926), not flush with it like all 12
+Form1/Form2 designs were. At default Rope Thickness this scales to only
+~2-3px of overlap into the rope's own rendered stroke, comfortably inside
+the rope's round line-cap radius (~19px), so it should still blend
+seamlessly rather than showing a seam -- reported to the user as a
+factual observation, not silently smoothed over or treated as a defect
+to fix, since it may simply be this design's intentional shoulder shape.
+node --check clean; 0 console errors.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
