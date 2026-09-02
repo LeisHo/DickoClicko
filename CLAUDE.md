@@ -52,6 +52,24 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   size/position already is — it's the panel's own chrome, being rendered
   within two different-shaped viewports. Persisted alongside panel geometry
   (`panelStyle` in `getPanelGeometry()`/`applyPanelGeometry()`), not in `cfg`.
+- **Save Settings writes through to a git-tracked settings log (§12l):**
+  `data/processed/dev-panel-settings.json`, holding `{values, order}` only
+  (not panel geometry/style — those stay per-device chrome, not a
+  cross-session default worth tracking in git). A static page can't
+  silently write an arbitrary disk path, so this uses the File System
+  Access API (`showSaveFilePicker`) — the first Save on a given browser
+  prompts a native dialog (navigate to `data/processed/`, keep the
+  suggested filename); the resulting handle persists in IndexedDB so every
+  later Save reuses it silently. Chromium-only (Firefox/Safari lack the
+  API) and localStorage remains the full baseline regardless — the git-log
+  write is a best-effort addition, never a blocker.
+- **The "set defaults" workflow (§12m):** when the user pastes a Copy
+  Settings dump and asks to "set defaults," merge it against
+  `data/processed/dev-panel-settings.json` per-field exactly as §12m
+  specifies (O = value on record before merge, G = current git-log value,
+  P = pasted value — P wins whenever it differs from O, otherwise adopt G).
+  This is a *behavior* to follow when that request comes in, not something
+  coded into the page.
 
 ## Gotchas
 
@@ -230,3 +248,15 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   uncompensated height stayed clamped (shrinking from the bottom instead of
   growing from the top). If `max-height` ever changes, update this constant
   to match.
+- `writeGitSettingsLog()` (git-tracked settings log, §12l) is best-effort
+  and must never gate the localStorage save in `saveSettings()` — the
+  localStorage write happens first and synchronously; the git-log write is
+  a separate async call whose failure only changes the Save button's
+  flash text ("Saved (local only)"), never blocks or rolls back the
+  localStorage save. A `FileSystemFileHandle` is natively
+  structured-clone-able (a documented File System Access API guarantee),
+  so it can go straight into `idbSet()` — don't "simplify" this by trying
+  to serialize the handle to JSON first, that would break it. (A test
+  mock standing in for a real handle, with plain function properties, is
+  NOT cloneable and will fail `idbSet()` — that's a limitation of the
+  mock, not a bug in this code; the real API's handle objects work fine.)

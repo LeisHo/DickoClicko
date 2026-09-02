@@ -677,11 +677,102 @@ function applyPanelGeometry(geom){
 
 function currentGeomKey(){ return GEOM_KEY_PREFIX + activeDeviceTab; }
 
-function saveSettings(){
+/* ---------------------------------------------------------------------
+   §12l: Save Settings writes through to a git-tracked settings log
+   (data/processed/dev-panel-settings.json), not just localStorage — so a
+   saved default is visible to a desktop Claude Code session in the same
+   repo, independent of which browser/device last hit Save. A static page
+   can't silently write an arbitrary disk path, so this uses the File
+   System Access API: the FIRST save on a given browser prompts a native
+   save dialog (navigate to data/processed/, use the suggested filename)
+   and the resulting handle is persisted in IndexedDB — every later save
+   reuses it with no dialog. Chromium-only (Firefox/Safari lack the API);
+   feature-detected, and localStorage remains the full baseline regardless
+   of whether this succeeds.
+--------------------------------------------------------------------- */
+const GIT_SETTINGS_FILENAME = 'dev-panel-settings.json';
+const IDB_NAME = 'dickoClicko';
+const IDB_STORE = 'handles';
+const IDB_HANDLE_KEY = 'gitSettingsFileHandle';
+
+function idbOpen(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, val){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function getGitSettingsFileHandle(promptIfMissing){
+  if (!('showSaveFilePicker' in window)) return null;
+  let handle = null;
+  try { handle = await idbGet(IDB_HANDLE_KEY); } catch (err) { handle = null; }
+  if (handle){
+    try {
+      if (await handle.requestPermission({ mode: 'readwrite' }) === 'granted') return handle;
+    } catch (err) { /* handle stale/revoked — fall through to re-prompt below */ }
+  }
+  if (!promptIfMissing) return null;
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ values: { ...cfg }, order: getPanelOrder() }));
+    handle = await window.showSaveFilePicker({
+      suggestedName: GIT_SETTINGS_FILENAME,
+      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+    });
+    await idbSet(IDB_HANDLE_KEY, handle);
+    return handle;
+  } catch (err) {
+    return null; // user cancelled the picker, or the API is blocked
+  }
+}
+
+async function writeGitSettingsLog(data){
+  const handle = await getGitSettingsFileHandle(true);
+  if (!handle) return false;
+  try {
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function saveSettings(){
+  const values = { ...cfg };
+  const order = getPanelOrder();
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ values, order }));
     localStorage.setItem(currentGeomKey(), JSON.stringify(getPanelGeometry()));
   } catch (err) { /* localStorage unavailable — dev-only convenience, fail silently */ }
+
+  // best-effort/async — the localStorage save above already completed
+  // synchronously regardless of whether this succeeds.
+  const btn = document.getElementById('dpSaveBtn');
+  writeGitSettingsLog({ values, order }).then(ok => {
+    if (!btn) return;
+    const orig = btn.textContent;
+    btn.textContent = ok ? 'Saved!' : 'Saved (local only)';
+    setTimeout(() => btn.textContent = orig, 900);
+  });
 }
 
 function resetSettings(){

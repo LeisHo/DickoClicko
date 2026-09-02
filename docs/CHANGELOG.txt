@@ -916,6 +916,57 @@ Verified:
   commit (grep-confirmed 0 references).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  7:14 AM - 7:21 AM EDT
+
+Implemented §12l/§12m, new sections in the workspace CLAUDE.md since this
+project's dev panel last caught up with it -- discovered by re-reading it
+fresh (per explicit request) and diffing against the project's own current
+state, since everything through §12k turned out already covered by
+concurrent work earlier this session.
+
+Added:
+- Save Settings now also writes {values, order} through to a git-tracked
+  data/processed/dev-panel-settings.json (§12l), not just localStorage.
+  A static page can't silently write an arbitrary disk path, so this uses
+  the File System Access API: writeGitSettingsLog() /
+  getGitSettingsFileHandle(), with the resulting handle persisted in
+  IndexedDB (idbGet()/idbSet()) so only the FIRST save on a given browser
+  needs the native picker dialog (navigate to data/processed/, keep the
+  suggested filename) -- every later save reuses the stored handle
+  silently. Chromium-only (Firefox/Safari lack the API); feature-detected
+  and fully best-effort -- localStorage remains the complete baseline
+  regardless of whether this succeeds.
+- Documented §12m's "set defaults" merge workflow (a pasted Copy Settings
+  dump merged against the git-tracked log per-field, per the exact O/G/P
+  rule §12m specifies) in this project's own CLAUDE.md as a standing
+  behavioral convention -- not page code, a rule for how a future request
+  to "set defaults" should be handled.
+- data/processed/ directory created for the new settings-log file.
+
+Verified:
+- IndexedDB read/write layer directly (idbSet/idbGet round-trip on plain
+  serializable data).
+- getGitSettingsFileHandle() calls showSaveFilePicker with the correct
+  suggestedName/type when no stored handle exists yet.
+- The full failure path end-to-end: a mocked handle that IndexedDB can't
+  structured-clone (a real FileSystemFileHandle can -- this is a
+  documented platform guarantee, not something this project's code
+  controls) is caught gracefully, writeGitSettingsLog() returns false, and
+  saveSettings() reflects that honestly in the Save button's flash text
+  ("Saved (local only)") rather than claiming success.
+- The property that actually matters: localStorage's own save happens
+  first and synchronously in saveSettings(), and completed correctly
+  (confirmed via direct localStorage inspection) regardless of the git-log
+  write's success or failure -- the enhancement can never block or corrupt
+  the existing baseline.
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references).
+- Not verified: an actual successful write through a real (non-mocked)
+  native save dialog -- this headless environment can't safely drive a
+  real OS file picker, so the write() call itself was exercised only via
+  documented API usage patterns, not a live end-to-end file write.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

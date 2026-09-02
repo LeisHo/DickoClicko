@@ -169,6 +169,17 @@ Nothing in progress — everything below is done, verified, and pushed.
   group's collapsed/expanded state is the workspace `CLAUDE.md` §12e
   standard, not a bug — "whichever groups were open or collapsed at Save
   time come back in that same state," by design.
+- Implemented §12l/§12m, added to the workspace `CLAUDE.md` since this
+  project's dev panel last caught up with it: Save Settings now also
+  writes `{values, order}` through to a git-tracked
+  `data/processed/dev-panel-settings.json` (File System Access API, one
+  native-picker prompt on the first save per browser, silent thereafter
+  via a handle persisted in IndexedDB; Chromium-only, localStorage stays
+  the unconditional baseline). §12m's paste-and-"set defaults" merge rule
+  is a behavioral convention now documented in this project's `CLAUDE.md`,
+  not page code. Verified the write path, the IndexedDB handle round-trip,
+  and — the property that actually matters — that a failed/unavailable
+  git-log write never blocks or affects the localStorage save.
 
 ## What's next
 

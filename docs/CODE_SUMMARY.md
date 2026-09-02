@@ -132,6 +132,15 @@ freely interleaved/reordered like any other group's -- an earlier version
 split sliders and colors into two separate arrays, which made an
 interleaved row order structurally impossible to represent at all.
 
+Save Settings also writes {values, order} through to a git-tracked
+data/processed/dev-panel-settings.json (§12l), via the File System Access
+API -- writeGitSettingsLog() -> getGitSettingsFileHandle(), whose handle is
+persisted in IndexedDB (idbGet()/idbSet()) after the first save's picker
+dialog so later saves need no dialog at all. Best-effort and fully async:
+the localStorage save in saveSettings() completes first and synchronously,
+this is a separate call layered on top whose failure only changes the Save
+button's flash text, never blocks or reverts the localStorage write.
+
 Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
 applies is decided by WHERE the hold starts, checked once at pointerdown
 (`isOnCircle()`, with a generous margin beyond the circle's own visual
