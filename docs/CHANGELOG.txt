@@ -1467,6 +1467,130 @@ Verified:
   reads from, not a rendered screenshot.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  09:07 AM - 09:29 AM EDT
+
+Fixed the real root cause behind 2 physics complaints, plus 3 smaller
+fixes (5 requests handled this round, one of which arrived as 2 new
+user-recorded videos mid-turn rather than text):
+- Found and fixed the ACTUAL root cause behind both "extension still
+  jittery" (a follow-up after the immediately-preceding entry's
+  damping/iterations fix had already resolved the larger "erratic
+  swinging" complaint) and a separately-reported "crazy movement when a
+  single click is applied": the rope had ZERO resistance to bending.
+  Pure distance (PBD-style) constraints only check inter-point distance,
+  never the angle between consecutive segments -- a segment pair folded
+  fully back on itself (180°) satisfies the solver exactly as well as if
+  it were straight. applyPunch()'s Gaussian-falloff push (different
+  points get pushed by different amounts in the same direction) can
+  invert local point order near the free/unanchored tip end, and the
+  distance solver alone has no way to ever recover from that -- it's a
+  stable configuration, not an unstable one. Diagnosed from 2 new
+  user-recorded videos (frame-extracted via Python + OpenCV, since
+  ffmpeg isn't installed in this environment): the single-click video
+  showed the rope visibly curl into a hook/knot shape immediately after
+  the click and stay visibly kinked for several real seconds (still
+  kinked ~5s later, not a normal decaying swing). Directly reproduced by
+  replicating applyPunch()'s own math against a live rope: a 2-segment
+  span (points[i] to points[i+2], should be ~2*segLen=55.38px if
+  reasonably straight) stuck at 23.28px after 3 full simulated seconds
+  with the old constraint-only solver -- a persistent ~42%-of-expected
+  fold, not a transient. This same "the solver doesn't care about local
+  angle" instability was ALSO the real source of the extension-jitter
+  video's symptom: the endcap's rotation (tipDirection(), a separate
+  function from the growing-tip's own position smoothing already shipped
+  last round) was flipping by up to a full 180° between frames during
+  growth. Fixed with a bending constraint: cfg.bendStiffness (new dev
+  slider, ROPE ANIMATION group, default 0.15) pulls every non-pinned
+  interior point toward the midpoint of its two immediate neighbors, once
+  per constraint iteration (same cadence as the existing distance pass).
+  0.15 was the smallest value found to fully resolve the fold
+  reproduction (23.28px -> 55.396px, vs expected 55.385px -- essentially
+  exact) and the endcap-angle reproduction (max frame delta 180° ->
+  0.014°) together; a settle-time regression check (punch a fresh rope,
+  measure time to a sustained sub-0.3px/frame tip speed) showed settle
+  time actually IMPROVED slightly (~1.35s vs the previously-measured
+  ~1.77s) rather than the rope looking stiffer. Re-verified end-to-end via
+  the REAL onPointerDown/onPointerUp handler path (not just the direct
+  synthetic-math reproduction): a dispatched punch on a live rope settled
+  to a fold-free 2-span ratio of exactly 1.000 after 5 real simulated
+  seconds.
+- Fixed the cut-sweep mark's perpendicular direction being frozen at the
+  moment of the cut (stored as nx,ny on the cutSweep object) instead of
+  following the entity's rotation afterward -- per explicit report ("the
+  cut line should follow the rotation and position of the end of the line
+  it was cut from instead of staying static"). A separate, earlier report
+  in the same message ("the cut line max length is the width of the
+  rope... should start at the edge of the rope to the other edge") turned
+  out to be the SAME root cause described differently: the mark's actual
+  world-space length was always exactly ropeThickness (startOffset/
+  endOffset are pure +-magnitudes, unaffected by rotation), but a stale
+  frozen direction made its apparent span look mismatched against the
+  rope's ACTUAL current edges once the rope had rotated even slightly.
+  renderCutSweep() now calls tipDirection(entity.points) fresh every
+  frame instead of reading nx,ny off the cutSweep object; removed nx,ny
+  from both cutRopeAt()'s and cutPieceAt()'s cutSweep object literals
+  (the local nx,ny variables are still used for the side calculation,
+  just no longer stored). Verified via tipDirection() directly: forcing
+  the last two points into a new relative position changes the returned
+  direction immediately.
+- Added a visible click/hold/double-click log INSIDE the dev panel itself
+  (#dpClickLog, a scrollable area below the settings groups, capped at
+  200 entries, a Clear button next to it) -- per explicit follow-up
+  ("where is my mouse click data log. it should show in the dev panel").
+  The earlier round's logClick() had only written to console.log, which
+  was the wrong read of "add a click diagnostic log" -- it needed to be
+  visible in the panel UI itself. Verified live via the real
+  onPointerDown/onPointerUp path (not calling logClick() directly): a
+  dispatched rope tap produced exactly the expected 3 new log lines in
+  #dpClickLog's DOM.
+- Fixed: clicking Save while viewing a Vercel deployment still triggered
+  the native local-file-save prompt -- per explicit report ("When i click
+  save, while viewing in vercel, it should also not trigger a local save
+  prompt"). GIT_LOG_WRITABLE was gated on `protocol !== 'file:'` alone,
+  which stays true for ANY non-file: origin including an ordinary hosted
+  deployment (Vercel, GitHub Pages, etc.) that has no locally-tracked
+  repo file for that write to meaningfully "track" through. Added a
+  DEV_MODE requirement on top (not a replacement -- DEV_MODE alone still
+  allows file:, which is exactly the case the existing protocol check
+  needs to keep excluding): `DEV_MODE && location.protocol !== 'file:' &&
+  'showSaveFilePicker' in window`. Verified via a truth-table check of
+  the 3-input boolean across the relevant cases -- only "hosted origin,
+  no explicit ?dev=1" flips from the old (wrong) true to the new
+  (correct) false; every other case (localhost, bare file://, hosted with
+  ?dev=1, no API at all) is unchanged.
+- "Set defaults" (§12m): merged a second user-provided Copy Settings dump
+  against the git-tracked settings log written earlier this session --
+  since nothing else had touched that file since it was first written
+  (O===G), the merge reduced to writing the pasted dump directly (P wins
+  wherever it differs from O, and where it doesn't, G===O anyway).
+
+Verified:
+- node --check clean throughout every intermediate edit.
+- Bending constraint: reproduced the fold BEFORE the fix (23.28px vs
+  expected 55.38px), confirmed it resolves AFTER (55.396px), confirmed
+  the same fix resolves the independently-discovered endcap-rotation
+  instability (180° max delta -> 0.014°), confirmed via a settle-time
+  regression check that normal swinging isn't made rigid, and confirmed
+  end-to-end via the real dispatched-pointer-event handler path, not just
+  direct-math reproduction.
+- Cut-sweep rotation: confirmed tipDirection() reflects a forced geometry
+  change immediately (the same function renderCutSweep() now calls fresh
+  every frame).
+- Click log UI: confirmed #dpClickLog receives real DOM entries via the
+  actual click-handler path, in the expected order, with correct data.
+- GIT_LOG_WRITABLE: truth-table verification (this sandbox cannot
+  exercise a genuine Vercel-hosted load).
+- Fresh page load: no console errors beyond the known
+  ERR_CONNECTION_RESET Browser-pane transient; dev panel renders with the
+  new Bend Stiffness slider and Click Log section present.
+- Did not live-verify: an actual rendered screenshot showing the visual
+  smoothness/knot-free result (this Browser pane doesn't run
+  requestAnimationFrame) -- verification was via the position/angle data
+  the render loop itself reads, and via frame-extraction from the user's
+  own screen recordings, not a freshly rendered screenshot from this
+  session.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

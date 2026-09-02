@@ -691,3 +691,103 @@ GOTCHAS
   that a real tap produces exactly `down:rope` -> `up:tap-pending` ->
   (after the double-click-threshold timer) `up:tap-punch`, in order, with
   the logged `hitDist`/`intensity` matching the actual computed values.
+  Console-only turned out to be the wrong read of the original request --
+  the user clarified it needs to be visible IN the dev panel, not just the
+  browser console, so `logClick()` also writes each entry into
+  `#dpClickLog` (a scrollable `<div>` below `#dpGroups`, capped at
+  `CLICK_LOG_MAX_ENTRIES=200`, oldest entries dropped from the front,
+  auto-scrolled to bottom on each append, with a Clear button wired
+  through `initDevPanelChrome()`) -- confirmed live via the actual
+  onPointerDown/onPointerUp path (not calling `logClick()` directly): a
+  dispatched rope tap produced exactly 3 new `<div>` children in
+  `#dpClickLog` with the expected text.
+- **`integrateChain()` gained a bending constraint (`cfg.bendStiffness`,
+  ROPE ANIMATION group, default `0.15`) alongside its existing distance
+  constraints.** Root-caused from 2 fresh user-recorded videos (one
+  showing "crazy movement" after a single click, one showing the
+  extension "still jittery" even after the damping/iterations fix already
+  shipped) -- frame-extraction (Python + OpenCV, `ffmpeg` not available in
+  this environment) of the single-click video showed the rope visibly
+  curling into a HOOK/KNOT shape immediately after the click and staying
+  visibly kinked for several real seconds (still visible ~5s later),
+  not a normal decaying swing. Root cause: pure distance (PBD-style)
+  constraints have NO concept of local bending angle -- a segment pair can
+  fold back on itself (angle up to 180°) and satisfy the distance solver
+  exactly as well as if it were straight, since only inter-point DISTANCE
+  is checked, never the ANGLE between consecutive segments. `applyPunch()`
+  pushes a wide Gaussian-falloff neighborhood of points sideways by
+  DIFFERENT amounts (proportional to `exp(-((i-hitIndex)/3)^2)`), which
+  can easily invert the local point ORDER near the (lightly-anchored,
+  free) tip end, and the distance solver alone has no way to ever recover
+  from that -- it's a stable local configuration, not an unstable one.
+  Directly reproduced by replicating `applyPunch()`'s own math against a
+  live rope and measuring the distance spanning 2 segments (points[i] to
+  points[i+2], which should be close to `segLen*2` for anything
+  reasonably straight): stuck at `23.28` vs an expected `55.38` (segLen
+  27.69) after 3 full simulated seconds with the OLD constraint-only
+  solver -- a real, persistent ~42%-of-expected fold, not a transient. The
+  same underlying "the last few points can be almost anywhere, angle-wise,
+  and the solver won't object" instability was ALSO the actual source of
+  the endcap-rotation flicker during growth that `tipDirection()` exposed
+  (see the smoothing entry above) -- confirmed by re-running THAT
+  exact reproduction (nudge + settle + grow, tracking `tipDirection()`'s
+  angle) with the bending constraint active: max frame-to-frame angle
+  delta dropped from up to `180°` (full flips) down to `0.014°`, and the
+  fold reproduction above dropped from `23.28` to `55.396` (vs expected
+  `55.385` -- essentially exact). Implemented as: for every non-pinned
+  interior point `1..points.length-2` (this range naturally excludes the
+  growing tip at `points.length-1`, which is never touched by ANY
+  constraint pass, kinematic or not, per the existing `skipLastSegment`
+  design), pull it toward the midpoint of its immediate neighbors by
+  `cfg.bendStiffness`, once per constraint iteration (same cadence/loop as
+  the distance pass, so both converge together rather than fighting over
+  iteration budget). `0.15` was chosen to be the smallest value that fully
+  resolved the fold reproduction above while a regression check (punch a
+  freshly-settled rope, track tip speed until it stays under a
+  0.3px/frame threshold for 30 consecutive frames) showed settle time
+  actually IMPROVED slightly (`~1.35s` vs the previously-measured
+  `~1.77s` for a comparable punch) rather than making the rope look
+  rigid/stick-like -- the bending pull evidently also damps the
+  oscillation faster, not just prevents folding. Re-verified end-to-end
+  via the REAL `onPointerDown`/`onPointerUp` handler path (not the
+  synthetic direct-math reproduction): a dispatched punch on a live rope
+  settled to a 2-point-span ratio of exactly `1.000` after 5 real
+  simulated seconds.
+- The double-click-cut sweep-mark's perpendicular direction is recomputed
+  FRESH every `renderCutSweep()` call from `tipDirection(entity.points)`,
+  not read from a `nx,ny` pair stored on the `cutSweep` object at cut time
+  (removed from both `cutRopeAt()`'s and `cutPieceAt()`'s `cutSweep`
+  object literals -- the local `nx,ny` vars are still needed there, just
+  for the `side` calculation, not for storage). An earlier version froze
+  the direction at the moment of the cut, so the mark's world-space
+  orientation visibly stopped tracking the entity's own rotation as it
+  kept swinging afterward -- reported both as "should follow the rotation
+  and position of the end it was cut from instead of staying static" and,
+  initially, as "cut line max length is [wrong versus] the width of the
+  rope" (the same root cause: a stale normal makes the mark's apparent
+  span look mismatched against the rope's ACTUAL current edges, even
+  though its own length in world-space was always exactly
+  `ropeThickness` -- `startOffset`/`endOffset` are pure ± magnitudes,
+  unaffected by rotation). Verified via `tipDirection()` directly: forcing
+  the last two points into a new relative position changes the returned
+  direction immediately, confirming `renderCutSweep()` (which calls
+  `tipDirection()` fresh every frame it runs) will track any future
+  rotation the same way.
+- `GIT_LOG_WRITABLE` now requires `DEV_MODE` in addition to
+  `location.protocol !== 'file:'` and File System Access API presence --
+  `DEV_MODE && location.protocol !== 'file:' && 'showSaveFilePicker' in
+  window`. Per explicit report that clicking Save while viewing a Vercel
+  deployment (a normal `https:` origin, not `file:`, not `localhost`)
+  still triggered the native save-file picker/disk write -- the previous
+  check only excluded `file:`, so any OTHER hosted origin (Vercel,
+  GitHub Pages, etc.) still passed it even though there's no
+  locally-tracked repo file on that visitor's machine for the write to
+  meaningfully "track" through. `DEV_MODE` alone isn't a substitute for
+  the protocol check (it still returns true for `file:`, which is exactly
+  the case §12l's OWN exception needs to keep excluding) -- both
+  conditions stay layered, not merged into one. Verified via a truth-table
+  check of the 3-input boolean across the relevant cases (localhost,
+  bare `file://`, an ordinary non-dev hosted origin, a hosted origin with
+  explicit `?dev=1`, no-API-at-all) -- only the "hosted origin, no
+  `?dev=1`" case flips from the old (wrong) `true` to the new (correct)
+  `false`; every other case's result is unchanged from before.

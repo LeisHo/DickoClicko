@@ -88,6 +88,22 @@
     background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
     padding:2px 4px;
   }
+  .dp-click-log-wrap { border-top:1px solid #33333f; margin-top:4px; }
+  .dp-click-log-header {
+    padding:7px 2px; display:flex; align-items:center; justify-content:space-between;
+    font-weight:600; font-size:var(--dp-group-size, 11px); letter-spacing:.04em;
+    color:var(--dp-text-color, #c9c9d8);
+  }
+  .dp-click-log-header button {
+    background:#3a3a4a; color:#e8e8f0; border:none; border-radius:4px;
+    padding:2px 8px; font-size:10px; cursor:pointer;
+  }
+  .dp-click-log {
+    height:110px; overflow-y:auto; background:#0f0f18; border:1px solid #3a3a4a;
+    border-radius:4px; padding:4px 6px; font:10px/1.5 ui-monospace, Consolas, monospace;
+    color:#9a9ab0; white-space:pre-wrap; word-break:break-all;
+  }
+  .dp-click-log .dp-click-log-empty { opacity:.5; }
 
   .dp-resize { position:absolute; z-index:10; }
   .dp-resize-n, .dp-resize-s { left:8px; right:8px; height:8px; cursor:ns-resize; }
@@ -120,6 +136,13 @@
       <button type="button" id="dpResetBtn">Reset</button>
     </div>
     <div id="dpGroups"></div>
+    <div class="dp-click-log-wrap">
+      <div class="dp-click-log-header">
+        <span>CLICK LOG</span>
+        <button type="button" id="dpClickLogClear">Clear</button>
+      </div>
+      <div id="dpClickLog" class="dp-click-log"><span class="dp-click-log-empty">(no clicks yet)</span></div>
+    </div>
   </div>
   <div class="dp-resize dp-resize-n" data-dir="n"></div>
   <div class="dp-resize dp-resize-s" data-dir="s"></div>
@@ -188,6 +211,7 @@ const DEV_GROUPS = [
     { key:'ropeWeight',      label:'Rope Weight',          type:'slider', unit:'x', min:0.1, max:5, step:0.1, def:1 },
     { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.5, max:0.999, step:0.001, def:0.85 },
     { key:'constraintIterations', label:'Constraint Iterations', type:'slider', unit:'x', min:1, max:20, step:1, def:10 },
+    { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0.15 },
   ]},
   { title:'ROPE GROWTH', controls:[
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
@@ -709,21 +733,26 @@ const IDB_HANDLE_KEY = 'gitSettingsFileHandle';
 // fallback for any of this anymore.
 let lastLoadedSnapshot = null;
 
-// §12l's file:// exception: gated on PROTOCOL, not just API capability --
-// opened as a bare local file (`file://`, no server behind it at all)
-// must never trigger the native save-file picker/disk write, even in a
-// browser that technically supports the File System Access API, since
-// there's no server for that write to be meaningfully "tracked" through
-// (matches DEV_MODE's own file:// detection just above). Also false in
-// the ordinary case of a browser lacking the API entirely (Firefox/
-// Safari). Checked once, not per-call, since both halves are
-// environmental facts that don't change mid-session. When false,
-// Save/Reset use SESSION_FALLBACK_KEY instead (sessionStorage, not
-// localStorage -- it's gone the moment the tab closes, so it can never
-// become the persistent "separate browser-local default" §12d/§12l
-// otherwise bans; it exists only so a Save made in this mode has
-// anything for that same tab's own Reset to read back).
-const GIT_LOG_WRITABLE = location.protocol !== 'file:' && 'showSaveFilePicker' in window;
+// §12l's scope: gated on DEV_MODE, not just protocol/API capability -- the
+// native save-file picker/disk write only makes sense against a real local
+// checkout (localhost/127.0.0.1/file:/explicit ?dev=1), never against a
+// deployed/hosted origin (e.g. a Vercel preview or production URL), which
+// has no locally-tracked repo file for that write to be meaningfully
+// "tracked" through even though its own protocol is a normal https:// that
+// would otherwise pass a bare protocol check. `location.protocol !==
+// 'file:'` is layered on TOP of DEV_MODE (not replaced by it) because
+// DEV_MODE itself still allows `file:` (that's what makes the dev panel
+// visible when opened as a bare local file) -- this is the one case where
+// git-write must stay off despite DEV_MODE being on, per §12l's own "no
+// server behind it at all" exception. Also false in the ordinary case of a
+// browser lacking the API entirely (Firefox/Safari). Checked once, not
+// per-call, since these are environmental facts that don't change
+// mid-session. When false, Save/Reset use SESSION_FALLBACK_KEY instead
+// (sessionStorage, not localStorage -- it's gone the moment the tab
+// closes, so it can never become the persistent "separate browser-local
+// default" §12d/§12l otherwise bans; it exists only so a Save made in this
+// mode has anything for that same tab's own Reset to read back).
+const GIT_LOG_WRITABLE = DEV_MODE && location.protocol !== 'file:' && 'showSaveFilePicker' in window;
 const SESSION_FALLBACK_KEY = 'dickoClicko.sessionSettings';
 
 function idbOpen(){
@@ -894,6 +923,10 @@ function initDevPanelChrome(){
   document.getElementById('dpCopyBtn').addEventListener('click', copySettings);
   document.getElementById('dpSaveBtn').addEventListener('click', saveSettings);
   document.getElementById('dpResetBtn').addEventListener('click', resetSettings);
+  document.getElementById('dpClickLogClear').addEventListener('click', () => {
+    const el = document.getElementById('dpClickLog');
+    el.innerHTML = '<span class="dp-click-log-empty">(no clicks yet)</span>';
+  });
   document.getElementById('dpCollapseBtn').addEventListener('click', () => {
     const panel = document.getElementById('devPanel');
     panel.classList.toggle('dp-collapsed');
@@ -1089,6 +1122,33 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
       const offX = dx * diff * 0.5, offY = dy * diff * 0.5;
       if (!aFixed){ a.x += offX; a.y += offY; }
       if (!bFixed){ b.x -= offX; b.y -= offY; }
+    }
+    // Bending constraint: gently pulls each interior point toward the
+    // midpoint of its two neighbors, i.e. toward local straightness. Pure
+    // distance constraints (above) have ZERO resistance to bending -- any
+    // angle between two segments, including a full fold-back, satisfies
+    // them equally well. A strong-enough punch (applyPunch()'s falloff
+    // pushes a wide neighborhood of points sideways by DIFFERENT amounts)
+    // can fold the chain onto itself, and the distance solver alone then
+    // has no reason to ever undo that fold -- it's just as "valid" as
+    // straight. Confirmed by direct reproduction: a single punch left the
+    // chain permanently kinked (2-point-span distance stuck at ~23px vs an
+    // expected ~55px for a straight chain, unrecovered after 3 full
+    // simulated seconds) -- reproducing the real, user-recorded "crazy
+    // movement"/knot bug. `cfg.bendStiffness` (default 0.15, tuned low so
+    // ordinary swinging still looks floppy/rope-like, not stick-rigid) is
+    // applied once per constraint iteration, same cadence as the distance
+    // constraints, so both converge together. Naturally skips the growing
+    // tip (loop bound is points.length-1, one short of the tip itself) --
+    // it never touches a kinematically-positioned point.
+    if (cfg.bendStiffness > 0){
+      for (let i = 1; i < points.length - 1; i++){
+        if (i === pinnedIndex) continue;
+        const a = points[i - 1], b = points[i], c = points[i + 1];
+        const midX = (a.x + c.x) / 2, midY = (a.y + c.y) / 2;
+        b.x += (midX - b.x) * cfg.bendStiffness;
+        b.y += (midY - b.y) * cfg.bendStiffness;
+      }
     }
   }
 }
@@ -1310,7 +1370,7 @@ function cutRopeAt(hit, clickX, clickY){
   // same as how a piece cut mid-swing keeps moving from the very next frame.
   const half = vmin(cfg.ropeThickness) / 2;
   mainRope.cutSweep = {
-    progress: 0, nx, ny,
+    progress: 0,
     startOffset: side > 0 ? half : -half,
     endOffset: side > 0 ? -half : half,
   };
@@ -1353,7 +1413,7 @@ function cutPieceAt(pieceIndex, hit, clickX, clickY){
 
   const half = vmin(cfg.ropeThickness) / 2;
   piece.cutSweep = {
-    progress: 0, nx, ny,
+    progress: 0,
     startOffset: side > 0 ? half : -half,
     endOffset: side > 0 ? -half : half,
   };
@@ -1379,12 +1439,26 @@ let downInfo = null;   // {mode:'circle'} or {mode:'rope', x,y,hit,startTime,cha
 let holdTimer = null;
 let pendingClick = null; // {hit,timer}
 
-// Click diagnostics -- DEV_MODE only. One console.log per input-state
-// transition (down, hold-eligible, growing, charging, release action) so
-// the full click/hold/double-click state machine can be read off the
-// console alone, without re-adding a temporary debug hook each time.
+// Click diagnostics -- DEV_MODE only. One entry per input-state transition
+// (down, hold-eligible, growing, charging, release action), both to the
+// console AND to a visible, scrollable log inside the dev panel itself
+// (#dpClickLog) -- the console alone isn't visible to a non-technical
+// user testing the app, so the panel display is the primary surface this
+// was actually requested for.
+const CLICK_LOG_MAX_ENTRIES = 200;
 function logClick(event, data){
-  if (DEV_MODE) console.log('[click]', event, data);
+  if (!DEV_MODE) return;
+  console.log('[click]', event, data);
+  const el = document.getElementById('dpClickLog');
+  if (!el) return;
+  const empty = el.querySelector('.dp-click-log-empty');
+  if (empty) empty.remove();
+  const line = document.createElement('div');
+  const dataStr = Object.entries(data || {}).map(([k, v]) => k + ':' + (typeof v === 'number' ? round(v, 2) : v)).join(' ');
+  line.textContent = event + '  ' + dataStr;
+  el.appendChild(line);
+  while (el.children.length > CLICK_LOG_MAX_ENTRIES) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
 }
 
 function isOnCircle(x, y){
@@ -1706,9 +1780,24 @@ function renderCutSweep(entity){
   // not a static remembered position — mainRope/the piece keeps moving
   // under normal physics, so the mark must track IT, not whatever fell (or
   // split) away from it.
-  const cutPoint = entity.points[entity.points.length - 1];
-  const x1 = cutPoint.x + sweep.nx * sweep.startOffset, y1 = cutPoint.y + sweep.ny * sweep.startOffset;
-  const x2 = cutPoint.x + sweep.nx * off, y2 = cutPoint.y + sweep.ny * off;
+  const pts = entity.points;
+  const cutPoint = pts[pts.length - 1];
+  // the perpendicular (nx,ny) is recomputed FRESH from the entity's
+  // CURRENT tangent every frame, not a direction snapshotted once at cut
+  // time -- the entity keeps swinging/rotating after the cut, and a frozen
+  // normal made the mark visibly stop tracking that rotation (reported:
+  // "should follow the rotation and position of the end it was cut from
+  // instead of staying static"). Same tangent->normal convention as the
+  // cut-time calculation (tipDirection() returns the same "toward
+  // increasing index" tangent cutRopeAt/cutPieceAt derived nx/ny from), so
+  // the sweep still runs from the same physical edge it started at.
+  // startOffset/endOffset are pure magnitudes (±half the rope thickness),
+  // so this is always exactly rope-thickness long at full sweep, one edge
+  // to the other, regardless of rotation.
+  const dir = tipDirection(pts);
+  const nx = dir.y, ny = -dir.x;
+  const x1 = cutPoint.x + nx * sweep.startOffset, y1 = cutPoint.y + ny * sweep.startOffset;
+  const x2 = cutPoint.x + nx * off, y2 = cutPoint.y + ny * off;
   ctx.strokeStyle = cfg.cutSweepColor;
   ctx.lineWidth = Math.max(2, vmin(cfg.cutSweepThickness));
   ctx.lineCap = 'round';

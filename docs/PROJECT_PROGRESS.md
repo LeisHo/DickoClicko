@@ -18,19 +18,20 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — everything below is done and pushed. The rope
-extension "still jittery" follow-up (after damping/iterations already
-fixed the larger "erratic swinging" complaint) is resolved via a smoothed
-growing-tip render — if the user reports jitter again, check
-`positionGrowingTip()`'s `smoothing` factor next (currently 0.25).
+Nothing in progress — everything below is done and pushed. The real root
+cause behind BOTH the "extension jitter" and a separately-reported "crazy
+movement on a single click" turned out to be the same thing: the rope had
+zero resistance to bending, so a strong-enough punch could fold it into a
+persistent knot. Fixed with a bending constraint (`cfg.bendStiffness`,
+default 0.15) — if either symptom reappears, that's the setting to check
+first, and re-run the fold reproduction described in `docs/CODE_SUMMARY.md`
+before assuming it's a new/different bug.
 
-Note: this session's edits landed interleaved with a concurrent session's
-own work on the settings-persistence layer (§12l file:// gating) in the
-same `index.html` — both sets of changes ended up committed together
-across a few commits due to the concurrent editing, not a scope mixup.
-Nothing was lost; verified via direct state inspection that this round's
-own features (click log, extension smoothing, cut-sweep placement,
-piece-splitting) work correctly regardless of which commit they landed in.
+Note: earlier in this session, edits landed interleaved with a concurrent
+session's own work on the settings-persistence layer (§12l file:// gating)
+in the same `index.html`, ending up committed together across a few
+commits due to the concurrent editing, not a scope mixup. Nothing was
+lost — verified via direct state inspection at the time.
 
 ## Recently completed
 
@@ -321,6 +322,46 @@ piece-splitting) work correctly regardless of which commit they landed in.
   first-ever git-tracked settings log (`data/processed/dev-panel-
   settings.json` didn't exist yet, so this was a first save, not a §12m
   merge against a prior version).
+- Found and fixed the REAL root cause behind both "extension still
+  jittery" and a separately-reported "crazy movement on a single click":
+  the rope had zero resistance to bending (pure distance constraints only
+  allow ANY angle between segments, including a full fold-back), so a
+  strong punch could fold it into a persistent knot that took many real
+  seconds to unwind, if it ever fully did. Diagnosed from 2 user-recorded
+  videos (frame-extracted via Python/OpenCV, since `ffmpeg` isn't
+  installed in this environment) showing the rope visibly curling into a
+  hook shape after a click and staying kinked; confirmed by directly
+  reproducing `applyPunch()`'s math and measuring a persistent fold (23%
+  of the expected straight-line span, unrecovered after 3 simulated
+  seconds). Fixed with a bending constraint (new `cfg.bendStiffness`
+  slider, ROPE ANIMATION group, default 0.15) pulling each interior point
+  toward the midpoint of its neighbors every constraint iteration. This
+  turned out to be the SAME root cause behind the endcap visibly
+  flipping/rotating during growth (up to a full 180° per frame in the
+  worst case) — the one fix resolved both: fold reproduction went from
+  23%→100% of expected span, endcap-angle instability from up to 180°
+  down to 0.014° max frame-to-frame change. A regression check showed
+  normal swing settle time actually improved slightly (~1.35s vs ~1.77s)
+  rather than the rope looking stiffer.
+- Fixed the cut-sweep mark's direction being frozen at the moment of the
+  cut instead of following the entity's rotation afterward — reported as
+  "should follow the rotation and position of the end it was cut from
+  instead of staying static" (and, initially, read as a "cut line max
+  length" complaint — same underlying cause: a stale direction makes the
+  mark's apparent span look wrong against the rope's current edges even
+  though its actual length was always correct). Now recomputed fresh
+  every render frame from the entity's current tangent.
+- Added a visible click/hold/double-click log INSIDE the dev panel itself
+  (a scrollable area below the settings groups, with a Clear button) —
+  the original click-diagnostic request had been implemented as
+  console-only, which the user clarified wasn't what was meant.
+- Fixed: clicking Save while viewing a Vercel deployment still triggered
+  the native local-file-save prompt. `GIT_LOG_WRITABLE` now also requires
+  `DEV_MODE` (localhost/127.0.0.1/file:/explicit `?dev=1`), not just
+  "protocol isn't file:" — an ordinary hosted origin like a Vercel URL is
+  a normal `https:` origin that was passing the old check even though
+  there's no locally-tracked repo file on that visitor's machine to save
+  through.
 
 ## What's next
 

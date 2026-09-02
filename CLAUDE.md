@@ -327,3 +327,51 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   for double-click-to-cut on pieces) — `hitTestAny()`/`hitTestPieces()`
   must never be wired into `applyPunch()`'s call sites without a fresh,
   explicit request to do so.
+- **`integrateChain()` has a bending constraint (`cfg.bendStiffness`,
+  default `0.15`) in addition to the distance constraints — do not remove
+  it.** Pure distance constraints have ZERO resistance to folding (any
+  angle between two segments, including a full 180° fold-back, satisfies
+  them equally well). A strong-enough punch left the chain PERMANENTLY
+  kinked — confirmed both by 2 user-recorded videos ("crazy movement on a
+  single click" and, separately, a still-visible "extension jitter" after
+  the damping/iterations fix) and by direct reproduction: a single punch
+  left a 2-point span stuck at ~42% of its straight-line length,
+  unrecovered after 3 full simulated seconds. The SAME root cause was also
+  the real source of the endcap-rotation instability during growth
+  (`tipDirection()`'s angle was flipping by up to 180° between frames) —
+  fixing the fold fixed both symptoms at once (verified: max angle delta
+  dropped from 180° to 0.014° on the same reproduction). Every interior,
+  non-pinned point (`1..points.length-2`, naturally excluding the
+  kinematically-positioned growing tip) is pulled toward the midpoint of
+  its two neighbors each constraint iteration, same cadence as the
+  distance constraints. Tuned low deliberately so ordinary swinging still
+  looks floppy/rope-like — don't raise it reflexively if a NEW instability
+  shows up; measure first, the way the previous damping/iteration tuning
+  was measured. See `docs/CODE_SUMMARY.md` Gotchas for the full
+  reproduction numbers.
+- The double-click-cut sweep-mark's perpendicular direction (`nx,ny`) is
+  computed FRESH every render frame from the entity's CURRENT tangent
+  (`tipDirection()`), never stored/frozen on the `cutSweep` object at cut
+  time — an earlier version snapshotted `nx,ny` once at the moment of the
+  cut, so the mark visibly stopped tracking the entity's rotation as it
+  kept swinging afterward (reported: "should follow the rotation and
+  position of the end it was cut from instead of staying static"; also
+  read initially as "cut line max length is [wrong versus] the width of
+  the rope" — same root cause, since a stale normal makes the mark's
+  world-space projection look mismatched against the rope's actual current
+  edges even though its own length is still exactly `ropeThickness`).
+- `logClick()` writes to BOTH `console.log` and a visible, scrollable log
+  inside the dev panel itself (`#dpClickLog`, below the settings groups,
+  capped at 200 entries, a Clear button next to it) — not console-only.
+  The console-only version was the wrong interpretation of the original
+  "add a click diagnostic log" request; the user clarified it needs to be
+  visible in the panel. Don't revert to console-only.
+- `GIT_LOG_WRITABLE` requires `DEV_MODE` (not just `protocol !== 'file:'`)
+  — a deployed/hosted origin (e.g. a Vercel preview or production URL) is
+  a normal `https:` origin that would otherwise pass the bare protocol
+  check, but has no locally-tracked repo file for the native save-picker
+  write to be meaningfully "tracked" through; per explicit report that
+  clicking Save while viewing a Vercel deployment still triggered the
+  native file-save prompt. `DEV_MODE` alone isn't sufficient either (it
+  still allows `file:`), so both conditions stay layered together, not
+  merged into one.
