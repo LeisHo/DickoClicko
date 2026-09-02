@@ -251,15 +251,21 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   uncompensated height stayed clamped (shrinking from the bottom instead of
   growing from the top). If `max-height` ever changes, update this constant
   to match.
-- `writeGitSettingsLog()` (git-tracked settings log, §12l) is best-effort
-  and must never gate the localStorage save in `saveSettings()` — the
-  localStorage write happens first and synchronously; the git-log write is
-  a separate async call whose failure only changes the Save button's
-  flash text ("Saved (local only)"), never blocks or rolls back the
-  localStorage save. A `FileSystemFileHandle` is natively
-  structured-clone-able (a documented File System Access API guarantee),
-  so it can go straight into `idbSet()` — don't "simplify" this by trying
-  to serialize the handle to JSON first, that would break it. (A test
-  mock standing in for a real handle, with plain function properties, is
-  NOT cloneable and will fail `idbSet()` — that's a limitation of the
-  mock, not a bug in this code; the real API's handle objects work fine.)
+- Save/Reset (§12d/§12l) write and read the git-tracked settings log
+  ONLY — there is deliberately no parallel localStorage default. An
+  earlier version of this project dual-wrote to both; that was corrected
+  after an explicit §12d/§12l wording change made clear the git-tracked
+  log is the *only* place Save Settings writes to. `getGitSettingsFileHandle()`
+  takes a `mode` ('read' | 'readwrite'): boot-time/Reset reads use
+  `queryPermission()` only (never prompts — there's no user gesture at
+  boot to back a native permission dialog) and silently fall back to
+  hardcoded defaults if permission isn't already granted; Save always
+  runs from a real click/keydown, so it can fall through to
+  `requestPermission()`/`showSaveFilePicker()` when needed. A
+  `FileSystemFileHandle` is natively structured-clone-able (a documented
+  File System Access API guarantee), so it can go straight into
+  `idbSet()` — don't "simplify" this by trying to serialize the handle to
+  JSON first, that would break it. (A test mock standing in for a real
+  handle, with plain function properties, is NOT cloneable and will fail
+  `idbSet()` — that's a limitation of the mock, not a bug in this code;
+  the real API's handle objects work fine.)

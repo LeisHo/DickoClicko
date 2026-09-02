@@ -170,16 +170,26 @@ Nothing in progress — everything below is done, verified, and pushed.
   standard, not a bug — "whichever groups were open or collapsed at Save
   time come back in that same state," by design.
 - Implemented §12l/§12m, added to the workspace `CLAUDE.md` since this
-  project's dev panel last caught up with it: Save Settings now also
-  writes `{values, order}` through to a git-tracked
+  project's dev panel last caught up with it: Save Settings writes
+  `{values, order, panelGeometry}` through to a git-tracked
   `data/processed/dev-panel-settings.json` (File System Access API, one
   native-picker prompt on the first save per browser, silent thereafter
-  via a handle persisted in IndexedDB; Chromium-only, localStorage stays
-  the unconditional baseline). §12m's paste-and-"set defaults" merge rule
-  is a behavioral convention now documented in this project's `CLAUDE.md`,
-  not page code. Verified the write path, the IndexedDB handle round-trip,
-  and — the property that actually matters — that a failed/unavailable
-  git-log write never blocks or affects the localStorage save.
+  via a handle persisted in IndexedDB; Chromium-only). §12m's
+  paste-and-"set defaults" merge rule is a behavioral convention
+  documented in this project's `CLAUDE.md`, not page code. Corrected
+  2026-09-02: an explicit revision to §12d/§12l made clear the git-tracked
+  log is the *only* place Save writes to — the original implementation's
+  parallel localStorage write was removed, and Reset now reads from the
+  git log only. Boot-time/Reset reads use only the non-prompting
+  `queryPermission()` (no user gesture exists at boot) and fall back to
+  hardcoded defaults if nothing is reachable yet; Save (always
+  gesture-backed) can prompt via `requestPermission()`/
+  `showSaveFilePicker()`. Verified via a temporary debug hook against a
+  standalone static server: graceful cold-boot fallback, graceful Save
+  failure with zero localStorage writes, and Copy/tab-switch working off
+  an in-memory `lastLoadedSnapshot`. A real picker-backed round trip
+  remains untestable headlessly (same documented mock-cloneability
+  limitation as before).
 - Minimum Rope Length's slider range widened to 0.1-15 %vh (was 0.4-30),
   default unchanged at 0.5, per explicit request.
 - Moved Floor Enabled/Color/Thickness/Height out of ROPE CUT into their

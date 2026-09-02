@@ -1054,6 +1054,55 @@ Verified:
   the same already-documented Browser-pane transient).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  07:48 AM - 08:00 AM EDT
+
+Changed (correction -- the workspace CLAUDE.md's §12d/§12l wording was
+explicitly revised since this project's dev panel last implemented them):
+- Save Settings now writes ONLY to the git-tracked settings log
+  (data/processed/dev-panel-settings.json via the File System Access API)
+  -- the previous dual-write to localStorage as a parallel "baseline" is
+  removed entirely. Reset now reads from that same git-tracked log only,
+  not from any local default.
+- getGitSettingsFileHandle() gained a `mode` ('read' | 'readwrite')
+  parameter: boot-time/Reset reads use only the non-prompting
+  queryPermission() and silently fall back to hardcoded defaults with no
+  saved log yet reachable (there's no user gesture at boot to back a
+  native permission prompt); Save always runs from a real click/keydown,
+  so it can fall through to requestPermission()/showSaveFilePicker() when
+  needed.
+- Added readGitSettingsLog() (mirrors writeGitSettingsLog()) and an
+  in-memory lastLoadedSnapshot, which copySettings() and the Desktop/
+  Mobile tab-switch handler now use to preview the "other" device's saved
+  panel geometry, replacing the removed localStorage reads.
+- resetSettings() is now async.
+- Updated the stale §12l source comment and the DICKOCLICKO CLAUDE.md
+  Gotchas entry, both of which previously described the old dual-write
+  design.
+
+Verified:
+- node --check clean on the extracted script.
+- grep-confirmed 0 remaining `localStorage` references anywhere in
+  index.html (only a comment noting its deliberate absence).
+- Live-tested via a temporary debug hook (window.__debugTMP, removed
+  before commit, grep-confirmed 0 references) against a standalone static
+  file server (the shared dev-server port was occupied by another
+  concurrent session): cold-boot Reset with no git log reachable yet
+  leaves cfg/geometry at defaults without throwing; Save without a
+  gesture-backed handle available fails gracefully ("Save failed" flash,
+  no localStorage keys written); Desktop/Mobile tab-switching and Copy
+  Settings still function correctly off lastLoadedSnapshot with no
+  persisted snapshot yet (Copy's clipboard write was blocked by this
+  headless browser's "document not focused" restriction -- a pre-existing
+  environment limitation unrelated to this change, confirmed by
+  reproducing the same block via a direct clipboard.writeText() probe).
+  A real showSaveFilePicker()-backed round trip (native picker dialog,
+  actual disk write, actual permission grant) could not be exercised in
+  this headless environment -- this is the same limitation already
+  documented for the original §12l implementation (a FileSystemFileHandle
+  mock with function properties is not structured-clone-able, so it can't
+  survive the real idbSet() call under test).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

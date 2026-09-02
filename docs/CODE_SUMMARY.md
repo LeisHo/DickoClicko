@@ -114,16 +114,27 @@ receives every frame: it stays exactly as smooth as it is now, since the
 verlet simulation producing those points doesn't change at all.
 
 Dev panel persistence (`saveSettings()`/`resetSettings()`/`copySettings()`):
-setting *values* and the *group/row order* are one shared blob
-(`localStorage['dickoClicko.devSettings']`) since every control in this
-project is judged non-device-specific (see project CLAUDE.md); the panel's
-own size/position is two independent blobs keyed by `activeDeviceTab`
-(`'dickoClicko.devPanelGeom.desktop'` / `'...mobile'`), switched by clicking
-the Desktop/Mobile tab buttons -- independent of the actual live viewport
-width, so the panel's mobile layout can be previewed without resizing the
-real browser window. The built-in "Dev Panel" group (§12i: font sizes,
-opacity, colors for the panel's own chrome) is judged device-specific the
-same way, so `panelStyle{}` rides inside that same per-tab geometry blob
+per §12d/§12l (revised 2026-09-02), Save Settings writes ONLY to a
+git-tracked settings log, `data/processed/dev-panel-settings.json` -- there
+is no parallel localStorage default. The File System Access API backs this:
+`writeGitSettingsLog()`/`readGitSettingsLog()` go through
+`getGitSettingsFileHandle(mode, promptIfMissing)`, whose resolved handle is
+persisted in IndexedDB (`idbGet()`/`idbSet()`) after the first save's native
+picker dialog, so later saves/reads need no dialog at all. `mode` is `'read'`
+for boot-time/Reset (uses only the non-prompting `queryPermission()` --
+there's no user gesture at boot to back a real permission prompt; falls back
+to hardcoded defaults if nothing is reachable yet) or `'readwrite'` for Save
+(always gesture-backed, so it can fall through to
+`requestPermission()`/`showSaveFilePicker()`). The saved snapshot is one
+blob: `{values, order, panelGeometry}` -- setting *values* and *group/row
+order* are shared across Desktop/Mobile (every control in this project is
+judged non-device-specific, see project CLAUDE.md), while `panelGeometry`
+holds two independent entries keyed by `activeDeviceTab`, switched by
+clicking the Desktop/Mobile tab buttons -- independent of the actual live
+viewport width, so the panel's mobile layout can be previewed without
+resizing the real browser window. The built-in "Dev Panel" group (§12i: font
+sizes, opacity, colors for the panel's own chrome) is judged device-specific
+the same way, so `panelStyle{}` rides inside `panelGeometry`'s per-tab entry
 (`getPanelGeometry()`'s `.style` field) rather than living in `cfg`; applied
 live via CSS custom properties (`--dp-title-size`, `--dp-bg`, etc.) set on
 `#devPanel` by `applyPanelStyle()`. `PANEL_STYLE_CONTROLS` is ONE array
@@ -132,14 +143,12 @@ freely interleaved/reordered like any other group's -- an earlier version
 split sliders and colors into two separate arrays, which made an
 interleaved row order structurally impossible to represent at all.
 
-Save Settings also writes {values, order} through to a git-tracked
-data/processed/dev-panel-settings.json (§12l), via the File System Access
-API -- writeGitSettingsLog() -> getGitSettingsFileHandle(), whose handle is
-persisted in IndexedDB (idbGet()/idbSet()) after the first save's picker
-dialog so later saves need no dialog at all. Best-effort and fully async:
-the localStorage save in saveSettings() completes first and synchronously,
-this is a separate call layered on top whose failure only changes the Save
-button's flash text, never blocks or reverts the localStorage write.
+An in-memory `lastLoadedSnapshot` (set by the last successful
+save/`readGitSettingsLog()`) is what `copySettings()` and the Desktop/Mobile
+tab-switch handler use to preview the *other* device's saved panel geometry
+-- there is nothing else to fall back to now that localStorage is gone, so
+before any save/reset in a fresh page load, the "other" tab's geometry is
+simply unknown (`null`, i.e. CSS default) until a real read succeeds.
 
 Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
 applies is decided by WHERE the hold starts, checked once at pointerdown

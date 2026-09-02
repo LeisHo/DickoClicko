@@ -595,8 +595,6 @@ function initResizeHandles(){
    captured alongside values (§12e), panel size/position saved separately
    per device class (§12f).
 --------------------------------------------------------------------- */
-const SETTINGS_KEY = 'dickoClicko.devSettings';
-const GEOM_KEY_PREFIX = 'dickoClicko.devPanelGeom.';
 const isMobileClass = () => window.matchMedia('(max-width: 767px)').matches;
 // which tab (Desktop/Mobile, §12f) is active — the panel's own geometry keys off
 // this explicit selection, not the live viewport, so it can be previewed/tuned
@@ -676,25 +674,33 @@ function applyPanelGeometry(geom){
   applyPanelStyleValues(geom && geom.style);
 }
 
-function currentGeomKey(){ return GEOM_KEY_PREFIX + activeDeviceTab; }
-
 /* ---------------------------------------------------------------------
-   §12l: Save Settings writes through to a git-tracked settings log
-   (data/processed/dev-panel-settings.json), not just localStorage — so a
-   saved default is visible to a desktop Claude Code session in the same
-   repo, independent of which browser/device last hit Save. A static page
-   can't silently write an arbitrary disk path, so this uses the File
-   System Access API: the FIRST save on a given browser prompts a native
-   save dialog (navigate to data/processed/, use the suggested filename)
-   and the resulting handle is persisted in IndexedDB — every later save
-   reuses it with no dialog. Chromium-only (Firefox/Safari lack the API);
-   feature-detected, and localStorage remains the full baseline regardless
-   of whether this succeeds.
+   §12l/§12d: Save Settings writes ONLY to a git-tracked settings log
+   (data/processed/dev-panel-settings.json) — there is deliberately no
+   separate browser-local default alongside it (per an explicit correction
+   to §12d/§12l: an earlier version of this project wrote to both, which
+   was wrong). Reset restores from that same file, not from any local
+   default. A static page can't silently write/read an arbitrary disk
+   path, so this uses the File System Access API: the FIRST Save on a
+   given browser prompts a native save dialog (navigate to
+   data/processed/, use the suggested filename); the resulting handle is
+   persisted in IndexedDB so every later Save/Reset reuses it with no
+   dialog. Reading at boot never prompts (no user gesture exists yet) —
+   it only succeeds if this browser already silently holds read
+   permission on a previously-picked handle (queryPermission, which never
+   shows UI), otherwise the panel just starts at hardcoded defaults, same
+   as a browser that's never saved here at all. Chromium-only
+   (Firefox/Safari lack the API) and feature-detected throughout.
 --------------------------------------------------------------------- */
 const GIT_SETTINGS_FILENAME = 'dev-panel-settings.json';
 const IDB_NAME = 'dickoClicko';
 const IDB_STORE = 'handles';
 const IDB_HANDLE_KEY = 'gitSettingsFileHandle';
+// the last snapshot read from (or written to) the git settings log, kept
+// in memory so tab-switching/copySettings can find the OTHER device's
+// panel geometry without re-reading the file — there is no localStorage
+// fallback for any of this anymore.
+let lastLoadedSnapshot = null;
 
 function idbOpen(){
   return new Promise((resolve, reject) => {
@@ -722,16 +728,22 @@ async function idbSet(key, val){
   });
 }
 
-async function getGitSettingsFileHandle(promptIfMissing){
+// mode: 'read' (boot/Reset — never prompts) or 'readwrite' (Save — may
+// prompt, since it always runs from a real click/keydown user gesture).
+async function getGitSettingsFileHandle(mode, promptIfMissing){
   if (!('showSaveFilePicker' in window)) return null;
   let handle = null;
   try { handle = await idbGet(IDB_HANDLE_KEY); } catch (err) { handle = null; }
   if (handle){
     try {
-      if (await handle.requestPermission({ mode: 'readwrite' }) === 'granted') return handle;
+      let perm = await handle.queryPermission({ mode }); // never shows UI
+      if (perm !== 'granted' && promptIfMissing){
+        perm = await handle.requestPermission({ mode }); // needs a user gesture to actually prompt
+      }
+      if (perm === 'granted') return handle;
     } catch (err) { /* handle stale/revoked — fall through to re-prompt below */ }
   }
-  if (!promptIfMissing) return null;
+  if (!promptIfMissing) return null; // boot-time/Reset read: never force a picker with no gesture behind it
   try {
     handle = await window.showSaveFilePicker({
       suggestedName: GIT_SETTINGS_FILENAME,
@@ -745,7 +757,7 @@ async function getGitSettingsFileHandle(promptIfMissing){
 }
 
 async function writeGitSettingsLog(data){
-  const handle = await getGitSettingsFileHandle(true);
+  const handle = await getGitSettingsFileHandle('readwrite', true);
   if (!handle) return false;
   try {
     const writable = await handle.createWritable();
@@ -757,42 +769,50 @@ async function writeGitSettingsLog(data){
   }
 }
 
-function saveSettings(){
-  const values = { ...cfg };
-  const order = getPanelOrder();
+async function readGitSettingsLog(){
+  const handle = await getGitSettingsFileHandle('read', false);
+  if (!handle) return null;
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ values, order }));
-    localStorage.setItem(currentGeomKey(), JSON.stringify(getPanelGeometry()));
-  } catch (err) { /* localStorage unavailable — dev-only convenience, fail silently */ }
+    const file = await handle.getFile();
+    return JSON.parse(await file.text());
+  } catch (err) {
+    return null; // missing/empty/corrupt file, or permission not actually granted
+  }
+}
 
-  // best-effort/async — the localStorage save above already completed
-  // synchronously regardless of whether this succeeds.
+function saveSettings(){
+  const current = activeDeviceTab;
+  const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
+  const otherGeom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[other] : null;
+  const snapshot = {
+    values: { ...cfg },
+    order: getPanelOrder(),
+    panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
+  };
   const btn = document.getElementById('dpSaveBtn');
-  writeGitSettingsLog({ values, order }).then(ok => {
+  writeGitSettingsLog(snapshot).then(ok => {
+    if (ok) lastLoadedSnapshot = snapshot;
     if (!btn) return;
     const orig = btn.textContent;
-    btn.textContent = ok ? 'Saved!' : 'Saved (local only)';
+    btn.textContent = ok ? 'Saved!' : 'Save failed';
     setTimeout(() => btn.textContent = orig, 900);
   });
 }
 
-function resetSettings(){
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (err) { saved = null; }
-  if (saved){
-    applyOrder(saved.order);
-    applyValues(saved.values);
+async function resetSettings(){
+  const snap = await readGitSettingsLog();
+  lastLoadedSnapshot = snap;
+  if (snap){
+    applyOrder(snap.order);
+    applyValues(snap.values);
   }
-  let geom = null;
-  try { geom = JSON.parse(localStorage.getItem(currentGeomKey())); } catch (err) { geom = null; }
-  applyPanelGeometry(geom);
+  applyPanelGeometry(snap && snap.panelGeometry ? snap.panelGeometry[activeDeviceTab] : null);
 }
 
 function copySettings(){
   const current = activeDeviceTab;
   const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
-  let otherGeom = null;
-  try { otherGeom = JSON.parse(localStorage.getItem(GEOM_KEY_PREFIX + other)); } catch (err) { otherGeom = null; }
+  const otherGeom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[other] : null;
   const snapshot = {
     values: { ...cfg },
     order: getPanelOrder(),
@@ -816,9 +836,8 @@ function initDeviceTabs(){
   buttons.forEach(b => b.addEventListener('click', () => {
     activeDeviceTab = b.dataset.tab;
     refreshActive();
-    let geom = null;
-    try { geom = JSON.parse(localStorage.getItem(currentGeomKey())); } catch (err) { geom = null; }
-    applyPanelGeometry(geom); // preview that tab's saved panel geometry, even without actually resizing the browser
+    const geom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[activeDeviceTab] : null;
+    applyPanelGeometry(geom); // preview that tab's last-loaded panel geometry, even without actually resizing the browser
   }));
   refreshActive();
 }
