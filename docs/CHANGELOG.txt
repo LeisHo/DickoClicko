@@ -2120,6 +2120,47 @@ datalog/ left untouched, per this session's standing practice of not
 touching another concurrent session's own working files.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  6:11 PM - 6:16 PM EDT
+
+Three explicit, previously-queued requests actioned together (each had
+been deferred by direct instruction until "next prompt" -- see the
+conversation, not a scope-creep decision made here):
+
+1. Removed the `Rope Weight` dev-panel setting entirely. It and
+   `Gravity Strength` were pure multiplicative factors on the same
+   acceleration term (`gravityAccel = vh(90) * gravityStrength *
+   ropeWeight`, used for both mainRope and fallen pieces) -- scaling
+   either one had an identical visible effect, so the setting was
+   genuinely redundant. Rather than just deleting it (which would have
+   silently HALVED the rope's actual gravity, since the product would no
+   longer be computed), folded its value into Gravity Strength's own
+   default: new default = old Gravity Strength x old Rope Weight (1.9 x
+   1.9 = 3.61, already within Gravity Strength's existing 0-5 range) --
+   applied to both the DEV_GROUPS hardcoded default and
+   data/processed/dev-panel-settings.json's git-tracked default, so the
+   rope's actual on-screen behavior is unchanged, not just similar.
+2. Moved the Damping slider's minimum from 0.5 to 0.7. The git-tracked
+   default (0.999) was already comfortably above the new floor, so
+   nothing needed clamping.
+3. Updated 4 of the 12 endcap SVGs with new path data from the user's
+   own revised source files (found via `git status` on data/Rope/, not
+   announced individually): End_Form1-06.svg, End_Form2-09.svg,
+   End_Form2-10.svg, End_Form2-11.svg. Same ENDCAP_DESIGNS keys, just new
+   `d` path strings -- no other code changes needed since each design's
+   identity (dropdown key/label) is unchanged.
+
+Verified: a temporary debug hook (window.__debugTMPropo, removed before
+commit, grep-confirmed 0 references) confirmed the Rope Weight row is
+gone from the live dev panel, Damping's range.min reads "0.7", Gravity
+Strength boots to 3.61, and all 4 updated endcap designs render without
+error with real (non-zero, mutually distinct) rope-colored pixel counts
+via a forced update()+render() pass (this sandbox's Browser pane still
+doesn't composite frames, so requestAnimationFrame doesn't fire here --
+same limitation as the original 12-design swap). node --check clean;
+settings JSON validated with a real JSON parser (not just eyeballed); 0
+console errors on a fresh page load.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

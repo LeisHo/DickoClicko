@@ -476,6 +476,15 @@ lost — verified via direct state inspection at the time.
   pane doesn't composite frames, so `requestAnimationFrame` never fires
   here — direct calls were needed instead of relying on the app's own
   loop).
+- 4 of the 12 endcap SVGs updated in place (`form1-06`, `form2-09`,
+  `form2-10`, `form2-11`) with new path data from the user's revised
+  source files.
+- Removed the redundant `Rope Weight` setting (it and `Gravity Strength`
+  multiplied into the identical acceleration term, so one was doing
+  nothing the other couldn't). `Gravity Strength`'s default was folded up
+  to the old combined product (3.61) so the rope's actual behavior is
+  unchanged, not just similar. `Damping`'s slider minimum moved from 0.5
+  to 0.7, both per explicit request.
 
 ## What's next
 

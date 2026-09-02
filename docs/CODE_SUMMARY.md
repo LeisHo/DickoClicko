@@ -1121,3 +1121,27 @@ GOTCHAS
   iterating the design set from) and `data/Rope/End Alignment.svg` itself
   were left untouched, same as this session's standing practice of never
   touching that other session's own files.
+- `ENDCAP_DESIGNS` entries get their `path` data updated in place whenever
+  the user revises one of the source SVGs (found via `git status` on
+  `data/Rope/`, not announced file-by-file) -- same key, new `d` string,
+  no other code changes needed since the design's identity (its dropdown
+  key/label) doesn't change, only its shape.
+- Removed `cfg.ropeWeight` entirely (redundant setting, explicit request).
+  It and `cfg.gravityStrength` were pure multiplicative factors on the
+  SAME acceleration term (`gravityAccel = vh(90) * gravityStrength *
+  ropeWeight`, both for mainRope and fallGravity) -- scaling either one
+  had an identical visible effect, so there was nothing `ropeWeight`
+  contributed that `gravityStrength` alone couldn't. Rather than just
+  deleting it and leaving `gravityStrength` at its own old default (which
+  would have silently HALVED the effective gravity the rope actually
+  experiences, since the product `gravityStrength * ropeWeight` no longer
+  gets computed), folded ropeWeight's value into gravityStrength's own
+  default: new `gravityStrength` default = old default × old ropeWeight
+  default (1.9 × 1.9 = 3.61, applied to both the DEV_GROUPS hardcoded
+  default and `data/processed/dev-panel-settings.json`'s git-tracked
+  default) -- preserves the EXACT same rope behavior post-removal, not
+  just a similar one. `gravityStrength`'s slider max (5) already
+  comfortably covers 3.61, no range change needed.
+- `damping`'s slider min moved from 0.5 to 0.7 (explicit request) -- the
+  git-tracked default (0.999) was already well above the new floor, so no
+  clamping was needed there.

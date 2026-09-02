@@ -15,8 +15,7 @@
     "holdDistance": 22,
     "bendStiffness": 0.07,
     "ropeAnimSpeed": 1.1,
-    "gravityStrength": 1.9,
-    "ropeWeight": 1.9,
+    "gravityStrength": 3.61,
     "damping": 0.999,
     "constraintIterations": 6,
     "ropeGrowthRate": 15,
@@ -91,7 +90,6 @@
         "bendStiffness",
         "ropeAnimSpeed",
         "gravityStrength",
-        "ropeWeight",
         "damping",
         "constraintIterations"
       ]
