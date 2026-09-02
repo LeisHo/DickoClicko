@@ -213,6 +213,7 @@ const DEV_GROUPS = [
       onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
+    { key:'ropeTopCurveArc',label:'Rope Top Curve Arch',type:'slider', unit:'x',    min:0,   max:3,  step:0.1, def:1 },
   ]},
   { title:'CLICK', controls:[
     { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.6 },
@@ -2228,9 +2229,11 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult){
     ctx.fill();
   }
   // startArcMult mirrors endArcMult at points[0] instead of points[n-1] --
-  // only meaningful for a fallen piece's own free cut edge (mainRope's
-  // points[0] is the anchor, always covered by the circle graphic, so
-  // callers pass 0 there and this block is skipped).
+  // meaningful for both a fallen piece's own free cut edge (Rope End
+  // Curve Arc reused there) AND mainRope's own anchor point (Rope Top
+  // Curve Arch, a separate/independent setting -- the rope draws ON TOP
+  // of the circle graphic, per render()'s own draw order, so this end is
+  // genuinely visible, not hidden underneath it).
   if (startArcMult > 0){
     const base = points[0];
     ctx.beginPath();
@@ -2481,7 +2484,14 @@ function render(){
     const cutArcMult = (hasEndcap && cfg.endcapAtCutEnd && cutFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
     strokeRopeCurve(piece.points, thickness, cfg.ropeColor, tipArcMult, cutArcMult);
   });
-  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, mainArcMult);
+  // mainRope's points[0] is the anchor -- always pinned to the circle,
+  // never a cut edge or a growing tip, so no endcap/End-Emerge concept
+  // ever applies there. Rope Top Curve Arch controls it directly and
+  // unconditionally, independent of Rope End Curve Arc (which only ever
+  // governed the FAR/free end). The rope is drawn AFTER (on top of) the
+  // circle below, so this end is genuinely visible, not hidden underneath
+  // it as an earlier version of this comment incorrectly assumed.
+  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, mainArcMult, cfg.ropeTopCurveArc);
   if (hasEndcap){
     fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge)));
     drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, mainTipFactor);

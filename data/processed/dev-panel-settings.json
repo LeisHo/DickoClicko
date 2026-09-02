@@ -11,6 +11,7 @@
     "ropeLength": 39.92429516185174,
     "ropeColor": "#8b5a2b",
     "ropeEndCurveArc": 0,
+    "ropeTopCurveArc": 1,
     "clickIntensity": 1.6,
     "holdDistance": 22,
     "bendStiffness": 0.07,
@@ -81,7 +82,8 @@
         "ropeThickness",
         "ropeLength",
         "ropeColor",
-        "ropeEndCurveArc"
+        "ropeEndCurveArc",
+        "ropeTopCurveArc"
       ]
     },
     {

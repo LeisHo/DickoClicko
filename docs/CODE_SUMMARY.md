@@ -1282,3 +1282,22 @@ GOTCHAS
     behavior change for the feature-off case. A full 40-frame render()
     pass (both the plain cut and a subsequent piece-on-piece cut) threw
     no errors.
+- **New setting: `ropeTopCurveArc` ("Rope Top Curve Arch")** -- mirrors
+  Rope End Curve Arc but for `mainRope.points[0]` (the anchor), wired via
+  `strokeRopeCurve()`'s `startArcMult` param (added the round before for
+  pieces' own cut edges, but never actually connected to mainRope's own
+  call, which always passed `0`). A prior Gotchas entry's claim that "the
+  anchor end always renders under the circle graphic so its cap style is
+  never actually visible" was WRONG -- checked before trusting it:
+  `render()` draws the circle FIRST, the rope stroke AFTER (on top), and
+  `ropeColor` differs from `circleColor` by default, so a curved cap
+  there is genuinely visible, not a no-op. Default `1` (not `0`) so the
+  change is immediately visible per the request's own phrasing, matching
+  Rope End Curve Arc's own default. Verified via a monkey-patched
+  `ctx.arc` during a real `render()` pass: exactly 2 arc calls (the
+  circle itself, r=32px; the new anchor arc, r=19.2px = thickness/2 × 1,
+  both centered at the anchor) and zero at the tip (correctly suppressed
+  -- Rope End Curve Arc is 0 in the live settings and an endcap design is
+  active there); separately regression-checked Rope End Curve Arc's own
+  mechanism still works unchanged (r=38.4px = thickness × 2 at the tip,
+  `endcapDesign: 'none'`).

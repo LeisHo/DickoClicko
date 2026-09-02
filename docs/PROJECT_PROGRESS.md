@@ -517,6 +517,12 @@ lost — verified via direct state inspection at the time.
   each piece was verified (including a real setTimeout-throttling issue
   in this sandbox's background tab that had to be worked around to test
   the double-click fix reliably).
+- Added `Rope Top Curve Arch` (default 1): the rope's anchor end
+  (`points[0]`) can now render curved instead of always flat, mirroring
+  the existing `Rope End Curve Arc` for the free end. Corrected a wrong
+  assumption from the End Emerge round — the anchor end was believed to
+  always be hidden under the circle graphic, but the rope actually draws
+  ON TOP of the circle, so this is a genuinely visible change.
 
 ## What's next
 

@@ -2312,6 +2312,41 @@ settings) before editing data/processed/dev-panel-settings.json, so the
 edits apply on top of their current real values, not a stale local copy.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  7:51 PM - 7:56 PM EDT
+
+Added a "Rope Top Curve Arch" setting (*D* shorthand), mirroring the
+existing Rope End Curve Arc but for mainRope.points[0] (the anchor),
+which previously always rendered as a flat line regardless of any
+setting -- strokeRopeCurve()'s startArcMult (added last round for pieces'
+own cut edges) was simply never wired up for mainRope's own call, which
+always passed 0 there. Checked the actual claim in a comment from last
+round before trusting it -- "that end always renders under the circle
+graphic so its cap style is never actually visible" was WRONG: render()
+draws the circle FIRST and the rope stroke AFTER (on top of it), and
+ropeColor/circleColor differ (brown vs black by default), so the anchor
+end is genuinely visible and a curved cap there is a real, worthwhile
+addition, not a no-op. New default (1, matching Rope End Curve Arc's own
+default) makes the change immediately visible per the request's own
+phrasing ("make the top end curved instead of a straight line"), not
+just a dormant slider defaulting to the old flat look. Verified via a
+temporary debug hook (removed before commit, grep-confirmed 0
+references): monkey-patched ctx.arc to record every call during a real
+render() pass -- confirmed exactly 2 arc calls (the circle graphic itself,
+r=32px, and the new rope-top arc, r=19.2px, both centered at the anchor,
+matching thickness/2 * ropeTopCurveArc(1) = 19.2 exactly) and zero arc
+calls at the tip (correctly suppressed there, since ropeEndCurveArc is 0
+in the live settings and an endcap design is active). Regression-checked
+the existing Rope End Curve Arc mechanism separately (endcapDesign
+'none', ropeEndCurveArc 2): still draws correctly at the tip
+(r=38.4=thickness*2), confirming the new setting didn't disturb the
+existing one it's modeled on. node --check clean; settings JSON
+validated with a real parser. Pulled 1 new live-Save commit from the
+remote (a user Save that also captured collapsed:true on 4 dev-panel
+groups -- direct, real-world confirmation the collapse-state feature from
+2 rounds ago is genuinely working live) before editing the settings file,
+same practice as every prior round this session.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
