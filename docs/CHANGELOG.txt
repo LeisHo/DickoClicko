@@ -1257,6 +1257,53 @@ Verified:
   same file's own established precedent 2 entries up.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  08:28 AM - 08:35 AM EDT
+
+Changed (§12l revision -- the workspace CLAUDE.md gained a genuinely new
+paragraph this round, not just a wording tweak: an explicit "no server,
+opened directly as a local file" exception, located via a byte-size/
+line-count delta against the version already read this session, 85283->
+86645 bytes / 719->725 lines):
+- Added a "no File System Access API at all" fallback to
+  saveSettings()/resetSettings(): a new GIT_LOG_WRITABLE constant
+  ('showSaveFilePicker' in window, checked once) now gates between the
+  existing git-log-only path and a new SESSION_FALLBACK_KEY sessionStorage
+  fallback. Scoped deliberately narrow -- this only engages when the API
+  is structurally absent (Firefox/Safari, or this page opened as a bare
+  local file in one of those), not for an ordinary picker cancel or
+  permission denial in a capable browser, which still just shows "Save
+  failed" as before. sessionStorage was chosen over localStorage on
+  purpose: it's gone the moment the tab closes, so it can never become
+  the persistent "separate browser-local default" §12d/§12l otherwise
+  bans across this whole spec -- it exists only so a Save made in a
+  capability-less browser has anything for that same tab's own Reset to
+  read back. The Save button says "Saved (session only)" in this mode,
+  never "Saved!", so it's never mistaken for a real git-log write.
+
+Verified:
+- node --check clean.
+- Live-tested both branches via a temporary debug hook
+  (window.__debugTMPropo, removed before commit, grep-confirmed 0
+  references) against a standalone static file server: (1) a throwaway
+  test copy of index.html with `delete window.showSaveFilePicker;`
+  injected before the main script (never touching real index.html)
+  confirmed GIT_LOG_WRITABLE correctly reads false, Save writes to
+  sessionStorage and shows "Saved (session only)", and a subsequent
+  Reset correctly restores the saved marker value from sessionStorage;
+  (2) the real, unmodified index.html confirmed GIT_LOG_WRITABLE reads
+  true when the API is genuinely present, sessionStorage is never
+  touched (null before and after a Save attempt), and Save falls through
+  to the pre-existing git-log path exactly as verified 2 rounds ago
+  (fails gracefully with "Save failed" when no gesture-backed handle is
+  available in this headless environment) -- confirming zero regression
+  to the normal-capability path.
+- Noted, not acted on: a different concurrent session is still actively
+  developing DEV_MODE debug scaffolding (window.__debugTMP2, growing
+  since the previous entry) in the same file's uncommitted working tree
+  -- left untouched and disclosed in the commit, same as the prior
+  entry's logClick() situation.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

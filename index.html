@@ -707,6 +707,20 @@ const IDB_HANDLE_KEY = 'gitSettingsFileHandle';
 // fallback for any of this anymore.
 let lastLoadedSnapshot = null;
 
+// §12l's file:// exception: the git write-through needs a real save
+// dialog/handle behind it, which the File System Access API can't offer
+// in a browser that lacks it entirely (Firefox/Safari, or this page
+// opened as a bare local file in one of those). Checked once, not
+// per-call, since it's an environmental capability, not something that
+// changes mid-session. When false, Save/Reset use SESSION_FALLBACK_KEY
+// instead (sessionStorage, not localStorage -- it's gone the moment the
+// tab closes, so it can never become the persistent "separate
+// browser-local default" §12d/§12l otherwise bans; it exists only so a
+// Save made in a capability-less browser has anything for that same
+// tab's own Reset to read back).
+const GIT_LOG_WRITABLE = 'showSaveFilePicker' in window;
+const SESSION_FALLBACK_KEY = 'dickoClicko.sessionSettings';
+
 function idbOpen(){
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_NAME, 1);
@@ -795,17 +809,41 @@ function saveSettings(){
     panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
   };
   const btn = document.getElementById('dpSaveBtn');
-  writeGitSettingsLog(snapshot).then(ok => {
-    if (ok) lastLoadedSnapshot = snapshot;
+  const flash = text => {
     if (!btn) return;
     const orig = btn.textContent;
-    btn.textContent = ok ? 'Saved!' : 'Save failed';
+    btn.textContent = text;
     setTimeout(() => btn.textContent = orig, 900);
+  };
+
+  if (!GIT_LOG_WRITABLE){
+    // no server/File-System-Access handle to write the git log through --
+    // §12l's file:// exception: fall back to this tab's own sessionStorage
+    // rather than failing outright, and say so honestly rather than
+    // claiming a real git-log save.
+    try {
+      sessionStorage.setItem(SESSION_FALLBACK_KEY, JSON.stringify(snapshot));
+      lastLoadedSnapshot = snapshot;
+      flash('Saved (session only)');
+    } catch (err) {
+      flash('Save failed');
+    }
+    return;
+  }
+
+  writeGitSettingsLog(snapshot).then(ok => {
+    if (ok) lastLoadedSnapshot = snapshot;
+    flash(ok ? 'Saved!' : 'Save failed');
   });
 }
 
 async function resetSettings(){
-  const snap = await readGitSettingsLog();
+  let snap;
+  if (!GIT_LOG_WRITABLE){
+    try { snap = JSON.parse(sessionStorage.getItem(SESSION_FALLBACK_KEY)); } catch (err) { snap = null; }
+  } else {
+    snap = await readGitSettingsLog();
+  }
   lastLoadedSnapshot = snap;
   if (snap){
     applyOrder(snap.order);
@@ -1139,10 +1177,25 @@ function growRope(dtSeconds){
     const pts = mainRope.points;
     const dir = tipGrowDirection(pts);
     const tip = pts[pts.length - 1];
+    // The newly-finalized point (and the fresh zero-length tip started right
+    // after it) inherit dir.prev's CURRENT velocity instead of starting from
+    // rest. dir.prev is a real, already-settled physics point that may still
+    // carry a small residual velocity (light swinging, or the ordinary
+    // frame-to-frame "breathing" of a fixed-iteration-count constraint
+    // solver); starting the new point at zero velocity next to a moving
+    // neighbor forces the solver to yank it into place over the following
+    // few frames, which showed up as a real, measured decaying-oscillation
+    // transient in dir.prev's own position every time a segment committed
+    // (confirmed via frame-by-frame tracing: prev.y jumped ~2px then settled
+    // over ~4-5 frames) -- and since positionGrowingTip() anchors the
+    // growing tip directly to dir.prev every frame, that transient was
+    // fully visible as tip jitter during extension. Matching the inherited
+    // velocity here removes the mismatch the solver was correcting for.
+    const vx = dir.prev.x - dir.prev.oldx, vy = dir.prev.y - dir.prev.oldy;
     tip.x = dir.prev.x + dir.x * targetSeg;
     tip.y = dir.prev.y + dir.y * targetSeg;
-    tip.oldx = tip.x; tip.oldy = tip.y;
-    pts.push({ x: tip.x, y: tip.y, oldx: tip.x, oldy: tip.y });
+    tip.oldx = tip.x - vx; tip.oldy = tip.y - vy;
+    pts.push({ x: tip.x, y: tip.y, oldx: tip.x - vx, oldy: tip.y - vy });
     mainRope.tipGrowLen -= targetSeg;
   }
   setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
@@ -1636,6 +1689,11 @@ if (DEV_MODE){
 }
 requestAnimationFrame(loop);
 
+window.__debugTMP2 = {
+  cfg, mainRope, update, tipGrowDirection, vh, positionGrowingTip, growRope, integrateChain,
+  setGrowing: v => { growing = v; },
+  getGrowing: () => growing,
+};
 
 })();
 </script>

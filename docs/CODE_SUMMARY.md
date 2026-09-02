@@ -162,6 +162,21 @@ tab-switch handler use to preview the *other* device's saved panel geometry
 before any save/reset in a fresh page load, the "other" tab's geometry is
 simply unknown (`null`, i.e. CSS default) until a real read succeeds.
 
+§12l's "no server, opened directly as a local file" exception (added
+2026-09-02): `GIT_LOG_WRITABLE` (`'showSaveFilePicker' in window`, computed
+once) gates `saveSettings()`/`resetSettings()` between the git-log path
+above and a `SESSION_FALLBACK_KEY` `sessionStorage` fallback -- for a
+browser that structurally can't offer the File System Access API at all
+(Firefox/Safari, or this page opened as a bare local file in one of those),
+not for an ordinary picker cancel or permission denial in a capable
+browser, which still just fails as before. `sessionStorage`, not
+`localStorage`, deliberately: it's gone the moment the tab closes, so it
+can never become the persistent "separate browser-local default" §12d/§12l
+otherwise bans -- it exists only so a Save made in a capability-less
+browser has anything for that same tab's own Reset to read back. The Save
+button says "Saved (session only)" in this mode, never "Saved!", so it's
+never mistaken for a real git-log write.
+
 Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
 applies is decided by WHERE the hold starts, checked once at pointerdown
 (`isOnCircle()`, with a generous margin beyond the circle's own visual
