@@ -592,3 +592,102 @@ GOTCHAS
   -- below any visible threshold). Exposed as sliders rather than picked
   once and hardcoded, specifically so this doesn't need another
   round-trip if the chosen default still isn't quite right.
+- `positionGrowingTip()` LERPS the growing tip's rendered position toward
+  its raw target (`tip.x/y += (target - tip.x/y) * 0.4` originally, tuned
+  down to `0.25`) instead of snapping straight to it every frame, after a
+  5th round of feedback ("rope animation isn't erratic anymore but the
+  extension still isn't smooth, it's jittery") landed once the
+  damping/iterations fix above had already resolved the earlier, larger
+  "erratic swinging" complaint -- a narrower, real residual. Diagnosed by
+  instrumenting `growRope()`/`integrateChain()`/`positionGrowingTip()`
+  directly (a manual step-by-step reconstruction of `update()`'s own call
+  order kept landing on frame offsets that didn't match a real
+  `update()`-driven trace, so the reliable method was always driving
+  growth through the real `update()` function and reading `pts[pts.length
+  - 1].y` every frame, exactly what `strokeRopeCurve()` renders as the
+  rope's own endpoint). Two independent, additive sources of frame-to-frame
+  noise were confirmed this way: (1) `dir.prev` (the real physics point
+  right behind the growing tip) is still subject to the constraint
+  solver's own ordinary per-frame "breathing" even while otherwise
+  visually settled, and since `positionGrowingTip()` anchors the tip's
+  ABSOLUTE position to `dir.prev` every frame, that breathing showed
+  through 1:1; (2) every time a segment completes, `dir.prev`'s IDENTITY
+  switches to the just-finalized point, and the newly-pushed
+  zero-length tip briefly started at zero velocity next to a
+  neighbor that could still be moving, which the constraint solver then
+  had to correct for over the next few frames. Fix #1 for the identity
+  switch: `growRope()`'s commit code now gives the newly-finalized point
+  (and the fresh tip started right after it) `dir.prev`'s CURRENT velocity
+  instead of zero (`vx/vy = dir.prev.(x|y) - dir.prev.old(x|y)`) --
+  measured to have negligible effect ALONE (the big, roughly-constant
+  ~+14.9px forward step at each commit boundary was unchanged before/after:
+  14.82px vs 14.90px on repeat 120-frame traces), but reasoned as correct
+  regardless (a newly-created point starting at rest next to a moving
+  neighbor is objectively worse than inheriting its velocity) and kept.
+  Fix #2, the one that actually moved the measured numbers: smoothing
+  `positionGrowingTip()`'s output. Swept smoothing factors on a clean
+  180-frame hold-to-grow trace (same rope, same settle, same growth rate),
+  counting how many of the 179 frame-to-frame deltas were NEGATIVE
+  (the tip visibly moving backward for one frame -- the actual
+  perceptible "jitter," since the discrete ~+14.9px forward step at each
+  commit is monotonic with the overall growth direction and, being a
+  single 16.7ms frame once every ~14 frames, was judged separately as very
+  unlikely to read as jitter to a human eye): no smoothing (direct snap) --
+  19-20 negative deltas per 180 frames, worst -2.94px; smoothing=0.4 --
+  still 20 negative deltas but worst reduced to -0.82px; smoothing=0.25 --
+  14 negative deltas, worst -0.67px. Settled on 0.25. `tipGrowLen`/
+  `mainRope.totalLength` (the actual growth accounting) are untouched by
+  either fix -- only the rendered pixel position of the still-growing tip
+  lags slightly behind its true target, imperceptible against the ~2px/
+  frame steady growth rate at the default Rope Growth Rate.
+- The double-click-cut sweep-mark (`cutSweep`) moved from a property on
+  the FALLING piece to a property on whichever entity KEEPS ITS OWN
+  IDENTITY through the cut -- `mainRope` after `cutRopeAt()`, or the piece
+  that keeps `points` after `cutPieceAt()` splits it -- per an explicit,
+  exactly-backwards bug report: "when the rope is cut, the white line...
+  should stay with the rope instead of the cut segment." Previously
+  `renderCutSweep(piece)` read `piece.cutProgress`/`piece.cutNx/cutNy/
+  cutStartOffset/cutEndOffset` and anchored to `piece.points[0]` -- so the
+  mark visibly followed whatever fell/swung away, not the rope the user
+  was still holding. `renderCutSweep(entity)` is now generic (reads
+  `entity.points`/`entity.cutSweep`), and `update()`/`render()` both
+  advance/draw `mainRope.cutSweep` AND every `fallenPieces[i].cutSweep`
+  independently (a rope cut and any number of later piece-splits each
+  animate on their own timeline; only entities with an ACTIVE, in-progress
+  sweep are touched, `progress >= 1` ones aren't). `cfg.cutSweepColor`/
+  `cfg.cutSweepThickness` (ROPE CUT group) replace the previously hardcoded
+  `'#ffffff'` / `Math.max(2, vmin(cfg.ropeThickness)*0.35)`, per explicit
+  request alongside the placement fix.
+- Fallen pieces are now double-click-cuttable (`cutPieceAt(pieceIndex, hit,
+  clickX, clickY)`), splitting one piece into two independent pieces at
+  the click point -- same tangent/normal/toppling geometry as
+  `cutRopeAt()`'s own piece-detach, factored into a shared `topplePiece()`
+  helper (identical rotation-around-pivot logic, used by both), but with
+  no anchor-pin or growth-accounting since a fallen piece has neither.
+  `hitTestAny(x, y)` returns whichever of the main rope (`hitTestRope`) or
+  the nearest in-range fallen piece (`hitTestPieces`, one `nearestPointOnRope`
+  call per piece) is closer, tagged `target: 'rope' | 'piece'` (+
+  `pieceIndex` for the piece case) -- used ONLY to decide the double-click
+  branch's cut target, resolved fresh at RELEASE time (not the stale
+  press-time hit) since a piece may have fallen/swung since the press, same
+  reasoning as the existing hold-charge release-position handling.
+  Single-tap punch and hold-to-charge intentionally stay rope-only
+  (unchanged scope, per the request's own wording -- only double-click-cut
+  was asked to extend to pieces): the quick-tap branch now arms
+  `pendingClick` off `hitTestAny()` (so a double-click aimed at a piece, or
+  a mix of a rope-tap and a piece-tap, still registers as a double-click),
+  but the single-tap-punch timeout callback still gates on the ORIGINAL
+  press-time `info.hit.dist <= clickDistance` (rope-only), unchanged from
+  before pieces became cuttable.
+- `logClick(event, data)` (`console.log('[click]', event, data)`,
+  DEV_MODE-gated) is a standing diagnostic, not a temporary debug hook --
+  added per explicit request for permanent click/hold/double-click
+  visibility. Called at every real input-state transition in
+  `onPointerDown`/`onPointerUp`: `down:circle`, `down:rope`,
+  `hold:grow-start`, `hold:charging-start`, `up:circle`, `up:double-click`,
+  `up:hold-release-too-far`, `up:hold-release-punch`, `up:tap-too-far`,
+  `up:tap-pending`, `up:tap-punch`, and `cancel` (on `pointercancel`).
+  Verified via dispatched synthetic `PointerEvent`s + `read_console_messages`
+  that a real tap produces exactly `down:rope` -> `up:tap-pending` ->
+  (after the double-click-threshold timer) `up:tap-punch`, in order, with
+  the logged `hitDist`/`intensity` matching the actual computed values.

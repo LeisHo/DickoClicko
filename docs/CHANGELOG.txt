@@ -1354,6 +1354,119 @@ Verified:
   scope and not this session's to judge.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  08:24 AM - 09:00 AM EDT
+
+Added / Fixed (4 requests handled this round: a standing click diagnostic,
+a follow-up rope-extension-jitter report, an exactly-backwards cut-sweep
+placement bug + new color/thickness controls, and double-click-cuttable
+fallen pieces -- plus one "set defaults" save):
+- Added logClick() (DEV_MODE-gated console.log('[click]', event, data)),
+  a permanent diagnostic firing at every click/hold/double-click state
+  transition in onPointerDown/onPointerUp. Verified via dispatched
+  synthetic pointer events + read_console_messages: a real tap logs
+  down:rope -> up:tap-pending -> up:tap-punch in order with correct
+  hitDist/intensity.
+- Resolved "rope extension still isn't smooth, jittery" (reported right
+  after the immediately-preceding entry's damping/iterations fix had
+  already resolved the separate, larger "erratic swinging" complaint).
+  Root-caused via direct instrumentation (manual step-by-step
+  reconstruction of update()'s own call order proved unreliable across
+  repeated attempts -- landed on driving growth through the real update()
+  and reading pts[pts.length-1].y every frame, exactly what
+  strokeRopeCurve() renders): the real physics point behind the growing
+  tip still "breathes" slightly every frame (ordinary fixed-iteration-
+  solver residual) even at visual rest, and that reference point's
+  IDENTITY switches to a newly-committed point every time a segment
+  completes -- positionGrowingTip() anchored the tip's absolute position
+  to it directly, showing both through 1:1. Fixed with 2 changes: (1)
+  growRope()'s commit code now gives a newly-finalized point (and the
+  fresh tip started right after it) its neighbor's CURRENT velocity
+  instead of zero -- measured negligible effect alone (the ~+14.9px
+  step at each commit boundary was ~unchanged, 14.82px vs 14.90px) but
+  kept as independently correct; (2) positionGrowingTip() now lerps
+  toward its target instead of snapping (smoothing factor 0.25, chosen
+  by sweeping values on a clean 180-frame hold-to-grow trace and
+  counting backward-motion frames -- the only genuinely visible
+  "jitter," since the discrete forward step is monotonic with the
+  overall growth direction and lasts one 16.7ms frame every ~14 frames:
+  no smoothing -> 19-20 backward frames/180, worst -2.94px; 0.4 -> 20
+  frames, worst -0.82px; 0.25 -> 14 frames, worst -0.67px). Growth
+  accounting (tipGrowLen/totalLength) is untouched; only the rendered
+  pixel position lags slightly, imperceptible against ~2px/frame growth.
+- Fixed a real, exactly-backwards bug: the double-click-cut sweep-mark
+  was staying with the FALLING piece, not the remaining rope still held
+  by the circle ("the white line... should stay with the rope instead
+  of the cut segment"). Generalized cutSweep from a per-piece property
+  (cutProgress/cutNx/cutNy/cutStartOffset/cutEndOffset on the falling
+  piece) to a per-entity object (mainRope.cutSweep, or
+  fallenPieces[i].cutSweep) belonging to whichever entity keeps its own
+  identity through a cut -- renderCutSweep(entity) is now generic;
+  update()/render() advance/draw mainRope's AND every piece's cutSweep
+  independently. Added cfg.cutSweepColor/cfg.cutSweepThickness dev
+  sliders (ROPE CUT group), replacing the previously hardcoded
+  '#ffffff' / Math.max(2, vmin(cfg.ropeThickness)*0.35), per the same
+  request. Verified via a scripted cut (grew a rope past the circle-cut
+  exclusion zone, dispatched a real double-click): the remaining rope
+  carries mainHasSweep:true, the newly-detached piece carries
+  pieceHasSweep:false.
+- Added double-click-to-cut on already-fallen pieces (cutPieceAt),
+  splitting one piece into two independent pieces at the click point --
+  per explicit request ("I can also double click on the cut segments to
+  cut them into 2 segments"). Same tangent/normal/toppling geometry as
+  the original rope-cut's own piece-detach, factored into a shared
+  topplePiece() helper. hitTestAny(x,y) returns whichever of the main
+  rope or the nearest in-range fallen piece is closer (hitTestPieces
+  checks every piece), tagged rope/piece -- used only for double-click
+  targeting, resolved fresh at release time since a piece may have
+  moved since the press. Single-tap punch and hold-to-charge
+  deliberately stayed rope-only (unchanged scope, matching the
+  request's own wording) -- the quick-tap branch now arms pendingClick
+  off hitTestAny() (so a piece-aimed double-click still registers), but
+  the single-tap-punch timeout still gates on the original press-time
+  rope-only hit, unchanged from before. Verified via a scripted
+  double-click on a fallen piece: 1 piece -> 2 pieces, the kept-identity
+  half carries the new sweep mark, the split-off half doesn't.
+- "Set defaults": wrote a user-provided Copy Settings dump as
+  data/processed/dev-panel-settings.json -- this file didn't exist yet,
+  so this was a first save (no §12m per-field merge needed, nothing to
+  merge against).
+
+Also present in this round's commits (see below): a concurrent session's
+own settings-persistence work (§12l file:// protocol gating), landed in
+the same file at the same time. Confirmed via `git diff`/`git show`
+inspection that this session's own edits (all of the above) and that
+session's edits (GIT_LOG_WRITABLE's protocol check, an "Endcap At Cut
+End" checkbox) ended up swept into the SAME few commits by the other
+session's own `git add`/`git commit` -- both sessions were editing
+index.html concurrently with no file-locking, so a broad `git add`
+picked up whichever edits were present in the working tree at that
+moment, regardless of which session made them. Nothing was lost or
+overwritten; verified this session's own features work correctly via
+direct state inspection (per-feature results above) regardless of which
+commit they ended up landing in. This session's only own commit this
+round is a small trailing cleanup (removing a temporary debug hook) --
+the substantive work above already existed in the working tree by the
+time this session got to `git commit`.
+
+Verified:
+- node --check clean throughout every intermediate edit.
+- Click diagnostics: dispatched synthetic pointer events, confirmed the
+  exact expected log sequence via read_console_messages.
+- Extension smoothing: quantitative before/after comparison on identical
+  180-frame traces (see numbers above), not just visual impression.
+- Cut-sweep placement + piece-splitting: scripted end-to-end tests via
+  dispatched pointer events through the real onPointerDown/onPointerUp
+  handlers (not calling cutRopeAt/cutPieceAt directly), confirming both
+  the cut geometry AND the sweep-mark ownership.
+- Fresh page load: no console errors beyond the known
+  ERR_CONNECTION_RESET Browser-pane transient; dev panel renders with
+  the new Cut Sweep Color/Cut Sweep Thickness controls present.
+- Did not live-verify: the actual visual smoothness improvement in a
+  rendered frame (rAF doesn't fire in this Browser pane environment) --
+  verification was via the underlying position data the render loop
+  reads from, not a rendered screenshot.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

@@ -1,0 +1,144 @@
+{
+  "values": {
+    "circleSize": 8.5,
+    "circleX": 50,
+    "circleY": 18,
+    "circleColor": "#000000",
+    "endcapDesign": "end4",
+    "endcapHeight": 1.4,
+    "ropeThickness": 4.7,
+    "ropeLength": 20.76923076923077,
+    "ropeColor": "#8b5a2b",
+    "ropeEndCurveArc": 1,
+    "clickIntensity": 1.6,
+    "holdDistance": 22,
+    "ropeAnimSpeed": 1,
+    "gravityStrength": 1.2,
+    "ropeWeight": 1,
+    "damping": 0.85,
+    "constraintIterations": 10,
+    "ropeGrowthRate": 15,
+    "clickHoldMaxDuration": 800,
+    "intensityCeiling": 4,
+    "minRopeLength": 0.5,
+    "circleCutDistance": 10,
+    "clickDistance": 8.9,
+    "doubleClickThreshold": 1000,
+    "ropeFallSpeed": 1,
+    "cutSpeed": 1.4,
+    "endcapAtCutEnd": true,
+    "floorEnabled": true,
+    "floorColor": "#ffffff",
+    "floorThickness": 5,
+    "floorHeight": 5,
+    "backgroundColor": "#1a1a2e"
+  },
+  "order": [
+    {
+      "key": "DEV PANEL",
+      "settings": [
+        "titleFontSize",
+        "tabFontSize",
+        "groupFontSize",
+        "labelFontSize",
+        "opacity",
+        "titleColor",
+        "bodyFontSize",
+        "bgColor",
+        "textColor"
+      ]
+    },
+    {
+      "key": "CIRCLE",
+      "settings": [
+        "circleSize",
+        "circleX",
+        "circleY",
+        "circleColor"
+      ]
+    },
+    {
+      "key": "ROPE",
+      "settings": [
+        "endcapDesign",
+        "endcapHeight",
+        "ropeThickness",
+        "ropeLength",
+        "ropeColor",
+        "ropeEndCurveArc"
+      ]
+    },
+    {
+      "key": "CLICK",
+      "settings": [
+        "clickIntensity",
+        "holdDistance"
+      ]
+    },
+    {
+      "key": "ROPE ANIMATION",
+      "settings": [
+        "ropeAnimSpeed",
+        "gravityStrength",
+        "ropeWeight",
+        "damping",
+        "constraintIterations"
+      ]
+    },
+    {
+      "key": "ROPE GROWTH",
+      "settings": [
+        "ropeGrowthRate",
+        "clickHoldMaxDuration",
+        "intensityCeiling"
+      ]
+    },
+    {
+      "key": "ROPE CUT",
+      "settings": [
+        "minRopeLength",
+        "circleCutDistance",
+        "clickDistance",
+        "doubleClickThreshold",
+        "ropeFallSpeed",
+        "cutSpeed",
+        "endcapAtCutEnd"
+      ]
+    },
+    {
+      "key": "FLOOR",
+      "settings": [
+        "floorEnabled",
+        "floorColor",
+        "floorThickness",
+        "floorHeight"
+      ]
+    },
+    {
+      "key": "UI",
+      "settings": [
+        "backgroundColor"
+      ]
+    }
+  ],
+  "panelGeometry": {
+    "desktop": {
+      "left": 1206,
+      "top": 10,
+      "width": 320,
+      "height": 665.2750244140625,
+      "style": {
+        "titleFontSize": 13,
+        "tabFontSize": 11,
+        "groupFontSize": 11,
+        "labelFontSize": 11,
+        "opacity": 0.94,
+        "titleColor": "#e8e8f0",
+        "bodyFontSize": 12,
+        "bgColor": "#12121e",
+        "textColor": "#c9c9d8"
+      }
+    },
+    "mobile": null
+  }
+}

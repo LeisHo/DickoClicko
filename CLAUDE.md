@@ -277,3 +277,53 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   handle, with plain function properties, is NOT cloneable and will fail
   `idbSet()` — that's a limitation of the mock, not a bug in this code;
   the real API's handle objects work fine.)
+- `logClick()` (DEV_MODE-gated `console.log('[click]', event, data)`) is the
+  standing click/hold/double-click diagnostic — one call at every real
+  state transition in `onPointerDown`/`onPointerUp` (down on circle/rope,
+  hold-eligible, charging-start, grow-start, every release branch). Added
+  per explicit request for a permanent diagnostic, not a temporary debug
+  hook — don't strip it out or gate it behind anything narrower than
+  `DEV_MODE`. Add a new `logClick()` call at any NEW state transition
+  rather than leaving it silent.
+- The growing tip's rendered position (`positionGrowingTip()`) is
+  SMOOTHED toward its raw target (`smoothing = 0.25`, a simple per-frame
+  lerp), not snapped to it — confirmed via frame-by-frame tracing that
+  snapping straight to `dir.prev.y + dir.y*tipGrowLen` every frame showed
+  through two real, measured sources of noise: the ordinary "breathing" of
+  a fixed-iteration-count constraint solver on the real physics point
+  right behind the tip, and `dir.prev`'s IDENTITY switching to a
+  newly-committed point every time a segment completes. Reported as
+  "rope extension isn't smooth, still jittery" after the damping/iteration
+  fix above had already resolved the separate, larger "erratic swinging"
+  complaint. Measured effect: max single-frame backward step during a
+  continuous hold-to-grow went from -2.94px (no smoothing) to -0.67px
+  (smoothing=0.25) over an identical 180-frame trace. `growRope()`'s own
+  commit code additionally has the newly-finalized point (and the fresh
+  tip started right after it) inherit `dir.prev`'s CURRENT velocity
+  instead of starting from rest, for the same reason. Don't revert either
+  change without re-measuring — see `docs/CODE_SUMMARY.md` Gotchas for the
+  full investigation and the numbers behind the chosen smoothing factor.
+- The double-click-cut sweep-mark belongs to whichever entity KEEPS ITS
+  OWN IDENTITY through a cut, not whatever falls/splits away — `cutSweep`
+  is a property on `mainRope` (after `cutRopeAt`) or on the piece that
+  keeps `points` after `cutPieceAt` splits it, never on the newly-created
+  falling/split-off piece. `renderCutSweep(entity)` reads `entity.points`
+  and `entity.cutSweep` generically now (was hardcoded to `mainRope`
+  and, before that, to the piece — reported backwards by the user: "the
+  white line... should stay with the rope instead of the cut segment").
+  `update()`/`render()` must advance/draw BOTH `mainRope.cutSweep` and
+  every `fallenPieces[i].cutSweep` independently — don't special-case only
+  one of them again.
+- Cut-sweep color/thickness are `cfg.cutSweepColor`/`cfg.cutSweepThickness`
+  dev sliders now, not the old hardcoded `'#ffffff'` / `Math.max(2,
+  vmin(cfg.ropeThickness)*0.35)`.
+- Fallen pieces are double-click-cuttable (`cutPieceAt`), splitting one
+  piece into two — same geometry/toppling as `cutRopeAt`'s own piece
+  split (factored into shared `topplePiece()`), but with no anchor/growth
+  bookkeeping since a piece has neither. `hitTestAny()` checks the main
+  rope AND every fallen piece and returns whichever is closer, tagged
+  `target: 'rope' | 'piece'` — used ONLY for double-click-cut targeting.
+  Punching and hold-charging stay rope-only by design (the user asked only
+  for double-click-to-cut on pieces) — `hitTestAny()`/`hitTestPieces()`
+  must never be wired into `applyPunch()`'s call sites without a fresh,
+  explicit request to do so.

@@ -18,10 +18,19 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — everything below is done and pushed. (The
-"rope physics is erratic" thread from the last update is resolved for
-now — see below — but if the user reports it again after trying the new
-Damping/Constraint Iterations sliders, that's the next place to look.)
+Nothing in progress — everything below is done and pushed. The rope
+extension "still jittery" follow-up (after damping/iterations already
+fixed the larger "erratic swinging" complaint) is resolved via a smoothed
+growing-tip render — if the user reports jitter again, check
+`positionGrowingTip()`'s `smoothing` factor next (currently 0.25).
+
+Note: this session's edits landed interleaved with a concurrent session's
+own work on the settings-persistence layer (§12l file:// gating) in the
+same `index.html` — both sets of changes ended up committed together
+across a few commits due to the concurrent editing, not a scope mixup.
+Nothing was lost; verified via direct state inspection that this round's
+own features (click log, extension smoothing, cut-sweep placement,
+piece-splitting) work correctly regardless of which commit they landed in.
 
 ## Recently completed
 
@@ -265,6 +274,53 @@ Damping/Constraint Iterations sliders, that's the next place to look.)
   check of all 4 input combinations, since this sandbox can't execute
   live JS under a real `file://` load for a project outside its own
   root.
+
+- Added a standing click diagnostic: `logClick()` (DEV_MODE-gated
+  `console.log`) fires at every real click/hold/double-click state
+  transition (down on circle/rope, hold-eligible, charging-start,
+  grow-start, and every release outcome) — per explicit request for a
+  permanent diagnostic. Verified via dispatched synthetic pointer events +
+  `read_console_messages`: a real tap logs `down:rope` → `up:tap-pending`
+  → `up:tap-punch` in order with correct `hitDist`/`intensity` values.
+- Resolved "rope extension still isn't smooth, jittery" (reported right
+  after the damping/iterations fix above had already resolved the larger
+  "erratic swinging" complaint) — a narrower, real residual. Root-caused
+  via direct instrumentation to 2 additive sources: the real physics point
+  behind the growing tip still "breathes" slightly every frame even at
+  visual rest (ordinary fixed-iteration-solver residual), and that
+  reference point's IDENTITY switches to a newly-committed point every
+  time a segment completes — `positionGrowingTip()` anchored the tip's
+  absolute position to it directly, so both effects showed through 1:1.
+  Fixed by smoothing the tip's rendered position toward its target
+  (lerp factor 0.25, tuned by sweeping several values and counting
+  backward-motion frames in a clean 180-frame trace: no smoothing → 19-20
+  backward frames per 180, worst -2.94px; 0.25 → 14 backward frames, worst
+  -0.67px) plus having a newly-committed point inherit its neighbor's
+  velocity instead of starting from rest. Growth accounting itself
+  (`tipGrowLen`/`totalLength`) is untouched — only the rendered pixel
+  position lags very slightly behind the true target.
+- Fixed a real, exactly-backwards bug: the double-click-cut sweep-mark was
+  staying with the FALLING piece instead of the remaining rope still held
+  by the circle ("the white line... should stay with the rope instead of
+  the cut segment"). The mark now belongs to whichever entity keeps its
+  own identity through a cut (`mainRope`, or the piece that keeps its
+  points after a split) — verified via direct state inspection of a
+  scripted cut: the remaining rope carries the mark, the newly-detached
+  piece doesn't. Added `cfg.cutSweepColor`/`cfg.cutSweepThickness` dev
+  sliders (ROPE CUT group) replacing the previously hardcoded white
+  color/computed thickness, per the same request.
+- Added double-click-to-cut on already-fallen pieces, splitting one piece
+  into two (same toppling/geometry as the original rope cut, factored into
+  a shared helper) — per explicit request ("I can also double click on
+  the cut segments to cut them into 2 segments"). Punching and
+  hold-to-charge intentionally stay rope-only, matching the request's own
+  scope. Verified via a scripted double-click on a fallen piece: 1 piece →
+  2 pieces, the kept-identity half carries the new sweep mark, the
+  split-off half doesn't.
+- "Set defaults": baked in a user-provided Copy Settings dump as the
+  first-ever git-tracked settings log (`data/processed/dev-panel-
+  settings.json` didn't exist yet, so this was a first save, not a §12m
+  merge against a prior version).
 
 ## What's next
 
