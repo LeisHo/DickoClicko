@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Dicko Clicko</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; overscroll-behavior:none; background:#000; }
+  #scene { position:fixed; inset:0; display:block; touch-action:none; }
+
+  #devPanel {
+    position:fixed; top:10px; right:10px;
+    width:min(320px, calc(100vw - 20px));
+    max-height:88vh; overflow-y:auto;
+    background:rgba(18,18,26,0.94); color:#e8e8f0;
+    font:12px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
+    border:1px solid #3a3a4a; border-radius:8px;
+    z-index:9999; user-select:none;
+    box-shadow:0 6px 24px rgba(0,0,0,0.5);
+  }
+  #devPanel.hidden { display:none; }
+  .dp-header {
+    padding:8px 10px; font-weight:600; font-size:13px;
+    background:#25253a; border-radius:8px 8px 0 0;
+    cursor:grab; touch-action:none;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .dp-header:active { cursor:grabbing; }
+  .dp-body { padding:4px 8px 10px; }
+  .dp-group { border-top:1px solid #33333f; }
+  .dp-group:first-child { border-top:none; }
+  .dp-group-header {
+    padding:7px 2px; font-weight:600; font-size:11px; letter-spacing:.04em;
+    color:#a9b4ff; cursor:pointer; display:flex; align-items:center; gap:6px;
+  }
+  .dp-group-header .arrow { transition:transform .15s; font-size:9px; }
+  .dp-group.collapsed .arrow { transform:rotate(-90deg); }
+  .dp-group.collapsed .dp-group-body { display:none; }
+  .dp-row { display:flex; align-items:center; gap:6px; padding:3px 2px; }
+  .dp-row label { flex:0 0 auto; width:118px; font-size:11px; color:#c9c9d8; }
+  .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:#7d8cff; }
+  .dp-num {
+    flex:0 0 auto; width:52px; text-align:right; font-size:11px;
+    background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
+    padding:2px 4px;
+  }
+  .dp-row input[type=color] {
+    width:40px; height:22px; border:1px solid #3a3a4a; border-radius:4px; background:none; padding:0;
+  }
+  .dp-row input[type=checkbox] { width:16px; height:16px; }
+  #devResize {
+    position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize;
+    background:linear-gradient(135deg, transparent 50%, #55556a 50%);
+    border-radius:0 0 8px 0;
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="devPanel" class="hidden">
+  <div class="dp-header" id="dpHeader"><span>Dicko Clicko — Dev</span><span id="dpFps">--fps</span></div>
+  <div class="dp-body" id="dpBody"></div>
+  <div id="devResize"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------------------------------------------------------------
+   Dev mode gating: local file, localhost, or ?dev=1
+--------------------------------------------------------------------- */
+const DEV_MODE = (
+  location.protocol === 'file:' ||
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1' ||
+  new URLSearchParams(location.search).get('dev') === '1'
+);
+
+/* ---------------------------------------------------------------------
+   Dev-panel control config. Every *DEV* from the spec is one entry here.
+   unit '%vw'/'%vh'/'%vmin' = percent of that viewport dimension.
+   unit 'x' = dimensionless multiplier. unit 'ms' = milliseconds.
+--------------------------------------------------------------------- */
+const DEV_GROUPS = [
+  { title:'CIRCLE', controls:[
+    { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:8 },
+    { key:'circleX',     label:'Circle X Pos',  type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:50 },
+    { key:'circleY',     label:'Circle Y Pos',  type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:18 },
+    { key:'circleColor', label:'Circle Color',  type:'color',  def:'#e74c3c' },
+  ]},
+  { title:'ROPE', controls:[
+    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:1.4 },
+    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:90, step:1,   def:45,
+      onChange: v => { if (mainRope) mainRope.segLen = vh(v) / (mainRope.points.length - 1); } },
+    { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
+    { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
+  ]},
+  { title:'CLICK', controls:[
+    { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:3 },
+    { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.4 },
+  ]},
+  { title:'ROPE ANIMATION', controls:[
+    { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1 },
+    { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:1.2 },
+    { key:'ropeWeight',      label:'Rope Weight',          type:'slider', unit:'x', min:0.1, max:5, step:0.1, def:1 },
+  ]},
+  { title:'ROPE GROWTH', controls:[
+    { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
+  ]},
+  { title:'ROPE CUT', controls:[
+    { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
+    { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
+    { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#4a4a4a' },
+    { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:1.5 },
+    { key:'floorHeight',     label:'Floor Height',     type:'slider',   unit:'%vh', min:0,   max:50, step:1,   def:10 },
+  ]},
+  { title:'MECHANICS', controls:[
+    { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:300 },
+  ]},
+  { title:'UI', controls:[
+    { key:'backgroundColor', label:'Background Color', type:'color', def:'#1a1a2e' },
+  ]},
+];
+
+const cfg = {};
+DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = c.def));
+
+/* ---------------------------------------------------------------------
+   Dev panel build-out
+--------------------------------------------------------------------- */
+const numEls = {};
+function buildDevPanel(){
+  const body = document.getElementById('dpBody');
+  DEV_GROUPS.forEach(group => {
+    const g = document.createElement('div');
+    g.className = 'dp-group';
+    const h = document.createElement('div');
+    h.className = 'dp-group-header';
+    h.innerHTML = '<span class="arrow">▼</span><span>' + group.title + '</span>';
+    const gb = document.createElement('div');
+    gb.className = 'dp-group-body';
+    h.addEventListener('click', () => g.classList.toggle('collapsed'));
+    group.controls.forEach(ctrl => gb.appendChild(buildRow(ctrl)));
+    g.appendChild(h); g.appendChild(gb); body.appendChild(g);
+  });
+}
+
+function setCfg(key, value){
+  cfg[key] = value;
+  const num = numEls[key];
+  if (num && num.type !== 'checkbox' && document.activeElement !== num.numInput) {
+    if (num.slider) num.slider.value = Math.max(parseFloat(num.slider.min), Math.min(parseFloat(num.slider.max), value));
+    if (num.numInput) num.numInput.value = round(value, 3);
+  }
+}
+
+function round(v, d){ const m = Math.pow(10,d); return Math.round(v*m)/m; }
+
+function buildRow(ctrl){
+  const row = document.createElement('div');
+  row.className = 'dp-row';
+  const label = document.createElement('label');
+  label.textContent = ctrl.label;
+  row.appendChild(label);
+
+  if (ctrl.type === 'slider') {
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = ctrl.min; slider.max = ctrl.max; slider.step = ctrl.step;
+    slider.value = ctrl.def;
+    const numInput = document.createElement('input');
+    numInput.type = 'text'; numInput.className = 'dp-num';
+    numInput.value = ctrl.def;
+
+    function apply(v){
+      v = parseFloat(v);
+      if (isNaN(v)) return;
+      cfg[ctrl.key] = v;
+      // slider handle visually clamps to its own range; the typed value is
+      // still the real value used by the sim (per project convention)
+      slider.value = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), v));
+      numInput.value = round(v, 3);
+      if (ctrl.onChange) ctrl.onChange(v);
+    }
+    slider.addEventListener('input', () => apply(slider.value));
+    numInput.addEventListener('change', () => apply(numInput.value));
+    numInput.addEventListener('keydown', e => { if (e.key === 'Enter') numInput.blur(); });
+
+    row.appendChild(slider); row.appendChild(numInput);
+    numEls[ctrl.key] = { slider, numInput };
+  } else if (ctrl.type === 'color') {
+    const color = document.createElement('input');
+    color.type = 'color'; color.value = ctrl.def;
+    color.addEventListener('input', () => { cfg[ctrl.key] = color.value; });
+    row.appendChild(color);
+    numEls[ctrl.key] = { type:'color' };
+  } else if (ctrl.type === 'checkbox') {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = !!ctrl.def;
+    cb.addEventListener('change', () => { cfg[ctrl.key] = cb.checked; });
+    row.appendChild(cb);
+    numEls[ctrl.key] = { type:'checkbox' };
+  }
+  return row;
+}
+
+/* ---------------------------------------------------------------------
+   Dev panel drag + resize (chrome only — not subject to the %-unit rule,
+   which applies to the animation's own position/size controls)
+--------------------------------------------------------------------- */
+function initPanelDrag(){
+  const panel = document.getElementById('devPanel');
+  const header = document.getElementById('dpHeader');
+  let dragging = false, startX, startY, startLeft, startTop;
+  header.addEventListener('pointerdown', e => {
+    dragging = true; header.setPointerCapture(e.pointerId);
+    const r = panel.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY; startLeft = r.left; startTop = r.top;
+    panel.style.right = 'auto';
+  });
+  header.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    panel.style.left = Math.max(0, Math.min(window.innerWidth - 40, startLeft + (e.clientX - startX))) + 'px';
+    panel.style.top = Math.max(0, Math.min(window.innerHeight - 40, startTop + (e.clientY - startY))) + 'px';
+  });
+  header.addEventListener('pointerup', () => dragging = false);
+
+  const resizer = document.getElementById('devResize');
+  let resizing = false, rStartX, rStartY, rStartW;
+  resizer.addEventListener('pointerdown', e => {
+    resizing = true; resizer.setPointerCapture(e.pointerId);
+    rStartX = e.clientX; rStartY = e.clientY; rStartW = panel.getBoundingClientRect().width;
+  });
+  resizer.addEventListener('pointermove', e => {
+    if (!resizing) return;
+    panel.style.width = Math.max(220, Math.min(window.innerWidth - 20, rStartW + (e.clientX - rStartX))) + 'px';
+  });
+  resizer.addEventListener('pointerup', () => resizing = false);
+}
+
+/* ---------------------------------------------------------------------
+   Canvas setup
+--------------------------------------------------------------------- */
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const vw = pct => window.innerWidth * pct / 100;
+const vh = pct => window.innerHeight * pct / 100;
+const vmin = pct => Math.min(window.innerWidth, window.innerHeight) * pct / 100;
+
+/* ---------------------------------------------------------------------
+   Rope physics — verlet point chain.
+   Main rope: point 0 pinned to the circle center, grown/cut at runtime.
+   Fallen pieces: unpinned independent chains, inherit velocity at cut time.
+--------------------------------------------------------------------- */
+const POINT_COUNT = 14;
+const CONSTRAINT_ITERATIONS = 6;
+const DAMPING = 0.99;
+const HOLD_THRESHOLD_MS = 180;
+const MAX_FALLEN_PIECES = 60;
+
+function makeChain(n, x, y, segLen){
+  const pts = [];
+  for (let i = 0; i < n; i++) pts.push({ x, y: y + i * segLen, oldx: x, oldy: y + i * segLen });
+  return pts;
+}
+
+let mainRope = null;
+let fallenPieces = [];
+
+function resetMainRope(){
+  const anchor = circleAnchor();
+  const totalLen = vh(cfg.ropeLength);
+  mainRope = {
+    points: makeChain(POINT_COUNT, anchor.x, anchor.y, totalLen / (POINT_COUNT - 1)),
+    segLen: totalLen / (POINT_COUNT - 1),
+  };
+}
+
+function circleAnchor(){
+  return { x: vw(cfg.circleX), y: vh(cfg.circleY) };
+}
+
+function closestPointOnSegment(px, py, a, b){
+  const abx = b.x - a.x, aby = b.y - a.y;
+  const abLenSq = abx * abx + aby * aby || 0.0001;
+  let t = ((px - a.x) * abx + (py - a.y) * aby) / abLenSq;
+  t = Math.max(0, Math.min(1, t));
+  return { x: a.x + abx * t, y: a.y + aby * t, t };
+}
+
+function nearestPointOnRope(px, py, points){
+  let best = { dist: Infinity, index: 0, x: points[0].x, y: points[0].y };
+  for (let i = 0; i < points.length - 1; i++){
+    const a = points[i], b = points[i + 1];
+    const cp = closestPointOnSegment(px, py, a, b);
+    const d = Math.hypot(px - cp.x, py - cp.y);
+    if (d < best.dist) best = { dist: d, index: cp.t < 0.5 ? i : i + 1, x: cp.x, y: cp.y };
+  }
+  return best;
+}
+
+function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex){
+  for (let i = 0; i < points.length; i++){
+    if (i === pinnedIndex) continue;
+    const p = points[i];
+    const vx = (p.x - p.oldx) * DAMPING;
+    const vy = (p.y - p.oldy) * DAMPING;
+    p.oldx = p.x; p.oldy = p.y;
+    p.x += vx;
+    p.y += vy + gravityAccel * dt * dt;
+  }
+  for (let iter = 0; iter < CONSTRAINT_ITERATIONS; iter++){
+    for (let i = 0; i < points.length - 1; i++){
+      const a = points[i], b = points[i + 1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy) || 0.0001;
+      const diff = (dist - segLen) / dist;
+      const aFixed = i === pinnedIndex, bFixed = (i + 1) === pinnedIndex;
+      const offX = dx * diff * 0.5, offY = dy * diff * 0.5;
+      if (!aFixed){ a.x += offX; a.y += offY; }
+      if (!bFixed){ b.x -= offX; b.y -= offY; }
+    }
+  }
+}
+
+function pileRepulsion(){
+  const all = [];
+  fallenPieces.forEach(piece => piece.points.forEach(p => all.push(p)));
+  const minSep = Math.max(2, vmin(cfg.ropeThickness) * 1.15);
+  for (let i = 0; i < all.length; i++){
+    for (let j = i + 1; j < all.length; j++){
+      const p = all[i], q = all[j];
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.0001 && dist < minSep){
+        const push = (minSep - dist) / 2;
+        const nx = dx / dist, ny = dy / dist;
+        p.x -= nx * push; p.y -= ny * push;
+        q.x += nx * push; q.y += ny * push;
+      }
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Growth / cut / punch actions
+--------------------------------------------------------------------- */
+let growing = false;
+
+function growRope(dtSeconds){
+  const growth = vh(cfg.ropeGrowthRate) * dtSeconds;
+  const newTotalPx = mainRope.segLen * (mainRope.points.length - 1) + growth;
+  mainRope.segLen = newTotalPx / (mainRope.points.length - 1);
+  setCfg('ropeLength', newTotalPx / window.innerHeight * 100);
+}
+
+function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex){
+  const dirX = hit.x - clickX, dirY = hit.y - clickY;
+  const len = Math.hypot(dirX, dirY) || 1;
+  const nx = dirX / len, ny = dirY / len;
+  const power = vh(1.0) * intensity;
+  for (let i = 0; i < points.length; i++){
+    if (i === pinnedIndex) continue;
+    const falloff = Math.exp(-Math.pow((i - hit.index) / 3, 2));
+    points[i].x += nx * power * falloff;
+    points[i].y += ny * power * falloff;
+  }
+}
+
+function cutRopeAt(hit){
+  const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
+  const lowerPoints = mainRope.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
+  mainRope.points = mainRope.points.slice(0, idx + 1);
+  if (lowerPoints.length >= 2){
+    // a perfectly vertical piece has no asymmetry to topple over on — give it a
+    // small random initial tilt (around its own cut-point end) so gravity and
+    // the floor collision naturally fold it into a heap instead of it standing
+    // there as a rigid straight column.
+    const angle = (Math.random() - 0.5) * 0.6;
+    const pivot = lowerPoints[0];
+    const cosA = Math.cos(angle), sinA = Math.sin(angle);
+    for (let i = 1; i < lowerPoints.length; i++){
+      const p = lowerPoints[i];
+      const dx = p.x - pivot.x, dy = p.y - pivot.y;
+      p.x = pivot.x + dx * cosA - dy * sinA;
+      p.y = pivot.y + dx * sinA + dy * cosA;
+      p.oldx = p.x; p.oldy = p.y;
+    }
+    fallenPieces.push({ points: lowerPoints, segLen: mainRope.segLen });
+    if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Input: click(punch) / hold(grow) / double-click(cut) disambiguation.
+   Double-click is hand-rolled (not the native dblclick event) because a
+   native click would otherwise fire before a dblclick is recognized —
+   the spec requires a double click to never trigger a single click.
+--------------------------------------------------------------------- */
+let downInfo = null;   // {x,y,hit,isHold}
+let holdTimer = null;
+let pendingClick = null; // {hit,timer}
+
+function hitTestRope(x, y){
+  const anchor = circleAnchor();
+  const circleR = vmin(cfg.circleSize) / 2;
+  if (Math.hypot(x - anchor.x, y - anchor.y) <= circleR) return null; // clicking the circle itself doesn't count
+  const hit = nearestPointOnRope(x, y, mainRope.points);
+  return hit.dist <= vmin(cfg.clickDistance) ? hit : null;
+}
+
+function onPointerDown(e){
+  const x = e.clientX, y = e.clientY;
+  const hit = hitTestRope(x, y);
+  if (!hit) return;
+  downInfo = { x, y, hit, isHold:false };
+  holdTimer = setTimeout(() => {
+    if (!downInfo) return;
+    downInfo.isHold = true;
+    growing = true;
+  }, HOLD_THRESHOLD_MS);
+}
+
+function onPointerUp(e){
+  if (!downInfo) return;
+  clearTimeout(holdTimer);
+  growing = false;
+  const info = downInfo;
+  downInfo = null;
+  if (info.isHold) return;
+
+  const now = performance.now();
+  if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
+    clearTimeout(pendingClick.timer);
+    pendingClick = null;
+    cutRopeAt(info.hit);
+  } else {
+    if (pendingClick) clearTimeout(pendingClick.timer);
+    pendingClick = {
+      time: now,
+      timer: setTimeout(() => {
+        applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0);
+        pendingClick = null;
+      }, cfg.doubleClickThreshold),
+    };
+  }
+}
+
+canvas.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointerup', onPointerUp);
+window.addEventListener('pointercancel', () => { downInfo = null; growing = false; clearTimeout(holdTimer); });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ---------------------------------------------------------------------
+   Update / render loop
+--------------------------------------------------------------------- */
+function floorY(){ return window.innerHeight - vh(cfg.floorHeight); }
+
+function update(rawDt){
+  const dt = rawDt * cfg.ropeAnimSpeed;
+  const gravityAccel = vh(90) * cfg.gravityStrength * cfg.ropeWeight;
+
+  mainRope.points[0].x = circleAnchor().x;
+  mainRope.points[0].y = circleAnchor().y;
+  if (growing) growRope(rawDt);
+  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0);
+
+  const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeWeight * cfg.ropeFallSpeed;
+  fallenPieces.forEach(piece => integrateChain(piece.points, piece.segLen, dt, fallGravity, -1));
+
+  if (cfg.floorEnabled){
+    const fY = floorY();
+    fallenPieces.forEach(piece => piece.points.forEach(p => {
+      if (p.y > fY){
+        p.y = fY;
+        p.oldx = p.x - (p.x - p.oldx) * 0.3;
+        p.oldy = p.y;
+      }
+    }));
+    pileRepulsion();
+  } else {
+    fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < window.innerHeight * 1.5));
+  }
+}
+
+function strokeRopeCurve(points, thicknessPx, color, endArcMult){
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = thicknessPx; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length - 1; i++){
+    const midX = (points[i].x + points[i+1].x) / 2, midY = (points[i].y + points[i+1].y) / 2;
+    ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+  }
+  const tip = points[points.length - 1];
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+
+  if (endArcMult > 0){
+    ctx.beginPath();
+    ctx.arc(tip.x, tip.y, (thicknessPx / 2) * endArcMult, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function render(){
+  ctx.fillStyle = cfg.backgroundColor;
+  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+  if (cfg.floorEnabled){
+    const fY = floorY();
+    ctx.fillStyle = cfg.floorColor;
+    ctx.fillRect(0, fY, window.innerWidth, vh(cfg.floorThickness));
+  }
+
+  const thickness = vmin(cfg.ropeThickness);
+  fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc));
+  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, cfg.ropeEndCurveArc);
+
+  const anchor = circleAnchor();
+  ctx.beginPath();
+  ctx.arc(anchor.x, anchor.y, vmin(cfg.circleSize) / 2, 0, Math.PI * 2);
+  ctx.fillStyle = cfg.circleColor;
+  ctx.fill();
+}
+
+let lastTime = performance.now();
+let fpsAccum = 0, fpsFrames = 0, fpsLast = performance.now();
+function loop(now){
+  const rawDt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+  update(rawDt);
+  render();
+  if (DEV_MODE){
+    fpsFrames++; fpsAccum += rawDt;
+    if (now - fpsLast > 500){
+      document.getElementById('dpFps').textContent = Math.round(fpsFrames / fpsAccum) + 'fps';
+      fpsFrames = 0; fpsAccum = 0; fpsLast = now;
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ---------------------------------------------------------------------
+   Boot
+--------------------------------------------------------------------- */
+resetMainRope();
+if (DEV_MODE){
+  document.getElementById('devPanel').classList.remove('hidden');
+  buildDevPanel();
+  initPanelDrag();
+}
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

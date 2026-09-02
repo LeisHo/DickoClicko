@@ -1,0 +1,95 @@
+DICKO CLICKO -- CHANGELOG
+================================================================================
+
+PROJECT START: 2026-09-01  -  10:33 PM EDT
+
+--------------------------------------------------------------------------------
+2026-09-01  -  10:33 PM - 10:49 PM EDT
+
+Initial build, from a spec given as a *DEV*/*COL* shorthand list (documented
+in CLAUDE.md). Single-file HTML/canvas app: a circle anchors a rope
+simulated with verlet-integration point-chain physics (gravity, distance
+constraints, per-segment thickness/curved end cap). All position/size dev
+controls use %/vmin of the viewport rather than px, per explicit
+requirement, so the layout stays proportional on both desktop and mobile.
+
+Added:
+- Circle rendering (%-based size/position, color picker).
+- Rope rendering hanging from the circle center, curved (rounded-cap +
+  filled end-arc) rather than a flat line.
+- Verlet rope physics: gravity strength, rope weight, and animation-speed
+  dev controls; the anchor point is re-pinned to the circle's position
+  every frame.
+- Click/punch interaction: clicking on or near the rope applies a
+  directional impulse (away from the click point, tapered across
+  neighboring points) so the rope deforms and swings back to equilibrium
+  pendulum-style, rather than moving as a rigid stick.
+- Click-and-hold to continuously grow the rope's length at a dev-controlled
+  rate.
+- Double-click to cut the rope at that point; the lower piece becomes an
+  independent falling physics body inheriting velocity at the moment of the
+  cut. Double-click is hand-rolled (setTimeout-based, keyed off the
+  Double Click Threshold dev control) rather than the native dblclick
+  event, specifically so a double click never fires a single-click punch
+  first, per explicit requirement.
+- Floor: toggle, color, thickness, and height dev controls; cut pieces
+  collide with the floor and pile on each other via pairwise point
+  repulsion across all fallen pieces.
+- Full dev panel: collapsible *COL* groups, every *DEV* from the spec
+  wired to a live effect, color pickers for color-only controls, and every
+  slider's numeric readout independently editable to any value beyond the
+  slider's own min/max (the slider handle visually clamps; the real value
+  is used by the sim).
+- Dev-mode gating: shows the panel on file://, localhost/127.0.0.1, or
+  ?dev=1; hidden otherwise.
+- Project docs (README, PROJECT_SUMMARY, CODE_SUMMARY, PROJECT_PROGRESS)
+  and a project CLAUDE.md documenting the *DEV*/*COL* prompt shorthand and
+  the future-default-value +20%-max-expansion convention.
+
+Fixed:
+- A cut rope piece falling from a perfectly vertical, undisturbed hanging
+  rope has no asymmetry to topple over on -- it was standing on the floor
+  as a rigid straight column instead of settling into a heap. Found via
+  direct physics-state inspection (stepping the simulation and reading
+  point positions), not visually. Fixed by giving each cut piece a small
+  random initial tilt (rotated around its own cut-point end) at the moment
+  of cutting, so gravity and the floor collision naturally fold it into a
+  heap.
+- The Rope Length slider had no effect once the rope's segment length was
+  intentionally decoupled from cfg.ropeLength (needed so hold-to-grow and
+  cutting could change the rope's effective length without a later
+  slider-default read snapping it back to the full default) -- added an
+  onChange hook so manually dragging the slider still rescales the rope's
+  current length correctly, including on an already-cut remainder.
+
+Verified:
+- All physics behaviors (anchor pin/stability, punch in both directions
+  described in the spec, hold-to-grow rate matching the dev control
+  exactly, double-click-cut point count and no spurious single-click punch
+  firing first, floor collision, multi-piece pile repulsion pushing
+  overlapping points apart) via direct calls into the running page's
+  physics functions through javascript_tool, stepping frames manually --
+  this session's headless Browser-pane tab doesn't composite frames, which
+  throttles/pauses requestAnimationFrame entirely, so the live animation
+  loop itself could not be watched directly in this environment. A
+  temporary debug hook (window.__debugTMP) used for this testing was
+  removed before commit (grep-confirmed clean).
+- %-based responsive layout confirmed correct via read-page/JS inspection
+  at both desktop (1280x720) and mobile (375x812 emulated) viewport sizes
+  -- circle/rope/floor positions and vmin-based circle radius all scaled
+  proportionally, dev panel remained readable and fit the smaller
+  viewport.
+- node --check clean on the extracted inline script, both before and after
+  removing the debug hook.
+- Not verified: real touch input on an actual mobile device (viewport-size
+  emulation only), and the ?dev=1/production-hostname branch of the
+  dev-mode gate (only the localhost branch was exercised live).
+
+--------------------------------------------------------------------------------
+<next entry follows the same divider + dated-header pattern>
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.
