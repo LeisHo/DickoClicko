@@ -1862,6 +1862,49 @@ matched exactly after a real boot-time load via a temporary debug hook
 references). node --check clean.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  1:36 PM - 1:42 PM EDT
+
+Fixed a real bug reported directly: the user confirmed a Vercel
+deployment WAS created with GITHUB_TOKEN/DEV_PANEL_SAVE_SECRET properly
+set, yet hitting Save Settings there still triggered the native
+File-System-Access picker dialog -- exactly the "local save prompt on a
+served deployment" behavior CLAUDE.md's §12d/§12l explicitly forbid.
+
+Root cause: GIT_LOG_WRITABLE never actually checked hostname, only
+protocol (`location.protocol !== 'file:'`) -- true for ANY non-file
+origin, including a real deployed https:// domain, not just
+localhost/127.0.0.1. A same-day earlier fix had added a DEV_MODE
+requirement, but its own truth-table (see CODE_SUMMARY's Gotchas) only
+flipped the "hosted origin, no ?dev=1" case -- which was never actually
+reachable as a bug, since that combination hides the dev panel/Save
+button entirely. The reachable case ("hosted origin WITH ?dev=1", the
+only way to see Save on a real deployment at all) was left unfixed the
+whole time.
+
+Fixed with a new IS_LOCAL_CONTEXT constant (protocol === 'file:' OR
+hostname is localhost/127.0.0.1) folded into GIT_LOG_WRITABLE, AND --
+the other necessary half -- saveSettings() itself now checks
+IS_LOCAL_CONTEXT after a Tier 1 (Vercel/GitHub API) failure and stops
+there with an honest error, instead of falling through to Tier 2/3 at
+all on a non-local origin. Also improved writeSettingsViaApi() to
+return {ok, error} instead of a bare boolean, so a real Tier 1 failure
+(missing env var, secret mismatch, a GitHub API error) is now visible
+in both the Save button's flash text (held 4s for errors) and the
+console -- needed since the user's live deployment is STILL failing
+Tier 1 for an as-yet-undiagnosed reason; this should surface why on
+their next attempt.
+
+Verified: localhost regression-checked (IS_LOCAL_CONTEXT/
+GIT_LOG_WRITABLE both still true, Save cascades through all 3 tiers
+exactly as before); a throwaway test copy with IS_LOCAL_CONTEXT forced
+false (simulating a real deployed hostname, since this environment has
+no way to actually navigate to one) confirmed Save now stops
+immediately after Tier 1's failure with an honest error message and
+never attempts Tier 2/3 at all. node --check clean; temporary debug
+hook (window.__debugTMPropo) removed before commit, grep-confirmed 0
+references.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

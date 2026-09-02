@@ -770,6 +770,11 @@ const DEV_PANEL_SAVE_SECRET = 'PkrbMti03M6xm3FEThYXa8gGW_08BOGj';
 // simpler than writing: once committed, the settings file is just an
 // ordinary static asset, so Reset fetches it directly rather than needing
 // its own API route.
+// Returns {ok, error} rather than a bare boolean -- api/save-settings.js's
+// own error responses (missing env vars, secret mismatch, GitHub API
+// failure) are worth surfacing directly rather than collapsing every
+// failure mode into a single generic "didn't work", both for real users
+// and for diagnosing a live deployment's actual problem from the outside.
 async function writeSettingsViaApi(data){
   try {
     const resp = await fetch('/api/save-settings', {
@@ -778,9 +783,10 @@ async function writeSettingsViaApi(data){
       body: JSON.stringify(data),
     });
     const body = await resp.json().catch(() => ({}));
-    return resp.ok && body.ok === true;
+    if (resp.ok && body.ok === true) return { ok: true };
+    return { ok: false, error: body.error || `HTTP ${resp.status}` };
   } catch (err) {
-    return false; // offline, not deployed as a Vercel function, CORS, etc.
+    return { ok: false, error: 'offline or unreachable: ' + String((err && err.message) || err) };
   }
 }
 async function readSettingsViaApi(){
@@ -810,17 +816,38 @@ function downloadSettingsAsFile(data){
   URL.revokeObjectURL(url);
 }
 
-// §12l's scope: gated on DEV_MODE, not just protocol/API capability -- the
-// native save-file picker/disk write only makes sense against a real local
-// checkout (localhost/127.0.0.1/file:/explicit ?dev=1), never against a
-// deployed/hosted origin (e.g. a Vercel preview or production URL), which
-// has no locally-tracked repo file for that write to be meaningfully
-// "tracked" through even though its own protocol is a normal https:// that
-// would otherwise pass a bare protocol check. `location.protocol !==
-// 'file:'` is layered on TOP of DEV_MODE (not replaced by it) because
-// DEV_MODE itself still allows `file:` (that's what makes the dev panel
-// visible when opened as a bare local file) -- this is the one case where
-// git-write must stay off despite DEV_MODE being on, per §12l's own "no
+// True only for a genuine local-development context (a bare local file, or
+// a local dev server) -- false for a real deployed/hosted origin (a Vercel
+// preview or production URL, or any other real domain), even though that
+// origin's own protocol is a normal https:// that would otherwise pass a
+// bare "not file:" check. This is the actual "is there a local checkout
+// behind this page at all" signal that both the fallback tiers below and
+// saveSettings() itself (see its own comment) key off of -- a deployed
+// page must never fall through to a local-save mechanism, per §12l/§12d's
+// explicit rule, regardless of whether Tier 1 (the Vercel/GitHub API)
+// succeeds or fails.
+const IS_LOCAL_CONTEXT = location.protocol === 'file:' ||
+  location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+// §12l's scope for Tier 2 specifically (the File System Access picker):
+// gated on DEV_MODE, not just protocol/API capability -- the native
+// save-file picker/disk write only makes sense against a real local
+// checkout (localhost/127.0.0.1, never file: -- see below), never against
+// a deployed/hosted origin, which has no locally-tracked repo file for
+// that write to be meaningfully "tracked" through. Corrected same day as
+// this comment's own original wording: the code previously only checked
+// `location.protocol !== 'file:'`, which stayed TRUE for any real deployed
+// domain too (a normal https:// origin passes that check just as easily
+// as localhost does) -- confirmed via direct user report: hitting Save on
+// a real, correctly-configured Vercel deployment still triggered the
+// native picker dialog, exactly the "local save prompt on a served
+// deployment" behavior §12d/§12l calls out as a bug. Now requires
+// IS_LOCAL_CONTEXT's own hostname check, which a deployed origin can never
+// satisfy. `location.protocol !== 'file:'` is layered on TOP of
+// IS_LOCAL_CONTEXT (not redundant with it) because IS_LOCAL_CONTEXT itself
+// still counts file: as local (that's what makes the dev panel visible
+// when opened as a bare local file, per DEV_MODE) -- this is the one case
+// where git-write must stay off despite being "local", per §12l's own "no
 // server behind it at all" exception. Also false in the ordinary case of a
 // browser lacking the API entirely (Firefox/Safari). Checked once, not
 // per-call, since these are environmental facts that don't change
@@ -829,7 +856,7 @@ function downloadSettingsAsFile(data){
 // closes, so it can never become the persistent "separate browser-local
 // default" §12d/§12l otherwise bans; it exists only so a Save made in this
 // mode has anything for that same tab's own Reset to read back).
-const GIT_LOG_WRITABLE = DEV_MODE && location.protocol !== 'file:' && 'showSaveFilePicker' in window;
+const GIT_LOG_WRITABLE = DEV_MODE && IS_LOCAL_CONTEXT && location.protocol !== 'file:' && 'showSaveFilePicker' in window;
 const SESSION_FALLBACK_KEY = 'dickoClicko.sessionSettings';
 
 function idbOpen(){
@@ -920,25 +947,42 @@ async function saveSettings(){
     panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
   };
   const btn = document.getElementById('dpSaveBtn');
-  const flash = text => {
+  const flash = (text, holdMs) => {
     if (!btn) return;
     const orig = btn.textContent;
     btn.textContent = text;
-    setTimeout(() => btn.textContent = orig, 900);
+    setTimeout(() => btn.textContent = orig, holdMs || 900);
   };
 
   // Tier 1: Vercel/GitHub API -- works from any device (see the big comment
   // above), so try it whenever a real server is behind the page at all.
   if (location.protocol !== 'file:'){
-    const apiOk = await writeSettingsViaApi(snapshot);
-    if (apiOk){
+    const result = await writeSettingsViaApi(snapshot);
+    if (result.ok){
       lastLoadedSnapshot = snapshot;
       flash('Saved to repo!');
       return;
     }
+    // §12d/§12l: a genuinely deployed page must NEVER fall through to a
+    // local-save mechanism (Tier 2's native picker, or Tier 3's download
+    // dialog) -- confirmed via direct user report that this was actually
+    // happening (Save on a real, configured Vercel deployment still
+    // triggered the native picker, since the OLD IS_LOCAL_CONTEXT-less
+    // check let it fall through here). Report the real failure and stop;
+    // console.error too, since the on-screen flash is brief and the error
+    // text (e.g. "Server not configured - missing: ...", a GitHub API
+    // failure detail) is exactly what's needed to diagnose a live
+    // deployment from the outside.
+    if (!IS_LOCAL_CONTEXT){
+      console.error('[saveSettings] Vercel/GitHub API write failed:', result.error);
+      flash('Save failed: ' + result.error, 4000);
+      return;
+    }
   }
 
-  // Tier 2: direct local disk write via the File System Access API.
+  // Tier 2: direct local disk write via the File System Access API. Local
+  // dev only (IS_LOCAL_CONTEXT, folded into GIT_LOG_WRITABLE itself) --
+  // never reached on a real deployment, per the guard above.
   if (GIT_LOG_WRITABLE){
     const ok = await writeGitSettingsLog(snapshot);
     if (ok){

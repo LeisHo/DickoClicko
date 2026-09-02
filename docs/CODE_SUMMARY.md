@@ -891,3 +891,47 @@ GOTCHAS
   explicit `?dev=1`, no-API-at-all) -- only the "hosted origin, no
   `?dev=1`" case flips from the old (wrong) `true` to the new (correct)
   `false`; every other case's result is unchanged from before.
+- **The `DEV_MODE` fix directly above did NOT actually close the bug it
+  was meant to fix.** Its own truth-table (quoted verbatim above) already
+  admitted only the "hosted origin, NO `?dev=1`" case flipped -- but that
+  case was never reachable as a real bug in the first place, since a
+  hosted deployment without `?dev=1` hides the dev panel/Save button
+  entirely (DEV_MODE false), so there's no way to even click Save there.
+  The ACTUAL only way to reach Save on a real deployment is WITH
+  `?dev=1` -- and `DEV_MODE && location.protocol !== 'file:' &&
+  'showSaveFilePicker' in window` stayed `true` for that exact case both
+  before AND after the `DEV_MODE` fix, since `?dev=1` makes `DEV_MODE`
+  true regardless of hostname and the protocol check alone can't
+  distinguish a real deployed `https:` origin from `http://localhost`.
+  Confirmed via direct user report: hitting Save on a real, correctly
+  env-var-configured Vercel deployment still triggered the native
+  File-System-Access picker dialog -- exactly the "local save prompt on
+  a served deployment" behavior §12d/§12l explicitly forbids. Root cause:
+  `GIT_LOG_WRITABLE` (and by extension `saveSettings()`'s own Tier-1-
+  failure fallback) never actually checked HOSTNAME, only protocol.
+  Fixed with a new `IS_LOCAL_CONTEXT` constant (`location.protocol ===
+  'file:' || location.hostname === 'localhost' || location.hostname ===
+  '127.0.0.1'`) folded into `GIT_LOG_WRITABLE`, AND -- the other half of
+  the actual fix -- `saveSettings()` itself now checks `IS_LOCAL_CONTEXT`
+  after a Tier 1 failure and stops there (flashing the real error text)
+  instead of falling through to Tier 2/3 at all when not local; the old
+  code fell through to Tier 2 purely because `GIT_LOG_WRITABLE` happened
+  to still be true, an accident of the incomplete boolean rather than a
+  deliberate check of "are we actually local." Also improved
+  `writeSettingsViaApi()` to return `{ok, error}` instead of a bare
+  boolean, so a real Tier 1 failure (missing env var, secret mismatch, a
+  GitHub API error) is now visible in both the Save button's flash text
+  (held 4s for errors, not the usual 900ms) and the console, rather than
+  collapsing every failure into an indistinguishable "didn't work" --
+  needed since the user's own live deployment is STILL failing Tier 1
+  for a reason not yet diagnosed from this environment; the new error
+  surfacing is what should make that reason visible from their own
+  browser now. Verified: real localhost regression-checked (unchanged:
+  `IS_LOCAL_CONTEXT`/`GIT_LOG_WRITABLE` both true, Save cascades through
+  all 3 tiers same as before); a throwaway test copy with
+  `IS_LOCAL_CONTEXT` forced `false` (simulating a real deployed hostname,
+  since this sandbox has no way to actually navigate to one) confirmed
+  Save now stops immediately after Tier 1's failure with an honest error
+  ("Save failed: HTTP 501" against this environment's own static test
+  server, which naturally lacks the real API route) and never attempts
+  Tier 2/3 at all.

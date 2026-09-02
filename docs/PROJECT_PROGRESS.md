@@ -408,6 +408,26 @@ lost — verified via direct state inspection at the time.
   always rendered as a straight line regardless of physics — now curves
   through to the actual tip like every other segment. Verified both via
   a temporary debug hook.
+- Fixed a real bug reported directly: hitting Save on a real, correctly
+  configured Vercel deployment (env vars set, per the user) still
+  triggered the native File-System-Access picker — exactly the "local
+  save prompt on a served deployment" §12d/§12l forbids. Root cause:
+  `GIT_LOG_WRITABLE` never actually checked hostname, only protocol, so
+  it stayed true for any real deployed origin too; a prior same-day
+  `DEV_MODE` fix (see CODE_SUMMARY Gotchas) didn't close this, since its
+  own truth-table only fixed the unreachable "hosted, no `?dev=1`" case
+  — the reachable "hosted WITH `?dev=1`" case (the only way to see Save
+  on a deployment at all) was untouched. Fixed with a new
+  `IS_LOCAL_CONTEXT` (protocol/hostname-based) that `GIT_LOG_WRITABLE`
+  now requires, AND `saveSettings()` itself now stops after a Tier 1
+  failure on a non-local origin instead of falling through to Tier 2/3.
+  Also made Tier 1 failures show the real error text (env var missing,
+  GitHub API error, etc.) instead of a generic failure, since the user's
+  live deployment is still failing Tier 1 for an undiagnosed reason —
+  this should surface why next time. Verified: localhost regression
+  unaffected; a throwaway test copy with `IS_LOCAL_CONTEXT` forced false
+  confirmed Save stops immediately with an honest error, no local prompt
+  of any kind.
 
 ## What's next
 
@@ -419,12 +439,13 @@ only change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
-- **Vercel project not yet created/configured for this repo.** The new
-  `api/save-settings.js` is written and pushed, but no Vercel project
-  exists for DICKOCLICKO yet, so `GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET`
-  aren't set anywhere real — Tier 1 writes will always fail until this is
-  done (falling through to Tier 2/3, not a bug). This requires the user's
-  own Vercel account access; see README.md's "Dev panel settings sync"
-  section for the exact steps. (Confirmed via GitHub's own commit history
-  that CLICKO's identical setup has the same gap — its Vercel function
-  has never actually fired for a real write either.)
+- **Tier 1 (Vercel/GitHub API) is still failing on the user's real
+  deployment for an undiagnosed reason.** The user confirmed the Vercel
+  project IS created with `GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET` set
+  (updating the earlier "not set up yet" note, which is now stale) — but
+  Save still doesn't reach the actual repo. With the local-prompt bug
+  now fixed, the NEXT Save attempt should show the real error (env var
+  name, GitHub API status/message) instead of a confusing native picker
+  dialog — needs the user to try Save again and report back what the
+  error text says, since this environment has no way to reach their live
+  deployment directly to diagnose further.
