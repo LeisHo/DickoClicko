@@ -130,3 +130,11 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   stay smooth; feeding a variable/jittery dt into `update()` again would
   reintroduce the "everything looks slightly jumpy" bug this was built to
   fix.
+- The dev panel's `n`/`s` resize-drag math must stay clamped to
+  `window.innerHeight * 0.88`, matching `#devPanel`'s own CSS
+  `max-height:88vh` exactly — letting the two diverge is a real, previously
+  shipped bug: dragging `s` past the cap went silently unresponsive, and
+  dragging `n` pushed the panel off-screen above the viewport while the
+  uncompensated height stayed clamped (shrinking from the bottom instead of
+  growing from the top). If `max-height` ever changes, update this constant
+  to match.

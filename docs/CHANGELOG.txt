@@ -412,6 +412,48 @@ Verified:
 - node --check clean; debug hook removed before commit (grep-confirmed).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  2:22 AM - 2:27 AM EDT
+
+Fixed a real, reproduced bug in vertical dev-panel resizing, per user
+report ("vertical resizing of Dev panel is buggy").
+
+Fixed:
+- initResizeHandles()'s move() math for the n/s resize handles never
+  clamped the requested height to match #devPanel's own CSS
+  max-height:88vh -- reproduced directly before touching any code:
+  dragging the bottom (s) handle past the cap went silently unresponsive
+  (JS kept accumulating a far-larger style.height with no visible effect,
+  e.g. requesting 710px while the actual rendered box stayed clamped at
+  633.6px on a 720px-tall viewport); dragging the top (n) handle was worse
+  -- since n also recomputes top independently, pushing it up 150px set
+  top to -140px (off-screen above the viewport) while the uncompensated
+  height stayed clamped at 633.6px, so the panel visibly shrank from the
+  BOTTOM edge while its top flew off-screen, instead of the top edge
+  moving up and the bottom staying put. Fixed by adding a matching
+  maxH = window.innerHeight * 0.88 clamp for both directions, and by
+  deriving n's height FROM its own (separately clamped) top around a
+  fixed bottomEdge point, rather than computing top and height
+  independently the way s always could safely afford to.
+
+Verified:
+- Reproduced the exact bug first (both directions) via dispatched
+  PointerEvent drags before writing the fix, confirming the top-going-
+  negative/bottom-shrinking behavior for n and the requested-vs-actual
+  height mismatch for s.
+- Post-fix: dragging n 150px up on an already-max-height panel moves top
+  by only the ~10px of real headroom available and leaves the bottom edge
+  fixed (643.59 -> 643.58, sub-pixel float noise only) instead of jumping
+  off-screen.
+- Post-fix: dragging s to request more height than the cap allows leaves
+  panel.style.height exactly equal to the actual rendered height (both
+  633.6px), no silent mismatch; shrinking back down afterward remains
+  fully responsive.
+- Regression: horizontal (e) resize unaffected -- still correctly bounded
+  by the viewport's right edge exactly as before.
+- node --check clean; no debug hook needed for this fix (tested via
+  dispatched PointerEvents directly against the shipped handlers).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

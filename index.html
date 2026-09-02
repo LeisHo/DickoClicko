@@ -486,10 +486,26 @@ function initResizeHandles(){
         const dx = ev.clientX - sx, dy = ev.clientY - sy;
         let { left, top, width, height } = startRect;
         const minW = 220, minH = 140;
+        // matches the CSS max-height:88vh on #devPanel exactly — without this,
+        // a requested height beyond it gets silently clamped by CSS while this
+        // math still thinks the full request took effect, so 's' would go
+        // visually unresponsive past the cap and 'n' would push the panel's
+        // top off-screen while its (uncompensated) height stayed clamped,
+        // shrinking the panel from the bottom instead of growing it.
+        const maxH = window.innerHeight * 0.88;
         if (dir.includes('e')) width = Math.max(minW, Math.min(window.innerWidth - left, startRect.width + dx));
-        if (dir.includes('s')) height = Math.max(minH, Math.min(window.innerHeight - top, startRect.height + dy));
+        if (dir.includes('s')) height = Math.max(minH, Math.min(maxH, window.innerHeight - top, startRect.height + dy));
         if (dir.includes('w')) { width = Math.max(minW, startRect.width - dx); left = startRect.left + (startRect.width - width); }
-        if (dir.includes('n')) { height = Math.max(minH, startRect.height - dy); top = startRect.top + (startRect.height - height); }
+        if (dir.includes('n')) {
+          // the bottom edge is the fixed point for a pure top-edge resize —
+          // compute height from the (clamped) top, not the other way around,
+          // so the two never disagree about where the bottom edge actually is.
+          const bottomEdge = startRect.top + startRect.height;
+          let newTop = startRect.top + dy;
+          newTop = Math.max(0, bottomEdge - maxH, Math.min(newTop, bottomEdge - minH));
+          top = newTop;
+          height = bottomEdge - newTop;
+        }
         panel.style.width = width + 'px';
         panel.style.height = height + 'px';
         panel.style.left = left + 'px';

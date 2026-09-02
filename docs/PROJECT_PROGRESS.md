@@ -22,37 +22,22 @@ Nothing in progress — everything below is done, verified, and pushed.
 
 ## Recently completed
 
-- Full build: circle + rope verlet physics, floor collision + piling, full
-  dev panel compliant with the workspace's §12 standard.
-- A run of real-usage bug reports from the user, fixed and verified: cut
-  intermittently stopping working (stale holdTimer race), a freeze cutting
-  mid-swing, the rope rendering behind the circle, the rope acting
-  stick-stiff once extended and its extended portion not being cuttable
-  (both traced to a fixed point count that just stretched thinner instead
-  of gaining points), the main rope not colliding with/piling on the floor.
-  Added a Minimum Rope Length slider (refuses a cut that would leave the
-  remainder shorter than it).
-- Hold-gesture split, per explicit clarification: a hold starting on the
-  circle grows the rope (as before); a hold starting on the rope now
-  charges punch intensity instead, firing immediately on release, scaled
-  by hold duration up to a new Intensity Ceiling at Click Hold Max
-  Duration. A quick tap on the rope is unaffected (still the existing
-  punch/double-click-to-cut path).
-- Fixed the actual root cause of a "cutting/holding bounces the rope like a
-  punch" report: charging's own eligibility timer used the short
-  `HOLD_THRESHOLD_MS` (180ms), which a real double-click's second press can
-  easily exceed, hijacking the cut into a charged punch. Now gated on
-  `cfg.doubleClickThreshold` instead — provably safe against ever
-  overlapping a valid double-click. Also made holding-to-charge work
-  regardless of distance from the rope (only quick taps still need real
-  proximity), per explicit request.
-- Switched the physics loop to a fixed timestep (`update()` always steps by
-  exactly 1/60s, however many times needed to catch up) — fixes a general
-  "everything looks slightly jumpy" report caused by physics/growth/
-  cut-sweep timing all previously depending on the raw, jittery per-frame
-  `requestAnimationFrame` delta.
-- Baked in a full settings dump (values, group/setting order) the user
-  copied from a live-tuned session as the new hardcoded defaults.
+- Full build: circle + rope verlet physics (punch, hold-to-grow-on-circle,
+  hold-to-charge-punch-on-rope, double-click-to-cut with a directional
+  sweep animation), floor collision + piling (including the main rope, not
+  just cut pieces), full dev panel compliant with the workspace's §12
+  standard (resize/hide/collapse, Copy/Save/Reset, drag-to-reorder,
+  Desktop/Mobile tabs, built-in appearance group).
+- A long run of real-usage bug reports from the user, all fixed and
+  verified: cut intermittently stopping working, a freeze cutting
+  mid-swing, wrong render order (rope/circle), a fixed point count making
+  extended rope stiff/uncuttable, hold gestures bouncing like a punch
+  (charging's eligibility timer could overlap a real double-click),
+  everything looking jumpy (physics now runs a fixed 1/60s timestep), and
+  vertical dev-panel resize going unresponsive or pushing the panel
+  off-screen (JS's requested height wasn't clamped to match the CSS
+  max-height it renders against). Also baked in a user-provided settings
+  dump as the new hardcoded defaults.
 
 ## What's next
 

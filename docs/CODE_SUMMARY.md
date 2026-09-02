@@ -122,6 +122,19 @@ None formally designated yet -- this is the initial build.
 --------------------------------------------------------------------------------
 GOTCHAS
 
+- `initResizeHandles()`'s `move()` math for `n`/`s` must stay in sync with
+  the CSS `max-height:88vh` on `#devPanel` (its own `maxH` local constant,
+  `window.innerHeight * 0.88`) -- letting the requested height diverge from
+  what CSS actually renders was a real, reproduced bug: dragging `s` went
+  silently unresponsive past the cap (JS kept accumulating a `style.height`
+  far beyond what was visibly happening), and dragging `n` was worse -- it
+  pushed the panel's `top` off-screen (negative, above the viewport) while
+  the uncompensated `height` stayed clamped, so the panel visibly shrank
+  from the BOTTOM while its top flew away, instead of the top edge moving
+  and the bottom staying put. Fixed by deriving `n`'s `height` FROM its
+  (separately clamped) `top` around the fixed `bottomEdge` point, rather
+  than computing the two independently -- see the inline comment at the
+  call site for the exact clamp order.
 - `charging` only becomes eligible after holding for `cfg.doubleClickThreshold`
   ms, not the shorter `HOLD_THRESHOLD_MS` -- this is provably, not just
   empirically, safe against ever hijacking a real double-click into a
