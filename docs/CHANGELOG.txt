@@ -1689,6 +1689,47 @@ PUT-to-commit, response shapes) was already an exact match, confirmed by
 direct comparison rather than a full rewrite.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  11:31 AM - 11:36 AM EDT
+
+Applied §12m's "set defaults" merge workflow to a user-pasted Copy
+Settings dump (Circle Size/Color, Rope Thickness/Length, Bend Stiffness,
+Rope Animation Speed/Gravity/Weight/Damping/Constraint Iterations,
+Minimum Rope Length, Circle Cut Distance, Double Click Threshold, Rope
+Fall Speed/Cut Speed, Background Color -- 19 of 35 values changed from
+the prior defaults) plus a group/row reorder (UI moved from last to
+right after the built-in Dev Panel group; Bend Stiffness moved to first
+within Rope Animation, ahead of Rope Animation Speed). Computed the full
+O/G/P merge table per-field: O (hardcoded index.html defaults) vs G (the
+git-tracked settings log, found stale -- it predated Bend Stiffness
+entirely, and several fields like Minimum Rope Length/Rope Fall Speed/
+Double Click Threshold had already drifted from O via untracked local
+tuning) vs P (the pasted dump) -- every single field resolved to P
+either because P deliberately differed from O, or because P already
+matched G, so the merged result equals P verbatim for both the values
+and the order. Updated both required locations per this project's
+established precedent: DEV_GROUPS' `def:` values/order in index.html
+(the fallback baseline for a fresh visitor with nothing else reachable
+yet) AND data/processed/dev-panel-settings.json (the git-tracked log
+itself, which Tier 1's boot-time fetch reads first per the 3-tier
+architecture 2 rounds ago). panelGeometry.desktop position/size updated
+to the pasted dump's value directly (no hardcoded-JS equivalent exists
+for panel position, so no 3-way merge needed there); panelGeometry.style
+(Dev Panel appearance) and panelGeometry.mobile were already identical
+across O/G/P, untouched.
+
+Verified:
+- node --check clean.
+- JSON.parse confirmed the rewritten settings log is valid.
+- Live-tested via a temporary debug hook (window.__debugTMPropo, removed
+  before commit, grep-confirmed 0 references) against a standalone
+  static file server: the rendered dev panel's group/row order matched
+  the merged order exactly (UI second, Bend Stiffness first in Rope
+  Animation, live DOM text extraction); a real boot cycle (Tier 1 fetch
+  of the rewritten settings log, not a mock) produced a `cfg` object
+  matching all 35 expected merged values exactly, 0 mismatches, 0 extra
+  keys.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

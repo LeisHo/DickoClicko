@@ -179,14 +179,17 @@ const DEV_MODE = (
    between X sliders (and between Y sliders) and land on the same point.
 --------------------------------------------------------------------- */
 const DEV_GROUPS = [
+  { title:'UI', controls:[
+    { key:'backgroundColor', label:'Background Color', type:'color', def:'#252546' },
+  ]},
   { title:'CIRCLE', controls:[
-    { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:4.5 },
+    { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:8 },
     { key:'circleX',     label:'Circle X Pos',  type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:50 },
     { key:'circleY',     label:'Circle Y Pos',  type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:18 },
-    { key:'circleColor', label:'Circle Color',  type:'color',  def:'#e74c3c' },
+    { key:'circleColor', label:'Circle Color',  type:'color',  def:'#000000' },
   ]},
   { title:'ROPE', controls:[
-    { key:'endcapDesign',   label:'Endcap Design',     type:'dropdown', def:'end2',
+    { key:'endcapDesign',   label:'Endcap Design',     type:'dropdown', def:'end3',
       options:[
         { value:'none', label:'None (plain round cap)' },
         { value:'end1', label:'End 1' },
@@ -195,8 +198,8 @@ const DEV_GROUPS = [
         { value:'end4', label:'End 4' },
       ] },
     { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1 },
-    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:2.8 },
-    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:8.653846153846153,
+    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:4.8 },
+    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:3.4615384615384612,
       onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
@@ -206,12 +209,12 @@ const DEV_GROUPS = [
     { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:22 },
   ]},
   { title:'ROPE ANIMATION', controls:[
-    { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1 },
-    { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:1.2 },
-    { key:'ropeWeight',      label:'Rope Weight',          type:'slider', unit:'x', min:0.1, max:5, step:0.1, def:1 },
-    { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.5, max:0.999, step:0.001, def:0.85 },
-    { key:'constraintIterations', label:'Constraint Iterations', type:'slider', unit:'x', min:1, max:20, step:1, def:10 },
-    { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0.15 },
+    { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0.07 },
+    { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1.1 },
+    { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:1.6 },
+    { key:'ropeWeight',      label:'Rope Weight',          type:'slider', unit:'x', min:0.1, max:5, step:0.1, def:1.3 },
+    { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.5, max:0.999, step:0.001, def:0.999 },
+    { key:'constraintIterations', label:'Constraint Iterations', type:'slider', unit:'x', min:1, max:20, step:1, def:6 },
   ]},
   { title:'ROPE GROWTH', controls:[
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
@@ -219,24 +222,21 @@ const DEV_GROUPS = [
     { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:4 },
   ]},
   { title:'ROPE CUT', controls:[
-    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.5 },
-    { key:'circleCutDistance', label:'Circle Cut Distance', type:'slider', unit:'%vmin', min:0, max:30, step:0.5, def:10 },
+    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.7 },
+    { key:'circleCutDistance', label:'Circle Cut Distance', type:'slider', unit:'%vmin', min:0, max:30, step:0.5, def:0 },
     { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8.9 },
-    { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:1000 },
-    { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
-    { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
-    { key:'endcapAtCutEnd',  label:'Endcap At Cut End', type:'checkbox', def:false },
+    { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:180 },
+    { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1.3 },
+    { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:2.1 },
+    { key:'endcapAtCutEnd',  label:'Endcap At Cut End', type:'checkbox', def:true },
     { key:'cutSweepColor',     label:'Cut Sweep Color',     type:'color',  def:'#ffffff' },
-    { key:'cutSweepThickness', label:'Cut Sweep Thickness', type:'slider', unit:'%vmin', min:0.1, max:5, step:0.1, def:1 },
+    { key:'cutSweepThickness', label:'Cut Sweep Thickness', type:'slider', unit:'%vmin', min:0.1, max:5, step:0.1, def:0.2 },
   ]},
   { title:'FLOOR', controls:[
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#ffffff' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:5 },
     { key:'floorHeight',     label:'Floor Height',     type:'slider',   unit:'%vh', min:0,   max:50, step:1,   def:5 },
-  ]},
-  { title:'UI', controls:[
-    { key:'backgroundColor', label:'Background Color', type:'color', def:'#1a1a2e' },
   ]},
 ];
 
