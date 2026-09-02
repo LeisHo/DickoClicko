@@ -15,7 +15,15 @@
 //   SETTINGS_FILE_PATH      - defaults to "data/processed/dev-panel-settings.json"
 
 const DEFAULT_REPO = 'LeisHo/DickoClicko';
-const DEFAULT_BRANCH = 'main';
+// This repo's actual (and only) branch is "master", not GitHub's newer
+// "main" default -- confirmed via `git branch -a`/`git remote show origin`
+// (HEAD branch: master). A hardcoded 'main' here targets a branch that
+// doesn't exist in this repo, and GitHub's Contents API returns a plain
+// 404 for "branch not found" on the commit (PUT) step -- exactly the
+// "GitHub commit failed 404" error a real user hit. Override via the
+// GITHUB_BRANCH env var only if this repo's default branch is ever
+// actually renamed to main.
+const DEFAULT_BRANCH = 'master';
 const DEFAULT_PATH = 'data/processed/dev-panel-settings.json';
 
 module.exports = async (req, res) => {
