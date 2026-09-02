@@ -487,13 +487,9 @@ only change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
-- **Tier 1 (Vercel/GitHub API) is still failing on the user's real
-  deployment for an undiagnosed reason.** The user confirmed the Vercel
-  project IS created with `GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET` set
-  (updating the earlier "not set up yet" note, which is now stale) — but
-  Save still doesn't reach the actual repo. With the local-prompt bug
-  now fixed, the NEXT Save attempt should show the real error (env var
-  name, GitHub API status/message) instead of a confusing native picker
-  dialog — needs the user to try Save again and report back what the
-  error text says, since this environment has no way to reach their live
-  deployment directly to diagnose further.
+None currently open. Tier 1 (Vercel/GitHub API Save) is now confirmed
+actually working end-to-end: 3 real "Update dev-panel-settings.json via
+Save Settings" commits landed on the remote from the user's own live
+deployment during this session (visible in git history as
+`fd36dfa`/`cb754f8`/`e741774`), resolving the previously-open blocker —
+no further diagnosis needed unless a new failure is reported.
