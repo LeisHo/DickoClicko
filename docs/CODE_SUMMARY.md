@@ -160,6 +160,15 @@ GOTCHAS
   zone (in `hitTestRope()`), so the two stay consistent -- a press "clearly
   meant for the circle" that lands just outside its exact pixel boundary
   should never fall through to charging a punch instead.
+- `initPanelDrag()`'s `move()` clamps `left`/`top` against the panel's own
+  actual `width`/`height` (captured in `r` at drag start), not a fixed stub
+  margin -- an earlier version clamped to `window.innerWidth/Height - 40`
+  regardless of the panel's real size, so dragging toward an edge let most
+  of the panel (including the resize corners, which sit right at its own
+  edges) go off-screen well before the drag actually stopped. Confirmed via
+  a 2000px-overshoot drag in each direction landing exactly flush with the
+  viewport edge (`right === innerWidth`, `bottom === innerHeight`, or
+  `left/top === 0`), not just "roughly on-screen."
 - `initResizeHandles()`'s `move()` math for `n`/`s` must stay in sync with
   the CSS `max-height:88vh` on `#devPanel` (its own `maxH` local constant,
   `window.innerHeight * 0.88`) -- letting the requested height diverge from

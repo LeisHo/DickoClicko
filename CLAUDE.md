@@ -140,6 +140,11 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   Any new code that changes the rope's real length must update
   `mainRope.totalLength` explicitly (and `cfg.ropeLength`'s display, if it
   changed the length outside of `growRope()`/the slider's own `onChange`).
+- Dragging the dev panel by its header clamps `left`/`top` against the
+  panel's own actual width/height, not a fixed stub margin — the panel (and
+  therefore its resize corners) must never be draggable off-screen. Don't
+  reintroduce a hardcoded margin here; it was the real bug the first version
+  had.
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to

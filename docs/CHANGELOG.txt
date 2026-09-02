@@ -543,6 +543,27 @@ Verified:
   (grep-confirmed).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  03:30 AM EDT
+
+Fixed:
+- Dev panel could be dragged partially (or almost fully) off-screen: the
+  drag clamp in initPanelDrag() used a hardcoded 40px margin
+  (window.innerWidth/Height - 40) instead of the panel's own actual
+  width/height, so dragging toward an edge let most of the panel -- including
+  the resize corners, which sit right at its own edges -- go off-screen well
+  before the drag actually stopped. Fixed by clamping left/top against the
+  panel's real getBoundingClientRect() dimensions captured at drag start
+  (maxLeft = innerWidth - panel width, maxTop = innerHeight - panel height,
+  both floored at 0).
+
+Verified:
+- A drag from the header 2000px past the bottom-right corner (1280x720
+  viewport, panel 320x633.59375px) landed exactly flush: left:960,
+  top:86.40625, right:1280, bottom:720 -- fully in frame.
+- A drag 3000px past the top-left corner landed exactly flush: left:0, top:0.
+- node --check clean.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

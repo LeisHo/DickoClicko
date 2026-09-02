@@ -460,8 +460,14 @@ function initPanelDrag(){
     panel.style.right = 'auto';
 
     function move(ev){
-      panel.style.left = Math.max(0, Math.min(window.innerWidth - 40, startLeft + (ev.clientX - startX))) + 'px';
-      panel.style.top = Math.max(0, Math.min(window.innerHeight - 40, startTop + (ev.clientY - startY))) + 'px';
+      // clamp against the panel's OWN actual width/height, not a fixed
+      // stub margin — otherwise most of the panel (including the resize
+      // corners, which sit right at its edges) can be dragged off-screen
+      // well before the drag "stops".
+      const maxLeft = Math.max(0, window.innerWidth - r.width);
+      const maxTop = Math.max(0, window.innerHeight - r.height);
+      panel.style.left = Math.max(0, Math.min(maxLeft, startLeft + (ev.clientX - startX))) + 'px';
+      panel.style.top = Math.max(0, Math.min(maxTop, startTop + (ev.clientY - startY))) + 'px';
     }
     function up(){ window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); }
     window.addEventListener('pointermove', move);

@@ -45,6 +45,11 @@ Nothing in progress — everything below is done, verified, and pushed.
   a refactor of the built-in "Dev Panel" appearance group so its rows can
   be freely reordered (previously split across two arrays that couldn't
   represent an interleaved order).
+- Dev panel could be dragged partially off-screen (clamp used a fixed 40px
+  stub instead of the panel's real width/height), which could push its own
+  resize corners out of frame. Fixed by clamping `left`/`top` against the
+  panel's actual measured dimensions; verified with 2000px/3000px-overshoot
+  drags landing exactly flush with the viewport edge in every direction.
 
 ## What's next
 
