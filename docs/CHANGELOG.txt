@@ -623,6 +623,68 @@ Verified:
   commit (grep-confirmed 0 references).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  04:34 AM EDT
+
+Fixed:
+- Rope extension animation "stepping" -- growth previously only added a
+  whole new point once accumulated growth crossed a full segment length
+  (~25px at current defaults), so the rope sat visibly still for several
+  frames and then snapped a whole segment into place, instead of looking
+  like continuous motion. Added mainRope.tipGrowLen, tracking how far the
+  LAST segment currently reaches toward a full targetSeg (rising every
+  frame during growth, reset to segLen -- fully committed -- after any
+  direct/instant length change). integrateChain() gained an optional
+  tipSegLen override for the last segment's rest length; the existing
+  distance-constraint solver then naturally pulls the tip out to match the
+  rising target each frame, the same mechanism already used for every
+  other segment, so there's nothing new to fight or correct. When
+  tipGrowLen reaches a full targetSeg, growRope() commits: the just-
+  finished segment is fixed at exactly targetSeg (clamping any single-
+  frame overshoot), a fresh zero-length tip point is pushed, and the
+  overshoot carries forward into the new tip's own tipGrowLen so no
+  accumulated growth is lost.
+- Click-and-hold not firing when pressed away from the rope and moved
+  toward it before releasing. The Click-And-Hold-Distance gate checked
+  info.hit, which is captured once at onPointerDown and never updated --
+  so it reflected the PRESS position, not the release position, meaning
+  moving the pointer during the hold had no effect on whether it fired.
+  Fixed by computing a fresh nearestPointOnRope() from the actual release
+  coordinates (e.clientX/e.clientY) in onPointerUp and using that for both
+  the distance gate and the punch's aim.
+
+Added:
+- Baked in another user-provided Copy Settings dump as new hardcoded
+  defaults: Rope Length 100.16051775147857 -> 17.30769230769231, Click And
+  Hold Distance 10 -> 40, Rope Animation Speed 1 -> 1.4, Minimum Rope
+  Length 8 -> 1, Cut Speed 1 -> 1.6. Every value already fit its slider's
+  existing min/max range (holdDistance's new default sits exactly at its
+  existing max of 40, minRopeLength's exactly at its existing min of 1) --
+  no range expansion was needed. Group/setting order in the dump matched
+  the existing DEV_GROUPS/PANEL_STYLE_CONTROLS order exactly, so no
+  reordering was needed either.
+
+Verified:
+- Isolated integrateChain() unit test (synthetic 3-point chain, no
+  gravity): the tip segment's actual distance tracked a rising tipSegLen
+  argument exactly at every value from 10 to 100 (of a 100 rest length).
+- Full-rope growth test with gravity/swing on and the floor disabled (to
+  isolate the mechanism from floor/pile physics): the tip segment's
+  measured length tracked the exact per-frame growth amount (1.8px/frame
+  at defaults) frame by frame in a clean sawtooth 0->targetSeg->0->...,
+  zero frames where it held still while tipGrowLen was still rising, and
+  point count incremented by exactly 1 at each sawtooth reset.
+- Click-and-hold, via dispatched PointerEvents with real elapsed hold
+  time: press far away + release near the rope now fires (previously did
+  not); press far + release far still correctly does not fire; press near
+  + release near (regression) still fires, matching prior behavior for
+  the common case.
+- Fresh (cleared localStorage) load confirmed all 5 new numeric defaults
+  exactly.
+- 0 console errors on a clean shipped-code reload.
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

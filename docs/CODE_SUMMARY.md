@@ -49,6 +49,13 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        is the separate, persisted "real" current length growRope()/cutRopeAt()
        actually accumulate against (see Gotchas -- these two used to be the
        same derived value, and splitting them was itself a bug-fix).
+       mainRope.tipGrowLen is a THIRD piece of state: how far the LAST
+       segment currently reaches toward a full TARGET_SEG_LEN_VH (always
+       full except mid-growth, when growRope() advances it 0->targetSeg
+       every frame and integrateChain() uses it as that one segment's
+       live rest-length target instead of segLen -- see Gotchas for why
+       this is what makes growth read as smooth motion instead of
+       whole-segment jumps).
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle
@@ -176,6 +183,52 @@ GOTCHAS
   equal to what `setMainRopeTotalLength()` independently computes for the
   same total, and reapplying it produced exactly 0 positional displacement
   on every point (a true no-op) instead of a correction.
+- Rope growth reads as smooth, continuous extension, not the whole-segment
+  jumps it used to (the rope sitting visibly still for several frames, then
+  snapping ~1 targetSeg length -- around 25px at current defaults -- into
+  place all at once). `integrateChain()` takes an optional `tipSegLen` param
+  that overrides just the LAST segment's rest length (`i === points.length
+  - 2` in the constraint loop); `growRope()` advances `mainRope.tipGrowLen`
+  by that frame's growth every frame (never in whole-point jumps), and the
+  ordinary distance-constraint solver -- the same one that already holds
+  every other segment at rest length -- naturally pulls the tip out to
+  match the rising target each frame, with nothing extra to fight or
+  correct. Only once `tipGrowLen` actually reaches a full `targetSeg` does
+  `growRope()` commit: it fixes the just-finished segment at exactly
+  `targetSeg` (clamping away any single-frame overshoot from a high growth
+  rate), pushes a fresh zero-length tip point, and carries the overshoot
+  forward into the new tip's own `tipGrowLen` so no accumulated growth is
+  ever lost (a `while` loop covers a growth rate fast enough to complete
+  more than one segment in a single frame). `resetMainRope()` and
+  `setMainRopeTotalLength()` (direct sets: slider drag, saved-settings
+  reload, cut) always set `tipGrowLen = segLen` (fully committed, no
+  growth-in-progress tip) -- `growRope()` is the ONLY place that lets it sit
+  below that. Verified live: with gravity/swing on and the floor disabled to
+  isolate the mechanism, the tip segment's measured length tracked the
+  per-frame growth amount (1.8px/frame at defaults) exactly, frame by
+  frame, in a clean sawtooth up to targetSeg and back — zero frames where it
+  held still while `tipGrowLen` was still rising. (Testing this against a
+  rope resting on a floor pile gave a misleadingly constant reading at
+  first -- floor/pile-repulsion physics, unrelated to this fix, dominates
+  the tip's position once it's piled up; disable `floorEnabled` when
+  re-verifying this specific mechanism in isolation.)
+- The Click-And-Hold-Distance gate on a charged hold's release must be
+  computed from the RELEASE position (`e.clientX/e.clientY` in
+  `onPointerUp`), not from `info.hit` -- `info.hit` is captured once at
+  `onPointerDown` time and never updated, so it's frozen at wherever the
+  press started. An earlier version checked `info.hit.dist` at release,
+  which meant moving the pointer toward the rope during the hold had NO
+  effect on whether it fired at all -- a hold that started too far from the
+  rope stayed stuck failing even after being dragged right over it,
+  matching a real user report ("click and hold doesn't work... I should be
+  able to click and hold anywhere, then when I release... within the
+  tolerance distance, it flicks the rope"). Fixed by computing a fresh
+  `releaseHit = nearestPointOnRope(e.clientX, e.clientY, mainRope.points)`
+  in `onPointerUp` and gating/aiming the punch with that instead. Verified
+  via dispatched PointerEvents with real elapsed hold time (not just
+  code review): press far away + release near the rope now fires; press far
+  + release far still correctly does not; press near + release near
+  (regression) still fires.
 - `isOnCircle()`'s hit-radius is the circle's own visual radius PLUS a fixed
   `vmin(4)` margin, not the bare visual radius -- a small `circleSize` (the
   default is 4.5%vmin) is an easy miss otherwise, especially since the rope

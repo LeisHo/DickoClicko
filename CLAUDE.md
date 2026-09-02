@@ -160,6 +160,21 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   violent segLen-mismatch bounce the first time anything calls
   `setMainRopeTotalLength()` (dragging the slider, or a saved settings reload
   at boot). See `docs/CODE_SUMMARY.md` Gotchas for the full mechanism.
+- Rope growth's smooth appearance depends on `mainRope.tipGrowLen` and
+  `integrateChain()`'s `tipSegLen` override — the last segment's rest length
+  rises continuously via the ordinary constraint solver instead of the rope
+  sitting still and then jumping a whole segment into place. Any future
+  change to growth mechanics must keep advancing `tipGrowLen` every frame
+  (never in whole-point jumps) and must reset it to `segLen` after any
+  direct/instant length change (slider, saved-settings reload, cut) — see
+  `docs/CODE_SUMMARY.md` Gotchas for the full mechanism and how it was
+  verified.
+- A charged hold's Click-And-Hold-Distance gate (and the punch's aim) must
+  be computed from the pointer's position AT RELEASE, not from the
+  press-time `info.hit` — that field is frozen at `onPointerDown` and never
+  updates, so checking it at release ignores any movement during the hold
+  entirely. This was a real, previously-shipped bug (see
+  `docs/CODE_SUMMARY.md` Gotchas).
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to

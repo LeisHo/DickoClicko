@@ -153,7 +153,7 @@ const DEV_GROUPS = [
   ]},
   { title:'ROPE', controls:[
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:2.8 },
-    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:100.16051775147857,
+    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:17.30769230769231,
       onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
@@ -161,10 +161,10 @@ const DEV_GROUPS = [
   { title:'CLICK', controls:[
     { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8 },
     { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:2 },
-    { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:10 },
+    { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:40 },
   ]},
   { title:'ROPE ANIMATION', controls:[
-    { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1 },
+    { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1.4 },
     { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:1.2 },
     { key:'ropeWeight',      label:'Rope Weight',          type:'slider', unit:'x', min:0.1, max:5, step:0.1, def:1 },
   ]},
@@ -172,9 +172,9 @@ const DEV_GROUPS = [
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
   ]},
   { title:'ROPE CUT', controls:[
-    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:1, max:30, step:0.5, def:8 },
+    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:1, max:30, step:0.5, def:1 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
-    { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
+    { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1.6 },
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#ffffff' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:5 },
@@ -751,6 +751,13 @@ function resetMainRope(){
     points: makeChain(pointCount, anchor.x, anchor.y, targetSeg),
     segLen: targetSeg,
     totalLength: totalLen, // the real, continuously-accumulating length — see growRope()
+    // how far the LAST segment currently reaches toward a full targetSeg --
+    // always targetSeg (fully committed) except mid-growth, when it rises
+    // from 0 back up to targetSeg each time growRope() adds a new tip point.
+    // See integrateChain()'s tipSegLen param and growRope() for how this
+    // drives smooth, continuous-looking extension instead of whole-segment
+    // jumps.
+    tipGrowLen: targetSeg,
   };
 }
 
@@ -792,6 +799,9 @@ function setMainRopeTotalLength(newTotalPx){
   // added, so re-deriving "current total" from it every frame would discard
   // however much sub-threshold growth had already accumulated.
   mainRope.totalLength = newTotalPx;
+  // a direct set (slider drag, saved-settings reload) always produces
+  // uniform, fully-committed segments -- no growth-in-progress tip.
+  mainRope.tipGrowLen = targetSeg;
 }
 
 function circleAnchor(){
@@ -817,7 +827,7 @@ function nearestPointOnRope(px, py, points){
   return best;
 }
 
-function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex){
+function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, tipSegLen){
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex) continue;
     const p = points[i];
@@ -827,12 +837,22 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex){
     p.x += vx;
     p.y += vy + gravityAccel * dt * dt;
   }
+  // tipSegLen, when given, overrides the LAST segment's rest length instead
+  // of segLen -- this is what makes rope growth read as smooth, continuous
+  // motion instead of the rope sitting still for several frames and then
+  // snapping a whole new segment into place. mainRope.tipGrowLen rises from
+  // 0 to segLen every frame as growRope() accumulates growth, and the
+  // ordinary distance-constraint solver below naturally pulls the tip out to
+  // match that rising target each frame -- the same mechanism that already
+  // holds every other segment at rest length, just with a moving target for
+  // this one segment, so there's nothing extra to fight or correct.
   for (let iter = 0; iter < CONSTRAINT_ITERATIONS; iter++){
     for (let i = 0; i < points.length - 1; i++){
       const a = points[i], b = points[i + 1];
+      const restLen = (tipSegLen !== undefined && i === points.length - 2) ? tipSegLen : segLen;
       const dx = b.x - a.x, dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 0.0001;
-      const diff = (dist - segLen) / dist;
+      const diff = (dist - restLen) / dist;
       const aFixed = i === pinnedIndex, bFixed = (i + 1) === pinnedIndex;
       const offX = dx * diff * 0.5, offY = dy * diff * 0.5;
       if (!aFixed){ a.x += offX; a.y += offY; }
@@ -864,14 +884,40 @@ function pileRepulsion(all){
 let growing = false;
 
 function growRope(dtSeconds){
+  const targetSeg = vh(TARGET_SEG_LEN_VH);
   const growth = vh(cfg.ropeGrowthRate) * dtSeconds;
   // accumulate from the persisted real total (mainRope.totalLength), not
   // re-derived from segLen*pointCount -- segLen is now pinned to a constant
   // (see setMainRopeTotalLength), so that product only changes in whole-point
   // jumps and would silently discard any growth accumulated since the last one.
-  const newTotalPx = mainRope.totalLength + growth;
-  setMainRopeTotalLength(newTotalPx);
-  setCfg('ropeLength', newTotalPx / window.innerHeight * 100);
+  mainRope.totalLength += growth;
+  // Unlike setMainRopeTotalLength() (used for direct sets, which snap
+  // straight to the target point count), growth advances the LAST segment's
+  // target length continuously via tipGrowLen -- integrateChain() then pulls
+  // the tip out to match it every frame through the ordinary constraint
+  // solver, which is what reads as smooth motion instead of the rope sitting
+  // still and then jumping a whole segment at once. Only once tipGrowLen
+  // actually reaches a full targetSeg do we commit: fix the just-finished
+  // segment at exactly targetSeg (clamping away any single-frame overshoot)
+  // and start a fresh, zero-length tip carrying the overshoot forward as its
+  // own head start, so no accumulated growth is ever lost. The while loop
+  // covers a growth rate high enough to complete more than one segment in a
+  // single frame.
+  mainRope.tipGrowLen += growth;
+  while (mainRope.tipGrowLen >= targetSeg){
+    const pts = mainRope.points;
+    const prev = pts[pts.length - 2] || pts[0];
+    const tip = pts[pts.length - 1];
+    let dx = tip.x - prev.x, dy = tip.y - prev.y;
+    const dlen = Math.hypot(dx, dy) || 1;
+    dx /= dlen; dy /= dlen;
+    tip.x = prev.x + dx * targetSeg;
+    tip.y = prev.y + dy * targetSeg;
+    tip.oldx = tip.x; tip.oldy = tip.y;
+    pts.push({ x: tip.x, y: tip.y, oldx: tip.x, oldy: tip.y });
+    mainRope.tipGrowLen -= targetSeg;
+  }
+  setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
 }
 
 function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex){
@@ -916,6 +962,9 @@ function cutRopeAt(hit, clickX, clickY){
   // jump the rope back out near its pre-cut length instead of adjusting the
   // actual current (cut) one.
   mainRope.totalLength = mainRope.segLen * idx;
+  // the remaining tip after a cut is always a full, already-committed
+  // segment -- no growth in progress.
+  mainRope.tipGrowLen = mainRope.segLen;
   setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
   if (lowerPoints.length >= 2){
     // a perfectly vertical piece has no asymmetry to topple over on — give it
@@ -1049,15 +1098,20 @@ function onPointerUp(e){
 
   if (info.charging){
     // a genuine hold — not limited by Click Distance (press down anywhere);
-    // gated instead by its own, more generous Click And Hold Distance, so a
-    // hold that was really aimed at the (now also more forgiving) circle and
-    // just barely missed doesn't fire a punch way out where you released.
-    // Fires immediately on release, intensity scaled by total hold time up
-    // to the ceiling at Click Hold Max Duration.
-    if (info.hit.dist > vmin(cfg.holdDistance)) return;
+    // gated instead by its own, more generous Click And Hold Distance,
+    // checked against WHERE THE HOLD ENDS, not where it started — the user
+    // can press anywhere and move the pointer toward the rope before
+    // releasing, so the release position (not the stale press-time info.hit)
+    // is what determines whether/where it fires. An earlier version reused
+    // info.hit, which is frozen at pointerdown time, so moving the pointer
+    // during the hold had no effect at all — a hold that started too far
+    // from the rope stayed stuck failing even after being dragged right
+    // over it, matching the reported "click and hold doesn't work."
+    const releaseHit = nearestPointOnRope(e.clientX, e.clientY, mainRope.points);
+    if (releaseHit.dist > vmin(cfg.holdDistance)) return;
     const heldMs = now - info.startTime;
     const t = Math.min(1, heldMs / cfg.clickHoldMaxDuration);
-    applyPunch(mainRope.points, info.hit, info.x, info.y, t * cfg.intensityCeiling, 0);
+    applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, t * cfg.intensityCeiling, 0);
     return;
   }
 
@@ -1090,7 +1144,7 @@ function update(rawDt){
   mainRope.points[0].x = circleAnchor().x;
   mainRope.points[0].y = circleAnchor().y;
   if (growing) growRope(rawDt);
-  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0);
+  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0, mainRope.tipGrowLen);
 
   // cutProgress only drives the cosmetic sweep-mark overlay now (render()) —
   // it never gates a piece's own physics, so a piece cut mid-swing keeps

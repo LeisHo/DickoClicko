@@ -73,6 +73,30 @@ Nothing in progress — everything below is done, verified, and pushed.
   `segLen`/point count matching what `setMainRopeTotalLength()`
   independently computes, and reapplying it is a true 0-displacement
   no-op.
+- Fixed rope-extension animation "stepping" (growth only advanced in
+  whole-segment jumps — around 25px at defaults — with nothing visibly
+  moving in between). Growth now advances a new `mainRope.tipGrowLen`
+  field every frame, and `integrateChain()`'s new `tipSegLen` override lets
+  the existing distance-constraint solver naturally pull the tip out to
+  match it each frame — the same mechanism already used for every other
+  segment, just with a continuously-rising target for this one. Verified
+  live (gravity/swing on, floor disabled to isolate the mechanism): the
+  tip segment's length tracked the exact per-frame growth amount, frame by
+  frame, in a clean sawtooth, with zero frames of no movement.
+- Fixed click-and-hold not firing when the user pressed away from the rope
+  and moved toward it before releasing ("click and hold anywhere, then
+  release within the tolerance distance"). The Click-And-Hold-Distance
+  gate was checking the press-time position (frozen at `onPointerDown`),
+  never the release position — moving the pointer during the hold had no
+  effect at all. Fixed by recomputing the nearest-rope-point check from the
+  actual release coordinates. Verified via dispatched pointer events with
+  real hold timing: press-far/release-near now fires, press-far/release-far
+  still correctly doesn't, and press-near/release-near (regression) still
+  fires.
+- Baked in another user-provided Copy Settings dump as new hardcoded
+  defaults (Rope Length, Click And Hold Distance, Rope Animation Speed,
+  Minimum Rope Length, Cut Speed) — every value already fit its slider's
+  existing range, no expansion needed.
 
 ## What's next
 
