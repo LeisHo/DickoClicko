@@ -237,6 +237,16 @@ Damping/Constraint Iterations sliders, that's the next place to look.)
   round-trip if this default still isn't quite right. Re-verified no
   regression in the 2-point-rope-tangling fix from 2 rounds ago under the
   new tuning.
+- Added "Endcap At Cut End" checkbox (ROPE CUT group, default off): when
+  on, each fallen rope segment also gets the selected endcap shape at its
+  severed/cut edge, not just its original tip end. Implemented by reusing
+  `drawEndcap()` unchanged with the fallen piece's points array reversed,
+  so no new drawing code was needed; mainRope needed no change since its
+  own tip already is the cut point right after a cut. Verified via a
+  temporary debug hook: a synthetic fallen piece's cut-end pixel coverage
+  rose from 666 (bare line-cap) to 855 (line-cap + SVG endcap) with the
+  checkbox on, its unaffected tip end stayed flat (847 vs 850), and a
+  real checkbox `change` event correctly toggled `cfg.endcapAtCutEnd`.
 
 ## What's next
 

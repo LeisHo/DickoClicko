@@ -81,6 +81,17 @@ ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg, End3.svg, End4.svg)
        safe because the anchor-shift translate is applied last in the
        transform chain (so it acts first on the raw path coordinates),
        putting the anchor at local (0,0), which no scale factor can move.
+       Optional "Endcap At Cut End" checkbox (ROPE CUT group,
+       cfg.endcapAtCutEnd): when on, each fallenPiece ALSO gets a cap at
+       points[0] (its severed/cut edge, per renderCutSweep's own
+       convention -- see Gotchas), not just its original tip end. Reuses
+       drawEndcap() unchanged by passing `[...piece.points].reverse()` --
+       that puts the cut point at index length-1 (the position
+       drawEndcap always caps) and its neighbor at length-2 (its
+       orientation reference), so no second code path was needed.
+       mainRope itself is never affected: its own tip already IS the cut
+       point after a cut (the falling piece keeps the OTHER end), so it
+       was already correctly capped by the existing single call.
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle

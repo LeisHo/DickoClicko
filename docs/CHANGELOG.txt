@@ -1206,6 +1206,57 @@ settings-persistence layer) that was present in the working tree
 alongside this round's own changes.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  08:20 AM - 08:27 AM EDT
+
+Added:
+- "Endcap At Cut End" checkbox (ROPE CUT group, cfg.endcapAtCutEnd,
+  default off), per explicit request: when on, each fallen (cut-off)
+  rope segment also gets the selected endcap shape at its severed/cut
+  edge -- not just its original tip end, which already had one. Reuses
+  drawEndcap() as-is by passing the fallen piece's points array reversed
+  (`[...piece.points].reverse()`), which puts the cut point at the index
+  drawEndcap always caps and its neighbor at the index it uses for
+  orientation -- no new drawing code needed. mainRope itself needed no
+  change: its own tip already IS the cut point right after a cut (the
+  piece that falls away keeps the other end), so it was already correctly
+  capped by the existing call. Only takes effect when an Endcap Design
+  other than "None" is selected, same gate as the existing tip-end cap.
+
+Verified:
+- node --check clean on the extracted script.
+- Live-tested via a temporary debug hook (window.__debugTMP, removed
+  before commit, grep-confirmed 0 references) against a standalone
+  static file server (this project's shared dev-server port was occupied
+  by a different concurrent session): a synthetic fallen piece rendered
+  with the checkbox off showed only the baseline round line-cap pixel
+  coverage at its cut end (666 magenta pixels in a 50x50px sample); with
+  the checkbox on, coverage rose to 855 pixels at the same spot,
+  consistent with the SVG endcap shape actually being drawn there; the
+  piece's unrelated tip end was unaffected either way (847 vs 850,
+  within anti-aliasing noise), confirming the existing tip-cap behavior
+  wasn't disturbed. Also confirmed the checkbox renders in the ROPE CUT
+  group (live DOM query) and that a real checkbox `change` event
+  correctly toggles `cfg.endcapAtCutEnd`.
+- This session's headless preview pane needed 2 environment workarounds
+  unrelated to the feature itself, both confirmed as pre-existing
+  environment quirks rather than app bugs: `canvas.width`/`height` were
+  still 0 at the moment of the first direct `render()` call (the
+  boot-time `resizeCanvas()` call had already run correctly, but the
+  pane's own uncomposited/non-visible state meant the canvas element's
+  backing store hadn't picked it up yet) -- patched directly for the
+  test; and `mainRope.points` was empty for the same reason
+  (`resetMainRope()` ran before `window.innerHeight` had a real value in
+  this pane) -- patched with 2 placeholder points so `render()` wouldn't
+  throw on the unrelated main-rope draw call.
+- Noted, not acted on: a different concurrent session is actively adding
+  DEV_MODE click-diagnostics logging (`logClick()`, new console.log calls
+  in `onPointerDown`) to the same file's working tree, uncommitted at the
+  time of this commit -- present already-integrated cleanly (verified via
+  `node --check` on the combined file) and unrelated to this task, so it
+  rides along in the same commit rather than being split out, per this
+  same file's own established precedent 2 entries up.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

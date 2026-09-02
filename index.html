@@ -201,6 +201,7 @@ const DEV_GROUPS = [
     { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:1000 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
+    { key:'endcapAtCutEnd',  label:'Endcap At Cut End', type:'checkbox', def:false },
   ]},
   { title:'FLOOR', controls:[
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
@@ -1257,6 +1258,14 @@ let downInfo = null;   // {mode:'circle'} or {mode:'rope', x,y,hit,startTime,cha
 let holdTimer = null;
 let pendingClick = null; // {hit,timer}
 
+// Click diagnostics -- DEV_MODE only. One console.log per input-state
+// transition (down, hold-eligible, growing, charging, release action) so
+// the full click/hold/double-click state machine can be read off the
+// console alone, without re-adding a temporary debug hook each time.
+function logClick(event, data){
+  if (DEV_MODE) console.log('[click]', event, data);
+}
+
 function isOnCircle(x, y){
   const anchor = circleAnchor();
   // a generous margin beyond the circle's own visual radius — a small
@@ -1287,9 +1296,11 @@ function onPointerDown(e){
 
   if (isOnCircle(x, y)){
     downInfo = { mode: 'circle' };
+    logClick('down:circle', { x, y });
     holdTimer = setTimeout(() => {
       if (!downInfo || downInfo.mode !== 'circle') return;
       growing = true;
+      logClick('hold:grow-start', { x, y });
     }, HOLD_THRESHOLD_MS);
     return;
   }
@@ -1300,6 +1311,7 @@ function onPointerDown(e){
   // proximity, since that's what targets a specific punch/cut point.
   const hit = nearestPointOnRope(x, y, mainRope.points);
   downInfo = { mode: 'rope', x, y, hit, startTime: performance.now(), charging: false };
+  logClick('down:rope', { x, y, hitDist: hit.dist, hitIndex: hit.index });
   // Charging only becomes eligible after a FULL doubleClickThreshold of
   // holding, not the short HOLD_THRESHOLD_MS — this is what keeps it from
   // ever hijacking a real double-click. Provably safe, not just empirically:
@@ -1310,6 +1322,7 @@ function onPointerDown(e){
   holdTimer = setTimeout(() => {
     if (!downInfo || downInfo.mode !== 'rope') return;
     downInfo.charging = true;
+    logClick('hold:charging-start', { x, y });
   }, cfg.doubleClickThreshold);
 }
 
@@ -1320,6 +1333,7 @@ function onPointerUp(e){
   downInfo = null;
 
   if (info.mode === 'circle'){
+    logClick('up:circle', { wasGrowing: growing });
     growing = false;
     return;
   }
@@ -1329,7 +1343,9 @@ function onPointerUp(e){
   if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
     clearTimeout(pendingClick.timer);
     pendingClick = null;
-    if (info.hit.dist <= vmin(cfg.clickDistance)) cutRopeAt(info.hit, info.x, info.y);
+    const willCut = info.hit.dist <= vmin(cfg.clickDistance);
+    logClick('up:double-click', { x: info.x, y: info.y, hitDist: info.hit.dist, willCut });
+    if (willCut) cutRopeAt(info.hit, info.x, info.y);
     return;
   }
 
@@ -1345,23 +1361,33 @@ function onPointerUp(e){
     // from the rope stayed stuck failing even after being dragged right
     // over it, matching the reported "click and hold doesn't work."
     const releaseHit = nearestPointOnRope(e.clientX, e.clientY, mainRope.points);
-    if (releaseHit.dist > vmin(cfg.holdDistance)) return;
     const heldMs = now - info.startTime;
+    if (releaseHit.dist > vmin(cfg.holdDistance)){
+      logClick('up:hold-release-too-far', { x: e.clientX, y: e.clientY, releaseDist: releaseHit.dist, heldMs });
+      return;
+    }
     const t = Math.min(1, heldMs / cfg.clickHoldMaxDuration);
+    const intensity = cfg.clickIntensity + t * cfg.intensityCeiling;
+    logClick('up:hold-release-punch', { x: e.clientX, y: e.clientY, releaseDist: releaseHit.dist, heldMs, t, intensity });
     // Intensity Ceiling stacks ON TOP of Click Intensity, not in place of it
     // -- a hold starts at the same intensity a quick tap would produce and
     // rises from there, reaching Click Intensity + Intensity Ceiling exactly
     // at Click Hold Max Duration.
-    applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, cfg.clickIntensity + t * cfg.intensityCeiling, 0);
+    applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, intensity, 0);
     return;
   }
 
   // quick tap — still needs real proximity to the rope to mean anything
-  if (info.hit.dist > vmin(cfg.clickDistance)) return;
+  if (info.hit.dist > vmin(cfg.clickDistance)){
+    logClick('up:tap-too-far', { x: info.x, y: info.y, hitDist: info.hit.dist });
+    return;
+  }
   if (pendingClick) clearTimeout(pendingClick.timer);
+  logClick('up:tap-pending', { x: info.x, y: info.y, hitDist: info.hit.dist });
   pendingClick = {
     time: now,
     timer: setTimeout(() => {
+      logClick('up:tap-punch', { x: info.x, y: info.y, hitDist: info.hit.dist, intensity: cfg.clickIntensity });
       applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0);
       pendingClick = null;
     }, cfg.doubleClickThreshold),
@@ -1370,7 +1396,7 @@ function onPointerUp(e){
 
 canvas.addEventListener('pointerdown', onPointerDown);
 window.addEventListener('pointerup', onPointerUp);
-window.addEventListener('pointercancel', () => { downInfo = null; growing = false; clearTimeout(holdTimer); });
+window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 /* ---------------------------------------------------------------------
@@ -1549,6 +1575,16 @@ function render(){
   if (cfg.endcapDesign !== 'none'){
     fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight));
     drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight);
+    // piece.points[0] is the cut edge (where it severed from the rest of the
+    // rope, per renderCutSweep's own convention) -- reversing the piece's
+    // points array before reusing drawEndcap() puts that cut point at
+    // points[length-1] (the position drawEndcap always caps) and its
+    // neighbor at points[length-2] (drawEndcap's own orientation reference),
+    // so the cap is correctly positioned AND oriented at the severed end
+    // with no separate code path needed.
+    if (cfg.endcapAtCutEnd){
+      fallenPieces.forEach(piece => drawEndcap([...piece.points].reverse(), thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight));
+    }
   }
   fallenPieces.forEach(piece => { if (piece.cutProgress < 1) renderCutSweep(piece); });
 }
