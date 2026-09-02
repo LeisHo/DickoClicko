@@ -1103,6 +1103,64 @@ Verified:
   survive the real idbSet() call under test).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  08:07 AM EDT
+
+Investigated (no code fix -- see next entry for the endcap work that WAS
+shipped this round):
+- 4th round of a recurring "rope physics is erratic" complaint, this time
+  with no fresh video. Ran an extensive reproduction sweep (settled rope
+  + hold-to-grow exactly as described, a single strong punch traced for
+  10s of settling, 5 rapid repeated punches without full settling between
+  them) via real dispatched PointerEvents + manually-stepped update()
+  calls (requestAnimationFrame doesn't run in this testing environment).
+  Every REPRODUCIBLE run showed 0 NaN, 0 sustained non-monotonic points,
+  the same already-known ~1.02-1.03x steady-state segment-length ratio
+  (not diverging), and kinetic-energy-proxy decaying normally after
+  repeated hits rather than accumulating. One run did show a severe
+  60-frame-long anomaly (54-130px per-frame steps) but could not be
+  reproduced again across 3 follow-up attempts with the identical script
+  -- logged as an unexplained one-off, not trusted as evidence either way.
+  Asked the user to clarify what "crazy" means rather than guess-tuning
+  DAMPING/CONSTRAINT_ITERATIONS blindly on the 4th round of a vague
+  repeat; answer: "jitters at rest, as well as jitters drastically when
+  triggered to move... sometimes the end of the rope will swing wildly."
+  "Jitters at rest" specifically has not yet been directly reproduced --
+  next step before any tuning change.
+
+Added:
+- 3rd rope endcap design (data/Rope/End3.svg) plus a new shared scale/
+  anchor reference for ALL 3 designs (ENDCAP_ALIGNMENT, from a new
+  data/Rope/End Alignment.svg -- a plain <line x1="41.57" y1="80.26"
+  x2="96.06" y2="80.26">), replacing the previous per-design getBBox()
+  measurement, per explicit request: End3 was authored to start exactly
+  at the alignment line's own (x1,y1), confirming it's meant as the
+  shared reference every design should scale/anchor against, so swapping
+  designs in the dropdown changes only shape, never apparent size or
+  attachment point. drawEndcap() now computes scale/anchor from
+  ENDCAP_ALIGNMENT.width/topCenterX/topY unconditionally (outside any
+  per-design branch), so this is correct by construction, not something
+  that needs re-verifying per design.
+
+Verified:
+- End3 renders with a reasonable, non-degenerate scale/extent (~29px tall
+  at ~20px rope thickness, consistent with its own path geometry scaled
+  by thicknessPx/54.49) and 0 console errors.
+- node --check clean; both temporary debug hooks used this round
+  (window.__debugTMP2 for the endcap check, plus the earlier physics
+  investigation's hook) removed before commit (grep-confirmed 0
+  references to either name). Left another session's own separate,
+  unrelated, still-in-progress debug hook (window.__debugTMP, for a
+  concurrent §12d/§12l settings-persistence revision) untouched -- not
+  this round's to clean up.
+
+Note: another session made a real, substantial, uncommitted revision to
+this same index.html concurrently (dropping the localStorage settings
+fallback entirely in favor of the git-tracked log only, correcting
+§12d/§12l) while this round's work was in progress. Confirmed via diff
+hunk-header inspection that none of it overlaps the endcap/physics code
+touched this round.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

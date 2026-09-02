@@ -18,7 +18,18 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — everything below is done, verified, and pushed.
+Investigating a recurring "rope physics is erratic/jitters/swings wildly"
+report (4th round on this general complaint). An extensive reproduction
+sweep this round (settled rope + hold-to-grow, single strong punch + 10s
+settle trace, 5 rapid repeated punches) found NO reproducible divergence
+(no NaN, no tangling, no runaway growth/energy) — one run did show a
+severe anomaly but couldn't be reproduced again across several retries.
+Asked the user to clarify what "crazy" looks like; answer: "jitters at
+rest, as well as jitters drastically when triggered to move... sometimes
+the end of the rope will swing wildly." Next step: re-investigate
+specifically "jitters at rest" (not yet directly reproduced) and try to
+catch the rare wild-swing case with a higher-volume repro sweep, before
+considering DAMPING/CONSTRAINT_ITERATIONS tuning changes.
 
 ## Recently completed
 
@@ -206,6 +217,14 @@ Nothing in progress — everything below is done, verified, and pushed.
   down to just Click Intensity and Click And Hold Distance. Purely a
   DEV_GROUPS reorganization — every control's own `cfg` key and wiring is
   unchanged, verified via a live DOM query of every group's rows.
+- Added a 3rd endcap design (End3.svg) and switched ALL 3 designs to one
+  shared scale/anchor reference (`ENDCAP_ALIGNMENT`, from a new
+  `data/Rope/End Alignment.svg`) instead of each design measuring its own
+  bounding box independently — per explicit request, since End3 was
+  authored specifically to align with that shared reference. Verified
+  End3 renders at a reasonable scale/extent with 0 console errors; the
+  shared-reference change is correct by construction (one `scale`/
+  `translate` computed outside any per-design branch).
 
 ## What's next
 

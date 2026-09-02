@@ -66,13 +66,14 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        solver) was tried first and caused a real, reproduced instability
        over long holds.
 
-ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg)
+ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg, End3.svg)
     -> optional decorative shapes at the free/tip end of mainRope and every
        fallenPiece (render(), Endcap Design dropdown), replacing the plain
        round cap entirely rather than stacking both. Embedded as Path2D
        objects using each SVG path's own coordinates verbatim -- see
-       Gotchas for why the scale/anchor math uses each path's real
-       getBBox(), not the SVGs' own (much larger) viewBox. Filled with
+       Gotchas for why the scale/anchor math uses ONE shared
+       ENDCAP_ALIGNMENT reference (from data/Rope/End Alignment.svg) for
+       every design, not each path's own bbox. Filled with
        cfg.ropeColor (not the SVGs' own authored white), so it always
        matches the rope; cfg.endcapHeight scales ONLY the local "down" axis
        (independent of the width-matching scale), stretching the cap
@@ -443,18 +444,24 @@ GOTCHAS
   `javascript_tool`, not by watching the live animation. A real browser tab
   (visible, foregrounded) runs the `requestAnimationFrame` loop normally;
   this only affects how this specific environment was used to test it.
-- `ENDCAP_DESIGNS`' `width`/`topY`/`topCenterX` for each SVG must come from
-  the PATH's real `getBBox()` (measured in a real browser DOM, e.g. a tiny
-  scratch HTML page loaded via the dev server), never the source SVGs' own
-  `viewBox` (`0 0 129.7 183.44` for both `data/Rope/End1.svg` and
-  `End2.svg` -- far bigger than the actual drawn shape, whose real bbox is
-  only ~50x36 and ~54x47 respectively). Scaling by the viewBox width would
-  make the cap render much smaller than the rope's actual thickness.
+- `ENDCAP_ALIGNMENT` (`width`/`topY`/`topCenterX`) is ONE shared scale/anchor
+  reference for every design in `ENDCAP_DESIGNS`, not a per-design bbox
+  measurement -- read directly from `data/Rope/End Alignment.svg`'s
+  `<line x1="41.57" y1="80.26" x2="96.06" y2="80.26">` (its explicit
+  numeric attributes, no `getBBox()` needed for a plain line). Earlier
+  (End1/End2 only) each design measured its own real `getBBox()`
+  independently; once a 3rd design (End3.svg) arrived specifically
+  authored to start at the alignment line's own `(x1,y1)`, the project
+  moved to one shared reference per explicit request, so swapping designs
+  in the dropdown doesn't change the cap's apparent size/anchor point --
+  only its shape. Never revert to per-design bbox measurement; add a new
+  design by giving it ONLY a `path`, no its own width/topY/topCenterX.
   `drawEndcap()`'s transform order matters: translate to the tip, rotate,
-  scale, THEN translate by `-topCenterX,-topY` (applied last so it acts
-  first on the path's own local coordinates) -- this is what makes the
-  path's flat top-center edge (not the SVG's origin, not the bbox center)
-  the pivot that lands exactly on the tip point. The rotation angle
+  scale, THEN translate by `-ENDCAP_ALIGNMENT.topCenterX,-topY` (applied
+  last so it acts first on the path's own local coordinates) -- this is
+  what makes the alignment line's own center (not the SVG's origin, not
+  any individual design's own bbox center) the pivot that lands exactly
+  on the tip point for every design uniformly. The rotation angle
   (`Math.atan2(-dir.x, dir.y)`) maps local "down" (both SVGs' authored
   orientation) onto the tip segment's actual current direction, so the cap
   reorients correctly even when the rope is swinging or hangs at an angle
