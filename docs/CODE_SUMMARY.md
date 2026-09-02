@@ -152,6 +152,30 @@ GOTCHAS
   update that too (`cutRopeAt()` does both, via `setCfg('ropeLength', ...)`,
   so the Rope Length slider doesn't show a stale pre-cut length that would
   un-cut the rope if nudged).
+- `resetMainRope()` (boot only, called exactly once) MUST build the chain
+  using `segLen = vh(TARGET_SEG_LEN_VH)` -- the same constant
+  `setMainRopeTotalLength()` pins everything to -- never a POINT_COUNT- or
+  cfg.ropeLength-derived value of its own. It used to compute its own
+  `totalLen / (POINT_COUNT - 1)`, which only happened to equal
+  `TARGET_SEG_LEN_VH` back when Rope Length's default was still 45 (the
+  value `TARGET_SEG_LEN_VH` was literally computed from); once a later
+  "set defaults" round changed Rope Length's default to
+  100.16051775147857 without updating `TARGET_SEG_LEN_VH` to match, the two
+  silently diverged (segLen ~55 vs targetSeg ~24.9 at 720px height). Any
+  code path that then called `setMainRopeTotalLength()` -- dragging the
+  Rope Length slider at all, or `resetSettings()` reapplying a saved
+  `ropeLength` value at boot -- unconditionally overwrote `segLen` to
+  `targetSeg` for every existing point in one frame, a whole-chain
+  rest-length jump the constraint solver had to violently correct: the
+  exact bounce/glitch reported both live (first touch of the slider) and
+  on page load (after Save Settings had persisted a shorter length).
+  Confirmed the mechanism and the fix by direct reproduction, not just
+  code review: before the fix would have shown `segLen=55.47...` vs
+  `targetSeg=24.92...` at the reported default; after the fix, a real
+  boot with a saved `ropeLength:20` loaded `segLen`/`pointCount` already
+  equal to what `setMainRopeTotalLength()` independently computes for the
+  same total, and reapplying it produced exactly 0 positional displacement
+  on every point (a true no-op) instead of a correction.
 - `isOnCircle()`'s hit-radius is the circle's own visual radius PLUS a fixed
   `vmin(4)` margin, not the bare visual radius -- a small `circleSize` (the
   default is 4.5%vmin) is an easy miss otherwise, especially since the rope

@@ -576,6 +576,53 @@ Added:
   too, keeping raw values copy/paste-compatible between same-axis sliders.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  04:19 AM EDT
+
+Fixed:
+- Setting Rope Length shorter caused a visible bounce/glitch live, and
+  reloading after Save Settings made the rope glitch right at boot.
+  Root-caused precisely before fixing: resetMainRope() (boot only) built
+  the initial point chain with its own segLen formula
+  (totalLen / (POINT_COUNT-1)) instead of the pinned TARGET_SEG_LEN_VH
+  constant that setMainRopeTotalLength() uses everywhere else. The two
+  only happened to agree back when Rope Length's default was still 45
+  (the exact value TARGET_SEG_LEN_VH was computed from); an earlier
+  "set defaults" round changed the default to 100.16051775147857 without
+  updating TARGET_SEG_LEN_VH to match, so they silently diverged
+  (segLen ~55.47 vs targetSeg ~24.92 at 720px viewport height). Any call
+  to setMainRopeTotalLength() -- dragging the Rope Length slider at all,
+  or resetSettings() reapplying a saved ropeLength value at boot --
+  unconditionally overwrote segLen to targetSeg for every existing point
+  in one frame, a whole-chain rest-length jump the constraint solver had
+  to violently correct on the next iterations. Fixed by having
+  resetMainRope() build from the same targetSeg constant (and the same
+  point-count formula) setMainRopeTotalLength() already uses, so the two
+  can never diverge again regardless of what Rope Length's default
+  becomes in the future.
+
+Verified:
+- Fresh boot (localStorage cleared, no saved settings): mainRope.segLen
+  measured exactly equal to vh(TARGET_SEG_LEN_VH) immediately after
+  resetMainRope() -- confirmed 24.923076923076923 === 24.923076923076923.
+- Simulated a live shrink via the real onChange path
+  (setMainRopeTotalLength, as dragging the slider calls it): segLen
+  stayed exactly at targetSeg, no jump introduced.
+- Simulated the real boot sequence with a saved shorter Rope Length
+  (20 %vh) persisted via saveSettings(): resetMainRope() and the
+  subsequent applyValues()-triggered setMainRopeTotalLength() produced
+  IDENTICAL segLen (24.923076923076923) and point count (7) -- reapplying
+  is now a true no-op.
+- Real page load (navigate, not simulated) with that same saved shorter
+  value: mainRope booted directly at segLen=24.923076923076923,
+  pointCount=7, totalLength=144 (=vh(20)), matching the saved value
+  exactly; calling setMainRopeTotalLength() again with the identical
+  total produced 0 positional displacement on every point.
+- Confirmed resetMainRope() is called exactly once (boot only), so this
+  fix cannot affect growth/cut/live-resize behavior at runtime.
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

@@ -57,6 +57,22 @@ Nothing in progress — everything below is done, verified, and pushed.
   already conform; this pins the convention so any future position slider
   follows it too, keeping raw values paste-compatible between same-axis
   sliders.
+- Fixed a real bug: setting Rope Length shorter caused a visible bounce
+  live, and reloading after Save Settings made the rope glitch right at
+  boot. Root cause: `resetMainRope()` built the initial chain with its own
+  segLen formula, which only matched the pinned `TARGET_SEG_LEN_VH`
+  constant back when Rope Length's default was still 45; a later
+  defaults-bake changed the default without updating that constant, so
+  the two silently diverged. Any call to `setMainRopeTotalLength()`
+  (slider drag, or a saved-settings reload at boot) then snapped every
+  point's rest length to the mismatched constant at once, which the
+  constraint solver had to violently correct — the bounce. Fixed by
+  having `resetMainRope()` build from the same `targetSeg` constant
+  everything else already uses. Verified via direct reproduction: after
+  the fix, a real boot with a saved shorter `ropeLength` already has
+  `segLen`/point count matching what `setMainRopeTotalLength()`
+  independently computes, and reapplying it is a true 0-displacement
+  no-op.
 
 ## What's next
 

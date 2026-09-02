@@ -734,9 +734,22 @@ let fallenPieces = [];
 function resetMainRope(){
   const anchor = circleAnchor();
   const totalLen = vh(cfg.ropeLength);
+  // Must build with the SAME segLen (targetSeg) that setMainRopeTotalLength()
+  // pins everything to, not a POINT_COUNT-derived one -- those two used to
+  // disagree whenever cfg.ropeLength's default no longer matched the fixed
+  // 45%vh TARGET_SEG_LEN_VH was originally computed from (it was, until a
+  // later "set defaults" round changed Rope Length's default without also
+  // updating this constant). The mismatch left the rope built at one segLen
+  // and then, the moment anything called setMainRopeTotalLength() (e.g. a
+  // saved settings reload firing ropeLength's onChange), silently
+  // overwritten to targetSeg for every point at once -- a whole-chain
+  // rest-length jump the constraint solver had to violently correct,
+  // reading as a bounce/glitch on load or on the slider's first touch.
+  const targetSeg = vh(TARGET_SEG_LEN_VH);
+  const pointCount = Math.max(2, Math.round(totalLen / targetSeg) + 1);
   mainRope = {
-    points: makeChain(POINT_COUNT, anchor.x, anchor.y, totalLen / (POINT_COUNT - 1)),
-    segLen: totalLen / (POINT_COUNT - 1),
+    points: makeChain(pointCount, anchor.x, anchor.y, targetSeg),
+    segLen: targetSeg,
     totalLength: totalLen, // the real, continuously-accumulating length — see growRope()
   };
 }

@@ -151,6 +151,15 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   therefore its resize corners) must never be draggable off-screen. Don't
   reintroduce a hardcoded margin here; it was the real bug the first version
   had.
+- `resetMainRope()` must build the initial chain with `segLen =
+  vh(TARGET_SEG_LEN_VH)`, never a value derived from `POINT_COUNT` or the
+  current `cfg.ropeLength` — those only coincidentally match `TARGET_SEG_LEN_VH`
+  at the exact default it was computed from (45), and silently diverging from
+  it again (e.g. a future default-bake that changes Rope Length without also
+  updating `TARGET_SEG_LEN_VH`) reintroduces a real, previously-shipped bug: a
+  violent segLen-mismatch bounce the first time anything calls
+  `setMainRopeTotalLength()` (dragging the slider, or a saved settings reload
+  at boot). See `docs/CODE_SUMMARY.md` Gotchas for the full mechanism.
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to
