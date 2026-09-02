@@ -8,7 +8,7 @@
     "endcapDesign": "end3",
     "endcapHeight": 1,
     "ropeThickness": 4.8,
-    "ropeLength": 34.76923076923084,
+    "ropeLength": 13.846153846153847,
     "ropeColor": "#8b5a2b",
     "ropeEndCurveArc": 1,
     "clickIntensity": 1.6,
@@ -131,8 +131,8 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 1218.8919677734375,
-      "top": 47.159088134765625,
+      "left": 1377.0595703125,
+      "top": 38.05397415161133,
       "width": 320,
       "height": 665.2556762695312,
       "style": {
