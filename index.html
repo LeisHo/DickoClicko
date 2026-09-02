@@ -141,14 +141,14 @@ const DEV_MODE = (
 --------------------------------------------------------------------- */
 const DEV_GROUPS = [
   { title:'CIRCLE', controls:[
-    { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:8 },
+    { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:4.5 },
     { key:'circleX',     label:'Circle X Pos',  type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:50 },
     { key:'circleY',     label:'Circle Y Pos',  type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:18 },
     { key:'circleColor', label:'Circle Color',  type:'color',  def:'#e74c3c' },
   ]},
   { title:'ROPE', controls:[
-    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:1.4 },
-    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:90, step:1,   def:45,
+    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:2.8 },
+    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:90, step:1,   def:53.972788461538556,
       onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
@@ -166,18 +166,18 @@ const DEV_GROUPS = [
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
   ]},
   { title:'ROPE CUT', controls:[
+    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:1, max:30, step:0.5, def:8 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
-    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:1, max:30, step:0.5, def:8 },
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#4a4a4a' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:1.5 },
     { key:'floorHeight',     label:'Floor Height',     type:'slider',   unit:'%vh', min:0,   max:50, step:1,   def:10 },
   ]},
   { title:'MECHANICS', controls:[
-    { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:300 },
     { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
     { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:4 },
+    { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:300 },
   ]},
   { title:'UI', controls:[
     { key:'backgroundColor', label:'Background Color', type:'color', def:'#1a1a2e' },
@@ -932,13 +932,23 @@ function onPointerDown(e){
     return;
   }
 
-  const hit = hitTestRope(x, y);
-  if (!hit){ downInfo = null; return; }
+  // hold-to-charge isn't limited by Click Distance — you can press down
+  // anywhere and the hold still charges, aimed at whatever the nearest rope
+  // point turns out to be. Only a QUICK tap (below) still needs real
+  // proximity, since that's what targets a specific punch/cut point.
+  const hit = nearestPointOnRope(x, y, mainRope.points);
   downInfo = { mode: 'rope', x, y, hit, startTime: performance.now(), charging: false };
+  // Charging only becomes eligible after a FULL doubleClickThreshold of
+  // holding, not the short HOLD_THRESHOLD_MS — this is what keeps it from
+  // ever hijacking a real double-click. Provably safe, not just empirically:
+  // if this release's own press duration already exceeds doubleClickThreshold,
+  // the gap from the FIRST click's release (which is earlier still) must
+  // exceed doubleClickThreshold too, so it could never have passed the
+  // double-click gap check below anyway.
   holdTimer = setTimeout(() => {
     if (!downInfo || downInfo.mode !== 'rope') return;
     downInfo.charging = true;
-  }, HOLD_THRESHOLD_MS);
+  }, cfg.doubleClickThreshold);
 }
 
 function onPointerUp(e){
@@ -952,32 +962,35 @@ function onPointerUp(e){
     return;
   }
 
+  const now = performance.now();
+
+  if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
+    clearTimeout(pendingClick.timer);
+    pendingClick = null;
+    if (info.hit.dist <= vmin(cfg.clickDistance)) cutRopeAt(info.hit, info.x, info.y);
+    return;
+  }
+
   if (info.charging){
-    // held long enough to start charging -- fires immediately on release
-    // (no double-click wait; a genuine hold was never a double-click
-    // attempt), intensity scaled linearly by total hold time up to the
+    // a genuine hold — click anywhere, not limited by Click Distance; fires
+    // immediately on release, intensity scaled by total hold time up to the
     // ceiling at Click Hold Max Duration.
-    const heldMs = performance.now() - info.startTime;
+    const heldMs = now - info.startTime;
     const t = Math.min(1, heldMs / cfg.clickHoldMaxDuration);
     applyPunch(mainRope.points, info.hit, info.x, info.y, t * cfg.intensityCeiling, 0);
     return;
   }
 
-  const now = performance.now();
-  if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
-    clearTimeout(pendingClick.timer);
-    pendingClick = null;
-    cutRopeAt(info.hit, info.x, info.y);
-  } else {
-    if (pendingClick) clearTimeout(pendingClick.timer);
-    pendingClick = {
-      time: now,
-      timer: setTimeout(() => {
-        applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0);
-        pendingClick = null;
-      }, cfg.doubleClickThreshold),
-    };
-  }
+  // quick tap — still needs real proximity to the rope to mean anything
+  if (info.hit.dist > vmin(cfg.clickDistance)) return;
+  if (pendingClick) clearTimeout(pendingClick.timer);
+  pendingClick = {
+    time: now,
+    timer: setTimeout(() => {
+      applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0);
+      pendingClick = null;
+    }, cfg.doubleClickThreshold),
+  };
 }
 
 canvas.addEventListener('pointerdown', onPointerDown);
@@ -1090,15 +1103,28 @@ function render(){
   fallenPieces.forEach(piece => { if (piece.cutProgress < 1) renderCutSweep(piece); });
 }
 
+// Fixed-timestep physics: update() always advances by exactly this much,
+// however many times are needed to catch up to real elapsed time (a plain
+// requestAnimationFrame dt is fed straight from the browser's own frame
+// timing, which jitters — every subsequent frame's motion, growth rate, and
+// cut-sweep speed jittered along with it, which read as "jumpy").
+// render() still runs once per real animation frame.
+const FIXED_DT = 1 / 60;
+const MAX_FRAME_DT = 0.25; // cap the catch-up burst after e.g. a backgrounded tab
 let lastTime = performance.now();
+let accumulator = 0;
 let fpsAccum = 0, fpsFrames = 0, fpsLast = performance.now();
 function loop(now){
-  const rawDt = Math.min((now - lastTime) / 1000, 0.05);
+  const frameDt = Math.min((now - lastTime) / 1000, MAX_FRAME_DT);
   lastTime = now;
-  update(rawDt);
+  accumulator += frameDt;
+  while (accumulator >= FIXED_DT){
+    update(FIXED_DT);
+    accumulator -= FIXED_DT;
+  }
   render();
   if (DEV_MODE){
-    fpsFrames++; fpsAccum += rawDt;
+    fpsFrames++; fpsAccum += frameDt;
     if (now - fpsLast > 500){
       document.getElementById('dpFps').textContent = Math.round(fpsFrames / fpsAccum) + 'fps';
       fpsFrames = 0; fpsAccum = 0; fpsLast = now;

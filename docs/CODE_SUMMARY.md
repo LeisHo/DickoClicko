@@ -97,12 +97,22 @@ Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
 applies is decided by WHERE the hold starts, checked once at pointerdown
 (`isOnCircle()`) -- a hold starting on the circle grows the rope (existing
 `growing`/`growRope()` path); a hold starting on the rope charges punch
-intensity instead (`downInfo.charging`, flipped by the same `holdTimer`
-used to detect "hold" at all) and fires the punch immediately on release,
-intensity scaled linearly from 0 to `cfg.intensityCeiling` as total hold
-time goes from 0 to `cfg.clickHoldMaxDuration` (clamped at 1x beyond that).
-A quick tap on the rope (never reaches `charging`) is unaffected -- still
-goes through the existing double-click-threshold punch/cut disambiguation.
+intensity instead (`downInfo.charging`) and fires the punch immediately on
+release, intensity scaled linearly from 0 to `cfg.intensityCeiling` as total
+hold time goes from 0 to `cfg.clickHoldMaxDuration` (clamped at 1x beyond
+that). Charging isn't limited by `clickDistance` -- press anywhere and hold;
+only a quick tap needs real proximity to the rope to mean anything (see
+Gotchas for why `charging`'s own eligibility timer is `cfg.doubleClickThreshold`,
+not the shorter `HOLD_THRESHOLD_MS`).
+
+Physics timestep: `loop()` runs a fixed-timestep accumulator
+(`FIXED_DT = 1/60`) -- `update()` always advances by exactly that much,
+called as many times as needed to catch up to real elapsed time, rather
+than being fed the raw (jittery) per-frame `requestAnimationFrame` delta
+directly. `render()` still runs once per real frame. This is what fixed a
+general "everything looks slightly jumpy" report -- growth rate, cut-sweep
+speed, and the verlet integration itself were all stepping by a
+frame-time-dependent (and therefore jittery) amount before this.
 
 --------------------------------------------------------------------------------
 UNTOUCHABLE SYSTEMS
@@ -111,6 +121,20 @@ None formally designated yet -- this is the initial build.
 
 --------------------------------------------------------------------------------
 GOTCHAS
+
+- `charging` only becomes eligible after holding for `cfg.doubleClickThreshold`
+  ms, not the shorter `HOLD_THRESHOLD_MS` -- this is provably, not just
+  empirically, safe against ever hijacking a real double-click into a
+  charged punch instead of a cut: if a release's own press duration already
+  exceeds `doubleClickThreshold`, the gap from the FIRST click's release
+  (necessarily earlier still) must exceed `doubleClickThreshold` too, so it
+  could never have passed the `pendingClick` gap check either way. An
+  earlier version used `HOLD_THRESHOLD_MS` (180ms) for this, which a real
+  human's second click of a double-click can easily exceed just by being
+  slightly deliberate about it -- confirmed as the actual cause of a
+  reported "cutting bounces the rope like a punch" bug (reproduced directly:
+  a second click held 200ms, comfortably still within the double-click gap,
+  used to fire a charged punch instead of completing the cut).
 
 - Double-click is hand-rolled (a `setTimeout` pairing keyed off
   `doubleClickThreshold` in `onPointerUp`), not the native `dblclick` event --

@@ -38,6 +38,21 @@ Nothing in progress — everything below is done, verified, and pushed.
   by hold duration up to a new Intensity Ceiling at Click Hold Max
   Duration. A quick tap on the rope is unaffected (still the existing
   punch/double-click-to-cut path).
+- Fixed the actual root cause of a "cutting/holding bounces the rope like a
+  punch" report: charging's own eligibility timer used the short
+  `HOLD_THRESHOLD_MS` (180ms), which a real double-click's second press can
+  easily exceed, hijacking the cut into a charged punch. Now gated on
+  `cfg.doubleClickThreshold` instead — provably safe against ever
+  overlapping a valid double-click. Also made holding-to-charge work
+  regardless of distance from the rope (only quick taps still need real
+  proximity), per explicit request.
+- Switched the physics loop to a fixed timestep (`update()` always steps by
+  exactly 1/60s, however many times needed to catch up) — fixes a general
+  "everything looks slightly jumpy" report caused by physics/growth/
+  cut-sweep timing all previously depending on the raw, jittery per-frame
+  `requestAnimationFrame` delta.
+- Baked in a full settings dump (values, group/setting order) the user
+  copied from a live-tuned session as the new hardcoded defaults.
 
 ## What's next
 
@@ -46,10 +61,6 @@ commit to: a Three.js-based physics/collision upgrade, and restyling the
 rope's geometry to something more illustrative while keeping the same
 smooth animation (the physics/render split already makes this a rendering-
 only change — see CODE_SUMMARY's `strokeRopeCurve()` note).
-
-## Open questions / blockers
-
-None currently open.
 
 ## Open questions / blockers
 

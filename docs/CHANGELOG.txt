@@ -352,6 +352,66 @@ Verified:
 - node --check clean; debug hook removed before commit (grep-confirmed).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  2:11 AM - 2:17 AM EDT
+
+Fixed the real root cause of a "cutting/holding bounces the rope like a
+punch" report, made holding-to-charge work regardless of distance from the
+rope, fixed a general "everything's slightly jumpy" report, and baked in a
+user-provided settings dump as the new defaults.
+
+Fixed:
+- Charging's own eligibility timer used HOLD_THRESHOLD_MS (180ms) -- a real
+  double-click's second press can easily be held longer than that, which
+  hijacked the release into a charged punch instead of completing the cut
+  (or, for hold-to-grow, if the press landed just off the circle). Changed
+  the eligibility gate to cfg.doubleClickThreshold instead. This is
+  provably safe against ever overlapping a valid double-click, not just
+  empirically tuned: if a release's own press duration already exceeds
+  doubleClickThreshold, the gap from the FIRST click's release (necessarily
+  earlier) must exceed doubleClickThreshold too, so it could never have
+  passed the double-click gap check either way. Reproduced the original bug
+  directly (a second click held 200ms -- past the old 180ms threshold, well
+  within the double-click gap -- used to fire a punch instead of cutting)
+  and confirmed the fix resolves it.
+- All animations (rope swing, growth rate, cut-sweep speed) were slightly
+  jumpy because update() was stepped by the raw, jittery per-frame
+  requestAnimationFrame delta. Switched to a fixed-timestep accumulator:
+  update() now always advances by exactly 1/60s, called as many times as
+  needed to catch up to real elapsed time each frame; render() still runs
+  once per real frame.
+
+Added:
+- Holding to charge a punch is no longer limited by Click Distance, per
+  explicit request -- press down anywhere and the hold still charges,
+  aimed at whichever rope point ends up nearest. Only a quick tap (single
+  click or either half of a double-click) still needs real proximity to
+  the rope, since that's what targets a specific punch/cut point.
+- Baked in a full Copy-Settings dump (values, group/setting order) the user
+  captured from a live-tuned session as the new hardcoded defaults:
+  Circle Size 8->4.5, Rope Thickness 1.4->2.8, Rope Length 45->53.972788461538556
+  (%vh; the exact captured value, not rounded), plus the Minimum Rope
+  Length/Rope Fall Speed/Cut Speed order in ROPE CUT and the Click Hold Max
+  Duration/Intensity Ceiling/Double Click Threshold order in MECHANICS
+  reordered to match. Every provided value was already within its slider's
+  existing min/max range, so no bound-expansion was needed.
+
+Verified:
+- Reproduced the exact original cut-bounce scenario (click 1 quick, click 2
+  held 200ms, ~215ms total gap -- comfortably inside the 300ms double-click
+  window) and confirmed it now cuts cleanly (fallen pieces 0->1, main rope
+  point count reduced) with no separate punch firing.
+- A hold started ~162px from the rope (7.5x the ~21.6px Click Distance
+  threshold) still correctly charged and fired a punch on release; an
+  otherwise-identical QUICK tap at the same far distance produced exactly
+  zero movement, confirming quick taps still respect Click Distance while
+  holds don't.
+- Regression: hold-to-grow on the circle still grows the rope by exactly
+  the expected amount and stops cleanly on release.
+- Fresh (cleared localStorage) page load confirmed Circle Size, Rope
+  Thickness, and Rope Length now read the new default values exactly.
+- node --check clean; debug hook removed before commit (grep-confirmed).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

@@ -113,3 +113,20 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   duration up to Intensity Ceiling at Click Hold Max Duration). The two are
   mutually exclusive per gesture by design, per explicit clarification from
   the user after the original spec read as ambiguous between them.
+- Charging-eligibility uses `cfg.doubleClickThreshold` as its hold-duration
+  gate, not the original (shorter) `HOLD_THRESHOLD_MS` — this is what makes
+  it provably impossible for charging to hijack a real double-click into an
+  unwanted "bounce" instead of a cut (see `docs/CODE_SUMMARY.md` Gotchas for
+  the proof). Don't shorten this back to `HOLD_THRESHOLD_MS`; that was the
+  actual root cause of a real reported bug.
+- Holding to charge a punch is NOT limited by `clickDistance` — you can
+  press down anywhere on screen and the hold still charges, aimed at
+  whichever rope point ends up nearest. Only a quick tap (single click or
+  either half of a double-click) still needs real proximity, since that's
+  what targets a specific punch/cut point precisely.
+- `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
+  accumulator pattern), never the raw per-frame `requestAnimationFrame`
+  delta — physics, growth rate, and cut-sweep timing all depend on this to
+  stay smooth; feeding a variable/jittery dt into `update()` again would
+  reintroduce the "everything looks slightly jumpy" bug this was built to
+  fix.
