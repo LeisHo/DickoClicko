@@ -1669,6 +1669,26 @@ exactly as designed, not a bug) -- see README.md's new "Dev panel
 settings sync" section for the exact setup steps.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  11:10 AM - 11:11 AM EDT
+
+Fixed: user supplied the workspace's canonical §12l reference
+implementation (already built and debugged on another project this
+session) as a spec to reconcile DICKOCLICKO's own api/save-settings.js
+against. Diffed line-by-line: every piece already matched except the
+missing-env-var error message, which reported a vague "missing
+GITHUB_TOKEN or DEV_PANEL_SAVE_SECRET" regardless of which ONE was
+actually absent -- the reference spec explicitly calls out reporting
+exactly which var is missing as "made debugging much faster." Fixed by
+building a `missing` array and joining it into the error message, same
+pattern as the reference. Re-confirmed the other 2 architecture pieces
+(the git-tracked seed file, the client's fetch('/api/save-settings')
+call with the X-Dev-Panel-Secret header) were already in place from the
+prior round rather than assuming. node --check clean. Only the 1 line
+of real logic change; everything else in the function (GET-for-sha,
+PUT-to-commit, response shapes) was already an exact match, confirmed by
+direct comparison rather than a full rewrite.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

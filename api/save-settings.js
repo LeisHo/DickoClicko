@@ -26,8 +26,14 @@ module.exports = async (req, res) => {
 
     const secret = process.env.DEV_PANEL_SAVE_SECRET;
     const token = process.env.GITHUB_TOKEN;
-    if (!secret || !token) {
-        res.status(500).json({ ok: false, error: 'Server not configured (missing GITHUB_TOKEN or DEV_PANEL_SAVE_SECRET)' });
+    // Report exactly which var is missing, not a vague "one of these" -- a
+    // real, previously-hit debugging pain point (per the workspace-wide
+    // §12l reference spec this function is modeled on).
+    const missing = [];
+    if (!secret) missing.push('DEV_PANEL_SAVE_SECRET');
+    if (!token) missing.push('GITHUB_TOKEN');
+    if (missing.length) {
+        res.status(500).json({ ok: false, error: `Server not configured - missing: ${missing.join(', ')}` });
         return;
     }
     if (req.headers['x-dev-panel-secret'] !== secret) {
