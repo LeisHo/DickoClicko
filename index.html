@@ -202,6 +202,8 @@ const DEV_GROUPS = [
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
     { key:'endcapAtCutEnd',  label:'Endcap At Cut End', type:'checkbox', def:false },
+    { key:'cutSweepColor',     label:'Cut Sweep Color',     type:'color',  def:'#ffffff' },
+    { key:'cutSweepThickness', label:'Cut Sweep Thickness', type:'slider', unit:'%vmin', min:0.1, max:5, step:0.1, def:1 },
   ]},
   { title:'FLOOR', controls:[
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
@@ -707,18 +709,21 @@ const IDB_HANDLE_KEY = 'gitSettingsFileHandle';
 // fallback for any of this anymore.
 let lastLoadedSnapshot = null;
 
-// §12l's file:// exception: the git write-through needs a real save
-// dialog/handle behind it, which the File System Access API can't offer
-// in a browser that lacks it entirely (Firefox/Safari, or this page
-// opened as a bare local file in one of those). Checked once, not
-// per-call, since it's an environmental capability, not something that
-// changes mid-session. When false, Save/Reset use SESSION_FALLBACK_KEY
-// instead (sessionStorage, not localStorage -- it's gone the moment the
-// tab closes, so it can never become the persistent "separate
-// browser-local default" §12d/§12l otherwise bans; it exists only so a
-// Save made in a capability-less browser has anything for that same
-// tab's own Reset to read back).
-const GIT_LOG_WRITABLE = 'showSaveFilePicker' in window;
+// §12l's file:// exception: gated on PROTOCOL, not just API capability --
+// opened as a bare local file (`file://`, no server behind it at all)
+// must never trigger the native save-file picker/disk write, even in a
+// browser that technically supports the File System Access API, since
+// there's no server for that write to be meaningfully "tracked" through
+// (matches DEV_MODE's own file:// detection just above). Also false in
+// the ordinary case of a browser lacking the API entirely (Firefox/
+// Safari). Checked once, not per-call, since both halves are
+// environmental facts that don't change mid-session. When false,
+// Save/Reset use SESSION_FALLBACK_KEY instead (sessionStorage, not
+// localStorage -- it's gone the moment the tab closes, so it can never
+// become the persistent "separate browser-local default" §12d/§12l
+// otherwise bans; it exists only so a Save made in this mode has
+// anything for that same tab's own Reset to read back).
+const GIT_LOG_WRITABLE = location.protocol !== 'file:' && 'showSaveFilePicker' in window;
 const SESSION_FALLBACK_KEY = 'dickoClicko.sessionSettings';
 
 function idbOpen(){
@@ -1151,8 +1156,24 @@ function positionGrowingTip(){
   const pts = mainRope.points;
   const dir = tipGrowDirection(pts);
   const tip = pts[pts.length - 1];
-  tip.x = dir.prev.x + dir.x * mainRope.tipGrowLen;
-  tip.y = dir.prev.y + dir.y * mainRope.tipGrowLen;
+  const targetX = dir.prev.x + dir.x * mainRope.tipGrowLen;
+  const targetY = dir.prev.y + dir.y * mainRope.tipGrowLen;
+  // Smoothed toward the raw target instead of snapping straight to it.
+  // dir.prev is a real physics point still subject to the constraint
+  // solver's own ordinary per-frame "breathing", and every time a segment
+  // completes dir.prev's IDENTITY switches to the just-finalized point --
+  // both effects are individually small, but anchoring the tip's ABSOLUTE
+  // position directly to dir.prev every frame showed them through 1:1
+  // (confirmed via frame-by-frame tracing: real, reproducible non-monotonic
+  // steps at every single commit boundary, not just visually-suspected
+  // jitter). Smoothing spreads each such step over a few frames instead of
+  // rendering it as one visible snap. tipGrowLen/totalLength (the actual
+  // growth accounting) are untouched -- only the rendered pixel position
+  // lags slightly behind the true target, which is imperceptible against a
+  // steady ~2px/frame growth rate.
+  const smoothing = 0.25;
+  tip.x += (targetX - tip.x) * smoothing;
+  tip.y += (targetY - tip.y) * smoothing;
   tip.oldx = tip.x; tip.oldy = tip.y;
 }
 
@@ -1216,6 +1237,31 @@ function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex){
 
 const CUT_SWEEP_BASE_SEC = 0.35;
 
+// a perfectly vertical piece has no asymmetry to topple over on -- give it a
+// small random initial tilt (around its own top point) so gravity and the
+// floor collision naturally fold it into a heap instead of it standing
+// there as a rigid straight column. Shared by both cutRopeAt (the piece
+// falling off the main rope) and cutPieceAt (a fallen piece split in two).
+function topplePiece(points){
+  const angle = (Math.random() - 0.5) * 0.6;
+  const pivot = points[0];
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  for (let i = 1; i < points.length; i++){
+    const p = points[i];
+    // rotate both the current AND old position by the same angle around the
+    // same pivot, so the rotation only adds a topple bias — it does NOT
+    // zero out whatever velocity the point already had from an in-progress
+    // swing (rotating position but resetting oldx/oldy to match would kill
+    // that momentum, which is exactly the "shouldn't freeze mid-swing" bug).
+    const dx = p.x - pivot.x, dy = p.y - pivot.y;
+    const odx = p.oldx - pivot.x, ody = p.oldy - pivot.y;
+    p.x = pivot.x + dx * cosA - dy * sinA;
+    p.y = pivot.y + dx * sinA + dy * cosA;
+    p.oldx = pivot.x + odx * cosA - ody * sinA;
+    p.oldy = pivot.y + odx * sinA + ody * cosA;
+  }
+}
+
 function cutRopeAt(hit, clickX, clickY){
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
   // refuse a cut whose TARGET point falls within Circle Cut Distance of the
@@ -1257,41 +1303,63 @@ function cutRopeAt(hit, clickX, clickY){
   // segment -- no growth in progress.
   mainRope.tipGrowLen = mainRope.segLen;
   setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
+  // the cut sweep-mark belongs to the REMAINING rope (still hanging from the
+  // circle), not the falling piece — it's anchored to mainRope's own new
+  // cut-edge point (its current last point), so it tracks the remaining
+  // rope's swing, not the piece's. A later cut overwrites this outright,
+  // same as how a piece cut mid-swing keeps moving from the very next frame.
+  const half = vmin(cfg.ropeThickness) / 2;
+  mainRope.cutSweep = {
+    progress: 0, nx, ny,
+    startOffset: side > 0 ? half : -half,
+    endOffset: side > 0 ? -half : half,
+  };
   if (lowerPoints.length >= 2){
-    // a perfectly vertical piece has no asymmetry to topple over on — give it
-    // a small random initial tilt (around its own cut-point end) so gravity
-    // and the floor collision naturally fold it into a heap instead of it
-    // standing there as a rigid straight column. Applied immediately, same
-    // frame as the cut — the piece keeps moving under normal physics from
-    // the very next frame, it is never paused; the sweep mark below is a
-    // purely cosmetic overlay, it doesn't gate the piece's motion at all
-    // (a piece cut while the rope is already mid-swing must keep swinging,
-    // not visibly freeze).
-    const angle = (Math.random() - 0.5) * 0.6;
-    const pivot = lowerPoints[0];
-    const cosA = Math.cos(angle), sinA = Math.sin(angle);
-    for (let i = 1; i < lowerPoints.length; i++){
-      const p = lowerPoints[i];
-      // rotate both the current AND old position by the same angle around the
-      // same pivot, so the rotation only adds a topple bias — it does NOT
-      // zero out whatever velocity the point already had from an in-progress
-      // swing (rotating position but resetting oldx/oldy to match would kill
-      // that momentum, which is exactly the "shouldn't freeze mid-swing" bug).
-      const dx = p.x - pivot.x, dy = p.y - pivot.y;
-      const odx = p.oldx - pivot.x, ody = p.oldy - pivot.y;
-      p.x = pivot.x + dx * cosA - dy * sinA;
-      p.y = pivot.y + dx * sinA + dy * cosA;
-      p.oldx = pivot.x + odx * cosA - ody * sinA;
-      p.oldy = pivot.y + odx * sinA + ody * cosA;
-    }
-    const half = vmin(cfg.ropeThickness) / 2;
-    const piece = {
-      points: lowerPoints, segLen: mainRope.segLen,
-      cutProgress: 0, cutNx: nx, cutNy: ny,
-      cutStartOffset: side > 0 ? half : -half,
-      cutEndOffset: side > 0 ? -half : half,
-    };
+    // Applied immediately, same frame as the cut — the piece keeps moving
+    // under normal physics from the very next frame, it is never paused;
+    // the sweep mark above is a purely cosmetic overlay, it doesn't gate
+    // the piece's motion at all (a piece cut while the rope is already
+    // mid-swing must keep swinging, not visibly freeze).
+    topplePiece(lowerPoints);
+    const piece = { points: lowerPoints, segLen: mainRope.segLen };
     fallenPieces.push(piece);
+    if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
+  }
+}
+
+// Splits an already-fallen piece into two independent pieces at the click
+// point — same geometry/toppling as cutRopeAt's own piece split, but with
+// no anchor/growth bookkeeping (a fallen piece has neither). The "upper"
+// half (index 0..idx) keeps the piece's own identity and cutSweep mark,
+// same convention as cutRopeAt's remaining rope keeping mainRope's; the
+// "lower" half becomes a brand-new fallen piece with no mark of its own.
+function cutPieceAt(pieceIndex, hit, clickX, clickY){
+  const piece = fallenPieces[pieceIndex];
+  if (!piece) return;
+  const idx = Math.max(1, Math.min(hit.index, piece.points.length - 2));
+  const upperLen = idx * piece.segLen;
+  const lowerLen = (piece.points.length - 1 - idx) * piece.segLen;
+  if (upperLen < vh(cfg.minRopeLength) || lowerLen < vh(cfg.minRopeLength)) return;
+
+  const a = piece.points[idx - 1], b = piece.points[idx];
+  let tx = b.x - a.x, ty = b.y - a.y;
+  const tlen = Math.hypot(tx, ty) || 1;
+  tx /= tlen; ty /= tlen;
+  const nx = ty, ny = -tx;
+  const side = (clickX - hit.x) * nx + (clickY - hit.y) * ny;
+
+  const lowerPoints = piece.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
+  piece.points = piece.points.slice(0, idx + 1);
+
+  const half = vmin(cfg.ropeThickness) / 2;
+  piece.cutSweep = {
+    progress: 0, nx, ny,
+    startOffset: side > 0 ? half : -half,
+    endOffset: side > 0 ? -half : half,
+  };
+  if (lowerPoints.length >= 2){
+    topplePiece(lowerPoints);
+    fallenPieces.push({ points: lowerPoints, segLen: piece.segLen });
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
 }
@@ -1335,6 +1403,30 @@ function hitTestRope(x, y){
   if (isOnCircle(x, y)) return null; // clicking the circle itself never counts as a rope hit
   const hit = nearestPointOnRope(x, y, mainRope.points);
   return hit.dist <= vmin(cfg.clickDistance) ? hit : null;
+}
+
+// Nearest fallen piece within Click Distance, if any -- same proximity gate
+// as hitTestRope, checked against every piece independently since they're
+// unrelated point chains scattered across the floor.
+function hitTestPieces(x, y){
+  let best = null;
+  for (let i = 0; i < fallenPieces.length; i++){
+    const hit = nearestPointOnRope(x, y, fallenPieces[i].points);
+    if (hit.dist <= vmin(cfg.clickDistance) && (!best || hit.dist < best.dist)) best = { ...hit, pieceIndex: i };
+  }
+  return best;
+}
+
+// Whichever of the main rope or a fallen piece is closest to (x,y), tagged
+// with which one it is -- used only for double-click-to-cut, which the
+// user can aim at either. Punching/hold-charging stay rope-only (unchanged
+// scope) and keep using hitTestRope/nearestPointOnRope directly.
+function hitTestAny(x, y){
+  const ropeHit = hitTestRope(x, y);
+  const pieceHit = hitTestPieces(x, y);
+  if (ropeHit && (!pieceHit || ropeHit.dist <= pieceHit.dist)) return { ...ropeHit, target: 'rope' };
+  if (pieceHit) return { ...pieceHit, target: 'piece' };
+  return null;
 }
 
 function onPointerDown(e){
@@ -1396,9 +1488,15 @@ function onPointerUp(e){
   if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
     clearTimeout(pendingClick.timer);
     pendingClick = null;
-    const willCut = info.hit.dist <= vmin(cfg.clickDistance);
-    logClick('up:double-click', { x: info.x, y: info.y, hitDist: info.hit.dist, willCut });
-    if (willCut) cutRopeAt(info.hit, info.x, info.y);
+    // re-resolve against CURRENT positions at release time -- the rope and
+    // any fallen piece may both have moved since the press, and a double
+    // click can be aimed at either (cuts the rope, or splits a piece).
+    const target = hitTestAny(e.clientX, e.clientY);
+    logClick('up:double-click', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
+    if (target){
+      if (target.target === 'rope') cutRopeAt(target, e.clientX, e.clientY);
+      else cutPieceAt(target.pieceIndex, target, e.clientX, e.clientY);
+    }
     return;
   }
 
@@ -1430,18 +1528,26 @@ function onPointerUp(e){
     return;
   }
 
-  // quick tap — still needs real proximity to the rope to mean anything
-  if (info.hit.dist > vmin(cfg.clickDistance)){
+  // quick tap — arms pendingClick if the press landed near the rope OR a
+  // fallen piece, so a double-click aimed at either (or a mix of the two)
+  // still registers; only a ROPE tap fires the single-tap punch on its own
+  // timeout — punching stays rope-only (unchanged scope), still keyed off
+  // the original press-time rope hit (info.hit), same as before pieces
+  // became double-click-cuttable.
+  const nearAny = hitTestAny(info.x, info.y);
+  if (!nearAny){
     logClick('up:tap-too-far', { x: info.x, y: info.y, hitDist: info.hit.dist });
     return;
   }
   if (pendingClick) clearTimeout(pendingClick.timer);
-  logClick('up:tap-pending', { x: info.x, y: info.y, hitDist: info.hit.dist });
+  logClick('up:tap-pending', { x: info.x, y: info.y, target: nearAny.target });
   pendingClick = {
     time: now,
     timer: setTimeout(() => {
-      logClick('up:tap-punch', { x: info.x, y: info.y, hitDist: info.hit.dist, intensity: cfg.clickIntensity });
-      applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0);
+      if (info.hit.dist <= vmin(cfg.clickDistance)){
+        logClick('up:tap-punch', { x: info.x, y: info.y, hitDist: info.hit.dist, intensity: cfg.clickIntensity });
+        applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0);
+      }
       pendingClick = null;
     }, cfg.doubleClickThreshold),
   };
@@ -1468,12 +1574,19 @@ function update(rawDt){
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0, hasPartialTip);
   if (hasPartialTip) positionGrowingTip();
 
-  // cutProgress only drives the cosmetic sweep-mark overlay now (render()) —
-  // it never gates a piece's own physics, so a piece cut mid-swing keeps
-  // swinging/falling continuously from the very next frame, same as any
-  // other fallen piece.
+  // cutSweep.progress only drives the cosmetic sweep-mark overlay now
+  // (render()) — it never gates anything's own physics, so a piece cut
+  // mid-swing keeps swinging/falling continuously from the very next frame.
+  // mainRope and any piece can each carry their own independent cutSweep
+  // (a rope cut, and any number of subsequent piece-splits, all animate
+  // on their own timeline).
+  if (mainRope.cutSweep && mainRope.cutSweep.progress < 1){
+    mainRope.cutSweep.progress = Math.min(1, mainRope.cutSweep.progress + rawDt * cfg.cutSpeed / CUT_SWEEP_BASE_SEC);
+  }
   fallenPieces.forEach(piece => {
-    if (piece.cutProgress < 1) piece.cutProgress = Math.min(1, piece.cutProgress + rawDt * cfg.cutSpeed / CUT_SWEEP_BASE_SEC);
+    if (piece.cutSweep && piece.cutSweep.progress < 1){
+      piece.cutSweep.progress = Math.min(1, piece.cutSweep.progress + rawDt * cfg.cutSpeed / CUT_SWEEP_BASE_SEC);
+    }
   });
 
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeWeight * cfg.ropeFallSpeed;
@@ -1585,17 +1698,19 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult){
   ctx.restore();
 }
 
-function renderCutSweep(piece){
-  const t = piece.cutProgress;
-  const off = piece.cutStartOffset + (piece.cutEndOffset - piece.cutStartOffset) * t;
-  // anchored to the piece's own current cut-edge point (points[0]), not a
-  // static remembered position — the piece keeps moving under normal
-  // physics, so the mark must track it rather than floating in place.
-  const cutPoint = piece.points[0];
-  const x1 = cutPoint.x + piece.cutNx * piece.cutStartOffset, y1 = cutPoint.y + piece.cutNy * piece.cutStartOffset;
-  const x2 = cutPoint.x + piece.cutNx * off, y2 = cutPoint.y + piece.cutNy * off;
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = Math.max(2, vmin(cfg.ropeThickness) * 0.35);
+function renderCutSweep(entity){
+  const sweep = entity.cutSweep;
+  const t = sweep.progress;
+  const off = sweep.startOffset + (sweep.endOffset - sweep.startOffset) * t;
+  // anchored to the entity's OWN current cut-edge point (its last point),
+  // not a static remembered position — mainRope/the piece keeps moving
+  // under normal physics, so the mark must track IT, not whatever fell (or
+  // split) away from it.
+  const cutPoint = entity.points[entity.points.length - 1];
+  const x1 = cutPoint.x + sweep.nx * sweep.startOffset, y1 = cutPoint.y + sweep.ny * sweep.startOffset;
+  const x2 = cutPoint.x + sweep.nx * off, y2 = cutPoint.y + sweep.ny * off;
+  ctx.strokeStyle = cfg.cutSweepColor;
+  ctx.lineWidth = Math.max(2, vmin(cfg.cutSweepThickness));
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(x1, y1);
@@ -1639,7 +1754,8 @@ function render(){
       fallenPieces.forEach(piece => drawEndcap([...piece.points].reverse(), thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight));
     }
   }
-  fallenPieces.forEach(piece => { if (piece.cutProgress < 1) renderCutSweep(piece); });
+  if (mainRope.cutSweep && mainRope.cutSweep.progress < 1) renderCutSweep(mainRope);
+  fallenPieces.forEach(piece => { if (piece.cutSweep && piece.cutSweep.progress < 1) renderCutSweep(piece); });
 }
 
 // Fixed-timestep physics: update() always advances by exactly this much,
@@ -1689,10 +1805,8 @@ if (DEV_MODE){
 }
 requestAnimationFrame(loop);
 
-window.__debugTMP2 = {
-  cfg, mainRope, update, tipGrowDirection, vh, positionGrowingTip, growRope, integrateChain,
-  setGrowing: v => { growing = v; },
-  getGrowing: () => growing,
+window.__debugTMP3 = {
+  cfg, mainRope, fallenPieces, update, render, cutRopeAt, cutPieceAt, hitTestAny, hitTestRope, hitTestPieces,
 };
 
 })();

@@ -1304,6 +1304,56 @@ Verified:
   entry's logClick() situation.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  08:49 AM - 08:54 AM EDT
+
+Fixed (correction to the immediately-preceding entry's §12l fallback,
+per explicit user clarification: "it should no longer trigger a local
+file save and only a cache save when its opened locally not on a
+server"):
+- GIT_LOG_WRITABLE was gating purely on File System Access API
+  capability (`'showSaveFilePicker' in window`), which stays true even
+  when this page is opened as a bare local file in a browser that
+  happens to support the API -- meaning Save would have still triggered
+  the native save-file picker/disk write in exactly the case the §12l
+  exception exists to avoid. Fixed by gating on PROTOCOL first:
+  `location.protocol !== 'file:' && 'showSaveFilePicker' in window`
+  (matching DEV_MODE's own existing protocol check) -- now false both
+  for a bare local file AND for a browser lacking the API, true only
+  when actually served (http/https, including a local dev server) with
+  the API present.
+
+Verified:
+- node --check clean.
+- Live-tested server-mode (http://) is unaffected: GIT_LOG_WRITABLE
+  still reads true, sessionStorage stays untouched, Save still attempts
+  the git-log path exactly as the prior entry verified.
+- Could not exercise a genuine file:// load for DICKOCLICKO directly in
+  this sandbox (confirmed again: navigating to file:// for a project
+  outside this session's own project root silently stays on the
+  previous page, not even reaching a real DOM) -- verified the new
+  boolean's correctness instead via a truth-table check of the exact
+  expression shape shipped (`protocol !== 'file:' && hasPicker`) against
+  all 4 relevant input combinations, confirming file://+API-present now
+  correctly evaluates false (the bug just fixed) while the other 3 cases
+  match prior, already-verified behavior. The `GIT_LOG_WRITABLE===false`
+  fallback branch itself (sessionStorage write/read round-trip, button
+  text) was already fully round-trip tested in the immediately preceding
+  entry and is unchanged by this fix -- only the boolean feeding into it
+  changed.
+- Noted, not acted on: a different concurrent session landed a large,
+  coherent, well-commented feature addition in the same file's working
+  tree while this fix was in progress -- new Cut Sweep Color/Thickness
+  sliders, a tip-position-smoothing fix for the growing rope tip, a
+  shared topplePiece() helper, and a new cutPieceAt() letting an already
+  -fallen piece be cut a second time, with cutSweep generalized to a
+  per-entity object so mainRope and every piece can each animate their
+  own independent cut-sweep mark. Read through the full diff before
+  committing (not just diffed size) to confirm it's complete/coherent,
+  not a broken mid-edit state; left entirely untouched and disclosed
+  here rather than reviewed/altered, since it's outside this task's
+  scope and not this session's to judge.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

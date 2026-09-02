@@ -247,18 +247,24 @@ Damping/Constraint Iterations sliders, that's the next place to look.)
   rose from 666 (bare line-cap) to 855 (line-cap + SVG endcap) with the
   checkbox on, its unaffected tip end stayed flat (847 vs 850), and a
   real checkbox `change` event correctly toggled `cfg.endcapAtCutEnd`.
-- Implemented §12l's newly-added "no server, opened directly as a local
-  file" exception: a `GIT_LOG_WRITABLE` capability check
-  (`'showSaveFilePicker' in window`) now gates Save/Reset between the
-  git-log path and a new session-scoped `sessionStorage` fallback for
-  browsers that lack the File System Access API entirely — deliberately
-  `sessionStorage`, not `localStorage`, since it can't outlive the tab
-  and so can never become the persistent local default §12d/§12l bans.
-  Verified both branches: a throwaway test copy with the API deleted
-  confirmed the fallback round-trips a saved value correctly and flashes
-  "Saved (session only)"; the real, unmodified file confirmed zero
-  change to the normal-capability path (sessionStorage untouched, same
-  git-log behavior as before).
+- Implemented §12l's "no server, opened directly as a local file"
+  exception: Save/Reset now check `GIT_LOG_WRITABLE` and fall back to a
+  session-scoped `sessionStorage` cache (never `localStorage` — it can't
+  outlive the tab, so it can never become the persistent local default
+  §12d/§12l bans) instead of the git-tracked settings log. Corrected same
+  day per explicit clarification: the check must gate on PROTOCOL, not
+  just API capability — `location.protocol !== 'file:' &&
+  'showSaveFilePicker' in window` (matching `DEV_MODE`'s own existing
+  protocol check), since checking capability alone stayed true even when
+  opened as a bare local file in a browser that happens to support the
+  API, which would have still triggered the native save-file
+  picker/disk write in exactly the case this exception exists to avoid.
+  Verified: server-mode (http://) unaffected (regression-checked live);
+  the sessionStorage fallback branch itself round-trips correctly
+  (live-tested); the corrected protocol logic verified via a truth-table
+  check of all 4 input combinations, since this sandbox can't execute
+  live JS under a real `file://` load for a project outside its own
+  root.
 
 ## What's next
 

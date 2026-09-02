@@ -163,19 +163,25 @@ before any save/reset in a fresh page load, the "other" tab's geometry is
 simply unknown (`null`, i.e. CSS default) until a real read succeeds.
 
 §12l's "no server, opened directly as a local file" exception (added
-2026-09-02): `GIT_LOG_WRITABLE` (`'showSaveFilePicker' in window`, computed
-once) gates `saveSettings()`/`resetSettings()` between the git-log path
-above and a `SESSION_FALLBACK_KEY` `sessionStorage` fallback -- for a
-browser that structurally can't offer the File System Access API at all
-(Firefox/Safari, or this page opened as a bare local file in one of those),
-not for an ordinary picker cancel or permission denial in a capable
-browser, which still just fails as before. `sessionStorage`, not
+2026-09-02): `GIT_LOG_WRITABLE` gates `saveSettings()`/`resetSettings()`
+between the git-log path above and a `SESSION_FALLBACK_KEY` `sessionStorage`
+fallback. Gated on PROTOCOL, not just API capability (corrected same day,
+per explicit user clarification -- the original version checked only
+`'showSaveFilePicker' in window`, which stayed true even when this page was
+opened as a bare local file in a browser that happens to support the API,
+so it would have still triggered the native save-file picker/disk write in
+exactly the case the exception exists to avoid): `GIT_LOG_WRITABLE =
+location.protocol !== 'file:' && 'showSaveFilePicker' in window` -- false
+both when there's genuinely no server behind the page (`file://`, matching
+`DEV_MODE`'s own protocol check just above) AND when the browser lacks the
+API entirely (Firefox/Safari), true only when served (http/https,
+including a local dev server) with the API present. `sessionStorage`, not
 `localStorage`, deliberately: it's gone the moment the tab closes, so it
 can never become the persistent "separate browser-local default" §12d/§12l
-otherwise bans -- it exists only so a Save made in a capability-less
-browser has anything for that same tab's own Reset to read back. The Save
-button says "Saved (session only)" in this mode, never "Saved!", so it's
-never mistaken for a real git-log write.
+otherwise bans -- it exists only so a Save made in this mode has anything
+for that same tab's own Reset to read back. The Save button says "Saved
+(session only)" in this mode, never "Saved!", so it's never mistaken for a
+real git-log write.
 
 Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
 applies is decided by WHERE the hold starts, checked once at pointerdown
