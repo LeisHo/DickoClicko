@@ -1905,6 +1905,74 @@ hook (window.__debugTMPropo) removed before commit, grep-confirmed 0
 references.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  1:45 PM - 1:56 PM EDT
+
+Three related changes to Fall Delay and rope-extension smoothness, all
+per direct requests:
+
+1. "The new rope ends should only appear the moment the cut segment
+   begins to fall" -- the cut-end endcap (Endcap At Cut End, ROPE CUT
+   group) is now hidden in render() while piece.fallDelay > 0, and
+   appears the instant it hits 0. Purely a render-time gate; doesn't
+   touch the delay countdown itself. A no-op with the default Fall
+   Delay (0) -- the cap still appears immediately, same as before.
+
+2. "If the rope is mid swing while it gets cut, the delayed cut segment
+   will continue to swing with the main rope segment until its time to
+   fall" -- a delayed piece was previously frozen motionless in empty
+   space for the whole delay. Now tracks whatever it was cut from
+   (mainRope for cutRopeAt(), or the upper remaining half of another
+   piece for a piece-on-piece cutPieceAt()) via rigid translation: each
+   frame, the piece shifts by exactly however far its "delayParent"'s
+   own current tip moved that frame (both x/y AND oldx/oldy shift
+   together, so no velocity is falsely injected once released).
+   Translation only, no rotation -- the piece's own shape (set once at
+   topplePiece() time) is unchanged during the delay, only its position.
+   Once fallDelay hits 0 the piece decouples completely and falls under
+   its own independent physics from that point on.
+
+3. "When I trigger the extension while the rope is mid swing, it still
+   extends in a jittery fashion" -- investigated as a DIFFERENT bug from
+   the earlier pileRepulsion/floor-related tangling fix (reproduced with
+   the floor disabled entirely, isolating it as swing+growth specific).
+   Direct frame-by-frame acceleration tracing at the growing tip found
+   real, periodic velocity-discontinuity spikes (up to ~50px/frame^2
+   against a ~4px/frame^2 baseline) recurring almost exactly at the
+   segment-commit interval. Root cause: growRope()'s commit always
+   snapped the tip to the mathematically "complete" targetSeg-away
+   position, but positionGrowingTip()'s own smoothing (added 2 rounds
+   ago, deliberately lagging behind the raw target to filter solver
+   noise) could still be meaningfully behind that exact position at the
+   moment of commit -- closing that gap in one frame is what produced
+   the spike. First attempt (finalizing the tip wherever it already
+   visually was, instead of snapping) fixed the spikes but introduced a
+   worse regression: without the ramp described below, segment lengths
+   fell measurably short over many commits during a real swinging
+   session (max ratio ~3.6x by 5s, worse than before). Final fix: ramp
+   positionGrowingTip()'s own smoothing factor UP toward 1 as
+   tipGrowLen approaches segLen (`Math.max(0.25, tipGrowLen/segLen)`),
+   so the tip has essentially already caught up to its target the
+   instant before commit -- growRope() then freezing it there (rather
+   than snapping) loses none of the segment's real length. Both
+   problems resolved together: verified via the same repro (punch to
+   induce real swinging, then grow immediately) that max acceleration
+   dropped from 50.27 to 9.93 (2 residual spikes vs 8 originally) AND
+   max segment-length ratio over a full 5s test came out at 1.274 --
+   BETTER than the original pre-any-fix baseline (1.774), not just
+   better than the failed first attempt's 3.6-3.9.
+
+Verified: node --check clean at every step. Live-tested via a temporary
+debug hook (window.__debugTMPropo, removed before commit, grep-confirmed
+0 references) against a standalone static server: a synthetic piece cut
+from a mainRope with real swinging velocity tracked the parent's tip
+exactly, frame by frame, for the entire delay, then correctly decoupled
+and fell independently the instant fallDelay hit 0 (confirmed via
+mainRope continuing to oscillate afterward while the released piece's
+own points stayed fixed); the acceleration-spike and segment-length-
+ratio metrics above were both measured directly, not estimated. No
+console errors throughout.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

@@ -847,12 +847,62 @@ GOTCHAS
   a plain `lineTo()`, unchanged.
 - New "Fall Delay" slider (`cfg.fallDelay`, ROPE CUT group, 0-3s, default
   0): a cut-off piece is captured with `fallDelay: cfg.fallDelay` at cut
-  time (`cutRopeAt()`/`cutPieceAt()`) and stays completely frozen -- the
-  fallenPieces loop in `update()` skips its `integrateChain()` call
-  entirely while `piece.fallDelay > 0`, only counting it down against
-  `dt` -- until it falls normally from that point on. Toppling (the
-  initial random tilt) and the cut-sweep mark are both unaffected, same
-  as before -- neither was ever gated by physics timing.
+  time (`cutRopeAt()`/`cutPieceAt()`) and gets no independent physics of
+  its own -- the fallenPieces loop in `update()` skips its
+  `integrateChain()` call entirely while `piece.fallDelay > 0`, only
+  counting it down against `dt` -- until it falls normally from that
+  point on. Toppling (the initial random tilt) and the cut-sweep mark
+  are both unaffected, same as before -- neither was ever gated by
+  physics timing. The cut-end endcap (`endcapAtCutEnd`) is likewise
+  hidden in `render()` while `piece.fallDelay > 0`, appearing the
+  instant it hits 0 -- per explicit request that the new rope end
+  shouldn't visually appear until the piece actually starts falling.
+  While still delayed, per a further explicit request ("continue to
+  swing with the main rope segment until its time to fall") the piece
+  is NOT left hanging motionless: it rigidly translates each frame by
+  however far its `delayParent`'s own current tip moved that frame
+  (`delayParent` = `mainRope` for a `cutRopeAt()` cut, or the upper
+  remaining piece for a `cutPieceAt()` piece-on-piece cut; both x/y AND
+  oldx/oldy shift together, so releasing the piece injects no false
+  velocity). Translation only, no rotation -- the piece's own shape
+  (set once at `topplePiece()` time) never changes during the delay.
+  Verified via a synthetic mainRope given real swinging velocity: the
+  cut piece's own cut-edge point matched the parent's tip position
+  EXACTLY at every sampled frame throughout the delay, then correctly
+  decoupled (parent kept oscillating, piece stayed fixed) the instant
+  `fallDelay` hit 0.
+- `growRope()`'s commit and `positionGrowingTip()`'s smoothing were
+  BOTH involved in a real, reproduced "still jittery" report specific
+  to extending while mid-swing (independent of the earlier
+  pileRepulsion/floor fix -- reproduced with the floor disabled
+  entirely). Direct frame-by-frame acceleration tracing at the growing
+  tip found real velocity-discontinuity spikes (up to ~50px/frame^2 vs
+  a ~4px/frame^2 baseline) recurring almost exactly at the segment-
+  commit interval: `growRope()` always snapped the tip to the
+  mathematically "complete" targetSeg-away position at commit, but
+  `positionGrowingTip()`'s own smoothing (added 2 rounds ago to filter
+  solver noise) could still be meaningfully lagging behind that exact
+  position at the commit instant -- closing the gap in one frame is
+  what produced the spike. Fixed with two changes together (neither
+  alone was sufficient -- see below): (1) `growRope()`'s commit now
+  finalizes the tip at whatever position it's ALREADY at instead of
+  snapping (only on the FIRST commit within a frame -- a rare
+  multi-commit-per-frame burst falls back to the original explicit
+  computation, since that tip was only just created this same frame
+  and has no meaningful smoothed history to preserve); (2)
+  `positionGrowingTip()`'s smoothing factor now ramps from 0.25 up to 1
+  as `tipGrowLen` approaches `segLen` (`Math.max(0.25,
+  tipGrowLen/segLen)`), so the tip has essentially caught up to its
+  target by the instant before commit. (1) alone fixed the spikes but
+  regressed segment-length stability (undershooting segments compounded
+  over many commits into a worse max ratio, ~3.6x by 5s, than before
+  any of this); (2) alone would leave the original gap unaddressed.
+  Together, verified via the same repro (a real punch to induce
+  swinging, then grow immediately): max acceleration dropped from
+  50.27 to 9.93 (2 residual spikes vs 8), AND max segment-length ratio
+  over a full 5s test came out at 1.274 -- better than the ORIGINAL
+  pre-any-fix baseline (1.774), not just better than the failed
+  single-change attempt.
 - The double-click-cut sweep-mark's perpendicular direction is recomputed
   FRESH every `renderCutSweep()` call from `tipDirection(entity.points)`,
   not read from a `nx,ny` pair stored on the `cutSweep` object at cut time

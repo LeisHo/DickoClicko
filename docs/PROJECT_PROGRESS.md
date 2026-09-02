@@ -428,6 +428,22 @@ lost — verified via direct state inspection at the time.
   unaffected; a throwaway test copy with `IS_LOCAL_CONTEXT` forced false
   confirmed Save stops immediately with an honest error, no local prompt
   of any kind.
+- Fall Delay refinements, both per explicit request: the cut-end endcap
+  now stays hidden until a delayed piece actually starts falling
+  (render-time gate on `piece.fallDelay`); a delayed piece cut mid-swing
+  now rigidly tracks whatever it was cut from (`delayParent`) instead of
+  hanging motionless, decoupling cleanly once released. Also fixed a
+  real, separate "still jittery" extension bug specific to growing while
+  mid-swing (independent of the earlier floor/pileRepulsion fix) —
+  found real periodic velocity spikes at every segment-commit boundary
+  via direct acceleration tracing; fixed with two changes together
+  (`growRope()` no longer snaps the tip at commit, and
+  `positionGrowingTip()`'s smoothing now ramps up as the segment nears
+  completion) — max acceleration dropped 50→10, and segment-length
+  stability came out *better* than the original pre-fix baseline. See
+  CODE_SUMMARY's Gotchas for the full investigation, including a first
+  attempt that fixed the spikes but regressed segment-length stability
+  before landing on the final two-part fix.
 
 ## What's next
 
