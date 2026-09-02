@@ -522,11 +522,3 @@ GOTCHAS
   anchor) that this used to cut successfully and now correctly gets
   rejected, while a normal cut well clear of the circle still succeeds
   (regression-checked).
-- `cfg.flickDistanceThreshold` (CLICK group, default `0`) gates a charged
-  hold's release on how far the pointer traveled from press to release,
-  independent of `cfg.holdDistance` (which gates on distance from the
-  ROPE at release, not on drag distance). Default `0` preserves the
-  original behavior exactly (a hold released essentially in place still
-  fires) -- verified a ~1px release is blocked once the threshold is
-  raised above it, and a release exceeding the threshold still fires with
-  the same displacement magnitude as before the gate was added.

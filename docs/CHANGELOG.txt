@@ -1017,6 +1017,43 @@ Verified:
   commit (grep-confirmed 0 references).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  07:45 AM EDT
+
+Removed:
+- The "Click And Hold Flick Distance Threshold" slider (CLICK group,
+  added the immediately-prior round) -- removed one message later per
+  explicit request. Both the DEV_GROUPS entry and its onPointerUp()
+  gating check (dragDist < vmin(cfg.flickDistanceThreshold)) were
+  deleted entirely; the corresponding CODE_SUMMARY.md Gotchas entry was
+  removed too rather than left describing a control that no longer
+  exists.
+
+Changed (reorganization only, per explicit request -- no cfg keys,
+wiring, or behavior changed, only which DEV_GROUPS group declares each
+control):
+- The MECHANICS group is gone. Click Hold Max Duration and Intensity
+  Ceiling moved into ROPE GROWTH (alongside Rope Growth Rate). Double
+  Click Threshold moved into ROPE CUT.
+- Click Distance moved from CLICK into ROPE CUT, joining the other
+  double-click-related controls there (Minimum Rope Length, Circle Cut
+  Distance, Double Click Threshold) -- "stick the double click sliders
+  all in the rope cut group," per explicit request. CLICK is now just
+  Click Intensity and Click And Hold Distance.
+
+Verified:
+- Live DOM query of every .dp-group's .dp-row children confirmed the
+  final grouping exactly: CLICK -> [clickIntensity, holdDistance]; ROPE
+  GROWTH -> [ropeGrowthRate, clickHoldMaxDuration, intensityCeiling];
+  ROPE CUT -> [minRopeLength, circleCutDistance, clickDistance,
+  doubleClickThreshold, ropeFallSpeed, cutSpeed]; no MECHANICS group;
+  flickDistanceThreshold absent everywhere (grep-confirmed 0 references
+  in index.html).
+- node --check clean.
+- 0 console errors on a clean shipped-code reload (network-request
+  check confirmed 200 OK; console noise from flaky navigate() calls was
+  the same already-documented Browser-pane transient).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

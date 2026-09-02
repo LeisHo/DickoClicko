@@ -182,15 +182,20 @@ Nothing in progress — everything below is done, verified, and pushed.
   git-log write never blocks or affects the localStorage save.
 - Minimum Rope Length's slider range widened to 0.1-15 %vh (was 0.4-30),
   default unchanged at 0.5, per explicit request.
-- Added a "Click And Hold Flick Distance Threshold" slider (CLICK group,
-  default 0 = no minimum, preserving prior behavior exactly): gates a
-  charged hold's release on how far the pointer actually traveled from
-  press to release, independent of Click And Hold Distance (which gates
-  on distance from the rope at release, not on drag distance). Verified
-  both directions: a release under the threshold is blocked, one above it
-  still fires with the same displacement magnitude as before.
 - Moved Floor Enabled/Color/Thickness/Height out of ROPE CUT into their
   own new "FLOOR" group, per explicit request.
+- Removed the "Click And Hold Flick Distance Threshold" slider (added,
+  then removed one message later, per explicit request — no longer
+  present in CLICK or anywhere else).
+- Reorganized the dev panel further, per explicit request: the MECHANICS
+  group is gone (had exactly 3 controls, all relocated). ROPE CUT now
+  holds every double-click-related control together (Minimum Rope Length,
+  Circle Cut Distance, Click Distance, Double Click Threshold, Rope Fall
+  Speed, Cut Speed); ROPE GROWTH now also holds Click Hold Max Duration
+  and Intensity Ceiling (the charge-and-flick timing controls); CLICK is
+  down to just Click Intensity and Click And Hold Distance. Purely a
+  DEV_GROUPS reorganization — every control's own `cfg` key and wiring is
+  unchanged, verified via a live DOM query of every group's rows.
 
 ## What's next
 
