@@ -1730,6 +1730,78 @@ Verified:
   keys.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  12:45 PM - 1:11 PM EDT
+
+Fixed the real cause of a still-reported "rope extension is still
+jitter" bug, per a user-supplied screen recording showing the repro:
+extend from startup, cut the rope, let it settle, click-and-hold to
+extend again. Diagnosed methodically rather than guessed at:
+
+- Extracted and montaged frames from the recording (Python + OpenCV/
+  PIL, since ffmpeg isn't available in this environment) -- confirmed
+  the video showed real, severe self-knotting during the SECOND
+  extension (chaotic tight coiling within a few seconds of holding),
+  not subtle jitter.
+- A direct point-coordinate dump from a synthetic, zero-perturbation
+  straight-down growth test showed Y-coordinates going non-monotonic
+  (a real fold baked in), which led to 2 real, independently-confirmed
+  bugs -- both fixed, but investigation showed NEITHER was the actual
+  cause of the reported tangle:
+  - integrateChain()'s new bending constraint (from 2 rounds ago) read
+    the kinematically-positioned growing tip as a neighbor on its last
+    loop iteration, closing a feedback loop with positionGrowingTip()
+    (which repositions the tip FROM that same neighbor's position every
+    frame). Fixed by excluding the tip from the bend loop while a
+    partial segment is growing, matching the distance constraint's own
+    existing skipLastSegment handling.
+  - tipGrowDirection() used a raw, unsmoothed per-frame direction --
+    prev/beforePrev are real solver-participating points with ordinary
+    per-frame "breathing" noise, and a single noisy frame at the exact
+    instant a segment committed could bake a wrong angle in as a
+    PERMANENT kink. Fixed by exponentially smoothing the direction into
+    a new, persisted mainRope.growDir (reset on cut and on a fresh
+    rope), so single-frame noise gets filtered before it can be
+    committed.
+- Confirmed neither fix above was the actual cause by reproducing the
+  tangle with cfg.bendStiffness forced to 0 -- identical divergence.
+- Isolated the real cause via a clean A/B: a static, non-growing
+  67-point chain was PERFECTLY stable under gravity with the floor
+  disabled (5 simulated seconds, 0 chain-order violations), but severely
+  unstable with the floor enabled once long enough to reach it --
+  pinning the floor-collision block in update() as the true root cause,
+  unrelated to growth, bending, or direction noise. Further isolation
+  found pileRepulsion() specifically: it has no concept of chain
+  adjacency, so once points pile near the floor it repels ANY two of
+  them closer than minSep, including non-adjacent points from the SAME
+  chain -- fighting the distance constraint faster than
+  cfg.constraintIterations (few, by default) can resolve within a
+  frame.
+- 2 other fixes were tried and rejected before removing the
+  pileRepulsion() call: softening the floor clamp from a hard snap to a
+  partial correction (5 rates tested, none reliably helped, worst case
+  got WORSE at low rates); re-solving constraints a second time on
+  floor-contact frames (measurably worse -- re-running integrateChain()
+  re-triggers its own velocity-integration step, amplifying rather than
+  resolving the correction, worst ratio hit 16x).
+
+Verified: node --check clean at every step. Live-tested via a temporary
+debug hook (window.__debugTMPropo, removed before commit, grep-confirmed
+0 references) against a standalone static file server, driving update()
+directly with a fixed 1/60s timestep (this pane's own rAF loop proved
+unreliable to depend on across separate tool calls -- confirmed directly
+by seeing inconsistent, non-reproducible results before switching to
+this method) for up to 1800 simulated frames (30s, longer than the
+user's own ~24.5s recording) of the exact repro (cut short, then
+hold-to-grow). Final result: max segment-length ratio never exceeded
+1.201 and converged to a constant 1.074 by ~10s in, vs. the unfixed
+version's unbounded climb past 16x and still rising at 30s. Known,
+disclosed tradeoff: a heavily-piled rope may now show less visual
+separation between overlapping coils than pileRepulsion() was meant to
+provide -- a proper fix would make it chain-adjacency-aware rather than
+removing it outright; flagged as a follow-up if that becomes its own
+complaint.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

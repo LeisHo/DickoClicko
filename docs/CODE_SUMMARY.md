@@ -780,6 +780,60 @@ GOTCHAS
   synthetic direct-math reproduction): a dispatched punch on a live rope
   settled to a 2-point-span ratio of exactly `1.000` after 5 real
   simulated seconds.
+- **The floor's `pileRepulsion()` call was the actual (and only) cause of
+  a severe, still-reported "extension jitter."** After the bendStiffness
+  fix above, the user supplied a further screen recording showing the
+  rope still tangling into a chaotic knot during a sustained hold-to-grow,
+  specifically after a cut. Diagnosed methodically rather than guessed:
+  extracted and montaged frames (Python + OpenCV/PIL) confirmed the video
+  showed real, severe self-knotting, not subtle jitter; a direct point-
+  coordinate dump from a synthetic zero-perturbation straight-down growth
+  test showed Y-coordinates going non-monotonic (a real fold), which led
+  first to `integrateChain()`'s bending constraint (fixed -- see
+  `bendEnd` in that function, a real, independent bug: its loop read the
+  kinematically-positioned growing tip as a neighbor on its last
+  iteration, closing a feedback loop with `positionGrowingTip()`) and
+  `tipGrowDirection()`'s raw per-frame direction (also fixed -- now
+  exponentially smoothed into a persisted `mainRope.growDir`, since a
+  single noisy frame's raw tangent could get baked into a permanent kink
+  at commit time). Both were real bugs and are still fixed, but NEITHER
+  was the actual cause of the reported tangle -- confirmed by reproducing
+  it with `cfg.bendStiffness` forced to `0`. The real cause: a static,
+  non-growing 67-point chain was proven perfectly stable under gravity
+  with the floor disabled (max segment-length ratio 1.0-1.6 over 5
+  simulated seconds, 0 chain-order violations) but severely unstable with
+  the floor enabled once long enough to reach it (ratio up to ~4.6x,
+  20-35 chain-order violations) -- isolating the floor-collision block in
+  `update()` as the true root cause, unrelated to growth, bending, or
+  direction noise. Further isolation (disabling just `pileRepulsion()`,
+  same floor clamp) dropped the same repro's worst-case ratio from >6x
+  (still climbing after 20s) to a stable ~0.7-1.3x band: `pileRepulsion()`
+  has no concept of chain adjacency, so once several points pile near the
+  floor it repels ANY two of them closer than `minSep` -- including two
+  points from far apart in the SAME chain -- fighting
+  `integrateChain()`'s distance constraint (which only ever acts between
+  true chain neighbors) faster than `cfg.constraintIterations` (a few,
+  by default) can resolve. Two other fixes were tried and rejected before
+  landing on removing the call: softening the floor clamp from a hard
+  snap to a partial correction (tested rates 0.02-0.35, none reliably
+  helped, worst case got WORSE at low rates) and re-solving constraints a
+  second time on floor-contact frames (measurably worse -- re-running
+  `integrateChain()` re-triggers its own velocity-integration step,
+  amplifying the correction instead of just resolving it, worst ratio hit
+  16x). Final fix: `pileRepulsion()` is no longer called from the floor-
+  collision block in `update()` at all. Verified via the full original
+  repro (cut short, hold-to-grow) over 1800 simulated frames (30s, past
+  the user's own ~24.5s recording): max segment-length ratio never
+  exceeded `1.201` and converged to a constant `1.074` by ~10s, vs. the
+  unfixed version's unbounded climb past 16x. Known tradeoff, not yet
+  addressed: a rope piled deep at the floor may render with less visual
+  separation between overlapping coils than `pileRepulsion()` was meant
+  to provide (chain-order "folding" at the pile itself is now expected --
+  a rope genuinely coils when it piles -- and isn't itself a sign of
+  instability, since segment lengths stay correct throughout). A real fix
+  for that would need `pileRepulsion()` to skip chain-adjacent pairs
+  rather than being removed outright; flagged as a follow-up if dense
+  piling's visual clumping becomes its own complaint.
 - The double-click-cut sweep-mark's perpendicular direction is recomputed
   FRESH every `renderCutSweep()` call from `tipDirection(entity.points)`,
   not read from a `nx,ny` pair stored on the `cutSweep` object at cut time

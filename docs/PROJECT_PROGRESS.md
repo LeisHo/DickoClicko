@@ -379,6 +379,28 @@ lost — verified via direct state inspection at the time.
   preferred Tier 1's real value over the Tier 3 session marker. Could not
   verify a real end-to-end write through an actual deployed Vercel
   function — see Open questions below.
+- Fixed the real cause of "extension is still jitter" (a user-supplied
+  screen recording showed severe self-knotting during sustained
+  hold-to-grow after a cut): `pileRepulsion()` — called whenever the
+  rope touches the floor — has no concept of chain adjacency, so once
+  enough of the rope piles near the floor it repels non-adjacent points
+  from the SAME chain, fighting the distance constraint faster than the
+  solver can resolve. No longer called from the floor-collision block.
+  Along the way, found and fixed 2 other real, independent bugs that
+  looked like plausible causes but weren't (confirmed by reproducing the
+  actual tangle with each isolated away): `integrateChain()`'s bending
+  constraint referenced the kinematic growing tip as a neighbor on its
+  last loop iteration, closing a feedback loop with
+  `positionGrowingTip()`; `tipGrowDirection()` used a raw, unsmoothed
+  per-frame direction that could bake solver noise into a permanent kink
+  at commit time (now exponentially smoothed via `mainRope.growDir`).
+  Verified via the full repro (cut short, hold-to-grow) over 1800
+  simulated frames (30s): max segment-length ratio never exceeded 1.201
+  and stayed flat at 1.074 from ~10s on, vs. unbounded growth past 16x
+  before the fix. Known tradeoff: a heavily-piled rope may show less
+  visual separation between coils than before — see CODE_SUMMARY's
+  Gotchas for the full investigation and what a proper follow-up fix
+  would need.
 
 ## What's next
 

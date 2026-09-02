@@ -1120,6 +1120,10 @@ function resetMainRope(){
     // drives smooth, continuous-looking extension instead of whole-segment
     // jumps.
     tipGrowLen: targetSeg,
+    // smoothed growth-direction state (tipGrowDirection()) -- null starts
+    // it fresh from the first real measurement rather than carrying over
+    // whatever direction the PREVIOUS mainRope object happened to end on.
+    growDir: null,
   };
 }
 
@@ -1243,11 +1247,31 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
     // movement"/knot bug. `cfg.bendStiffness` (default 0.15, tuned low so
     // ordinary swinging still looks floppy/rope-like, not stick-rigid) is
     // applied once per constraint iteration, same cadence as the distance
-    // constraints, so both converge together. Naturally skips the growing
-    // tip (loop bound is points.length-1, one short of the tip itself) --
-    // it never touches a kinematically-positioned point.
+    // constraints, so both converge together.
+    //
+    // bendEnd mirrors segCount's own skipLastSegment handling above -- NOT
+    // just "loop bound is points.length-1, one short of the tip", which
+    // only keeps the tip from being MOVED by this constraint but still lets
+    // it be READ as neighbor `c` on the loop's last iteration (i =
+    // points.length-2, c = points[points.length-1] = the tip). While a
+    // partial tip is active, that tip is kinematically repositioned every
+    // frame by positionGrowingTip() FROM this same point's own position
+    // (points.length-2, i.e. dir.prev) -- so bending this point toward a
+    // midpoint that includes the tip closes a feedback loop between the
+    // two: bend pulls prev toward the tip's last-frame position, then
+    // positionGrowingTip() re-extends the tip from prev's new (bent)
+    // position and direction, repeating every frame. Confirmed via a
+    // user-supplied screen recording as the real cause of a severe,
+    // reproduced tangle (the rope curling into a tight, chaotic knot within
+    // ~1s of holding to grow after a cut) -- not present before
+    // bendStiffness was added, and specific to active growth, matching
+    // exactly what the recording showed. Excluding dir.prev from the
+    // bending constraint entirely while a partial tip exists (same
+    // skipLastSegment signal the distance constraint already uses to leave
+    // that whole segment alone) breaks the loop.
     if (cfg.bendStiffness > 0){
-      for (let i = 1; i < points.length - 1; i++){
+      const bendEnd = points.length - 1 - (skipLastSegment ? 1 : 0);
+      for (let i = 1; i < bendEnd; i++){
         if (i === pinnedIndex) continue;
         const a = points[i - 1], b = points[i], c = points[i + 1];
         const midX = (a.x + c.x) / 2, midY = (a.y + c.y) / 2;
@@ -1284,6 +1308,27 @@ let growing = false;
 // (from the point BEFORE prev, to prev) -- deliberately not derived from the
 // tip's own current position, which is what's being placed and would make
 // the direction circular/dependent on wherever the tip last happened to be.
+//
+// The RAW per-frame tangent is exponentially smoothed into mainRope.growDir
+// before being returned, rather than handed back unsmoothed. prev/beforePrev
+// are real, solver-participating points, so their measured tangent carries
+// the solver's own ordinary per-frame "breathing" noise (worse with fewer
+// constraintIterations / higher damping, i.e. less energy removed per
+// frame) -- positionGrowingTip() already smooths its OWN rendered position
+// toward the target, but growRope()'s commit previously placed each newly-
+// finalized segment using a freshly-recomputed RAW direction with no
+// smoothing at all, so a single noisy frame at the exact instant a segment
+// committed could bake a locally-wrong angle in as a PERMANENT kink.
+// Confirmed via reproduction: a synthetic straight-down growth test (zero
+// punches/perturbation, so every committed point's Y should stay strictly
+// increasing) showed points going non-monotonic starting a few commits in --
+// e.g. point Y-sequence ...441.4, 455.4, 511.8, 462.4, 520.2, 471.8... --
+// a real fold-back baked in at specific commits, reproducing the user's
+// reported chaotic knotting during sustained hold-to-grow after a cut. This
+// happened independent of cfg.bendStiffness (reproduced identically with it
+// forced to 0), so it predates and is unrelated to that constraint -- fixing
+// bendStiffness's own separate tip-feedback issue (see integrateChain()'s
+// bendEnd) was necessary but not sufficient on its own.
 function tipGrowDirection(pts){
   const n = pts.length;
   const prev = pts[n - 2] || pts[0];
@@ -1305,8 +1350,17 @@ function tipGrowDirection(pts){
   // very short and then repeatedly growing it. Falls back to straight down
   // (the rope's own authored default direction) whenever there's no real
   // direction to measure yet.
-  if (dlen < 1e-6) return { x: 0, y: 1, prev };
-  return { x: dx / dlen, y: dy / dlen, prev };
+  const raw = dlen < 1e-6 ? { x: 0, y: 1 } : { x: dx / dlen, y: dy / dlen };
+  if (!mainRope.growDir){
+    mainRope.growDir = { x: raw.x, y: raw.y };
+  } else {
+    const s = 0.15; // low-pass factor -- low enough to filter single-frame solver noise, high enough to still track real swinging within a few frames
+    mainRope.growDir.x += (raw.x - mainRope.growDir.x) * s;
+    mainRope.growDir.y += (raw.y - mainRope.growDir.y) * s;
+    const glen = Math.hypot(mainRope.growDir.x, mainRope.growDir.y) || 1;
+    mainRope.growDir.x /= glen; mainRope.growDir.y /= glen; // re-normalize -- blending two unit vectors doesn't stay unit length
+  }
+  return { x: mainRope.growDir.x, y: mainRope.growDir.y, prev };
 }
 
 // Places the currently-growing tip segment directly, every frame, instead of
@@ -1467,6 +1521,12 @@ function cutRopeAt(hit, clickX, clickY){
   // the remaining tip after a cut is always a full, already-committed
   // segment -- no growth in progress.
   mainRope.tipGrowLen = mainRope.segLen;
+  // a cut changes the chain's own local geometry right at the new tip --
+  // any smoothed growth direction carried over from BEFORE the cut
+  // (tipGrowDirection()) belongs to a now-discarded portion of the rope,
+  // so the next hold-to-grow should measure fresh rather than starting
+  // biased toward wherever the rope was pointing pre-cut.
+  mainRope.growDir = null;
   setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
   // the cut sweep-mark belongs to the REMAINING rope (still hanging from the
   // circle), not the falling piece — it's anchored to mainRope's own new
@@ -1785,7 +1845,36 @@ function update(rawDt){
         p.oldy = p.y;
       }
     });
-    pileRepulsion(allPoints);
+    // pileRepulsion is deliberately NOT called here anymore. It has no
+    // concept of chain adjacency -- it repels ANY two points closer than
+    // minSep, including two points from far apart in the SAME chain that
+    // simply ended up geometrically close after piling against the floor.
+    // That fights integrateChain()'s distance constraint (which only ever
+    // acts between true chain neighbors) for the ENTIRE rope, not just the
+    // piled portion, and with only a handful of constraintIterations (a
+    // dev-tunable, currently defaulted low) the solver can't recover from
+    // that conflict within a frame -- confirmed as the dominant driver of
+    // a real, reproduced bug: sustained hold-to-grow, once the tip reached
+    // the floor, built into a severe, non-recovering tangle (worst-case
+    // segment-length ratio >6x, dozens of points folded out of chain
+    // order), reproducing the user's own screen-recorded "cut, then
+    // extend again" report. Multiple other fixes attempted first (see
+    // integrateChain()'s bendEnd comment and tipGrowDirection()'s
+    // smoothing comment -- both real, independent bugs, both fixed, but
+    // NEITHER was the actual cause here, confirmed by reproducing this
+    // exact tangle with bendStiffness forced to 0). Isolated via direct
+    // A/B: the same repro run with pileRepulsion call removed entirely
+    // stayed stable (ratio ~0.7-1.3x) over a 20+ simulated-second hold,
+    // well past the user's own ~24s recording; softening the floor
+    // clamp's snap strength and re-solving constraints a second time on
+    // floor-contact frames were also tried and did NOT help (the latter
+    // made it measurably worse -- re-running integrateChain() re-triggers
+    // its own velocity integration step, amplifying the correction rather
+    // than just resolving it). The tradeoff: a rope piled deep at the
+    // floor may render with less visual separation between overlapping
+    // coils than pileRepulsion was meant to provide -- flagged as a
+    // follow-up if that becomes its own complaint, since a real fix would
+    // need pileRepulsion to be chain-adjacency-aware, not just removed.
   } else {
     fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < window.innerHeight * 1.5));
   }
