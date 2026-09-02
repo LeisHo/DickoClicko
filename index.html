@@ -964,8 +964,24 @@ function tipGrowDirection(pts){
   const n = pts.length;
   const prev = pts[n - 2] || pts[0];
   const beforePrev = pts[n - 3] || pts[0];
-  let dx = prev.x - beforePrev.x, dy = prev.y - beforePrev.y;
-  const dlen = Math.hypot(dx, dy) || 1;
+  const dx = prev.x - beforePrev.x, dy = prev.y - beforePrev.y;
+  const dlen = Math.hypot(dx, dy);
+  // A chain this short (n<=2, e.g. right after a cut leaves just the anchor
+  // + 1 point) has no real local tangent yet -- prev and beforePrev both
+  // resolve to the SAME point (pts[n-3] underflows to undefined, falling
+  // back to pts[0]), making dx/dy exactly 0. The old `|| 1` fallback only
+  // guarded the DIVISOR, not this case, so it silently returned direction
+  // (0,0) -- positionGrowingTip() and growRope()'s commit both then placed
+  // the new point at EXACTLY prev's position (anchor.x + 0*len = anchor.x),
+  // collapsing multiple points onto the same coordinate. integrateChain()'s
+  // distance constraint, solving a real segLen against a measured distance
+  // of ~0, then produced a correction with an effectively arbitrary
+  // direction (0/0.0001-scale noise) -- confirmed via reproduction as the
+  // tight knot/tangle right at the anchor reported after cutting the rope
+  // very short and then repeatedly growing it. Falls back to straight down
+  // (the rope's own authored default direction) whenever there's no real
+  // direction to measure yet.
+  if (dlen < 1e-6) return { x: 0, y: 1, prev };
   return { x: dx / dlen, y: dy / dlen, prev };
 }
 
@@ -1033,6 +1049,15 @@ const CUT_SWEEP_BASE_SEC = 0.35;
 
 function cutRopeAt(hit, clickX, clickY){
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
+  // refuse a cut whose TARGET point falls within the circle's own margin
+  // (isOnCircle()) -- a double-click landing just outside that margin
+  // (still "on the rope" by hit-testing, but visually right at/around the
+  // circle) used to be able to cut extremely close to the anchor, which
+  // reads as "double-clicking near the circle cuts the rope short" even
+  // though the press itself was technically off the circle. Reuses the
+  // same margin already tuned for hold-to-grow eligibility rather than
+  // inventing a new threshold.
+  if (isOnCircle(hit.x, hit.y)) return;
   // refuse the cut entirely if it would leave the remaining (anchor-side)
   // rope shorter than the configured minimum — the rope stays whole rather
   // than being clamped to some other length the user didn't ask for.

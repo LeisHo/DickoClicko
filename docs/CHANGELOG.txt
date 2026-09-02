@@ -854,6 +854,68 @@ Verified:
   commit (grep-confirmed 0 references).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  07:01 AM EDT
+
+Fixed:
+- Real tangling bug: cutting the rope down to just 2 points (a near-anchor
+  cut) and then repeatedly using hold-to-grow produced a tight,
+  physically-wrong knot right at the circle -- reported with a
+  user-supplied screen recording (datalog/Recording 2026-09-02
+  064728.mp4). Root-caused precisely: tipGrowDirection() computes a
+  direction from prev/beforePrev, but for a chain this short (n<=2),
+  pts[n-3] underflows past index 0 and falls back to pts[0] -- the SAME
+  point prev already resolves to -- making dx=dy=0. The old `|| 1`
+  fallback only guarded the divisor, not this case, so it silently
+  returned direction (0,0). positionGrowingTip() and growRope()'s commit
+  then placed new points at EXACTLY prev's position (the anchor),
+  collapsing multiple chain points onto the same coordinate;
+  integrateChain()'s distance constraint, solving a real segLen against a
+  ~0 measured distance next frame, produced an effectively
+  arbitrary-direction correction (the 0.0001 distance floor amplifies
+  near-zero dx/dy float noise into a near-random kick) -- exactly the
+  observed knot. Fixed by having tipGrowDirection() fall back to straight
+  down (the rope's own authored default) whenever there's no real local
+  tangent yet (dlen < 1e-6), covering both call sites (growth-in-progress
+  positioning and point-commit) with one change.
+- Double-clicking near (but not literally on) the circle could still cut
+  the rope very short -- reported twice ("double click within the bounds
+  of the circle... cut at the shortest length possible"); the first
+  round's diagnosis (this was just the cut mechanism reacting correctly
+  to the newly-lowered Minimum Rope Length) turned out to be incomplete.
+  cutRopeAt() now also refuses a cut whose TARGET point (hit.x/hit.y, not
+  the press position) falls within isOnCircle()'s margin -- a double-click
+  offset mostly sideways from the circle registers as a normal rope click
+  at press time (isOnCircle false there), but its nearest rope point can
+  still project to well within the circle's margin (the rope hangs
+  roughly vertical, so a click offset in X still finds its nearest point
+  at roughly the same Y). Reuses the existing isOnCircle margin rather
+  than inventing a new threshold.
+
+Clarified (not a bug):
+- Copy Settings and Save Settings capturing each collapsible group's
+  collapsed/expanded state is the workspace CLAUDE.md SS12e standard, not
+  a bug -- "whichever groups were open or collapsed at Save time come
+  back in that same state," explicitly by design.
+
+Verified:
+- Degenerate-direction fix: forced a real 2-point rope, ran 5 separate
+  hold-to-grow cycles via dispatched pointer events with manually-stepped
+  physics (requestAnimationFrame doesn't run in this testing
+  environment) -- 0 non-monotonic points and minPairDist never dropped
+  below ~22px (targetSeg ~32px) across all 5 cycles, vs. immediate
+  point-collapse before the fix.
+- Circle-cut-exclusion fix: a click offset sideways from the circle
+  (isOnCircleAtClick:false) whose nearest rope point lands within the
+  margin (hitWasOnCircle:true) now correctly produces cutHappened:false;
+  a normal double-click well clear of the circle still cuts successfully
+  (regression-checked). Also re-confirmed (twice, with realistic click
+  timing) that a double-click dead-center on the circle was already safe
+  before this fix and remains so.
+- 0 console errors on a clean shipped-code reload.
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

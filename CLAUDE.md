@@ -201,6 +201,21 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   at the start of every resize-drag, not once at boot; the title's
   rendered width depends on the Dev Panel Title Font Size slider, a live
   setting, so a cached value can go stale.
+- `tipGrowDirection()` must fall back to a real direction (not `(0,0)`)
+  whenever `prev`/`beforePrev` coincide — a 2-point rope (right after a
+  near-anchor cut) hits this every time, and a degenerate `(0,0)`
+  direction collapses new chain points onto the anchor's exact position,
+  which the constraint solver then flings apart in an effectively random
+  direction the next frame. This was a real, reported bug (a tangled knot
+  right at the circle after cutting short and regrowing) — see
+  `docs/CODE_SUMMARY.md` Gotchas for the full mechanism and reproduction.
+- `cutRopeAt()` refuses a cut whose TARGET point (not the press position)
+  falls within `isOnCircle()`'s margin — a double-click can register as a
+  normal rope click (press itself outside the circle) while still
+  targeting a rope point that IS within the circle's zone. This was a
+  real, reported bug ("double click within the bounds of the circle...
+  cut at the shortest length possible") — see `docs/CODE_SUMMARY.md`
+  Gotchas for the reproduction.
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to

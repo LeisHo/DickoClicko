@@ -141,13 +141,34 @@ Nothing in progress — everything below is done, verified, and pushed.
   dump's 1 — the dump appears to predate the explicit "make min rope
   length .5" request earlier in the same conversation; flagged to the user
   rather than silently overridden either way.
-- Diagnosed (not a code bug): double-clicking just outside the circle's
-  hold-to-grow margin lands as a rope double-click very close to the
-  anchor, and now that Minimum Rope Length is 0.5 (down from 1/8 in
-  earlier rounds), that cut succeeds instead of being rejected — leaving a
-  very short remaining rope. This is the cut mechanism working exactly as
-  designed; explained to the user rather than silently added a new,
-  unrequested "no-cut zone" near the circle.
+- Fixed: double-clicking near (but not literally on) the circle could
+  still target a rope point within the circle's own margin and cut there
+  — reported twice ("double click within the bounds of the circle... cut
+  at the shortest length possible"). The initial diagnosis (this was just
+  the cut mechanism correctly reacting to the newly-lowered Minimum Rope
+  Length) turned out to be incomplete once the user reiterated it as a
+  real problem — `cutRopeAt()` now also refuses a cut whose TARGET point
+  falls within `isOnCircle()`'s margin, regardless of Minimum Rope Length.
+  Verified: a click offset sideways from the circle (so the press itself
+  reads as rope-mode) whose nearest rope point still lands within the
+  margin now correctly gets rejected; a normal cut well clear of the
+  circle still succeeds.
+- Fixed a real tangling bug: cutting the rope down to just 2 points (a
+  near-anchor cut) and then repeatedly using hold-to-grow produced a
+  tight, physically-wrong knot right at the circle — confirmed via a
+  user-supplied screen recording. Root cause: `tipGrowDirection()`
+  returned a degenerate `(0,0)` direction whenever the chain was this
+  short (its `prev` and `beforePrev` reference collapse to the same
+  anchor point), which placed new points exactly on top of the anchor;
+  the physics solver then flung them apart in an effectively arbitrary
+  direction the next frame. Fixed with a proper fallback to straight
+  down. Verified via a direct reproduction (forced a 2-point rope, ran 5
+  real hold-to-grow cycles): 0 non-monotonic points and no near-zero
+  point spacing throughout, vs. immediate collapse before the fix.
+- Clarified (not a bug): Copy Settings and Save Settings capturing each
+  group's collapsed/expanded state is the workspace `CLAUDE.md` §12e
+  standard, not a bug — "whichever groups were open or collapsed at Save
+  time come back in that same state," by design.
 
 ## What's next
 

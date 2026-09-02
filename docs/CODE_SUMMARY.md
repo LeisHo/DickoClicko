@@ -475,3 +475,35 @@ GOTCHAS
   (`.dp-body{overflow-y:auto}`), so it can shrink to 0 too. Real
   measured floor at this project's current header content: 81x34px (vs.
   the old hardcoded 220x140).
+- `tipGrowDirection()` MUST fall back to a real direction (straight down)
+  when `prev`/`beforePrev` coincide, never silently return `(0,0)`. For a
+  2-point rope (`pts[n-3]` underflows past index 0, so both `prev` and
+  `beforePrev` resolve to the SAME anchor point), the old code's `|| 1`
+  fallback only guarded the divisor, not the degenerate `dx=dy=0` case
+  itself, so it returned direction `(0,0)`. Both `positionGrowingTip()`
+  and `growRope()`'s commit then placed the new point at EXACTLY `prev`'s
+  position -- collapsing multiple chain points onto the same coordinate --
+  and `integrateChain()`'s distance constraint, solving a real `segLen`
+  against a ~0 measured distance the next frame, produced an effectively
+  arbitrary-direction correction (the `|| 0.0001` distance floor divides a
+  near-zero `dx,dy` by a value close to 0, amplifying float noise into a
+  essentially random kick). This is exactly the tight knot/tangle right at
+  the anchor a user reported after cutting the rope down to 2 points and
+  then repeatedly growing it -- confirmed by direct reproduction (forced a
+  2-point rope, ran 5 real hold-to-grow cycles via dispatched pointer
+  events with manually-stepped physics since `requestAnimationFrame`
+  doesn't run in this environment): before the fix this collapsed
+  immediately; after, `minPairDist` never dropped below ~22px (targetSeg
+  ~32px) across all 5 cycles, with 0 non-monotonic points throughout.
+- `cutRopeAt()` refuses a cut whose TARGET point (`hit.x,hit.y`, not the
+  press position) falls within `isOnCircle()`'s margin, on top of the
+  existing `minRopeLength` guard. A double-click landing just outside the
+  circle's margin (registering as a normal rope click at press time, per
+  `onPointerDown`'s own `isOnCircle` check) can still target a rope point
+  that IS within that margin -- e.g. a click offset mostly sideways from
+  the circle, whose nearest point on the (vertical) rope still projects
+  close to the anchor in Y. Confirmed via a targeted reproduction
+  (`isOnCircleAtClick:false`, `hitWasOnCircle:true`) that this used to cut
+  successfully and now correctly gets rejected, while a normal cut well
+  clear of the circle still succeeds (regression-checked). Reuses the
+  existing `isOnCircle` margin rather than a new threshold.
