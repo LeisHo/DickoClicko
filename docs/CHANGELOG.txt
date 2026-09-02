@@ -454,6 +454,95 @@ Verified:
   dispatched PointerEvents directly against the shipped handlers).
 
 --------------------------------------------------------------------------------
+2026-09-02  -  2:36 AM - 2:47 AM EDT
+
+Fixed hold-to-grow missing the circle and firing a charge-punch instead,
+fixed real (and self-introduced) growth jitter/stall bugs, added a Click
+And Hold Distance control, and baked in 2 more rounds of user-provided
+settings dumps as defaults.
+
+Fixed:
+- isOnCircle() used the circle's bare visual radius, which a real user
+  found unreliable to hit precisely, especially at the current small
+  Circle Size default (4.5%vmin) and with the rope rendering visually
+  through/over the circle right where it emerges -- a hold "clearly meant
+  for the circle" could land just outside it and get treated as a rope
+  hold instead, firing an unwanted charge-punch on release. Fixed by
+  adding a generous vmin(4) margin to the circle's effective hit-radius,
+  used consistently for both hold-to-grow eligibility and the rope's own
+  exclusion zone.
+- The rope jittered slightly even when hanging still, specifically while
+  growing. Root cause: setMainRopeTotalLength() re-derived segLen from
+  newTotalPx/pointCount every call -- every time growth added a new point,
+  pointCount jumped, so segLen (the rest-length EVERY existing segment is
+  solved against) silently changed too, in the same instant, by an amount
+  that didn't match the continuously-growing newTotalPx. The constraint
+  solver then had one frame to correct that whole-chain mismatch, which
+  read as a small bounce. Fixed by pinning segLen to exactly
+  TARGET_SEG_LEN_VH permanently -- new points are already inserted exactly
+  that far from their neighbor, so there's nothing left to correct.
+- That fix introduced a second bug, caught by direct reproduction before
+  calling it done: with segLen now constant, growRope()'s old baseline
+  calculation (segLen * pointCount) stopped changing between point
+  insertions, so sustained growth silently stalled for however long it
+  took to cross the next whole-point threshold (confirmed directly:
+  ropeLength climbed once, then sat completely frozen for 270+ simulated
+  frames despite the hold still being active). Fixed by adding
+  mainRope.totalLength, a persisted real-length value growRope() actually
+  accumulates against, decoupled from the quantized segLen*pointCount
+  product.
+- cutRopeAt() wasn't updating mainRope.totalLength (or the Rope Length
+  slider's displayed value) after truncating the rope -- found while
+  verifying the above fix. Without this, growth after a cut would have
+  resumed from the stale PRE-cut length, and nudging the Rope Length
+  slider post-cut would have jumped the rope back out near its old length
+  instead of adjusting the actual (shorter) current one.
+
+Added:
+- Click And Hold Distance dev control (CLICK group): gates whether
+  releasing a charged hold actually fires a punch, separately from Click
+  Distance (which still governs quick-tap targeting) and separately from
+  the now-unlimited-by-Click-Distance charging itself -- a hold released
+  too far from the rope now does nothing, rather than punching wherever
+  the nearest rope point happened to be.
+- Baked in 2 more rounds of user-provided Copy Settings dumps as the new
+  hardcoded defaults (Rope Length, Click Distance, Click Intensity, floor
+  color/thickness/height, and the built-in Dev Panel group's row order).
+  Rope Length's new default (100.16051775147857 %vh) exceeded its prior
+  max (90) -- raised to value*1.2 (120.19262130177428) per the project's
+  standing over-max-default rule; every other provided value already fit
+  its slider's existing range.
+- Refactored the built-in "Dev Panel" appearance group from two separate
+  arrays (sliders, then colors) into one unified, arbitrarily-orderable
+  array -- needed to actually honor the requested new row order, which
+  interleaves slider and color rows in a way the old two-array split could
+  never represent.
+
+Verified:
+- A hold 5px past the circle's raw visual edge (outside the old radius,
+  inside the new margin) now correctly registers as on-circle and grows
+  the rope; released cleanly with growing stopping and no punch fired.
+- Sustained growth (900 simulated frames, ~66 real point-insertion events,
+  both with and without gravity) now shows zero lateral (x-axis) deviation
+  on an initially-vertical rope throughout -- confirms the jitter fix
+  holds even under real, continuous, incremental growth, not just the
+  edge case that first exposed the stall.
+- Rope Length climbs smoothly and continuously frame-to-frame post-fix
+  (verified via periodic snapshots showing steady progression), not the
+  climb-once-then-freeze pattern the stall bug produced.
+- Cut-then-regrow: cut the rope, confirmed the displayed length dropped to
+  match the shorter remainder immediately, then grew it again and
+  confirmed growth resumed from that (correct, shorter) baseline rather
+  than the stale pre-cut value.
+- Click And Hold Distance: a hold released 2x beyond the threshold fired
+  nothing (zero movement); a hold released within it fired a real,
+  correctly-directional impulse.
+- Fresh (cleared localStorage) load confirmed every new default value and
+  the Dev Panel group's new row order exactly.
+- node --check clean throughout; debug hook removed before commit
+  (grep-confirmed).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

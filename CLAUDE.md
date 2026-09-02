@@ -123,7 +123,23 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   press down anywhere on screen and the hold still charges, aimed at
   whichever rope point ends up nearest. Only a quick tap (single click or
   either half of a double-click) still needs real proximity, since that's
-  what targets a specific punch/cut point precisely.
+  what targets a specific punch/cut point precisely. Charging is instead
+  gated by its own `holdDistance` at release time — a hold that lands too
+  far from the rope (e.g. a hold really meant for the circle that missed
+  even the circle's own generous margin) fires nothing, rather than a punch
+  way out where the release happened to be.
+- `isOnCircle()` uses the circle's visual radius plus a fixed margin, not
+  the bare radius — a small `circleSize` is an easy miss otherwise. Don't
+  shrink or remove this margin; it's what makes "click and hold on any area
+  bound by the circle" actually reliable, per explicit user report that it
+  wasn't.
+- `mainRope.totalLength` (not `segLen * pointCount`) is what growth/cut
+  actually accumulate against — `segLen` is pinned constant now (see
+  `docs/CODE_SUMMARY.md` Gotchas), so re-deriving "current length" from it
+  every frame silently stalls growth between point-insertion thresholds.
+  Any new code that changes the rope's real length must update
+  `mainRope.totalLength` explicitly (and `cfg.ropeLength`'s display, if it
+  changed the length outside of `growRope()`/the slider's own `onChange`).
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to

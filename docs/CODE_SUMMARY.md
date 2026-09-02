@@ -44,7 +44,11 @@ fallenPieces[] (module state, one entry per cut-off rope segment)
        (TARGET_SEG_LEN_VH) as the rope grows/shrinks, so a long rope stays
        just as flexible (and just as accurately hit-testable) as a short
        one, instead of a fixed 14 points getting stretched thinner and
-       thinner into something stick-stiff (see Gotchas).
+       thinner into something stick-stiff (see Gotchas). segLen itself is
+       pinned to exactly TARGET_SEG_LEN_VH at all times; mainRope.totalLength
+       is the separate, persisted "real" current length growRope()/cutRopeAt()
+       actually accumulate against (see Gotchas -- these two used to be the
+       same derived value, and splitting them was itself a bug-fix).
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle
@@ -91,17 +95,24 @@ opacity, colors for the panel's own chrome) is judged device-specific the
 same way, so `panelStyle{}` rides inside that same per-tab geometry blob
 (`getPanelGeometry()`'s `.style` field) rather than living in `cfg`; applied
 live via CSS custom properties (`--dp-title-size`, `--dp-bg`, etc.) set on
-`#devPanel` by `applyPanelStyle()`.
+`#devPanel` by `applyPanelStyle()`. `PANEL_STYLE_CONTROLS` is ONE array
+(each entry carries its own `type: 'slider'|'color'`) so its rows can be
+freely interleaved/reordered like any other group's -- an earlier version
+split sliders and colors into two separate arrays, which made an
+interleaved row order structurally impossible to represent at all.
 
 Gesture dispatch (`onPointerDown`/`onPointerUp`): which hold behavior
 applies is decided by WHERE the hold starts, checked once at pointerdown
-(`isOnCircle()`) -- a hold starting on the circle grows the rope (existing
-`growing`/`growRope()` path); a hold starting on the rope charges punch
-intensity instead (`downInfo.charging`) and fires the punch immediately on
-release, intensity scaled linearly from 0 to `cfg.intensityCeiling` as total
-hold time goes from 0 to `cfg.clickHoldMaxDuration` (clamped at 1x beyond
-that). Charging isn't limited by `clickDistance` -- press anywhere and hold;
-only a quick tap needs real proximity to the rope to mean anything (see
+(`isOnCircle()`, with a generous margin beyond the circle's own visual
+radius -- see Gotchas) -- a hold starting on/near the circle grows the rope
+(existing `growing`/`growRope()` path); a hold starting on the rope charges
+punch intensity instead (`downInfo.charging`) and fires the punch
+immediately on release IF it's within `cfg.holdDistance` of the rope,
+intensity scaled linearly from 0 to `cfg.intensityCeiling` as total hold
+time goes from 0 to `cfg.clickHoldMaxDuration` (clamped at 1x beyond that).
+Charging isn't limited by `clickDistance` (its own, separate, more generous
+`holdDistance` governs it instead) -- press anywhere and hold; only a quick
+tap needs real proximity (`clickDistance`) to the rope to mean anything (see
 Gotchas for why `charging`'s own eligibility timer is `cfg.doubleClickThreshold`,
 not the shorter `HOLD_THRESHOLD_MS`).
 
@@ -122,6 +133,33 @@ None formally designated yet -- this is the initial build.
 --------------------------------------------------------------------------------
 GOTCHAS
 
+- `mainRope.segLen` and `mainRope.totalLength` are deliberately two separate
+  fields, not one derived from the other. `segLen` is pinned to exactly
+  `TARGET_SEG_LEN_VH` forever (see the mainRope architecture note above) --
+  which means `segLen * (points.length - 1)` only reflects the rope's real
+  current length in whole-point-count jumps, NOT continuously. `totalLength`
+  is what `growRope()` actually accumulates growth against every frame, and
+  what `cutRopeAt()` recomputes after truncating `points`. An earlier version
+  had `growRope()` re-derive "current total" from `segLen * pointCount`
+  every frame instead of reading a persisted value -- since that product
+  doesn't change at all between point-insertions, growth would silently
+  stall for however long it took to cross the next whole-point threshold,
+  found by direct reproduction (ropeLength climbed once, then sat frozen for
+  270+ simulated frames despite `growing` staying `true` the whole time).
+  Any code that changes the rope's real length (a new growth mechanic, a
+  different cut behavior, etc.) must update `mainRope.totalLength`
+  explicitly -- and if it also changes `cfg.ropeLength`'s displayed value,
+  update that too (`cutRopeAt()` does both, via `setCfg('ropeLength', ...)`,
+  so the Rope Length slider doesn't show a stale pre-cut length that would
+  un-cut the rope if nudged).
+- `isOnCircle()`'s hit-radius is the circle's own visual radius PLUS a fixed
+  `vmin(4)` margin, not the bare visual radius -- a small `circleSize` (the
+  default is 4.5%vmin) is an easy miss otherwise, especially since the rope
+  renders visually through/over the circle right where it emerges. This
+  margin gates both hold-to-grow eligibility and the rope's own exclusion
+  zone (in `hitTestRope()`), so the two stay consistent -- a press "clearly
+  meant for the circle" that lands just outside its exact pixel boundary
+  should never fall through to charging a punch instead.
 - `initResizeHandles()`'s `move()` math for `n`/`s` must stay in sync with
   the CSS `max-height:88vh` on `#devPanel` (its own `maxH` local constant,
   `window.innerHeight * 0.88`) -- letting the requested height diverge from

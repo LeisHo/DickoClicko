@@ -33,11 +33,18 @@ Nothing in progress — everything below is done, verified, and pushed.
   mid-swing, wrong render order (rope/circle), a fixed point count making
   extended rope stiff/uncuttable, hold gestures bouncing like a punch
   (charging's eligibility timer could overlap a real double-click),
-  everything looking jumpy (physics now runs a fixed 1/60s timestep), and
+  everything looking jumpy (physics now runs a fixed 1/60s timestep),
   vertical dev-panel resize going unresponsive or pushing the panel
-  off-screen (JS's requested height wasn't clamped to match the CSS
-  max-height it renders against). Also baked in a user-provided settings
-  dump as the new hardcoded defaults.
+  off-screen, hold-to-grow missing the (small) circle and firing a punch
+  instead, and growth itself jittering slightly even on a still rope.
+  Fixing that last one surfaced a second bug in the fix itself (growth
+  silently stalling between point-insertion thresholds), caught and fixed
+  before shipping, not left for the user to find. Added a Click And Hold
+  Distance slider gating the charge-punch specifically. Baked in 2 rounds
+  of user-provided settings dumps as the new hardcoded defaults, including
+  a refactor of the built-in "Dev Panel" appearance group so its rows can
+  be freely reordered (previously split across two arrays that couldn't
+  represent an interleaved order).
 
 ## What's next
 
