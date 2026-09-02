@@ -117,6 +117,37 @@ Nothing in progress — everything below is done, verified, and pushed.
   rotated to continue in whatever direction the rope tip currently points
   — verified correct via direct pixel inspection of the rendered canvas,
   both hanging straight down and forced sideways.
+- Dev panel: fixed the minimum resize size to be derived from the header's
+  actual rendered content (`computeMinPanelSize()`) instead of a hardcoded
+  `220x140` (in both JS and CSS — removed both), per a workspace `CLAUDE.md`
+  §12c requirement added after this project's panel already shipped. Real
+  measured floor is 81x34px.
+- Endcap follow-ups from live testing: colored to match `cfg.ropeColor`
+  instead of the SVGs' authored white; added an "Endcap Height" slider
+  that stretches the cap vertically while its top edge stays exactly
+  pinned at the rope's tip (verified: 2x height produced exactly 2x the
+  measured pixel extent, and the tip pixel stayed cap-colored at every
+  tested multiplier).
+- Charged-punch intensity now stacks Intensity Ceiling ON TOP of Click
+  Intensity (`clickIntensity + t*intensityCeiling`, reaching that sum
+  exactly at Click Hold Max Duration) rather than replacing it — a hold
+  released immediately now punches at the same intensity a quick tap
+  would, instead of at 0.
+- Baked in another user-provided Copy Settings dump (Rope Length, Endcap
+  Design → End 2, Click Distance, Click Intensity, Click And Hold
+  Distance, Rope Animation Speed, Double Click Threshold, Cut Speed), plus
+  reordering the ROPE group (Endcap Design + Endcap Height moved to the
+  front). Minimum Rope Length was deliberately left at 0.5 rather than the
+  dump's 1 — the dump appears to predate the explicit "make min rope
+  length .5" request earlier in the same conversation; flagged to the user
+  rather than silently overridden either way.
+- Diagnosed (not a code bug): double-clicking just outside the circle's
+  hold-to-grow margin lands as a rope double-click very close to the
+  anchor, and now that Minimum Rope Length is 0.5 (down from 1/8 in
+  earlier rounds), that cut succeeds instead of being rejected — leaving a
+  very short remaining rope. This is the cut mechanism working exactly as
+  designed; explained to the user rather than silently added a new,
+  unrequested "no-cut zone" near the circle.
 
 ## What's next
 

@@ -784,6 +784,76 @@ Verified:
   before commit.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  06:07 AM EDT
+
+Fixed:
+- Dev panel resize floor was hardcoded (minW=220, minH=140 in JS, mirrored
+  in CSS #devPanel{min-width:220px;min-height:140px}) instead of derived
+  from what the panel's own chrome actually needs, per a workspace
+  CLAUDE.md §12c requirement added since the panel first shipped. Added
+  computeMinPanelSize(), which measures the header's title scrollWidth +
+  collapse button width + padding/gap (for width) and the header's own
+  offsetHeight (for height) live from the DOM -- computed fresh at the
+  start of every resize-drag (not cached), since the title's rendered
+  width depends on the Dev Panel Title Font Size slider. Removed the
+  hardcoded CSS min-width/min-height entirely so JS is the sole source of
+  truth (the same two-sources-of-truth pattern that caused the earlier
+  max-height:88vh bug). Real measured floor: 81x34px.
+- Charged-punch intensity (Click-And-Hold on the rope) previously ranged
+  from 0 to Intensity Ceiling as hold duration went 0 -> Click Hold Max
+  Duration, meaning an immediately-released hold punched at zero. Changed
+  to clickIntensity + t*intensityCeiling per explicit request -- Intensity
+  Ceiling now stacks ON TOP of Click Intensity, reaching their sum exactly
+  at Click Hold Max Duration. Verified via a real dispatched hold: a
+  release at Click Hold Max Duration produced exactly clickIntensity +
+  intensityCeiling (measured 6 = 2+4) worth of displacement.
+
+Added:
+- Rope endcap SVGs are now colored to match cfg.ropeColor instead of
+  their authored white, per explicit request. Added an "Endcap Height"
+  slider (ROPE group) that stretches the cap along its own local "down"
+  axis independently of the width-matching scale, with the top edge
+  staying exactly pinned at the rope's tip regardless of the multiplier
+  (safe by construction: the anchor-shift translate is the last call in
+  drawEndcap()'s transform chain, so it acts first on the raw path
+  coordinates, landing the anchor at local (0,0) where no scale factor
+  can move it). Verified: at 2x height, the cap's measured pixel extent
+  was exactly 2x; the exact tip pixel stayed cap-colored at every tested
+  multiplier (0.5x-3x).
+- Baked in another user-provided Copy Settings dump as new hardcoded
+  defaults: Rope Length -> 8.653846153846153, Endcap Design -> "end2",
+  Click Distance -> 8.9, Click Intensity -> 1.6, Click And Hold Distance
+  -> 22, Rope Animation Speed -> 1, Double Click Threshold -> 1000
+  (exactly at its existing max, no expansion needed), Cut Speed -> 1.
+  Reordered the ROPE group to match the dump (Endcap Design, Endcap
+  Height, Rope Thickness, Rope Length, Rope Color, Rope End Curve Arc).
+  Minimum Rope Length was deliberately kept at 0.5 rather than the dump's
+  1 -- the dump appears to have been captured before the explicit "make
+  min rope length .5" request earlier in the same turn took effect;
+  flagged to the user rather than silently going either way.
+
+Diagnosed (no code change):
+- Double-clicking just outside the circle's hold-to-grow margin (isOnCircle
+  false, but still visually close to the circle) is treated as a normal
+  rope double-click targeting whichever point is nearest -- which, that
+  close to the anchor, is index 1-2. Reproduced directly: a double-click
+  3px past the circle's margin cut the rope from totalLength 124.6 down to
+  49.8 (pointCount 3). This is the cut mechanism working exactly as
+  designed; it now SUCCEEDS where it would previously have been rejected
+  because Minimum Rope Length is 0.5 (down from 1 or 8 in earlier rounds)
+  -- a direct, expected consequence of that setting, not a separate bug.
+  No "no-cut zone near the circle" was added, since that would be a new,
+  unrequested feature rather than a fix.
+
+Verified:
+- 0 console errors on a clean shipped-code reload (network log confirmed
+  the actual page responses were 200 OK throughout; a couple of
+  ERR_CONNECTION_RESET console lines on 2 earlier reloads were a Browser-
+  pane-side transient, not present on the final reload).
+- node --check clean; debug hook (window.__debugTMP) removed before
+  commit (grep-confirmed 0 references).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

@@ -12,7 +12,13 @@
   #devPanel {
     position:fixed; top:10px; right:10px;
     width:min(320px, calc(100vw - 20px));
-    max-height:88vh; min-width:220px; min-height:140px;
+    max-height:88vh;
+    /* min-width/min-height are NOT set here -- they depend on the header's
+       own rendered content (title font size is itself a dev-panel setting),
+       so a static CSS number would drift out of sync with the JS-computed
+       floor the same way max-height almost did; computeMinPanelSize()
+       applies them via style.minWidth/minHeight instead, as the one source
+       of truth the resize-drag math also reads from directly. */
     background:var(--dp-bg, rgba(18,18,26,0.94)); color:var(--dp-text-color, #c9c9d8);
     font:var(--dp-body-size, 12px)/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
     border:1px solid #3a3a4a; border-radius:8px;
@@ -157,25 +163,26 @@ const DEV_GROUPS = [
     { key:'circleColor', label:'Circle Color',  type:'color',  def:'#e74c3c' },
   ]},
   { title:'ROPE', controls:[
-    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:2.8 },
-    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:17.30769230769231,
-      onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
-    { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
-    { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
-    { key:'endcapDesign',   label:'Endcap Design',     type:'dropdown', def:'none',
+    { key:'endcapDesign',   label:'Endcap Design',     type:'dropdown', def:'end2',
       options:[
         { value:'none', label:'None (plain round cap)' },
         { value:'end1', label:'End 1' },
         { value:'end2', label:'End 2' },
       ] },
+    { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1 },
+    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:2.8 },
+    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:8.653846153846153,
+      onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
+    { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#8b5a2b' },
+    { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
   ]},
   { title:'CLICK', controls:[
-    { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8 },
-    { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:2 },
-    { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:40 },
+    { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:8.9 },
+    { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.6 },
+    { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:22 },
   ]},
   { title:'ROPE ANIMATION', controls:[
-    { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1.4 },
+    { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1 },
     { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:1.2 },
     { key:'ropeWeight',      label:'Rope Weight',          type:'slider', unit:'x', min:0.1, max:5, step:0.1, def:1 },
   ]},
@@ -183,9 +190,9 @@ const DEV_GROUPS = [
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
   ]},
   { title:'ROPE CUT', controls:[
-    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:1, max:30, step:0.5, def:1 },
+    { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.4, max:30, step:0.5, def:0.5 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
-    { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1.6 },
+    { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1 },
     { key:'floorEnabled',    label:'Floor Enabled',    type:'checkbox', def:true },
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#ffffff' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:5 },
@@ -194,7 +201,7 @@ const DEV_GROUPS = [
   { title:'MECHANICS', controls:[
     { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
     { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:4 },
-    { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:300 },
+    { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:1000 },
   ]},
   { title:'UI', controls:[
     { key:'backgroundColor', label:'Background Color', type:'color', def:'#1a1a2e' },
@@ -506,6 +513,33 @@ function initPanelDrag(){
   });
 }
 
+// §12c: "minimum size is whatever is functionally necessary" -- derived
+// live from the header's own rendered content (title text width, collapse
+// button width, padding, gaps), not a hardcoded guess. Computed fresh on
+// every resize-drag start rather than cached once, since the title's
+// rendered width depends on the Dev Panel Title Font Size slider (part of
+// the panel's own live-adjustable appearance), so a cached value could go
+// stale the moment that slider moves. #dpFps (flex:1 1 auto) is
+// deliberately excluded from the floor -- it's the header's designated
+// shrink-first element, not a click target, so it's fine for it to have
+// zero space rather than dictating the panel's minimum width. The floor
+// only needs to keep the title and the (clickable) collapse button
+// visible and non-overlapping -- everything below the header scrolls
+// (`.dp-body{overflow-y:auto}`), so it can shrink to 0 without breaking
+// anything.
+function computeMinPanelSize(){
+  const header = document.getElementById('dpHeader');
+  const title = header.querySelector('.dp-title');
+  const collapseBtn = document.getElementById('dpCollapseBtn');
+  const style = getComputedStyle(header);
+  const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  const gap = parseFloat(style.gap) || 0;
+  return {
+    width: Math.ceil(title.scrollWidth + collapseBtn.offsetWidth + paddingX + gap * 2),
+    height: Math.ceil(header.offsetHeight),
+  };
+}
+
 /* All 4 edges + all 4 corners resizable, per §12c. */
 function initResizeHandles(){
   const panel = document.getElementById('devPanel');
@@ -516,11 +550,13 @@ function initResizeHandles(){
       const sx = e.clientX, sy = e.clientY;
       const startRect = panel.getBoundingClientRect();
       panel.style.right = 'auto';
+      const { width: minW, height: minH } = computeMinPanelSize();
+      panel.style.minWidth = minW + 'px';
+      panel.style.minHeight = minH + 'px';
 
       function move(ev){
         const dx = ev.clientX - sx, dy = ev.clientY - sy;
         let { left, top, width, height } = startRect;
-        const minW = 220, minH = 140;
         // matches the CSS max-height:88vh on #devPanel exactly — without this,
         // a requested height beyond it gets silently clamped by CSS while this
         // math still thinks the full request took effect, so 's' would go
@@ -1171,7 +1207,11 @@ function onPointerUp(e){
     if (releaseHit.dist > vmin(cfg.holdDistance)) return;
     const heldMs = now - info.startTime;
     const t = Math.min(1, heldMs / cfg.clickHoldMaxDuration);
-    applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, t * cfg.intensityCeiling, 0);
+    // Intensity Ceiling stacks ON TOP of Click Intensity, not in place of it
+    // -- a hold starts at the same intensity a quick tap would produce and
+    // rises from there, reaching Click Intensity + Intensity Ceiling exactly
+    // at Click Hold Max Duration.
+    applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, cfg.clickIntensity + t * cfg.intensityCeiling, 0);
     return;
   }
 
@@ -1300,7 +1340,7 @@ function tipDirection(points){
   return { x: dx / len, y: dy / len };
 }
 
-function drawEndcap(points, thicknessPx, designKey){
+function drawEndcap(points, thicknessPx, designKey, color, heightMult){
   const design = ENDCAP_DESIGNS[designKey];
   if (!design) return;
   const dir = tipDirection(points);
@@ -1313,9 +1353,17 @@ function drawEndcap(points, thicknessPx, designKey){
   ctx.save();
   ctx.translate(tip.x, tip.y);
   ctx.rotate(angle);
-  ctx.scale(scale, scale);
+  // heightMult stretches ONLY the local "down" axis (independent of X) --
+  // applied here, before the anchor-shift below, so it scales the shape
+  // around the path's own local origin. Since the anchor-shift translate is
+  // the LAST transform call (so it acts FIRST on the path's raw coordinates,
+  // canvas transforms compose in reverse call order), the anchor point
+  // (topCenterX,topY) always lands at local (0,0) regardless of scale --
+  // any scale factor leaves the origin fixed -- so the cap's top edge stays
+  // exactly at the tip no matter how much vertical stretch is applied.
+  ctx.scale(scale, scale * heightMult);
   ctx.translate(-design.topCenterX, -design.topY);
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = color;
   ctx.fill(design.path);
   ctx.restore();
 }
@@ -1361,8 +1409,8 @@ function render(){
   fallenPieces.forEach(piece => strokeRopeCurve(piece.points, thickness, cfg.ropeColor, roundCapMult));
   strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, roundCapMult);
   if (cfg.endcapDesign !== 'none'){
-    fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign));
-    drawEndcap(mainRope.points, thickness, cfg.endcapDesign);
+    fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight));
+    drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight);
   }
   fallenPieces.forEach(piece => { if (piece.cutProgress < 1) renderCutSweep(piece); });
 }

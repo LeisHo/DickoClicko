@@ -188,7 +188,19 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   (a `129.7x183.44` viewBox around an actual drawn shape of only ~50x36 /
   ~54x47), and scaling by the viewBox would render the cap far smaller than
   the rope's actual thickness. See `docs/CODE_SUMMARY.md` Gotchas for the
-  full transform math and how it was verified.
+  full transform math and how it was verified. It's filled with
+  `cfg.ropeColor`, not the SVGs' own authored white — don't hardcode a
+  color there again. `cfg.endcapHeight` stretches only the local Y axis;
+  the anchor-shift translate must stay the LAST call in the transform
+  chain (so it's applied first to the raw path coordinates) or the top
+  edge will drift off the tip when height ≠ 1.
+- The dev panel's minimum resize size must come from
+  `computeMinPanelSize()` (derived live from the header's actual rendered
+  content), never a hardcoded number in either the JS resize math or CSS
+  `min-width`/`min-height` — per workspace `CLAUDE.md` §12c. Recompute it
+  at the start of every resize-drag, not once at boot; the title's
+  rendered width depends on the Dev Panel Title Font Size slider, a live
+  setting, so a cached value can go stale.
 - `update()` is always called with a fixed `1/60` timestep now (`loop()`'s
   accumulator pattern), never the raw per-frame `requestAnimationFrame`
   delta — physics, growth rate, and cut-sweep timing all depend on this to

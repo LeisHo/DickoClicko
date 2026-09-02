@@ -72,7 +72,14 @@ ENDCAP_DESIGNS / drawEndcap() (data/Rope/End1.svg, End2.svg)
        round cap entirely rather than stacking both. Embedded as Path2D
        objects using each SVG path's own coordinates verbatim -- see
        Gotchas for why the scale/anchor math uses each path's real
-       getBBox(), not the SVGs' own (much larger) viewBox.
+       getBBox(), not the SVGs' own (much larger) viewBox. Filled with
+       cfg.ropeColor (not the SVGs' own authored white), so it always
+       matches the rope; cfg.endcapHeight scales ONLY the local "down" axis
+       (independent of the width-matching scale), stretching the cap
+       vertically while its top edge stays pinned exactly at the tip --
+       safe because the anchor-shift translate is applied last in the
+       transform chain (so it acts first on the raw path coordinates),
+       putting the anchor at local (0,0), which no scale factor can move.
 
 update(rawDt) each animation frame:
     1. re-pin mainRope's anchor point to the (possibly-moved) circle
@@ -132,8 +139,12 @@ radius -- see Gotchas) -- a hold starting on/near the circle grows the rope
 (existing `growing`/`growRope()` path); a hold starting on the rope charges
 punch intensity instead (`downInfo.charging`) and fires the punch
 immediately on release IF it's within `cfg.holdDistance` of the rope,
-intensity scaled linearly from 0 to `cfg.intensityCeiling` as total hold
-time goes from 0 to `cfg.clickHoldMaxDuration` (clamped at 1x beyond that).
+intensity scaled linearly from `cfg.clickIntensity` (at 0 held time) up to
+`cfg.clickIntensity + cfg.intensityCeiling` (at `cfg.clickHoldMaxDuration`,
+clamped beyond that) -- Intensity Ceiling stacks ON TOP of Click Intensity
+per explicit request, it does not replace it; a hold that's released
+essentially immediately still punches at the same intensity a quick tap
+would.
 Charging isn't limited by `clickDistance` (its own, separate, more generous
 `holdDistance` governs it instead) -- press anywhere and hold; only a quick
 tap needs real proximity (`clickDistance`) to the rope to mean anything (see
@@ -436,4 +447,31 @@ GOTCHAS
   Both `mainRope` and every `fallenPieces` entry share the exact same
   `drawEndcap()` call in `render()` -- there is no special-casing for
   cut pieces, so a fresh cut's remaining tip picks up the cap
-  automatically, with no extra code needed.
+  automatically, with no extra code needed. Confirmed the cap was white
+  originally (matching both source SVGs' authored `fill:#fff`) and fixed
+  it to use `cfg.ropeColor` per an explicit request; `cfg.endcapHeight`
+  (a later addition) scales only the local Y axis inside the same
+  transform chain, verified to keep the top edge exactly pinned at the
+  tip at every tested multiplier (0.5x-3x) while the cap's rendered
+  extent scaled linearly (2x height produced exactly 2x the measured
+  pixel extent).
+- The dev panel's minimum resize size is derived live from
+  `computeMinPanelSize()` (header's title `scrollWidth` + collapse
+  button width + header padding/gap, for width; header's own
+  `offsetHeight`, for height), never a hardcoded guess -- per the
+  workspace `CLAUDE.md` §12c requirement added after this project's
+  panel already shipped with hardcoded `minW=220,minH=140` (in both the
+  JS resize math AND a matching CSS `#devPanel{min-width:220px;
+  min-height:140px}` -- exactly the two-sources-of-truth pattern that
+  caused the earlier `max-height:88vh` bug in this same file, so both
+  were removed together). Computed FRESH at the start of every
+  resize-drag (not cached once at boot) because the title's rendered
+  width depends on the Dev Panel Title Font Size slider, a live setting;
+  a cached value would go stale the moment that slider moves.
+  `#dpFps` (the fps counter, `flex:1 1 auto`) is deliberately excluded
+  from the floor -- it's the header's own designated shrink-first
+  element and isn't a click target, so letting it hit zero width is
+  fine; everything below the header already scrolls
+  (`.dp-body{overflow-y:auto}`), so it can shrink to 0 too. Real
+  measured floor at this project's current header content: 81x34px (vs.
+  the old hardcoded 220x140).
