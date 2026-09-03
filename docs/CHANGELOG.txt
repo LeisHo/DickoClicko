@@ -3605,6 +3605,73 @@ docs/CHANGELOG.txt (this entry), docs/CODE_SUMMARY.md (3 new Gotchas).
 Left data/Rope/End_Form1-01.svg (a different concurrent session's own
 active edit) untouched.
 
+2026-09-03  -  06:51 AM - 07:00 AM EDT
+
+Investigated "the startup animation is still weird. sometimes the rope
+comes from above, sometimes i see the background rope jump up past the
+top edge of the circle, then come back down. i think it has something to
+do with the startup rise clear offset" -- plus a request for a checkbox
+to visualize that offset.
+
+Root-caused via direct math trace, then confirmed visually with the new
+debug overlay before concluding: updateIntro()'s 'rising' phase computed
+its climb target (clearY) from Startup Rise Clear Offset alone, with no
+regard for anchorBoundaryRadius() -- the radius integrateChain()'s own
+boundaryConstraint actually confines mainRope's anchor to, every frame.
+At the live default Offset (-18.5), the raw target sits ~29%vmin from
+circleAnchor() against an ~8.75%vmin boundary radius at default Circle
+Size/Circle Boundary Offset. bgRope's own rope-start (fully unconstrained
+during 'rising') climbed all the way there, then the existing handoff
+code set mainRope's anchor AND its oldx/oldy equal to that same
+far-outside position, intending zero implied velocity. The very next
+integrateChain() call's boundaryConstraint clamps position back inside
+the radius WITHOUT touching oldx/oldy (a deliberate, already-correct
+design for the constraint's normal case -- see its own comment), so
+oldx/oldy was left holding the far-outside spawn position while x/y held
+the clamped one. The FOLLOWING frame's verlet step then computed a real
+implied velocity from that mismatch and flung the anchor hard in the
+correction's own direction -- confirmed large enough to overshoot past
+the boundary's opposite side before damping settled it back, exactly
+"jump up past the top edge... then come back down".
+
+Fixed by clamping clearY itself (the 'rising' phase's own climb target)
+to the anchor's real boundary, so bgRope's visible climb now stops
+exactly where mainRope's anchor can actually rest -- the existing
+handoff code's own "zero implied velocity" assignment (already correct
+as written) is now genuinely true on the following frame too, not
+silently invalidated by a same-frame position clamp it didn't know
+about. Worth flagging directly: this means an Offset large enough to
+target beyond the boundary no longer visibly extends the climb any
+further -- it never actually could without reproducing this bug; Circle
+Boundary Offset (or Circle Size) is what actually governs how far the
+anchor, and therefore the visible climb, can range from center.
+
+Added the requested "Debug: Show Rise Clear Offset Line" checkbox (off
+by default, STARTUP ANIMATION group): draws a dashed magenta line at the
+RAW (uncapped) offset target and a dashed cyan circle at
+anchorBoundaryRadius(), rendered regardless of introPhase so it's usable
+for tuning Circle Boundary Offset/Circle Size after the animation has
+already finished, not just during it.
+
+Live-verified in the local dicko-clicko-static preview: enabled the
+debug checkbox and confirmed the cyan boundary circle sits visibly
+inside the drawn circle's own bottom edge while the magenta target line
+sits far below it -- visual proof of the exact mismatch driving the bug.
+Reloaded fresh and watched the actual startup sequence: the anchor
+settles to a stable position with no lingering oscillation across
+repeated screenshots. Did not capture a frame-by-frame video of the
+handoff moment itself -- this sandbox runs the fixed-timestep loop at an
+effectively very high real-world rate (300fps reported by the panel's
+own counter), so the whole wait+climb+settle sequence completes within a
+fraction of a real second, faster than screenshot polling can reliably
+straddle; confidence rests on the end-to-end stable result plus the
+math trace, not a captured mid-transition frame.
+
+node --check clean after each edit. Updated docs/CHANGELOG.txt (this
+entry), docs/CODE_SUMMARY.md (1 new Gotcha). Left data/Rope/
+End_Form1-01.svg (a different concurrent session's own active edit)
+untouched.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

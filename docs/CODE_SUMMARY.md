@@ -2192,3 +2192,48 @@ GOTCHAS
   local `SLIDE_SHARE` reads it) so the two functions can't drift apart
   again. End Emerge Speed still governs only the part the user actually
   sees.
+- **Startup Rise Clear Offset's raw target can sit far outside mainRope's
+  own anchor boundary, and the intro handoff didn't account for that --
+  producing a real one-frame implied-velocity spike, not a random
+  glitch.** `updateIntro()`'s 'rising' phase used to compute `clearY =
+  circleAnchor().y + circleSize/2 - introRiseClearOffset` with no upper
+  bound on how far it could sit from `anchorBoundaryRadius()` (the
+  radius `integrateChain()`'s own `boundaryConstraint` actually confines
+  mainRope's anchor to, every frame). At the live default Offset
+  (-18.5), the raw target sits ~29%vmin from `circleAnchor()` against an
+  ~8.75%vmin boundary radius at default Circle Size/Circle Boundary
+  Offset -- bgRope's own rope-start (fully unconstrained/scripted during
+  'rising') climbed there anyway, then the handoff code set mainRope's
+  anchor AND its `oldx`/`oldy` equal to that same far-outside position
+  (intending zero implied velocity). The very next `integrateChain()`
+  call's `boundaryConstraint` clamps position back inside the radius
+  WITHOUT touching `oldx`/`oldy` (a DELIBERATE design, see that
+  constraint's own comment on why touching it there was tried and was
+  wrong) -- so `oldx`/`oldy` was left holding the far-outside spawn
+  position while `x`/`y` held the clamped one. The FOLLOWING frame's
+  verlet step (`vx = (p.x - p.oldx) * damping`) then computed a real
+  implied velocity from that mismatch and flung the anchor hard in the
+  correction's own direction, confirmed via direct trace to be large
+  enough to overshoot past the boundary's opposite side before damping
+  settled it -- reported as "sometimes i see the background rope jump up
+  past the top edge of the circle, then come back down" / "the rope
+  comes from above". Fixed by clamping `clearY` ITSELF (the 'rising'
+  phase's own climb target) to `[circleAnchor().y - anchorBoundaryRadius(),
+  circleAnchor().y + anchorBoundaryRadius()]` -- bgRope's visible climb
+  now stops exactly where mainRope's anchor can actually rest, so the
+  existing handoff code's own "zero implied velocity" assignment is
+  finally true on the very next frame too, not just the one it's set on.
+  A material, visible side effect worth knowing: an Offset large enough
+  to target beyond that boundary no longer visibly extends the climb any
+  further than the boundary itself allows -- it never actually could,
+  without reproducing this exact bug; Circle Boundary Offset (or Circle
+  Size) is what actually governs how far the anchor -- and therefore the
+  visible climb -- can range from center. Added a `Debug: Show Rise
+  Clear Offset Line` checkbox (off by default) per direct request,
+  rendered at the very end of `render()` regardless of `introPhase`: a
+  dashed magenta line at the RAW (uncapped) target and a dashed cyan
+  circle at `anchorBoundaryRadius()`, so the two quantities this fix
+  reconciles can be visually compared directly -- confirmed live (both
+  lines render at the expected positions, the cyan boundary circle sits
+  visibly inside the drawn circle graphic's own bottom edge at default
+  settings) before concluding the fix was correct.

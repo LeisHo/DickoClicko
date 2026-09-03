@@ -818,6 +818,23 @@ assuming it never shipped.
   earlier request to slow the visible grow (End Emerge Speed down to
   0.01) silently slowed the invisible slide by the same factor. Gave
   the slide phase its own fixed ~0.3s duration, independent of Speed.
+- "sometimes i see the background rope jump up past the top edge of the
+  circle, then come back down" -- root-caused to Startup Rise Clear
+  Offset's raw target sitting far outside mainRope's own anchor physics
+  boundary (~29%vmin from center vs. an ~8.75%vmin boundary radius at
+  default settings). bgRope's own unconstrained climb reached the raw
+  target, then the handoff set mainRope's anchor's oldx/oldy equal to
+  that same far-outside position (intending zero velocity) -- but the
+  very next frame's boundary clamp silently invalidated that assumption,
+  producing a real one-frame implied-velocity spike that flung the
+  anchor past the boundary before settling back. Fixed by clamping the
+  climb's own target to the anchor's real boundary, so the handoff is
+  now a genuine zero-discontinuity continuation. Side effect worth
+  knowing: an Offset beyond that boundary no longer visibly extends the
+  climb further -- Circle Boundary Offset/Circle Size now govern the
+  visible climb's real reach. Added a "Debug: Show Rise Clear Offset
+  Line" checkbox (STARTUP ANIMATION group) showing both the raw target
+  and the boundary circle for tuning.
 
 ## What's next
 

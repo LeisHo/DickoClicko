@@ -344,6 +344,7 @@ const DEV_GROUPS = [
     { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:1.4 },
     { key:'introRiseSpeed',      label:'Startup Rise Speed',        type:'slider', unit:'%vh/s', min:0.5, max:300, step:0.5, def:5 },
     { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
+    { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Line', type:'checkbox', def:false },
     { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:0.4 },
     { key:'introExtendSpeed',    label:'Startup Extension Speed',   type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:15 },
     { key:'introExtendSpeedTweenEnabled', label:'Startup Extension Speed Tween Enabled', type:'checkbox', def:false },
@@ -1925,7 +1926,45 @@ function updateIntro(rawDt){
     // This replaces the old "climb until reaching mainRope's own settled
     // anchor position" target: a purely geometric trigger, independent
     // of wherever Anchor Physics happens to settle mainRope's anchor.
-    const clearY = circleAnchor().y + vmin(cfg.circleSize) / 2 - vmin(cfg.introRiseClearOffset);
+    //
+    // Clamped to mainRope's own anchor boundary (anchorBoundaryRadius()
+    // around circleAnchor()) -- NOT the raw offset math alone. Reported as
+    // "sometimes i see the background rope jump up past the top edge of
+    // the circle, then come back down" / "the rope comes from above":
+    // mainRope's anchor is a physics point that can NEVER actually rest
+    // outside that radius (integrateChain()'s own boundaryConstraint
+    // clamps it back every single frame), so an Offset large enough to
+    // put the RAW target beyond it was never actually achievable by the
+    // handoff below -- bgRope climbed there anyway (fully unconstrained
+    // during 'rising'), then mainRope's spawn got hard-snapped back
+    // inside the boundary on the very next physics tick while its
+    // oldx/oldy still held the far-outside spawn position (set equal to
+    // it the same frame, on the -- as it turns out, false -- assumption
+    // that meant zero implied velocity). The FOLLOWING frame's verlet
+    // step then computed a real implied velocity from that mismatch
+    // (clamped position minus the still-far-outside old position),
+    // flinging the anchor hard in the correction's own direction --
+    // confirmed via direct trace at the current default Startup Rise
+    // Clear Offset (-18.5): the raw target sits ~29%vmin from center vs.
+    // an ~8.75%vmin boundary radius at default Circle Size/Circle
+    // Boundary Offset, a large enough gap to overshoot past the
+    // boundary's opposite side before damping settled it back --
+    // reproducing exactly the reported jump-then-return. Clamping the
+    // climb's own TARGET here means bgRope's visible climb now stops
+    // exactly where mainRope's anchor can actually rest, so the handoff
+    // below is a genuine zero-discontinuity continuation, matching what
+    // this code always intended ("There will not be a sudden jump") --
+    // rather than relying on a same-frame zero-velocity assignment that
+    // the very next frame's boundary clamp was silently invalidating.
+    // A large negative Offset's own configured "climb from far below"
+    // distance is now bounded by the anchor's real physics reach --
+    // increase Circle Boundary Offset (or Circle Size) to let the anchor
+    // itself range further from center if a longer visible climb is
+    // wanted; Offset beyond that boundary was never physically
+    // achievable without reproducing this exact bug.
+    const rawClearY = circleAnchor().y + vmin(cfg.circleSize) / 2 - vmin(cfg.introRiseClearOffset);
+    const boundaryR = anchorBoundaryRadius();
+    const clearY = Math.min(circleAnchor().y + boundaryR, Math.max(circleAnchor().y - boundaryR, rawClearY));
     const step = vh(cfg.introRiseSpeed) * rawDt;
     if (bgRope.points[0].y - clearY <= step){
       bgRope.points[0].y = clearY;
@@ -3602,6 +3641,33 @@ function render(){
   }
   if (mainRope.cutSweep && mainRope.cutSweep.progress < 1) renderCutSweep(mainRope);
   fallenPieces.forEach(piece => { if (piece.cutSweep && piece.cutSweep.progress < 1) renderCutSweep(piece); });
+
+  // Debug: Show Rise Clear Offset Line -- draws the RAW (uncapped)
+  // Startup Rise Clear Offset target as a dashed line, plus the anchor's
+  // own physics boundary (anchorBoundaryRadius() around circleAnchor())
+  // as a dashed circle, so the two can be visually compared -- exactly
+  // the two quantities updateIntro()'s own clamp (see its comment) now
+  // reconciles. Drawn regardless of introPhase (not just during
+  // waiting/rising/pausing) so it's just as usable for inspecting Circle
+  // Boundary Offset/Circle Size tuning after the animation has finished.
+  if (cfg.debugShowRiseClearOffset){
+    const anchor = circleAnchor();
+    const rawClearY = anchor.y + vmin(cfg.circleSize) / 2 - vmin(cfg.introRiseClearOffset);
+    const boundaryR = anchorBoundaryRadius();
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ff2ec4';
+    ctx.beginPath();
+    ctx.moveTo(0, rawClearY);
+    ctx.lineTo(window.innerWidth, rawClearY);
+    ctx.stroke();
+    ctx.strokeStyle = '#2ee6ff';
+    ctx.beginPath();
+    ctx.arc(anchor.x, anchor.y, boundaryR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 // Fixed-timestep physics: update() always advances by exactly this much,
