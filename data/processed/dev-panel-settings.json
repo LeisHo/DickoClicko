@@ -1,17 +1,17 @@
 {
   "values": {
     "backgroundColor": "#252546",
-    "circleSize": 8,
+    "circleSize": 11,
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#000000",
-    "circleBoundaryOffset": -1.5,
-    "anchorWeight": 2.8,
+    "circleBoundaryOffset": -2.5,
+    "anchorWeight": 0,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.3,
     "tipSegmentShapeEnabled": false,
-    "ropeThickness": 4.8,
-    "ropeLength": 10.702106810387066,
+    "ropeThickness": 6.4,
+    "ropeLength": 31.45210681038715,
     "ropeColor": "#a5815f",
     "ropeEndCurveArc": 1,
     "ropeTopCurveArc": 1,
@@ -46,9 +46,9 @@
     "floorThickness": 10,
     "floorHeight": 6,
     "introEnabled": true,
-    "introWaitDuration": 1.5,
-    "introRiseSpeed": 35,
-    "introPauseDuration": 0.3
+    "introWaitDuration": 2,
+    "introRiseSpeed": 5,
+    "introPauseDuration": 0.1
   },
   "order": [
     {
@@ -85,7 +85,7 @@
     },
     {
       "key": "CIRCLE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleSize",
         "circleX",
@@ -95,7 +95,7 @@
     },
     {
       "key": "ANCHOR PHYSICS",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
@@ -183,11 +183,11 @@
     }
   ],
   "panelGeometry": {
-    "mobile": {
-      "left": 74.03571319580078,
-      "top": 439.1428527832031,
-      "width": 320,
-      "height": 438.9821472167969,
+    "desktop": {
+      "left": 1076,
+      "top": 4.578125,
+      "width": 686,
+      "height": 583.65625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -200,11 +200,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "desktop": {
-      "left": 1076,
-      "top": 4.578125,
+    "mobile": {
+      "left": 74.03571319580078,
+      "top": 439.1428527832031,
       "width": 320,
-      "height": 583.65625,
+      "height": 438.9821472167969,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
