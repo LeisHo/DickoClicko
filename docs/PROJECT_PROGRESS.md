@@ -798,6 +798,26 @@ assuming it never shipped.
   from a concurrent session (`git reset --mixed origin/master` after a
   manual 3-way merge of the settings file) rather than overwrite either
   side.
+- 3 more real bugs reported and fixed, all root-caused via direct code
+  tracing: (1) "sometimes it lags, sometimes it jumps really high up" on
+  startup -- `lastTime` used to start ticking before Boot's own
+  synchronous work (dev-panel construction, `resetSettings()`) had run,
+  so that real wall-clock gap counted as frame 1's own dt and the
+  fixed-timestep accumulator caught it up in a burst of extra ticks
+  before the first paint. Fixed by re-syncing `lastTime` immediately
+  before the first real frame instead. (2) Fallen cut pieces visibly
+  shrinking in LENGTH as they decayed, not just thickness -- the
+  endcap's height was scaling off the same live, decaying thickness as
+  its width. Decoupled them: the endcap's width still tracks the
+  piece's live thickness (visibly thinning) while its height now stays
+  pinned to the piece's thickness at the moment it fell (length no
+  longer recedes). Live-verified by cutting the rope and watching a
+  fallen piece over ~18s. (3) End Emerge still taking ~5s to become
+  visible even with Emerge Delay at 0 -- the invisible slide-into-
+  position phase and the visible grow phase shared one rate, so an
+  earlier request to slow the visible grow (End Emerge Speed down to
+  0.01) silently slowed the invisible slide by the same factor. Gave
+  the slide phase its own fixed ~0.3s duration, independent of Speed.
 
 ## What's next
 

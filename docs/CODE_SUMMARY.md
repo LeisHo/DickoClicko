@@ -2120,3 +2120,75 @@ GOTCHAS
   parent's CURRENT (possibly already-decayed) thickness via
   `pieceThickness(piece)` at the moment of the split, so the split-off
   piece doesn't visually jump back to full thickness.
+- **A fixed-timestep accumulator's `lastTime` clock starting too early
+  makes ordinary page-load work look like a physics catch-up burst.**
+  `lastTime = performance.now()` used to be set where `FIXED_DT` itself
+  is declared, well before Boot's own synchronous work (dev-panel
+  construction, `resetSettings()`, etc.) actually runs -- all of that
+  real wall-clock time landed in frame 1's own `frameDt`, which the
+  `MAX_FRAME_DT`-capped accumulator (see `loop()`) then "catches up" on
+  in a burst of extra `update(FIXED_DT)` ticks BEFORE the first
+  `render()`. Since `updateIntro()`'s 'rising' phase moves
+  `bgRope.points[0].y` by a fixed amount PER TICK, a burst of several
+  ticks compressed into one JS turn paints as a sudden jump the instant
+  `render()` finally runs; a smaller, more variable burst reads as
+  stutter instead -- reported as "sometimes it lags, sometimes it jumps
+  really high up". Fixed by re-syncing `lastTime = performance.now()`
+  again immediately before the FIRST `requestAnimationFrame(loop)` call,
+  after all of Boot's synchronous work has already run -- frame 1's own
+  `frameDt` then reflects only the real gap until the browser's next
+  paint (a normal single frame), not the page's own startup cost.
+  `MAX_FRAME_DT` itself is untouched -- it still does its real job of
+  capping a genuine catch-up burst (e.g. after a backgrounded tab).
+- **`drawEndcap()`'s width and height used to scale off the SAME
+  `thicknessPx`, so a fallen piece's own thickness decay silently
+  shrank its endcap's LENGTH too, not just its width.** The endcap's
+  footprint extends beyond the piece's actual polyline tip; `ctx.scale
+  (normalScale, yScale*heightMult)` used one `normalScale =
+  thicknessPx / ENDCAP_ALIGNMENT.width` for both axes, so as
+  `pieceThickness(piece)` decayed toward `pieceMinThickness`, the
+  endcap's own vertical span shrank right along with its width --
+  reducing how far the visible piece extended beyond the anchor even
+  though the underlying `points` array never changed length. Reported
+  as "i dont want them to get shorter, just thinner" and "the cut off
+  segment begins to shrink immediately" (immediately here meaning
+  "within the first couple of decaying seconds", not literally frame
+  0 -- `pieceThickness()` still honors Piece Decay Delay). Fixed by
+  giving `drawEndcap()` an optional 8th param, `heightThicknessPx`
+  (defaults to `thicknessPx` -- mainRope's own call site is unchanged,
+  so its endcap still scales uniformly with `liveThickness`, including
+  the intentional Detach Thickness Multiplier growth). The fallenPieces
+  call site now passes `piece.baseThickness` (fixed at the moment the
+  piece fell) for this param, so the endcap's X axis still tracks the
+  live decaying thickness (visibly thinning, as intended) while its Y
+  axis stays pinned to the piece's own original thickness (length no
+  longer recedes as it thins). Live-verified via an actual cut in a
+  local static-server browser session: the fallen piece's width
+  visibly narrowed over ~18s of real decay while its top-to-bottom
+  span stayed constant (within ordinary physics-settle variance).
+- **`emergeFactor()`'s invisible slide-into-position phase and its
+  visible grow phase used to share ONE rate, so slowing End Emerge
+  Speed for a slower visible grow-in silently slowed the invisible
+  slide by the same factor.** `tickEmerge()` advanced a single
+  `emerge.progress` at `cfg.endEmergeSpeed / EMERGE_BASE_SEC` for its
+  entire 0..1 span; `drawEndcap()`'s own `SLIDE_SHARE` (0.15) then
+  treated the first 15% of that span as an invisible slide and the
+  rest as the visible scale-up. At Speed's own current default (0.01,
+  set several rounds ago per an explicit "at least 5x slower" request
+  for the visible grow), reaching even that first 15% took
+  `0.15 / (0.01/0.35)` ~= 5.25s -- reported as "even with delay set to
+  0 it takes a while... like 5 seconds at least" (Delay adds ON TOP of
+  this; setting it to 0 only removes the separate `delayRemaining`
+  wait, not this slide cost). This is the SAME class of bug as an
+  earlier-fixed one (the original 50/50 slide/scale split that made
+  growth invisible for half the configured duration) resurfacing
+  through a different mechanism -- back then SLIDE_SHARE itself was
+  too large; now the shared RATE got slowed down for an unrelated
+  reason. Fixed by decoupling the two phases' rates: `tickEmerge()` now
+  advances at a fixed `EMERGE_SLIDE_SHARE / EMERGE_SLIDE_SEC` (always
+  ~0.3s real time) while `emerge.progress < EMERGE_SLIDE_SHARE`, and
+  only switches to the Speed-scaled rate once past that point --
+  `EMERGE_SLIDE_SHARE` is now a shared top-level const (`drawEndcap()`'s
+  local `SLIDE_SHARE` reads it) so the two functions can't drift apart
+  again. End Emerge Speed still governs only the part the user actually
+  sees.

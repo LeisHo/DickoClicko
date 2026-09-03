@@ -3522,6 +3522,89 @@ node --check clean. Updated docs/CHANGELOG.txt (this entry),
 docs/PROJECT_PROGRESS.md. Left data/Rope/End_Form1-01.svg (a different
 concurrent session's own active edit) untouched.
 
+2026-09-03  -  06:18 AM - 06:33 AM EDT
+
+3 real bugs reported and fixed this round, all root-caused via direct code
+tracing (not guessed at): the startup rope's occasional lag/jump, fallen
+cut pieces visibly shrinking in length (not just thickness), and a long
+invisible delay before the End Emerge animation becomes visible even with
+Emerge Delay at 0.
+
+(1) Startup rope lag/jump ("sometimes it lags, sometimes it jumps really
+high up"): `lastTime = performance.now()` used to be set where FIXED_DT
+itself is declared, well before Boot's own synchronous work (dev-panel
+construction, resetSettings(), etc.) actually runs. That real wall-clock
+gap landed in frame 1's own frameDt, which the MAX_FRAME_DT-capped
+accumulator then "catches up" on in a burst of extra update(FIXED_DT)
+ticks before the first render() -- since updateIntro()'s 'rising' phase
+moves bgRope.points[0].y a fixed amount PER TICK, a compressed burst
+paints as a sudden jump; a smaller/variable one reads as stutter. Fixed
+by re-syncing lastTime again immediately before the first
+requestAnimationFrame(loop) call, after Boot's synchronous work has
+already run -- frame 1's own frameDt now reflects only a normal single
+frame's gap. MAX_FRAME_DT itself untouched (still caps a genuine
+backgrounded-tab catch-up).
+
+(2) Fallen pieces shrinking in length ("i dont want them to get shorter,
+just thinner. the end cap should also scale with the thickness" / "the
+cut off segment begins to shrink immediately"): drawEndcap()'s endcap
+graphic scaled BOTH its width and height off the same live, decaying
+thicknessPx -- so as a fallen piece thinned (Piece Decay Speed, after
+Piece Decay Delay), its endcap's own footprint beyond the tip shrank
+right along with it, visibly reducing the piece's total length even
+though its underlying points array never changed. Fixed by giving
+drawEndcap() an optional 8th param, heightThicknessPx (defaults to
+thicknessPx -- mainRope's own call site unchanged, so its endcap still
+scales uniformly, including the intentional Detach Thickness Multiplier
+growth). fallenPieces now pass piece.baseThickness (fixed at the moment
+the piece fell) for this param: width still tracks live thickness
+(visibly thinning) while height stays pinned to the piece's original
+thickness (length no longer recedes). Live-verified by actually cutting
+the rope in a local static-server browser session and watching one
+fallen piece over ~18s: visibly thinner, same top-to-bottom span.
+
+(3) End Emerge taking ~5s to become visible even with Delay=0: answered
+"what is Detach Pause Duration" directly first (a duplicate of Startup
+Pause Duration, used specifically for the pause after a full double-click
+detach-and-regrow, not a regular partial cut -- added several rounds ago
+per explicit request). Then root-caused the emerge-timing report:
+tickEmerge() advanced a single emerge.progress at ONE rate
+(cfg.endEmergeSpeed / EMERGE_BASE_SEC) across its whole 0..1 span, and
+drawEndcap()'s own SLIDE_SHARE (0.15) treated the first 15% of that as an
+invisible slide-into-position. At End Emerge Speed's current default
+(0.01, set several rounds ago per an explicit "at least 5x slower"
+request for the visible grow), reaching even that first 15% took
+~5.25s -- Delay only removes the separate delayRemaining wait, not this
+slide cost, so setting it to 0 didn't help. Same class of bug as an
+earlier-fixed one (the original 50/50 slide/scale split), resurfacing
+through a different mechanism: back then SLIDE_SHARE was too large; now
+the shared rate got slowed for an unrelated reason (a slower VISIBLE
+grow, requested separately). Fixed by decoupling the two phases' rates:
+the slide portion now always advances at a fixed EMERGE_SLIDE_SHARE /
+EMERGE_SLIDE_SEC (~0.3s real time regardless of Speed); only the
+remaining, visible grow portion still scales with End Emerge Speed.
+EMERGE_SLIDE_SHARE is now a shared top-level const so drawEndcap()'s own
+SLIDE_SHARE can't drift out of sync with it again.
+
+node --check clean after each edit. Verified live in a local
+dicko-clicko-static preview (python http.server via .claude/launch.json):
+confirmed the full startup sequence renders correctly, performed a real
+cut via simulated pointer events, and watched the fallen piece decay over
+~18s (item 2, above). Did not attempt to reproduce the startup lag/jump
+itself live (item 1) -- it depends on real, variable page-load timing
+that isn't reliably reproducible on demand in a quick preview session;
+confidence there rests on the code trace (frame 1's frameDt provably
+included Boot's synchronous work before this fix, and provably doesn't
+after) rather than a captured repro. Also hit the already-documented,
+already-RESOLVED sandbox-only artifact (window.innerWidth/innerHeight
+reading 0 on this Browser pane's very first paint, see the "RESOLVED, not
+a code bug" Gotcha) during the first couple of reloads -- recognized as
+the known issue, not a new regression, and confirmed the app fully
+recovers on its own once a real viewport size is available. Updated
+docs/CHANGELOG.txt (this entry), docs/CODE_SUMMARY.md (3 new Gotchas).
+Left data/Rope/End_Form1-01.svg (a different concurrent session's own
+active edit) untouched.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

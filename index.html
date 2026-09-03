@@ -3183,6 +3183,12 @@ const TIP_SEGMENT_SHAPE = (function(){
    created.
 --------------------------------------------------------------------- */
 const EMERGE_BASE_SEC = 0.35;
+// The invisible slide-into-position phase (see SLIDE_SHARE in drawEndcap)
+// always resolves in this fixed real time, independent of End Emerge
+// Speed -- see tickEmerge()'s own comment for why this exists separately
+// from EMERGE_BASE_SEC.
+const EMERGE_SLIDE_SHARE = 0.15;
+const EMERGE_SLIDE_SEC = 0.3;
 // Each tween takes the raw progress `t` (0..1) plus `s` (End Emerge Easing
 // Strength) -- `s` generalizes the exponent each curve already used
 // (originally hardcoded to 2, i.e. t², matching a classic quadratic ease):
@@ -3211,7 +3217,23 @@ function tickEmerge(emerge, rawDt){
     emerge.delayRemaining = Math.max(0, emerge.delayRemaining - rawDt);
     return;
   }
-  emerge.progress = Math.min(1, emerge.progress + rawDt * cfg.endEmergeSpeed / EMERGE_BASE_SEC);
+  // Two-phase rate, not one shared rate for the whole 0..1 span: the
+  // invisible SLIDE portion (progress 0..EMERGE_SLIDE_SHARE, see
+  // drawEndcap's own SLIDE_SHARE) always resolves in a fixed
+  // EMERGE_SLIDE_SEC, regardless of End Emerge Speed. Only the remaining,
+  // visible GROW portion still scales with Speed. Per explicit report
+  // ("even with delay set to 0 it takes a while... like 5 seconds at
+  // least"): the two phases used to share ONE rate
+  // (cfg.endEmergeSpeed / EMERGE_BASE_SEC), so slowing Speed down for a
+  // slower visible grow-in also silently slowed the invisible slide by
+  // the same factor -- at Speed's own current default (0.01, set per an
+  // earlier explicit request for a much slower grow), the slide alone
+  // took ~5.25s (0.15 / (0.01/0.35)) before ANY visible change appeared,
+  // regardless of Delay.
+  const rate = emerge.progress < EMERGE_SLIDE_SHARE
+    ? EMERGE_SLIDE_SHARE / EMERGE_SLIDE_SEC
+    : cfg.endEmergeSpeed / EMERGE_BASE_SEC;
+  emerge.progress = Math.min(1, emerge.progress + rawDt * rate);
 }
 
 // 0 = fully hidden (rope-width scale), 1 = fully emerged (normal scale).
@@ -3255,10 +3277,22 @@ function tipDirection(points){
 // the same world position the rope's own stroke gradient already
 // occupies, regardless of the endcap's current rotation/scale/slide
 // position.
-function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, gradientInfo){
+function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, gradientInfo, heightThicknessPx){
   const design = ENDCAP_DESIGNS[designKey];
   if (!design) return;
   if (factor === undefined) factor = 1;
+  // heightThicknessPx defaults to thicknessPx (mainRope's own call site,
+  // and every call before this param existed): the endcap's length (Y
+  // axis) scales off the SAME thickness as its width (X axis), same as
+  // before. A fallen piece's own decay (pieceThickness()) passes its
+  // fixed baseThickness here instead -- decoupling the endcap's LENGTH
+  // from its currently-decaying WIDTH, per explicit request ("i dont want
+  // them to get shorter, just thinner. the end cap should also scale with
+  // the thickness"): the cap narrows as the piece thins (X still tracks
+  // live thickness) but its footprint beyond the tip no longer recedes as
+  // decay progresses (Y stays pinned to whatever thickness the piece had
+  // when it fell).
+  if (heightThicknessPx === undefined) heightThicknessPx = thicknessPx;
   const dir = tipDirection(points);
   const tip = points[points.length - 1];
   // rotates local "down" (0,1) to (dir.x,dir.y); derived from the standard
@@ -3266,7 +3300,8 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   // (-sinθ,cosθ) = (dir.x,dir.y).
   const angle = Math.atan2(-dir.x, dir.y);
   const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
-  const startYScale = normalScale * cfg.endcapStartingScale;
+  const heightNormalScale = heightThicknessPx / ENDCAP_ALIGNMENT.width;
+  const startYScale = heightNormalScale * cfg.endcapStartingScale;
   // Sequential, not simultaneous, per explicit request ("instead of
   // simultaneously rescaling the endcap back up, the rescaling only
   // begins once the endcap top edge has aligned with the rope end"):
@@ -3281,10 +3316,10 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   // animation" (reported directly). SLIDE_SHARE is deliberately small so
   // the (largely invisible) slide resolves quickly and nearly all of the
   // configured duration goes to the part that's actually visible.
-  const SLIDE_SHARE = 0.15;
+  const SLIDE_SHARE = EMERGE_SLIDE_SHARE;
   const slideFactor = Math.min(1, factor / SLIDE_SHARE);
   const scaleFactor = Math.max(0, Math.min(1, (factor - SLIDE_SHARE) / (1 - SLIDE_SHARE)));
-  const yScale = startYScale + (normalScale - startYScale) * scaleFactor;
+  const yScale = startYScale + (heightNormalScale - startYScale) * scaleFactor;
   // The hidden endcap starts exactly ONE full natural design-height up
   // the rope from the tip -- "it will be up the rope exactly the height
   // of the endcap geometry after scaling", per explicit request. No
@@ -3536,7 +3571,7 @@ function render(){
     if (showMainRope) drawTipSegmentShape(mainRope.points, liveThickness, cfg.ropeColor);
   }
   if (hasEndcap){
-    fallenPieces.forEach(piece => drawEndcap(piece.points, pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge)));
+    fallenPieces.forEach(piece => drawEndcap(piece.points, pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge), undefined, piece.baseThickness));
     // detachScale: 1 for the boot-time rope (detachTipScaleProgress never
     // set) or once its own grow-back has finished; otherwise blends from
     // Detach Endcap Start Scale up to 1 as detachTipScaleProgress rises --
@@ -3642,6 +3677,20 @@ if (DEV_MODE){
   initDeviceTabs();
   resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 }
+// Re-synced HERE, right before the first real frame -- not left at its
+// module-init-time value set alongside FIXED_DT above. Everything since
+// then (DEV_MODE's synchronous dev-panel construction, resetSettings()'s
+// own synchronous portion, etc.) takes a real, variable amount of wall-
+// clock time. Left uncorrected, that startup work counted as frame 1's
+// own dt, which the fixed-timestep accumulator (MAX_FRAME_DT-capped)
+// then "catches up" on in a burst of extra ticks BEFORE the first
+// render() -- reported as "sometimes it lags, sometimes it jumps really
+// high up": a bigger burst (more queued ticks) reads as a sudden jump
+// once painted; a smaller, more variable one reads as stutter across the
+// first couple of seconds. Root cause, not a band-aid -- doesn't touch
+// MAX_FRAME_DT itself, which still does its real job of capping a
+// genuine catch-up burst (e.g. after a backgrounded tab).
+lastTime = performance.now();
 requestAnimationFrame(loop);
 
 })();
