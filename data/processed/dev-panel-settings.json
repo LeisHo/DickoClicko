@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.4,
-    "ropeLength": 13.961538461538451,
+    "ropeLength": 6.961538461538458,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": false,
     "ropeGradientColors": [
@@ -56,9 +56,9 @@
     "floorHeight": 6,
     "introEnabled": true,
     "introWaitDuration": 2,
-    "introRiseSpeed": 26.5,
-    "introRiseClearOffset": 0,
-    "introPauseDuration": 0.2,
+    "introRiseSpeed": 5,
+    "introRiseClearOffset": 17,
+    "introPauseDuration": 0.4,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2
@@ -66,7 +66,7 @@
   "order": [
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "introExtendSpeed",
         "introExtendSpeedTweenEnabled",
