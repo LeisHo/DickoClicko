@@ -2019,3 +2019,39 @@ GOTCHAS
   endcap SVGs); flagged in PROJECT_PROGRESS's Open Questions instead of
   silently working around it in the shipped code or silently leaving it
   undiscovered.
+- **RESOLVED, not a code bug: the "empty points array" crash above is
+  `window.innerWidth`/`innerHeight` reading `0` on certain fresh-tab-open
+  paths in this specific Claude Code Browser-pane sandbox.** Root-caused
+  during the next round's own testing by directly checking those two
+  values on a freshly `preview_start`-opened tab (no prior `navigate` on
+  it) immediately after load: both read `0`. Every `vh()`/`vw()`/`vmin()`
+  call divides by one of them, so `TARGET_SEG_LEN_VH`'s derived `segLen`
+  becomes `0`, and `Math.round(totalLen / 0)` (or `0/0` when `totalLen`
+  is also `0`) feeds `NaN`/`Infinity` into `makeChain()`'s point count --
+  producing exactly the empty/degenerate `points` array both sessions
+  independently hit. Switching to an already-`navigate`'d tab with a real
+  measured viewport made the crash disappear across every subsequent run.
+  This matches an already-documented quirk elsewhere in this workspace
+  (HANDO's and BUTTSONS3D's own "window.innerWidth/innerHeight read 0 on
+  the very first script tick" entries) -- not new, and not reachable from
+  a real browser/deployment load (a real page always has a valid
+  viewport by the time scripts run). No production code fix was needed
+  for the root cause itself; see the next entry for the (independently
+  motivated) `loop()` resilience change made anyway.
+- **5-item startup-animation follow-up round** (background rope becomes
+  the climbing visual with a geometric clear-boundary trigger; gradient
+  coloring for both ropes via a new "gradient" dev-panel control type;
+  cross-piece-only fallen-piece collision via `pieceCollision()`;
+  `maintainBgRopeEnd()` keeping the background rope's own tip
+  perpetually out of the circle's clip view; End Emerge redesigned to
+  slide-then-scale sequentially instead of simultaneously, with a
+  width-clip against sideways overflow) -- full mechanism details for
+  each are in that round's own CHANGELOG entry rather than duplicated
+  here. One cross-cutting change worth calling out on its own: `loop()`
+  now wraps its own body in try/catch, logging via `console.error`
+  rather than letting an uncaught exception silently stop
+  `requestAnimationFrame` from ever rescheduling itself (which is
+  EXACTLY what made the sandbox-only crash two entries above look like a
+  permanent, unrecoverable freeze rather than a single bad frame) -- a
+  real, generally-applicable resilience improvement, kept independent of
+  whatever specific exception triggers it.

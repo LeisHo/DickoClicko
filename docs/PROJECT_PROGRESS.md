@@ -724,10 +724,52 @@ assuming it never shipped.
   expected 54.49, the same as before the edit; flagged back to the user
   rather than assumed fixed. `form4`'s edit and all 4 new designs DO fill
   the full expected width at that line, verified directly the same way.
-  All 6 confirmed rendering with 0 errors via `update()`/`render()`
-  (worked around 2 unrelated, real bugs in the still-in-progress Startup
-  Animation feature to get a valid rope state to test against — see Open
-  Questions below, not fixed, not mine to fix).
+- A large follow-up round reworking the startup animation and extending
+  it in 4 directions, per explicit request ("replace what you did with
+  this"), plus baked in a full user-provided settings dump as the new
+  hardcoded defaults ("set defaults"). This round's index.html changes
+  landed inside `237288e` (the endcap-SVG commit above) rather than their
+  own commit — the two sessions' work interleaved on disk faster than
+  either could commit; disclosed here rather than left implicit. (1)
+  The startup animation's climbing visual is now the background rope
+  itself (not a separate dot): its own rope-start climbs from one full
+  circle-diameter below the circle, and the trigger for the next phase is
+  now geometric -- "when the rope start of background rope clears the
+  bottom edge of the circle" (new Startup Rise Clear Offset slider) --
+  instead of "reaches mainRope's own settled position". (2) Rope
+  Gradient Enabled + Rope Gradient Colors (and the same pair for the
+  background rope) -- a new "gradient" dev-panel control type (a stop-
+  count slider followed by that many color pickers, ROPE group) drives a
+  real top-to-bottom `ctx.createLinearGradient`. (3) Fallen rope pieces
+  now collide with each other (`pieceCollision()`) -- push apart rather
+  than freely overlapping when cut segments land near each other; scoped
+  to cross-piece pairs only (never a piece's own points against
+  themselves), which is what makes it safe unlike the old, removed
+  `pileRepulsion()`. (4) The background rope's own tip is now actively
+  managed (`maintainBgRopeEnd()`) so it's never visible through the
+  circle's clip -- extends when its tip gets close, trims once it's
+  comfortably far. (5) End Emerge redesigned per the user's own
+  clarified spec: slide-then-scale instead of simultaneous (the hidden
+  endcap slides from one full design-height up the rope down to the tip
+  at constant small scale; only once fully arrived does it scale up),
+  End Emerge Hide Distance removed (no longer tunable -- always exactly
+  one design-height), and a width-clip added so the hidden/mid-slide
+  endcap can't stick out sideways past a narrower rope segment (e.g.
+  under Tip Segment Shape's taper). Also added a permanent `loop()`
+  try/catch: a single bad frame used to permanently freeze the app
+  (nothing recovers from an uncaught throw inside `requestAnimationFrame`
+  callbacks); now it's logged and skipped, and the loop keeps running.
+  All 5 verified live via temporary debug hooks (removed before commit,
+  confirmed via `grep`): the rise/clear-boundary timing matched Startup
+  Rise Speed exactly; both ropes' gradients confirmed via pixel sampling
+  and (for the background rope, since it visually overlaps mainRope at
+  rest) monkey-patched canvas calls showing a real `CanvasGradient`
+  reaching `stroke()`; 2 synthetic overlapping fallen pieces (7px apart)
+  separated to 59px after one frame of `pieceCollision()` and re-settled
+  to their correct ~30px segment length within 10 more frames; the
+  endcap's own instrumented slide/scale factors confirmed scaling
+  genuinely holds at 0 until the slide fully lands (slideFactor=1),
+  exactly matching the requested sequencing.
 
 ## What's next
 
@@ -744,21 +786,32 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
-- **The Startup Animation feature currently breaks the app on every frame
-  with `introEnabled: true` (the live default).** Found incidentally
-  while testing endcap SVGs, on a completely fresh page load with no
-  test interference: `loop()` logs "loop() error (frame skipped):
-  Cannot read properties of undefined (reading 'x')" every single frame,
-  from `integrateChain()` failing on `mainRope.points[0]` (empty
-  `points` array right after boot) and, once that's worked around,
-  the same failure on `bgRope.points[0]`. Confirmed NOT a test artifact
-  -- reproduced on a truly untouched reload before any debug hook was
-  attached. This means the rope currently never renders or updates at
-  all with the live default settings. Not investigated further or fixed
-  -- this is the Startup Animation feature from the "Recently completed"
-  entry above, which is still apparently under active development by a
-  concurrent session; flagging clearly rather than silently working
-  around it in the shipped code or silently leaving it undiscovered.
+- **RESOLVED (not a code bug):** an earlier entry here reported the app
+  breaking on every frame with `mainRope.points`/`bgRope.points` empty
+  right after boot ("Cannot read properties of undefined (reading 'x')"),
+  reproduced by a concurrent session on what looked like a completely
+  fresh, untouched page load. Root-caused during this round's own testing:
+  `window.innerWidth`/`innerHeight` can read `0` immediately after certain
+  ways of opening a fresh tab in this specific Claude Code Browser-pane
+  sandbox (confirmed directly: a tab opened via a bare `preview_start` with
+  no prior `navigate` on that tab reported `innerW:0, innerH:0` right after
+  load) -- the SAME already-documented quirk this project's own history
+  has hit before (HANDO's and BUTTSONS3D's own entries: "window.innerWidth/
+  innerHeight read 0 on the very first script tick"). With those at 0,
+  every `vh()`/`vw()`/`vmin()` call returns 0, `TARGET_SEG_LEN_VH`-derived
+  `segLen` becomes 0, and `Math.round(totalLen/0)` (or `0/0`) feeds `NaN`/
+  `Infinity` into `makeChain()`'s point count -- producing exactly the
+  empty/degenerate `points` array both sessions independently hit. This is
+  a sandbox-only artifact of how a fresh preview tab gets opened, not
+  something a real browser/deployment load can produce (a real page load
+  always has a valid viewport by the time scripts run) -- confirmed by
+  reproducing it on a freshly `preview_start`-opened tab and NOT
+  reproducing it after switching to an already-`navigate`'d tab with a
+  real viewport size, across many subsequent runs. No code fix was needed
+  for the underlying cause; a `loop()` try/catch was added anyway as
+  independently-motivated resilience (see "Recently completed" above) so
+  a real one-off bad frame, whatever its cause, no longer permanently
+  freezes the app.
 - Tier 1 (Vercel/GitHub API Save) is confirmed working end-to-end: 3 real
   "Update dev-panel-settings.json via Save Settings" commits landed on the
   remote from the user's own live deployment (visible in git history as

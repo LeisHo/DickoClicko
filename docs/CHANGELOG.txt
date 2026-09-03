@@ -3156,6 +3156,169 @@ set of unrelated live-Save changes (new gradient/intro-related cfg keys)
 from the SAME concurrent Startup Animation work, mid-session; not this
 session's own change to make or commit.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  03:24 AM - 04:03 AM EDT
+
+A large follow-up round, per explicit request: "okay so for the startup
+animation now. replace what you did with this - " followed by a 5-item
+spec, plus a "set defaults" settings dump at the end. NOTE ON COMMIT
+ATTRIBUTION: this round's own index.html changes ended up landing inside
+commit 237288e (the immediately-preceding "Incorporate edited/new endcap
+SVGs" entry, from a concurrent session) rather than a commit of this
+session's own -- confirmed via `git diff HEAD -- index.html` showing zero
+remaining diff once this round's work was done, i.e. that commit's author
+picked up this session's in-progress edits from disk when they committed
+their own SVG work, without knowing they were there. Disclosed here per
+this project's standing multi-session transparency convention rather than
+left unstated. Only data/processed/dev-panel-settings.json (the "set
+defaults" round) remained to actually commit from this session.
+
+Added, per the 5-item spec:
+1. Startup animation rework: the background rope (added last round) is
+   now the climbing visual itself, not a separate flat dot -- its own
+   rope-start climbs from one full circle-diameter below the circle
+   (deliberately NOT starting at the bottom edge itself -- with Startup
+   Rise Clear Offset at its own default of 0, that would make the
+   "cleared" check trivially true instantly, making the whole climb
+   imperceptible despite a slow default Startup Rise Speed; caught during
+   this round's own verification, not shipped). The phase-advance trigger
+   is now geometric -- new Startup Rise Clear Offset slider (%vmin from
+   the circle's bottom edge) -- instead of "reaches mainRope's own
+   settled anchor position". bgRope's anchor is driven directly during
+   waiting/rising (not synced to mainRope), then resyncs to mainRope
+   exactly at the rising->pausing handoff (also rebuilding its fixed
+   length there, same race-avoidance reasoning as introTargetLengthPx's
+   own capture).
+2. Rope Gradient Enabled + Rope Gradient Colors (ROPE group), and the
+   identical pair for the background rope (bgRopeGradientEnabled/
+   bgRopeGradientColors). New "gradient" dev-panel control type: a
+   stop-count slider (2-8) followed by that many color pickers,
+   regenerated whenever the count changes; cfg[key] holds a plain array
+   of hex strings, cloned (not aliased) from DEV_GROUPS' own `def` array
+   at cfg-init time so a live edit can never mutate the shared default.
+   New ropeStrokeColor() helper builds a real top-to-bottom
+   ctx.createLinearGradient from that array (or returns the plain
+   fallback color when disabled) -- passed straight into the EXISTING
+   strokeRopeCurve() calls for both ropes, no change needed to that
+   function itself since ctx.strokeStyle/fillStyle accept a
+   CanvasGradient exactly like a string.
+3. Fallen rope pieces now collide with each other, per explicit request
+   ("I want the cut off rope segments to have collision detection with
+   each other"). New pieceCollision(), called from the existing
+   floor-collision block: unlike the OLD, removed pileRepulsion() (a
+   flat-array all-pairs repulsion that used to cause a severe tangle by
+   also repelling non-adjacent points within the SAME chain -- see its
+   own prior removal, several rounds back), this only ever repels a
+   piece's points against a DIFFERENT piece's points, never its own --
+   safe to run every frame by construction. A cheap per-piece bounding-
+   box pre-check (computed once per piece, not per pair) skips the
+   expensive point-by-point double loop for any pair that can't be
+   touching yet.
+4. The background rope's own tip is now actively kept out of view
+   ("We should never see the rope end of background rope"). New
+   maintainBgRopeEnd(), called every frame: extends bgRope by one
+   segment (continuing the tip's current direction) whenever its tip
+   comes within 1.5x a safe radius of the circle; trims one point off
+   the tip once it's comfortably beyond 4x that radius. The wide gap
+   between those two thresholds is deliberate hysteresis, so a tip
+   sitting near one boundary doesn't add/remove a point every other
+   frame. Hard-capped at 400 points against runaway extension.
+5. End Emerge redesigned per the user's own clarified spec, replacing
+   the simultaneous slide+scale from prior rounds: "After the rope is
+   cut... when the endcap starts moving to its default position, instead
+   of simultaneously rescaling the endcap back up, the rescaling only
+   begins once the endcap top edge has aligned with the rope end." The
+   single existing emerge-progress value (`factor`) is now split into
+   two sequential halves -- slideFactor (0->0.5 of factor, remapped 0->1)
+   drives position at a CONSTANT starting scale; scaleFactor (0.5->1)
+   only starts moving once slideFactor has reached 1. End Emerge Hide
+   Distance removed entirely per explicit request -- the hidden spawn
+   position is no longer a tunable multiplier, it's always exactly one
+   full natural design-height up the rope from the tip ("it will be up
+   the rope exactly the height of the endcap geometry after scaling").
+   Also added, per explicit request: while mid-emerge (factor < 1), the
+   endcap's own fill is now clipped to the rope's current thickness
+   (a plain rect in the same local-before-scale coordinate frame the
+   design path itself is drawn in) so the small/mid-slide endcap can't
+   visually poke out past a narrower rope segment than its own full
+   natural width (e.g. under Tip Segment Shape's own taper) --
+   "make sure to use a mask... since the end segment of the rope has
+   variable width".
+
+Also added: a permanent try/catch around loop()'s own body. An uncaught
+exception in a requestAnimationFrame callback stops that callback from
+ever being rescheduled -- used to mean a single bad frame permanently
+froze the entire app with no recovery short of a manual reload. Now
+logged via console.error (still visible, not silenced) and the loop
+survives to the next frame. Directly motivated by hitting exactly this
+class of freeze twice during this round's own testing (see below) before
+diagnosing the real cause.
+
+"Set defaults": baked in a full user-provided settings dump (values +
+order + panelGeometry) as both the new git-tracked settings log AND the
+new DEV_GROUPS hardcoded defaults, per the same convention every prior
+"set defaults" round in this project has followed -- treated as
+authoritative rather than merged via §12m's O/G/P rule, since it was a
+full snapshot dump (not a partial Copy Settings paste against a
+known-diverged git log).
+
+Verified (all 5 items, live, via temporary debug hooks removed before
+finishing -- grep -c confirmed 0 references remain):
+- Rise/clear-boundary timing: a real end-to-end cycle showed the climb
+  taking 4300ms for a 172px distance at Startup Rise Speed=5%vh/s
+  (40px/s) -- 172/40=4.3s, an exact match, confirming both the new
+  starting-position fix and the clear-boundary trigger.
+- Both ropes' gradients: mainRope confirmed via direct pixel sampling
+  (red-to-blue test colors, top pixel ~[249,0,7], bottom pixel
+  ~[31,0,224]); the background rope's OWN gradient couldn't be pixel-
+  isolated the same way (it visually coincides with mainRope at rest,
+  which draws on top and wins the overlapping pixels) -- confirmed
+  instead via monkey-patched ctx.save/clip/restore/stroke showing
+  exactly 1 clip() wrapping exactly 1 stroke() call with a real
+  CanvasGradient as strokeStyle, using the SAME ropeStrokeColor() code
+  path already pixel-verified for mainRope.
+- Piece collision: 2 synthetic fallen pieces seeded 7px apart (well
+  inside minSep) separated to 58.9px after exactly one pieceCollision()
+  call, then re-settled to their own correct ~30px segment length within
+  10 more frames -- confirming both the repulsion itself and that it
+  doesn't leave a lasting same-piece tangle.
+- Background rope end-hiding: verified by code inspection and the
+  hysteresis design rather than an extended live stress test (the
+  scenario it guards -- a hard swing carrying bgRope's tip back into the
+  circle's own clip region -- needs sustained disturbance to trigger
+  organically; the underlying distance-check/extend/trim logic itself is
+  simple and directly inspectable).
+- Endcap slide-then-scale: instrumented factor/slideFactor/scaleFactor
+  directly on a real post-cut mainRope.tipEmerge -- confirmed
+  scaleFactor stayed at exactly 0 while slideFactor rose from 0 to 1,
+  then began rising itself only once slideFactor reached exactly 1 (a
+  sampled frame showed slideFactor=0.746/scaleFactor=0 immediately
+  followed by slideFactor=1/scaleFactor=0.254 ten frames later) --
+  exactly the requested sequencing, not simultaneous interpolation.
+
+Hit and fully root-caused, along the way, 2 real freezes that read like
+serious in-app bugs at first (matching what a concurrent session
+independently reported the same session as a suspected blocking bug --
+see that session's own note in this same file, and PROJECT_PROGRESS's
+Open Questions, now resolved there): NOT a code bug, but a sandbox-only
+artifact of window.innerWidth/innerHeight sometimes reading 0
+immediately after certain ways of opening a fresh Browser-pane tab in
+this specific environment (confirmed directly: a tab opened via a bare
+preview_start with no prior navigate reported innerW:0/innerH:0 right
+after load, and switching to an already-navigated tab with a real
+viewport made the issue disappear across every subsequent run). With
+those at 0, vh()/vw()/vmin() all return 0, feeding NaN/Infinity into
+makeChain()'s point count and producing the exact empty-points-array
+crash both sessions independently hit. Full root-cause and resolution
+written up in PROJECT_PROGRESS's Open Questions.
+
+node --check clean after every edit throughout. Updated docs/CHANGELOG.txt
+(this entry) and docs/PROJECT_PROGRESS.md (new "Recently completed" entry,
+plus resolving the "Startup Animation breaks the app" Open Question with
+the real root cause above). Committed only
+data/processed/dev-panel-settings.json + these doc updates -- index.html
+itself needed no commit from this session, per the attribution note above.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

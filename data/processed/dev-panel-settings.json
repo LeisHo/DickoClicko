@@ -1,27 +1,31 @@
 {
   "values": {
     "backgroundColor": "#252546",
-    "circleSize": 11,
+    "circleSize": 21.5,
     "circleX": 50,
     "circleY": 18,
-    "circleColor": "#000000",
-    "circleBoundaryOffset": -2.5,
-    "anchorWeight": 0,
+    "circleColor": "#111023",
+    "circleBoundaryOffset": -2,
+    "anchorWeight": 0.4,
     "endcapDesign": "form1-01",
-    "endcapHeight": 1.3,
+    "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.4,
-    "ropeLength": 31.702106810387154,
+    "ropeLength": 13.846153846153845,
     "ropeColor": "#a5815f",
+    "ropeGradientEnabled": false,
+    "ropeGradientColors": ["#a5815f", "#3d2817"],
+    "bgRopeGradientEnabled": false,
+    "bgRopeGradientColors": ["#a5815f", "#3d2817"],
     "ropeEndCurveArc": 1,
-    "ropeTopCurveArc": 1,
-    "clickIntensity": 1.6,
+    "ropeTopCurveArc": 0.8,
+    "clickIntensity": 1.1,
     "holdDistance": 22,
     "bendStiffness": 0,
-    "ropeAnimSpeed": 1.1,
+    "ropeAnimSpeed": 1.2,
     "gravityStrength": 4.1,
     "damping": 0.999,
-    "constraintIterations": 2,
+    "constraintIterations": 1,
     "ropeGrowthRate": 15,
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 7.5,
@@ -36,7 +40,6 @@
     "cutSweepThickness": 0.2,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
-    "endEmergeHideDistance": 3,
     "endEmergeDelay": 1.85,
     "endEmergeSpeed": 0.54,
     "endEmergeEasingStrength": 6,
@@ -48,16 +51,24 @@
     "introEnabled": true,
     "introWaitDuration": 2,
     "introRiseSpeed": 5,
-    "introPauseDuration": 2
+    "introRiseClearOffset": 0,
+    "introPauseDuration": 2,
+    "introExtendSpeed": 15,
+    "introExtendSpeedTweenEnabled": false,
+    "introExtendStartSpeed": 2
   },
   "order": [
     {
       "key": "STARTUP ANIMATION",
       "collapsed": false,
       "settings": [
+        "introExtendSpeed",
+        "introExtendSpeedTweenEnabled",
+        "introExtendStartSpeed",
         "introEnabled",
         "introWaitDuration",
         "introRiseSpeed",
+        "introRiseClearOffset",
         "introPauseDuration"
       ]
     },
@@ -85,7 +96,7 @@
     },
     {
       "key": "CIRCLE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "circleSize",
         "circleX",
@@ -95,7 +106,7 @@
     },
     {
       "key": "ANCHOR PHYSICS",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
@@ -111,6 +122,10 @@
         "ropeThickness",
         "ropeLength",
         "ropeColor",
+        "ropeGradientEnabled",
+        "ropeGradientColors",
+        "bgRopeGradientEnabled",
+        "bgRopeGradientColors",
         "ropeEndCurveArc",
         "ropeTopCurveArc"
       ]
@@ -164,7 +179,6 @@
       "settings": [
         "endEmergeEnabled",
         "endcapStartingScale",
-        "endEmergeHideDistance",
         "endEmergeDelay",
         "endEmergeSpeed",
         "endEmergeEasingStrength",
@@ -184,9 +198,9 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 1076,
+      "left": 1236,
       "top": 4.578125,
-      "width": 686,
+      "width": 526,
       "height": 583.65625,
       "style": {
         "titleFontSize": 13,
