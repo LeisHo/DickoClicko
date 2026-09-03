@@ -72,7 +72,7 @@
     "introEnabled": true,
     "introWaitDuration": 2,
     "introRiseSpeed": 5,
-    "introRiseClearOffset": -9.5,
+    "introRiseClearOffset": -4,
     "introPauseDuration": 0.4,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
