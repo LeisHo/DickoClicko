@@ -579,6 +579,78 @@ assuming it never shipped.
   fresh frames in this session) that the rendered width now genuinely
   tapers to match the shape's real silhouette, and that the feature is a
   clean no-op when disabled.
+- Removed Rope Start Bounce Intensity and the separate bounce/reflection
+  step entirely, per explicit feedback that it looked like the anchor
+  "suddenly zooming back to its default spot" rather than a natural
+  weighted body rolling down the side of the circle. Root cause of that
+  "zoom" turned out to be the explicit bounce formula, not the position
+  clamp underneath it — a first attempt at the fix instead tried to make
+  the position clamp itself "velocity preserving," which introduced a
+  REAL, measured bug (an outward test velocity of 15px/frame came out as
+  323px/frame after one update() call, from double-counting the clamp's
+  own correction across multiple constraint-solver iterations in the same
+  frame) — caught before shipping and reverted to a plain position-only
+  clamp (matching how the distance/bend constraints already work), which
+  turned out to be all that was needed: verified via isolated tests that
+  the anchor now rolls/slides tangentially along the boundary and settles
+  cleanly at the bottom with no bounce, no zoom, and no velocity blow-up.
+- Fixed a real, reported bug: double-clicking inside the circle graphic
+  never cut the rope, because `onPointerDown` routed any press starting
+  there into a 'circle' (hold-to-grow) mode that never even checked for a
+  double-click. Fixed by adding the same double-click detection to that
+  branch, resolving the target via a new `hitTestAnyIgnoringCircle()` that
+  skips `isOnCircle()`'s own exclusion (used only for this circle-mode
+  double-click path — normal single-click/hold behavior on the circle is
+  unaffected). That alone wasn't sufficient, though: `cutRopeAt()`'s own
+  "too close to cut" floor was independently found to be structurally
+  impossible to pass for any click reaching it via this new path (it was
+  floored at `circleExclusionRadius()`, the exact same threshold that
+  routes a press into circle-mode in the first place, and measured from
+  the circle graphic's FIXED center rather than the anchor's own,
+  now-mobile position) — confirmed directly via a debug-hook test before
+  concluding the fix was complete. Fixed by measuring that floor from
+  `mainRope.points[0]` (the anchor's real position) and trusting Circle
+  Cut Distance directly, with no hidden floor-under-the-floor — this
+  resolves the "Double-click-near-circle residual gap" previously tracked
+  under Open Questions below (removed, no longer applicable). Verified
+  end-to-end via the real `onPointerDown`/`onPointerUp` handlers: a
+  double-click on a rope point resting visibly inside the circle (blocked
+  by `hitTestRope()`'s own exclusion) now correctly schedules and
+  completes a real cut, while a double-click exactly at the anchor's own
+  position is still correctly refused.
+- Rope End/Top Curve Arc redesigned per explicit clarification: it was
+  drawing a filled circle of variable RADIUS at each end (so intermediate
+  values just looked like a smaller button sitting on a flat-cornered
+  tip), not controlling how much of a semicircle the end is. Replaced with
+  a half-ellipse (`drawEndArc()`) whose flat chord always spans the rope's
+  full width and whose outward protrusion is `(thickness/2) × arcMult` —
+  0 is a true flat/straight end, 1 is a true semicircle, and values in
+  between are a proportionally flattened arc. Verified via a monkey-patched
+  `ctx.ellipse()` call during a real render pass: radiusX/radiusY both
+  came out to exactly `thickness/2` at arcMult=1, confirming a true
+  semicircle.
+- End Emerge changes per explicit feedback: the spawn/scale effect now
+  scales ONLY the Y (length-along-the-rope) axis — X stays at the rope's
+  normal full width throughout, verified via monkey-patched `ctx.scale()`
+  calls showing an identical X term at factor=0 and factor=1, with only Y
+  changing. The design-derived automatic "how far the endcap starts
+  hidden" (`ENDCAP_BOTTOM_Y`-based) is now a tunable `End Emerge Hide
+  Distance` slider (0 = "already aligned with its final position", 1 =
+  the old automatic behavior) — verified via monkey-patched `ctx.translate()`
+  calls at 0/1/settled. Added `End Emerge Easing Strength`, generalizing
+  each tween's previously-hardcoded exponent (all originally power-2
+  curves) into a tunable one — verified `easeOut` at progress 0.5 producing
+  0.5/0.75/0.9375 for strength 1/2/4 respectively (strength 2 exactly
+  matches the old hardcoded look, confirming no default-behavior
+  regression), matching `t^s`/`1-(1-t)^s` exactly.
+- "Set defaults": merged a user-provided Copy Settings dump against the
+  git-tracked settings log per §12m's own resolution rule (pasted value
+  wins whenever it differs from BOTH the original snapshot AND the git
+  log's current value) — the git log had itself moved independently since
+  the paste was taken (a live client had already saved `ropeLength` and
+  `circleCutDistance` to different values in the interim), resolved
+  correctly via the same per-field O/G/P comparison this project's
+  `CLAUDE.md` already specifies.
 
 ## What's next
 
@@ -595,15 +667,6 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
-- **Double-click-near-circle has a known, disclosed residual gap.** The
-  reproduced bug (Circle Cut Distance smaller than the circle's own
-  click-exclusion radius) is fixed, but with the user's OWN live Circle
-  Cut Distance (9.5%vmin, already above the exclusion radius), a
-  double-click ~12-20px past their own configured safety margin can still
-  land on a low rope-point index (due to segment-length granularity, not
-  a drifted threshold) and leave a short remainder. Not fixed further
-  without direction from the user on how much extra margin is wanted —
-  see CODE_SUMMARY's Gotchas for the full mechanism.
 - Tier 1 (Vercel/GitHub API Save) is confirmed working end-to-end: 3 real
   "Update dev-panel-settings.json via Save Settings" commits landed on the
   remote from the user's own live deployment (visible in git history as

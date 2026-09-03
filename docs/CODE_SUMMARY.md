@@ -1581,3 +1581,187 @@ GOTCHAS
     always compute the actual ratio fresh (`canvas.width /
     window.innerWidth`) rather than assuming `window.devicePixelRatio`
     matches the backing store, when sampling pixels in a future session.
+- **Anchor bounce removed; the position-clamp itself needed NO extra
+  mechanism to look natural.** Per explicit feedback ("I dont like how it
+  suddenly zooms back into its default spot"), `constrainAnchorToCircle()`
+  (the separate velocity-reflection function from the anchor-physics
+  round above) and `cfg.anchorBounceIntensity` are both fully removed.
+  - **A first fix attempt introduced a real, measured bug, caught before
+    shipping.** The instinct was to make `integrateChain()`'s own
+    `boundaryConstraint` position-clamp "velocity preserving" by shifting
+    `oldx`/`oldy` by the SAME delta as the position correction, on the
+    theory (correct in isolation) that this keeps Verlet's implied
+    velocity unchanged, letting tangential motion continue while only
+    radial over-penetration gets corrected. The bug: this block runs
+    INSIDE the `constraintIterations` loop, and can fire on more than one
+    of those rounds within a single frame (the distance constraint
+    pulling point 0 back out between rounds, then the boundary clamp
+    pulling it back in again) -- shifting `oldx`/`oldy` on EVERY firing
+    sums each round's own correction on top of the last, even though only
+    the FINAL position matters. Confirmed via direct simulation: a
+    synthetic point placed 20px past the boundary with a +15px/frame
+    outward velocity came out with an IMPLIED velocity of +323.782
+    next-frame (`y - oldy`) after a single `update()` call -- wildly
+    wrong, not a rounding artifact.
+  - **The actual fix is simpler than the broken attempt**: revert to a
+    PLAIN position-only clamp -- exactly like the distance and bend
+    constraints already in the same loop, neither of which EVER touches
+    `oldx`/`oldy`. This works because `oldx`/`oldy` is already fixed for
+    the whole frame (set once, at the very top of `integrateChain()`, to
+    last frame's final position) -- leaving it alone during the
+    constraint-iteration loop means next frame's implied velocity is
+    naturally `(this frame's FINAL clamped position - last frame's
+    position)`, which already correctly preserves tangential motion
+    (rolling along the boundary) while killing radial motion (no bounce),
+    with zero extra bookkeeping. Re-verified with the identical adversarial
+    test: implied velocity came out as a sane -20 (pulled back in by
+    roughly the amount it overshot by), not 323.
+  - Verified the "rolls/slides naturally" claim directly, not just
+    "doesn't blow up": a point given a strong tangential (sideways)
+    velocity while resting at the boundary visibly slid sideways (x drifted
+    640 -> 643.76) before gravity pulled it back down to rest at the
+    bottom over ~15 frames, then held steady there (639.85-640.2, pure
+    numerical jitter) for 165+ more simulated frames. A real
+    chain-propagated disturbance (kicking `points[1]`, the segment right
+    next to the anchor, hard upward) displaced the anchor off the boundary
+    (`dist` dropped from 32 to 27.08) then resettled it at the boundary
+    within 5 frames, with the SAME already-documented `constraintIterations`-
+    dependent residual ratio (1.29 at the live setting) as the original
+    anchor-physics round -- confirming no new instability, not just no
+    crash.
+- **Double-click-in-circle: two independent, layered bugs, both needed
+  fixing before a real cut would succeed.** Reported directly ("double
+  click in the circle STILL DOESNT WORK").
+  - **Bug 1 -- routing.** `onPointerDown` checked `isOnCircle(x,y)` FIRST
+    and returned immediately into `downInfo = {mode:'circle'}` for
+    hold-to-grow, with no double-click detection anywhere in that branch.
+    Fixed by giving the `'circle'` branch of `onPointerUp` the same
+    `pendingClick`-timestamp-based double-click check the `'rope'` branch
+    already had, resolving the target via a new `hitTestAnyIgnoringCircle(x,y)`
+    -- identical to `hitTestAny()` but calls `nearestPointOnRope()`
+    directly instead of `hitTestRope()`, deliberately skipping
+    `isOnCircle()`'s own exclusion (that exclusion still fully governs
+    normal single-click/hold-to-grow routing; only this specific
+    already-double-click-confirmed path bypasses it).
+  - **Bug 2 -- the cut floor, found DURING verification of bug 1's fix,
+    not assumed away.** After fixing bug 1, a scripted double-click that
+    `hitTestAnyIgnoringCircle()` correctly resolved to a real rope point
+    still never produced a cut. Root cause: `cutRopeAt()`'s own "too close
+    to cut" guard was `Math.max(vmin(cfg.circleCutDistance),
+    circleExclusionRadius())`, measured from `circleAnchor()` (the circle
+    GRAPHIC's fixed center). Since this is a `Math.max` against
+    `circleExclusionRadius()` -- the EXACT SAME threshold `isOnCircle()`
+    uses to route a press into `'circle'` mode in the first place -- the
+    guard's effective radius is ALWAYS >= that routing threshold, by
+    construction. This means NO click that could ever reach `cutRopeAt()`
+    via the circle-mode double-click path (bug 1's fix) could EVER pass
+    this check, regardless of how far it actually was from the anchor --
+    confirmed directly: an inflated-`circleSize` test where
+    `hitTestAnyIgnoringCircle()` found a real point 67.74px from the
+    circle's center still got rejected, because the inflated
+    `circleExclusionRadius()` inflated the floor by the same amount.
+    This floor's own original design (see the Circle Cut Distance Gotcha
+    elsewhere in this doc) predates the anchor becoming a free-moving
+    point -- when the anchor was rigidly pinned to the circle's fixed
+    center, "close to the anchor" and "close to the circle's own edge"
+    were the same statement, so flooring at `circleExclusionRadius()` cost
+    nothing. That's no longer true. Fixed by (a) measuring the guard from
+    `mainRope.points[0]` (the anchor's REAL current position) instead of
+    `circleAnchor()`, and (b) removing the `circleExclusionRadius()` floor
+    entirely -- `cfg.circleCutDistance` (already independently tunable,
+    and set noticeably smaller in the user's own current settings) is now
+    the guard's ONLY radius, trusted directly rather than silently
+    enlarged.
+  - Verified end-to-end via the REAL `onPointerDown`/`onPointerUp`
+    handlers (not calling `cutRopeAt()` directly): with the merged
+    settings live (`circleCutDistance: 3`), a scripted double-click on
+    `mainRope.points[1]` (confirmed via `hitTestRope()` returning `null`
+    for that exact point, i.e. genuinely "inside the circle" per the
+    routing logic) correctly created a `pendingCut`, which then correctly
+    produced a real fallen piece after advancing past its delay. A
+    double-click at `mainRope.points[0]`'s own position (distance 0 from
+    the anchor) was still correctly refused -- the safety floor still
+    works, just measured from the right point with the right radius now.
+- **Rope End Curve Arc / Rope Top Curve Arch was drawing the wrong
+  SHAPE, not just the wrong size.** Per explicit clarification ("At 0,
+  the end of the rope is a straight line, at 1 its a full semi circle...
+  at 0.5, it woud be halfway between the two"), the setting is meant to
+  interpolate how much of a semicircle the end is -- not the radius of a
+  circle sitting on top of a flat-cut end. The previous
+  `strokeRopeCurve()` drew `ctx.arc(tip, (thickness/2)*arcMult, 0,
+  2*PI)` -- a FULL circle whose radius shrank with `arcMult`, so 0.5
+  looked like a small button poking out of a flat-cornered tip (the
+  circle no longer spanning the stroke's own width), not a flattened
+  semicircle. Replaced with `drawEndArc(px, py, dirx, diry, thicknessPx,
+  arcMult)`: rotates into the local frame where +x is the outward
+  direction (`tipDirection()` at the tip, `normalize(points[0]-points[1])`
+  at the start), then draws a HALF-ellipse via
+  `ctx.ellipse(0,0,protrusion,halfW,0,-PI/2,PI/2)` + `closePath()` --
+  the flat chord (from the implicit `closePath` back to the arc's start)
+  always spans the full rope width (`halfW*2 = thicknessPx`), while only
+  the outward `protrusion = halfW*arcMult` varies. At `arcMult=1`,
+  `protrusion === halfW`, making the ellipse a TRUE semicircle (matching
+  the old always-round look exactly); at 0 the protrusion collapses to
+  nothing (a flat chord, i.e. invisible, matching a straight end); values
+  between are a proportionally flattened arc. Verified via a
+  monkey-patched `ctx.ellipse()` call during a real `render()` pass:
+  called with `radiusX === radiusY === 19.2` (exactly `thicknessPx/2` at
+  the live 4.8%vmin thickness) for `ropeTopCurveArc: 1`, confirming a true
+  semicircle rather than an undersized circle.
+- **End Emerge: Y-only scale, tunable hide distance, tunable easing
+  strength -- all 3 verified via monkey-patched canvas calls, not visual
+  inspection alone (screenshots don't reliably composite fresh
+  `ctx`-level draws in this environment -- see the Tip Segment Shape
+  Gotcha above).**
+  - `drawEndcap()`'s `ctx.scale(x,y)` call now passes a FIXED
+    `normalScale` for X and an interpolated `yScale` (start ->
+    `normalScale`) for Y, replacing the old shared `scale` variable used
+    for both axes -- per explicit feedback ("scaling it only in the Y
+    axis, as in the length axis"). Verified: monkey-patched `ctx.scale`
+    calls at factor=0 and factor=1 showed an IDENTICAL X term (0.367,
+    `thicknessPx/ENDCAP_ALIGNMENT.width`) both times, with only Y
+    changing (0.0367 -> 0.367, matching `normalScale *
+    cfg.endcapStartingScale` -> `normalScale` exactly).
+  - The spawn anchor Y position (previously hardcoded to
+    `ENDCAP_BOTTOM_Y[designKey]`, the design's own bbox bottom) is now
+    `ENDCAP_ALIGNMENT.topY + (ENDCAP_BOTTOM_Y[designKey] -
+    ENDCAP_ALIGNMENT.topY) * cfg.endEmergeHideDistance` -- a new tunable
+    slider (`End Emerge Hide Distance`, x, 0-3, default 1). `0` collapses
+    the offset to exactly `topY`, i.e. "already aligned with its final
+    position" per explicit spec; `1` reproduces the exact old automatic
+    behavior. Verified via monkey-patched `ctx.translate()` calls (the
+    2nd `translate()` in `drawEndcap()` is the anchor-shift one): hide=0/
+    factor=0 -> `-80.26` (`-topY` exactly); hide=1/factor=0 -> `-157.804`
+    (`-ENDCAP_BOTTOM_Y`, the old default, confirming hide=1 is a true
+    behavioral no-op vs. the prior hardcoded version); hide=1/factor=1 ->
+    `-80.26` (always settles to normal `topY` regardless of hide
+    distance, confirming the setting only affects the SPAWN state, never
+    the settled one).
+  - `EMERGE_TWEENS` entries now take `(t, s)` instead of just `(t)`,
+    generalizing each curve's previously-hardcoded exponent (all
+    originally fixed at 2 -- `t*t`, `1-(1-t)*(1-t)`, etc.) into `Math.pow`
+    calls parameterized by a new `s` -- `cfg.endEmergeEasingStrength`
+    (x, 1-6, default 2), fed through from `emergeFactor()`. `linear`
+    ignores `s` entirely (`t => t` regardless), matching the intuitive
+    "no easing" reading of that option. Added per explicit feedback that
+    the fixed curves were "not enough" (too subtle a visual effect).
+    Verified: `easeOut(0.5, s)` for `s = 1/2/4` produced `0.5/0.75/0.9375`
+    -- `s=1` is exactly linear (matches `t`), `s=2` exactly reproduces the
+    OLD hardcoded formula's output (`1-(1-0.5)^2 = 0.75`, confirming
+    zero default-behavior regression from generalizing the formula),
+    `s=4` is visibly more pronounced, all monotonically increasing with
+    `s` as expected from `1-(1-t)^s`.
+- **§12m "Set defaults" merge computed programmatically, not by hand, once
+  the field count made manual O/G/P comparison error-prone.** With ~40
+  settings and the live git-tracked settings file having ALREADY moved
+  independently since an earlier read in this same session (confirmed by
+  re-reading it immediately before merging, per the standing multi-session
+  discipline -- ropeLength and circleCutDistance had both changed from a
+  live client's own further tweaks), a small throwaway Node script applied
+  this project's own §12m resolution rule (`P==G` -> stays `P`; `P==O &&
+  G!=O` -> adopt `G`; `P!=O` -> `P` wins regardless of `G`) across every
+  field, rather than reasoning through ~15 differing fields by hand where
+  a transcription slip could silently ship the wrong default. Every
+  differing field in this merge resolved via the `P!=O -> P wins` case (no
+  field required the 3-way judgment call) -- confirmed by inspecting the
+  script's own per-field log before writing the result.

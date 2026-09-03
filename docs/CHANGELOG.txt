@@ -2657,6 +2657,160 @@ Verified:
   hypothesis (a directly-verified branch-name mismatch), not a confirmed
   fix, pending the user's own redeploy.
 
+--------------------------------------------------------------------------------
+2026-09-02  -  11:46 PM EDT
+
+A 6-item follow-up on the anchor-physics/End-Emerge work: remove the
+anchor bounce, fix double-click-in-circle, redesign Rope End/Top Curve
+Arc's actual meaning, and rework End Emerge's scale/hide/easing controls.
+
+Removed:
+- Rope Start Bounce Intensity (the dev slider AND the separate
+  constrainAnchorToCircle() velocity-reflection step it drove) -- per
+  explicit feedback that the bounce read as the anchor "suddenly zooming
+  back to its default spot" instead of a natural weighted body rolling
+  down the side of the circle. A first fix attempt tried to make
+  integrateChain()'s own position-clamp "velocity preserving" by shifting
+  oldx/oldy alongside the clamped x/y -- this introduced a REAL,
+  measured bug (caught via direct testing before shipping, not assumed
+  correct from the math): the clamp can fire on more than one of
+  constraintIterations' rounds per frame, and shifting oldx/oldy on EVERY
+  firing compounds each round's correction on top of the last -- a
+  15px/frame outward test velocity came out as 323px/frame after a single
+  update() call. Reverted to a plain position-only clamp (matching how
+  the distance/bend constraints in the same loop already work, neither of
+  which ever touches oldx/oldy) -- this alone, with the bounce function
+  removed entirely, produces the requested natural roll/settle behavior:
+  re-verified via 2 isolated tests, a hard outward flick now implies a
+  reasonable, non-compounding correction (-20 for a +15 push past the
+  boundary, not 323), and a strong tangential kick shows the point
+  visibly sliding sideways along the boundary before gravity resettles it
+  at the bottom (x drifted from 640 to 643.76 before returning to ~640
+  over ~15 frames) -- and a real chain-propagated disturbance (kicking the
+  segment next to the anchor) still displaces and resettles it correctly,
+  with the same already-documented 1.29x residual ratio as before (no new
+  instability).
+
+Fixed:
+- Double-clicking inside the circle graphic never cut the rope --
+  reported directly ("double click in the circle STILL DOESNT WORK").
+  Root cause #1: onPointerDown routed ANY press starting inside
+  isOnCircle()'s exclusion zone into a 'circle' (hold-to-grow) mode that
+  never checked for a double-click at all. Fixed by adding the same
+  pendingClick-based double-click detection already used on the rope-side
+  path to the 'circle' branch too, resolving the target via a new
+  hitTestAnyIgnoringCircle() (identical to hitTestAny() but resolves the
+  rope hit via nearestPointOnRope() directly, skipping isOnCircle()'s own
+  exclusion -- used ONLY for this path; normal single-click/hold-to-grow
+  on the circle is unaffected).
+  Root cause #2, found during verification (not assumed fixed after #1):
+  cutRopeAt()'s own "too close to cut" floor was `Math.max(circleCutDistance,
+  circleExclusionRadius())`, measured from circleAnchor() (the circle
+  GRAPHIC's fixed center) -- since this floor is a MAX against
+  circleExclusionRadius(), the exact same threshold isOnCircle() uses to
+  route a press into 'circle' mode, it is ALWAYS >= that threshold by
+  construction. Meaning: no click that ever reached this function via the
+  new circle-mode double-click path could EVER pass this check, regardless
+  of how far it actually was from the anchor -- confirmed directly via a
+  debug-hook test (a double-click correctly routed through, via a real
+  hit from hitTestAnyIgnoringCircle(), was still always rejected). This
+  floor's own original reasoning predates the anchor becoming a
+  free-moving point (back then, "close to the anchor" and "close to the
+  circle's fixed center" were the same thing by definition). Fixed by
+  measuring from mainRope.points[0] (the anchor's REAL current position)
+  instead of circleAnchor(), and removing the circleExclusionRadius()
+  floor-under-the-floor entirely -- Circle Cut Distance (already
+  independently tunable, and set noticeably smaller in the user's own
+  current settings) is now trusted directly. Verified end-to-end via the
+  real onPointerDown/onPointerUp handlers: a double-click on a rope point
+  resting visibly inside the circle (confirmed blocked by hitTestRope()'s
+  own isOnCircle exclusion beforehand) now correctly schedules AND
+  completes a real cut (pendingCut created, then a real fallen piece
+  after the delay elapses); a double-click exactly at the anchor's own
+  position is still correctly refused (0 distance, always < Circle Cut
+  Distance).
+- Rope End Curve Arc / Rope Top Curve Arch redesigned per explicit
+  clarification: "At 0, the end of the rope is a straight line, at 1 its
+  a full semi circle... at 0.5, it woud be halfway between the two." The
+  previous implementation drew a filled circle of variable RADIUS at each
+  end (strokeRopeCurve()'s old endArcMult/startArcMult block) -- at 0.5
+  this just looked like a smaller button sitting on the stroke's own
+  flat-cornered tip, not a flattened semicircle. Replaced with a new
+  drawEndArc(px, py, dir, thicknessPx, arcMult) that draws a half-ellipse
+  via ctx.ellipse(): the flat chord always spans the rope's full width
+  (thicknessPx), and the outward protrusion is (thicknessPx/2)*arcMult --
+  0 degenerates to a flat line, 1 makes the protrusion equal the chord's
+  own half-width (a TRUE semicircle), values between are a proportionally
+  flattened arc rather than a smaller full circle. Verified via a
+  monkey-patched ctx.ellipse() call during a real render() pass:
+  radiusX/radiusY both came out to exactly thicknessPx/2 (19.2px at the
+  live 4.8%vmin thickness) at arcMult=1, confirming a true semicircle, not
+  an undersized circle.
+
+Changed (End Emerge):
+- The spawn/scale effect now scales ONLY the Y (length-along-the-rope)
+  axis, per explicit feedback ("can you try scaling it only in the Y
+  axis, as in the length axis"). drawEndcap()'s ctx.scale() call now uses
+  a fixed normalScale for X and an interpolated yScale for Y (previously
+  both axes shared the same interpolated `scale`). Verified via
+  monkey-patched ctx.scale() calls: X came out identically 0.367 at both
+  factor=0 and factor=1, while Y went 0.0367 (0.367 x the live
+  Endcap Starting Scale 0.1) -> 0.367.
+- Added "End Emerge Hide Distance" slider (x, 0-3, default 1): replaces
+  the previous hardcoded automatic "how far the endcap starts hidden"
+  (derived from ENDCAP_BOTTOM_Y, the design's own bbox bottom) with a
+  tunable multiplier of that same per-design bottom-minus-top span. 0
+  means the spawn anchor is exactly the normal topY -- "already aligned
+  with its final position," per explicit spec -- and 1 reproduces the old
+  automatic behavior exactly. Verified via monkey-patched ctx.translate()
+  calls: hideDistance=0/factor=0 -> anchorY -80.26 (matches -topY exactly);
+  hideDistance=1/factor=0 -> -157.804 (matches -ENDCAP_BOTTOM_Y, the old
+  default); hideDistance=1/factor=1 -> -80.26 (always settles to normal
+  topY regardless of hideDistance).
+- Added "End Emerge Easing Strength" slider (x, 1-6, default 2): each
+  EMERGE_TWEENS curve now takes the eased exponent as a parameter instead
+  of a value hardcoded to 2 (t², 1-(1-t)², etc.) -- default 2 reproduces
+  the exact old curves, per explicit feedback that the fixed built-in
+  curves "right now its not enough" (too subtle). `linear` ignores the
+  strength parameter entirely (stays true linear regardless). Verified:
+  easeOut at progress 0.5 produced 0.5/0.75/0.9375 for strength 1/2/4 --
+  strength 1 is exactly linear (t=0.5), strength 2 exactly matches the
+  original hardcoded formula (1-(1-0.5)^2=0.75, confirming no
+  default-behavior regression), strength 4 is visibly more pronounced.
+
+"Set defaults": merged a user-provided Copy Settings dump against the
+live git-tracked settings log per this project's own §12m resolution
+rule -- computed programmatically (O/G/P per field) rather than by hand,
+since the git log had itself moved independently in the interim (a live
+client saved a different ropeLength/circleCutDistance sometime during
+this session, confirmed via re-reading the settings file immediately
+before merging rather than trusting an earlier read). Every differing
+field resolved cleanly via the rule's own "P wins whenever P != O,
+regardless of G" case -- no field required a judgment call. Also added
+2 new keys (endEmergeHideDistance, endEmergeEasingStrength) with their
+DEV_GROUPS defaults, since the user's paste predates those settings.
+
+Verified:
+- node --check clean at every checkpoint.
+- Live-tested via a temporary debug hook (window.__debugTMPropo2, chosen
+  to avoid colliding with a concurrent session's own window.__debugTMP5,
+  which was read-only reused where convenient rather than touched --
+  both hooks fully removed before commit, grep-confirmed 0 references to
+  either).
+- General regression re-confirmed with all changes combined and the
+  final merged settings live: growth/settle stayed stable (segment-length
+  ratio bounded at 1.234x, consistent with the tradeoff already documented
+  for a lower Constraint Iterations), 0 new console errors on a
+  confirmed-fresh page load, and a real screenshot showing correct visual
+  rendering (curved top, tapered rope, endcap, Tip Segment Shape all
+  compositing together correctly).
+- This project's own settings file and index.html were both found to
+  have changed on disk mid-session from concurrent activity (another
+  Claude session's Tip Segment Shape feature; a live client's own further
+  slider tweaks saved to the settings log) -- re-read fresh immediately
+  before every write that depended on current state, rather than trusting
+  an earlier read, per this project's standing multi-session discipline.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

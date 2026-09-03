@@ -1778,46 +1778,44 @@ function cutRopeAt(hit, clickX, clickY){
   // explicit request, since the implicit reuse wasn't generous enough for
   // real reported clicks.
   //
-  // Floored at isOnCircle's OWN exclusion radius (circleSize/2 + a fixed
-  // margin) rather than trusting Circle Cut Distance alone -- confirmed as
-  // a real, reproduced bug via direct testing against the user's actual
-  // saved settings (circleCutDistance 9.5%vmin, circleSize 8%vmin):
-  // isOnCircle's exclusion radius came out to 64px, but circleCutDistance
-  // was only 76px... which sounds MORE generous, except segLen (~27.7px at
-  // default growth) means rope point index 3 sits at 83.1px from the
-  // anchor -- just past BOTH thresholds, but still only 3 segments into a
-  // rope that could be hundreds of px long. A double-click landing just
-  // past the visible circle (which is smaller still, ~32px radius) could
-  // resolve to that point and cut the rope down to almost nothing,
-  // regardless of the rope's actual length -- exactly the reported "double
-  // click within the circle's diameter cuts near the minimum length"
-  // symptom, confirmed via direct simulation with the user's own settings
-  // (offset 83.2px from anchor: cut scheduled at idx 3, remaining length
-  // 83.1px, vs offsets 63.4/64.6px: correctly refused). Since the user's
-  // whole mental model is "circle-area clicks are for growing, never
-  // cutting," Circle Cut Distance can never be trusted to be smaller than
-  // the circle's own click-exclusion zone -- this floor guarantees that.
-  //
   // Measured from mainRope.points[0] (the anchor's own ACTUAL current
-  // position), not circleAnchor() (the circle graphic's fixed center) --
-  // corrected per a later real bug: with the anchor now a free-moving
-  // physics point (see the anchor-physics work elsewhere in this file)
-  // that can rest anywhere inside the circle, measuring from the fixed
-  // graphic center made this floor's radius ALWAYS >= circleExclusionRadius(),
-  // the exact same threshold isOnCircle() uses to route a press into
-  // 'circle' mode in the first place -- meaning by construction, no click
-  // that ever reached this function via the circle-mode double-click path
-  // could pass this check, regardless of how far it actually was from
-  // where the anchor currently sits. Confirmed directly: a double-click
-  // correctly routed through to here (hitTestAnyIgnoringCircle finding a
-  // real rope point) was still always rejected, even for a point clearly
-  // NOT close to the anchor's actual position. Measuring from the anchor's
-  // real position instead keeps the same safety intent (never cut right
-  // next to wherever the rope actually starts) while no longer being
-  // structurally impossible to pass for a genuinely-far-enough point that
-  // happens to fall inside the drawn circle.
+  // position), not circleAnchor() (the circle graphic's fixed center), and
+  // no longer floored at circleExclusionRadius() (isOnCircle's own
+  // threshold) the way an earlier round of this fix did -- both corrected
+  // together per explicit follow-up feedback ("double click in the circle
+  // still doesn't work") plus a separately reported real bug: with the
+  // anchor now a free-moving physics point (see the anchor-physics work
+  // elsewhere in this file) that can rest anywhere inside the circle,
+  // measuring from the fixed graphic center AND flooring at
+  // circleExclusionRadius() together made this check's effective radius
+  // ALWAYS >= circleExclusionRadius() -- the exact same threshold
+  // isOnCircle() uses to route a press into 'circle' mode in the first
+  // place. That meant, by construction, NO click that ever reached this
+  // function via the circle-mode double-click path (see onPointerUp's
+  // 'circle' branch, and hitTestAnyIgnoringCircle()) could ever pass this
+  // check, no matter how far it actually was from the anchor -- confirmed
+  // directly via a debug-hook test: a double-click correctly routed
+  // through to here was still always rejected, even for a point clearly
+  // not close to the anchor's real position. The old floor's own
+  // reasoning (below) was written back when the anchor was rigidly pinned
+  // to the circle's fixed center, so "close to the anchor" and "close to
+  // the circle's own edge" were the same thing by definition -- no longer
+  // true now that the anchor moves independently, so Circle Cut Distance
+  // (already independently tunable, and set noticeably smaller in the
+  // user's own current settings) is trusted directly, without a hidden
+  // floor silently enlarging it:
+  //
+  // [historical] segLen (~27.7px at default growth) means rope point
+  // index 3 could sit ~83px from a fixed circle-center anchor -- just past
+  // where a smaller Circle Cut Distance would have refused it, but still
+  // only 3 segments into a rope that could be hundreds of px long. A
+  // double-click landing just past the visible circle could resolve to
+  // that point and cut the rope down to almost nothing, regardless of the
+  // rope's actual length -- the original "double click within the
+  // circle's diameter cuts near the minimum length" symptom this whole
+  // exclusion mechanism exists to prevent.
   const anchorForCut = mainRope.points[0];
-  const cutExclusionR = Math.max(vmin(cfg.circleCutDistance), circleExclusionRadius());
+  const cutExclusionR = vmin(cfg.circleCutDistance);
   if (Math.hypot(hit.x - anchorForCut.x, hit.y - anchorForCut.y) < cutExclusionR) return;
   // refuse the cut entirely if it would leave the remaining (anchor-side)
   // rope shorter than the configured minimum — the rope stays whole rather
@@ -2904,8 +2902,6 @@ if (DEV_MODE){
   resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 }
 requestAnimationFrame(loop);
-
-window.__debugTMPropo2 = { cfg, mainRope, fallenPieces, update, render, circleAnchor, anchorBoundaryRadius, hitTestRope, hitTestAny, hitTestAnyIgnoringCircle, cutRopeAt, onPointerDown, onPointerUp, emergeFactor, ENDCAP_BOTTOM_Y, ENDCAP_ALIGNMENT };
 
 })();
 </script>
