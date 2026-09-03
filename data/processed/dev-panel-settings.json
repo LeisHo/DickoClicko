@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 10,
-    "ropeLength": 3.4615384615384612,
+    "ropeLength": 3.7115384615384612,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": false,
     "ropeGradientColors": [
@@ -56,6 +56,9 @@
     "endcapAtCutEnd": true,
     "cutSweepColor": "#ffffff",
     "cutSweepThickness": 0.2,
+    "pieceDecayDelay": 1,
+    "pieceDecaySpeed": 0.5,
+    "pieceMinThickness": 1,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.6,
     "endEmergeDelay": 0.75,
@@ -69,7 +72,7 @@
     "introEnabled": true,
     "introWaitDuration": 2,
     "introRiseSpeed": 5,
-    "introRiseClearOffset": 17,
+    "introRiseClearOffset": -9.5,
     "introPauseDuration": 0.4,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
@@ -77,15 +80,12 @@
     "detachPauseDuration": 2,
     "detachTipStartScale": 0.3,
     "detachTipGrowDuration": 1,
-    "detachThicknessMultiplier": 1,
-    "pieceDecayDelay": 1,
-    "pieceDecaySpeed": 0.5,
-    "pieceMinThickness": 1
+    "detachThicknessMultiplier": 1
   },
   "order": [
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "introExtendSpeed",
         "introExtendSpeedTweenEnabled",
@@ -229,11 +229,11 @@
     }
   ],
   "panelGeometry": {
-    "mobile": {
-      "left": -1,
-      "top": 0,
-      "width": 229,
-      "height": 830.71875,
+    "desktop": {
+      "left": 1236,
+      "top": 4.578125,
+      "width": 526,
+      "height": 583.65625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -246,11 +246,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "desktop": {
-      "left": 1236,
-      "top": 4.578125,
-      "width": 526,
-      "height": 583.65625,
+    "mobile": {
+      "left": -1,
+      "top": 0,
+      "width": 229,
+      "height": 830.71875,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
