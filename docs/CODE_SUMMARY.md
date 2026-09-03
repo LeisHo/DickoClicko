@@ -1485,3 +1485,99 @@ GOTCHAS
     exactly `circleAnchor + (0, anchorBoundaryRadius)` -- dead center of
     the bottom of its own boundary circle, the expected resting
     equilibrium from the original anchor-physics build.
+- Added Tip Segment Shape (`cfg.tipSegmentShapeEnabled`, ROPE group): a
+  user-supplied shape (`data/Rope/RopeEG.svg`, a tall vase-like silhouette
+  with a symmetric two-lobed forked bottom) drawn on the segment(s) right
+  below the endcap, per an explicit multi-message design conversation.
+  `TIP_SEGMENT_SHAPE` is computed once at boot the same way
+  `ENDCAP_BOTTOM_Y` already is -- a throwaway `<path>` + `getBBox()` -- to
+  get `topCenterX`/`width`/`topY`/`bottomY` automatically from the raw `d`
+  string rather than hand-measuring, since this SVG has no explicit
+  alignment `<line>` of its own (the user specified its orientation
+  directly instead: "a vertical line through the horizontal center of this
+  svg" -- so `topCenterX` comes from the bbox's own X midpoint, not a
+  shared reference). `getBBox()`'s measured values matched an independent
+  hand-trace of the path's bezier vertices almost exactly (topCenterX
+  134.62 vs hand-traced 134.62; topY/bottomY 27.32/341.30 vs 27.32/341.3),
+  cross-confirming both.
+  - First implementation attempt scaled the shape's height to exactly
+    match the live segment's current length (`liveLength/naturalHeight`),
+    mirroring how the endcap's `heightMult` slider works. This was WRONG:
+    the shape's natural proportions are ~2.5:1 tall (`naturalHeight`
+    313.98 vs `width` 125.58), but one physics segment is only ~28px at
+    default settings -- ~9% of the shape's own natural height. Squashing
+    it that hard destroyed all its detail: a per-row filled-width scan
+    across the compressed render showed essentially NO variation (~37px
+    constant throughout a 5-sample scan), meaning the neck/waist/belly/
+    fork had no vertical room left to read as anything but a flat blob.
+    Caught before shipping by directly measuring the compressed output,
+    not just eyeballing intent.
+  - Presented the tradeoff to the user directly (3 options: proportion-
+    preserving scale non-matched to the segment; forced segment-length
+    match, accepting the squash; a middle-ground multi-segment span) with
+    a stated recommendation, rather than silently picking one -- this is a
+    real visual/behavioral tradeoff (does the shape always look right, or
+    always end exactly on a physics point), not an implementation detail.
+    User chose proportion-preserving. Rewrote `drawTipSegmentShape()` to
+    scale uniformly from rope thickness alone (`thicknessPx /
+    TIP_SEGMENT_SHAPE.width`, both axes), same formula `drawEndcap()`
+    already uses -- the shape's own top edge generally does NOT land
+    exactly on the second-to-last physics point anymore (it reaches
+    further back up the chain), which is expected and accepted per the
+    user's own choice.
+  - This surfaced a SECOND real bug, only visible after fixing the first:
+    the plain rope stroke (`strokeRopeCurve`) draws the mainRope/piece
+    chain all the way to the true tip regardless, in the exact same
+    `cfg.ropeColor` as the new shape -- so the full-width stroke UNDERNEATH
+    filled in exactly where the shape's own narrower silhouette (waist,
+    fork) should have shown as a visible cutout, making the shape
+    effectively invisible (same color, same area, stroke drawn first).
+    Confirmed via a targeted width-profile scan at the (wrongly) uniform-
+    scale version: constant ~38px width the entire span, no taper visible
+    at all, despite the shape function itself working correctly when
+    called in isolation (verified separately by drawing it directly in a
+    bright test color and finding it exactly where expected). Fixed with
+    `pointsExcludingTipSegmentShape(points, segLen, thicknessPx)`: computes
+    the shape's own scaled height, converts that to a whole number of
+    segments via the entity's own `segLen` (`Math.ceil(shapeHeightPx /
+    segLen)`, clamped so at least 2 points always remain), and returns the
+    points array truncated by that many trailing points -- so the stroke
+    stops short of the shape's own vertical extent, leaving that area for
+    the shape alone to render. Approximate (whole segments, not exact
+    stroke arc-length) is intentional and sufficient: over-omitting by a
+    fraction of a segment just shows a bit more of the shape's own natural
+    taper instead of stroke, never a visible gap, since the shape's own
+    bottom is always exactly anchored to the true tip regardless of how
+    much stroke got omitted above it. The truncated points are used ONLY
+    for the stroke call -- `drawTipSegmentShape()` itself always receives
+    the FULL, untruncated points array, so its own position/rotation
+    calculation (from the true last two points) is never affected.
+    `mainArcMult`/`tipArcMult` (the round-cap-at-the-free-end treatment)
+    are also forced to 0 whenever Tip Segment Shape is on, same reasoning
+    as `hasEndcap` already forces it to 0 -- the shape now covers that end
+    entirely, no separate cap treatment needed there.
+  - Re-verified via a targeted width-profile scan after both fixes: real,
+    smooth taper matching the shape's own silhouette exactly -- 34px near
+    the top (flared edge just appearing) -> 20px at the waist (~68-77px
+    from the tip) -> 38px at the belly (~32-35px from the tip) -> down to
+    6px right at the forked bottom tip. Also confirmed the OFF state
+    (`tipSegmentShapeEnabled: false`) still renders a perfectly flat,
+    constant-width plain rope (9/9 samples identical), i.e. zero regression
+    to the default appearance.
+  - This entire feature was verified WITHOUT screenshots: this session's
+    Browser pane intermittently failed to composite fresh frames after
+    direct `ctx`-level draw calls (confirmed via a controlled test --
+    `ctx.fillRect` and a direct `drawEndcap()` call with an unmistakable
+    bright test color produced no visible change in 3 consecutive
+    screenshots, while `getImageData` read back on the SAME canvas
+    correctly showed the new pixels were actually there). All verification
+    for this feature used direct pixel sampling (`ctx.getImageData`)
+    against the live canvas instead, which is unaffected by the
+    compositor issue -- reads the ACTUAL drawn pixels regardless of
+    whether the browser has visually repainted the pane. Canvas backing-
+    store scale relative to CSS pixels (`canvas.width` vs
+    `window.innerWidth`) was observed to differ between page loads in this
+    same environment (1600x1000 vs 1280x800 for a 1280x800 CSS viewport) --
+    always compute the actual ratio fresh (`canvas.width /
+    window.innerWidth`) rather than assuming `window.devicePixelRatio`
+    matches the backing store, when sampling pixels in a future session.

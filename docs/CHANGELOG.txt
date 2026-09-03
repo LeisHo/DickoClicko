@@ -2535,6 +2535,128 @@ formula itself was correct all along, per the isolated results above.
 node --check clean. A stray double-blank-line left behind by the earlier
 debug-hook removal was also cleaned up while removing this turn's hook.
 
+--------------------------------------------------------------------------------
+2026-09-02  -  10:59 PM - 11:37 PM EDT
+
+Added Tip Segment Shape -- a user-supplied custom shape rendered on the
+rope segment(s) right below the endcap, after an extended design
+conversation across many turns:
+- Started conversational: user asked how hard 3D would be (physics
+  generalizes almost for free, rendering/interaction don't -- answered
+  directly, no code touched), then asked how to swap the rope body for a
+  custom shape instead. Explained two approaches: repeated stamps
+  ("beads on a chain," a decorative/repeating look) vs. a continuous
+  variable-width ribbon (a single shape that genuinely tapers). User
+  wanted something narrower: just the ONE segment beneath the endcap,
+  not the whole body -- clarified that a single stamped shape swings and
+  rotates with the rope but does NOT bend within itself (it's rigid,
+  just repositioned/rotated each frame), which the user confirmed was
+  fine for what they had in mind.
+- User handed over data/Rope/RopeEG.svg -- first export contained only
+  an alignment-line stub and two degenerate zero-area polygons, no real
+  shape (caught and reported before assuming anything about the shape).
+  Re-exported version had a real path; hand-traced its bezier vertices
+  (no SVG rendering available in this environment at the time -- see
+  below) to describe the silhouette back to the user (flared top,
+  narrowing to a neck) before they corrected it with an actual reference
+  image: it swells back into a full rounded body below the neck, THEN
+  narrows to a small two-lobed forked point at the very bottom -- more
+  vase-shaped than the hand-trace alone suggested.
+- Implemented TIP_SEGMENT_SHAPE (computed once at boot via a throwaway
+  <path>+getBBox(), same technique ENDCAP_BOTTOM_Y already uses, since
+  this SVG has no explicit alignment <line> of its own -- the user
+  specified orientation directly instead: "a vertical line through the
+  horizontal center of this svg"), drawTipSegmentShape() (bottom-anchored
+  at the tip, same convention as drawEndcap()), and a new Tip Segment
+  Shape checkbox (ROPE group). getBBox()'s measured values matched the
+  independent hand-trace almost exactly (topCenterX 134.62 vs
+  hand-traced 134.62; topY/bottomY 27.32/341.30 vs 27.32/341.3),
+  cross-confirming both were done correctly.
+- First scale implementation matched the shape's height to the live
+  segment's own current length, mirroring how Endcap Height already
+  works. Measured (not just eyeballed) as wrong before shipping: the
+  shape's natural proportions are ~2.5:1 tall, but one physics segment
+  is only ~9% of that natural height at default settings -- a per-row
+  filled-width scan across the compressed render showed essentially NO
+  width variation (~37px constant), meaning the shape's own
+  neck/waist/belly/fork detail had no vertical room left to read as
+  anything but a flat blob. Presented the tradeoff directly to the user
+  (proportion-preserving scale vs. forced segment-length match vs. a
+  multi-segment middle ground) with a stated recommendation rather than
+  silently picking one, since it's a genuine visual/behavioral choice,
+  not an implementation detail -- user chose proportion-preserving.
+  Rewrote drawTipSegmentShape() to scale uniformly from rope thickness
+  alone (same formula drawEndcap() already uses), accepting that the
+  shape's own top edge no longer generally lands exactly on the
+  second-to-last physics point.
+- That fix surfaced a SECOND real bug, only visible once the first was
+  fixed: the plain rope stroke draws the chain all the way to the true
+  tip regardless, in the exact same cfg.ropeColor as the new shape -- so
+  the full-width stroke underneath filled in exactly where the shape's
+  own narrower silhouette should have shown as a visible cutout, making
+  it invisible against its own backdrop despite rendering correctly in
+  isolation (confirmed separately by drawing it directly in an
+  unmistakable bright test color and finding it exactly where expected
+  via pixel sampling). Fixed with pointsExcludingTipSegmentShape():
+  converts the shape's own scaled height into a whole number of segments
+  via the entity's own segLen, and truncates the points array passed to
+  strokeRopeCurve() by that many trailing points (approximate, not exact
+  arc-length -- intentional, since over-omitting just shows more of the
+  shape's own taper instead of stroke, never a gap). The truncated array
+  is used ONLY for the stroke call; drawTipSegmentShape() itself always
+  gets the full, untruncated points so its own position/rotation stays
+  correct regardless. mainArcMult/tipArcMult (the round-cap-at-the-free-
+  end treatment) are also forced to 0 whenever the feature is on, same
+  reasoning hasEndcap already uses.
+- Re-verified via a width-profile pixel scan after both fixes: a real,
+  smooth taper matching the shape's actual silhouette -- 34px near the
+  top (flared edge appearing) -> 20px at the waist -> 38px at the belly
+  -> down to 6px at the forked bottom tip. Confirmed zero regression to
+  the OFF state (perfectly flat, constant-width plain rope, 9/9 samples
+  identical).
+- This entire feature was verified without a single working screenshot:
+  this session's Browser pane intermittently failed to composite fresh
+  frames after direct ctx-level draw calls (confirmed via a controlled
+  test -- a direct ctx.fillRect and a direct drawEndcap() call with an
+  unmistakable bright color produced no visible change across 3
+  consecutive screenshots, while ctx.getImageData read back on the SAME
+  canvas correctly showed the new pixels were actually there). All
+  verification used direct pixel sampling against the live canvas
+  instead. Also discovered mid-session that canvas.width vs
+  window.innerWidth (the actual backing-store-to-CSS-pixel ratio) is NOT
+  reliably equal to window.devicePixelRatio in this environment --
+  observed 1600x1000 canvas for a 1280x800 CSS viewport on one page load,
+  then 1280x800 (1:1) on another with the identical viewport -- always
+  compute the ratio fresh from canvas.width/window.innerWidth when pixel-
+  sampling in this environment rather than assuming devicePixelRatio.
+- Also fixed, mid-session, per direct report: clicking Save while
+  running on Vercel produced "Save failed: GitHub commit failed 404".
+  Traced api/save-settings.js's GitHub-Contents-API write to a hardcoded
+  DEFAULT_BRANCH='main' -- this repo's actual (and only) branch is
+  master (confirmed via `git branch -a`/`git remote show origin`), so
+  every commit attempt was targeting a branch that doesn't exist,
+  which GitHub's API reports as a plain 404 on the write step. Fixed the
+  default to 'master'; committed alone (api/save-settings.js only) since
+  index.html had substantial unrelated concurrent work in progress at
+  the time.
+
+Verified:
+- node --check clean throughout every intermediate edit.
+- TIP_SEGMENT_SHAPE's getBBox()-derived geometry cross-confirmed against
+  an independent hand-trace of the SVG's own bezier path.
+- Both scale-formula bugs (segment-squash, stroke-overlap) caught via
+  direct measurement (pixel-width scans) before being reported as fixed,
+  not assumed correct from code review alone.
+- Direct isolation test proved drawTipSegmentShape() itself was correct
+  even while screenshots showed no visible change, correctly identifying
+  the Browser pane's compositor (not the app code) as the actual gap.
+- Fresh page load: no console errors.
+- Did not live-verify the Save-button GitHub-commit fix against a real
+  Vercel deployment/GitHub API (no access to the live env vars/token
+  from this sandbox) -- reported as the leading, well-evidenced
+  hypothesis (a directly-verified branch-name mismatch), not a confirmed
+  fix, pending the user's own redeploy.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

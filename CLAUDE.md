@@ -375,3 +375,22 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   native file-save prompt. `DEV_MODE` alone isn't sufficient either (it
   still allows `file:`), so both conditions stay layered together, not
   merged into one.
+- **Tip Segment Shape** (`cfg.tipSegmentShapeEnabled`, ROPE group) draws a
+  user-supplied shape (`TIP_SEGMENT_SHAPE`, from `data/Rope/RopeEG.svg`)
+  anchored bottom-up at the tip, same convention as the endcap. It is
+  **scaled uniformly from rope thickness alone** (`drawTipSegmentShape()`),
+  never stretched to fit exactly one physics segment's length — an earlier
+  version did that and it squashed the shape (natural aspect ratio ~2.5:1
+  tall, one segment only ~9% of its natural height) into an unrecognizable
+  flat blob. Don't revert to segment-length-matched scaling without
+  re-measuring; see `docs/CODE_SUMMARY.md` Gotchas for the numbers.
+- Because the shape isn't segment-length-matched, it usually reaches
+  further back up the chain than just the last segment. **The plain rope
+  stroke must stop short of the shape's own scaled height**
+  (`pointsExcludingTipSegmentShape()`, called before every
+  `strokeRopeCurve()` for mainRope/pieces) — both render in the exact same
+  `cfg.ropeColor`, so without this, the full-width stroke underneath fills
+  in exactly where the shape's own narrower silhouette (waist, fork)
+  should show as a visible cutout, making the shape invisible against its
+  own backdrop. Don't add a new stroke call for mainRope/a piece without
+  routing it through this helper first when Tip Segment Shape might be on.

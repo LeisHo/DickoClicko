@@ -18,20 +18,19 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — everything below is done and pushed. The real root
-cause behind BOTH the "extension jitter" and a separately-reported "crazy
-movement on a single click" turned out to be the same thing: the rope had
-zero resistance to bending, so a strong-enough punch could fold it into a
-persistent knot. Fixed with a bending constraint (`cfg.bendStiffness`,
-default 0.15) — if either symptom reappears, that's the setting to check
-first, and re-run the fold reproduction described in `docs/CODE_SUMMARY.md`
-before assuming it's a new/different bug.
+Nothing in progress — everything below is done and pushed.
 
-Note: earlier in this session, edits landed interleaved with a concurrent
-session's own work on the settings-persistence layer (§12l file:// gating)
-in the same `index.html`, ending up committed together across a few
-commits due to the concurrent editing, not a scope mixup. Nothing was
-lost — verified via direct state inspection at the time.
+Note: this project has had multiple Claude sessions actively editing
+`index.html` concurrently for an extended stretch (settings-persistence
+work, anchor physics, End Emerge, and this session's Tip Segment Shape
+feature all landed in overlapping windows). Several commits ended up
+bundling more than one session's own changes together because the file
+kept changing between read and write — always disclosed in the commit
+message when it happened, never silently. Nothing has been lost; each
+session verified its own feature worked correctly regardless of which
+commit it ended up landing in. If something looks like it's missing or
+reverted, check `git log -p` for the actual commit that touched it before
+assuming it never shipped.
 
 ## Recently completed
 
@@ -557,6 +556,29 @@ lost — verified via direct state inspection at the time.
   including a test-methodology trap (routing a bounce test through the
   full update() pipeline masked the restitution effect) caught and worked
   around before it could be mistaken for a real bug.
+- Added Tip Segment Shape (`cfg.tipSegmentShapeEnabled`, ROPE group): a
+  user-supplied vase-like shape with a two-lobed forked bottom
+  (`data/Rope/RopeEG.svg`) drawn on the segment(s) right below the endcap,
+  after an extended back-and-forth design conversation (whole-rope
+  "beads" vs. one custom segment, whether a stamped shape can bend, what
+  "varies in thickness" actually implies, and finally the user handing
+  over the real SVG once a first empty export was caught and re-done).
+  A first pass scaled the shape's height to exactly match the live
+  segment's length, matching how Endcap Height already works — measured
+  as visibly wrong before shipping (the shape's own proportions are
+  ~2.5:1 tall, but one segment is only ~9% of that natural height, so it
+  squashed into an unrecognizable flat blob). Presented the tradeoff
+  directly to the user (proportion-preserving vs. segment-matched vs. a
+  middle ground) rather than picking silently; they chose proportion-
+  preserving. That surfaced a second real bug once fixed: the plain rope
+  stroke, drawn in the same color, was filling in exactly where the
+  shape's own narrower waist/fork should read as a cutout, making the
+  shape invisible against its own backdrop — fixed by having the stroke
+  stop short of wherever the shape's own height reaches back to. Verified
+  via direct pixel sampling (screenshots weren't reliably compositing
+  fresh frames in this session) that the rendered width now genuinely
+  tapers to match the shape's real silhouette, and that the feature is a
+  clean no-op when disabled.
 
 ## What's next
 

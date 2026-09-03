@@ -190,7 +190,6 @@ const DEV_GROUPS = [
   ]},
   { title:'ANCHOR PHYSICS', controls:[
     { key:'circleBoundaryOffset', label:'Circle Offset', type:'slider', unit:'%vmin', min:-10, max:10, step:0.5, def:0 },
-    { key:'anchorBounceIntensity', label:'Rope Start Bounce Intensity', type:'slider', unit:'x', min:0, max:1.5, step:0.05, def:0.4 },
     { key:'anchorWeight', label:'Rope Start Weight', type:'slider', unit:'x', min:0, max:5, step:0.1, def:1 },
   ]},
   { title:'ROPE', controls:[
@@ -213,6 +212,7 @@ const DEV_GROUPS = [
         { value:'form3-02', label:'Form 3 - 02' },
       ] },
     { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1 },
+    { key:'tipSegmentShapeEnabled', label:'Tip Segment Shape', type:'checkbox', def:false },
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:4.8 },
     { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:34.76923076923084,
       onChange: v => { if (mainRope) setMainRopeTotalLength(vh(v)); } },
@@ -250,8 +250,10 @@ const DEV_GROUPS = [
   { title:'END EMERGE', controls:[
     { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:false },
     { key:'endcapStartingScale', label:'Endcap Starting Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.5 },
+    { key:'endEmergeHideDistance', label:'End Emerge Hide Distance', type:'slider', unit:'x', min:0, max:3, step:0.1, def:1 },
     { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:0.3 },
     { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.2, max:5, step:0.1, def:1.3 },
+    { key:'endEmergeEasingStrength', label:'End Emerge Easing Strength', type:'slider', unit:'x', min:1, max:6, step:0.1, def:2 },
     { key:'endEmergeTweening', label:'End Emerge Tweening', type:'dropdown', def:'easeOut',
       options:[
         { value:'linear', label:'Linear' },
@@ -1297,9 +1299,9 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
   // separate tip-position-smoothing fix above. Excluding the tip here
   // entirely removes the kick at its source.
   const tipIndex = skipLastSegment ? points.length - 1 : -1;
-  // boundaryConstraint.weightMult (Anchor Weight, see constrainAnchorToCircle()'s
-  // own comment) lets that one point feel MORE or LESS gravity than the rest
-  // of the chain -- e.g. mainRope's own anchor, so it can look/feel heavier
+  // boundaryConstraint.weightMult (Anchor Weight) lets that one point feel
+  // MORE or LESS gravity than the rest of the chain -- e.g. mainRope's own
+  // anchor, so it can look/feel heavier
   // ("like an anchor") even though it's no longer rigidly fixed. Defaults to
   // 1 (identical to every other point) whenever boundaryConstraint is absent
   // or doesn't specify one, so nothing changes for fallenPieces or for a
@@ -1393,8 +1395,7 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
     }
     // boundaryConstraint ({index, center, radius}): keeps points[index]
     // inside a circular boundary, e.g. mainRope.points[0] inside the
-    // circle graphic (see constrainAnchorToCircle()'s own comment for the
-    // full feature). Applied EVERY iteration, alongside distance/bend
+    // circle graphic. Applied EVERY iteration, alongside distance/bend
     // above, rather than once as a post-pass after the whole solve
     // finishes -- a post-pass version was tried first and produced a real,
     // measured, persistent instability: clamping the point to an EXACT
@@ -1420,6 +1421,28 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
       const bdx = bp.x - boundaryConstraint.center.x, bdy = bp.y - boundaryConstraint.center.y;
       const bdist = Math.hypot(bdx, bdy) || 1e-6;
       if (bdist > boundaryConstraint.radius){
+        // Position-only clamp, same as every other constraint in this loop
+        // (distance/bend never touch oldx/oldy either) -- deliberately NOT
+        // shifting oldx/oldy here. oldx/oldy is already fixed for the
+        // WHOLE frame (set once, at the very top of this function, to last
+        // frame's final position); leaving it alone means next frame's
+        // implied velocity is naturally (this frame's final clamped
+        // position - last frame's position), which already correctly
+        // preserves tangential motion (rolling along the boundary) while
+        // killing radial motion (no bounce), with zero extra bookkeeping.
+        // An earlier version of this fix DID shift oldx/oldy here, on the
+        // theory that it would preserve velocity across the clamp -- that
+        // was wrong and double-counted: this block can fire on more than
+        // one of the constraintIterations rounds per frame (the distance
+        // constraint pulling point 0 back out between rounds), and shifting
+        // oldx/oldy on EVERY firing compounds each round's correction on
+        // top of the last, producing an implied velocity many times too
+        // large (confirmed via direct simulation: a 15px/frame outward
+        // velocity came out as 323px/frame after just one update() call).
+        // The real cause of the "zooms back to its default spot" complaint
+        // was constrainAnchorToCircle()'s separate, explicit bounce
+        // formula -- removed entirely below -- not this position clamp,
+        // which was already correct as originally written.
         bp.x = boundaryConstraint.center.x + (bdx / bdist) * boundaryConstraint.radius;
         bp.y = boundaryConstraint.center.y + (bdy / bdist) * boundaryConstraint.radius;
       }
@@ -1428,32 +1451,22 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
 }
 
 // mainRope.points[0] is no longer rigidly pinned to circleAnchor() -- per
-// explicit request, it's a free physics point kept inside the circle by
-// integrateChain()'s own boundaryConstraint param (see that function's
-// comment -- the actual position-clamping now happens THERE, iteratively,
-// not here). This function's only remaining job is the BOUNCE: reflecting
-// the point's implied velocity off the boundary normal on genuine impact
-// (standard v' = v - (1+restitution)*(v.n)*n, damped by `restitution` so
-// repeated bounces settle rather than oscillating forever), matching the
-// explicit request ("hits the other side of the circle, bounces off and
-// falls back down"). Deliberately does NOT touch p.x/p.y at all -- position
-// is already correct from the iterative solve; only oldx/oldy are adjusted,
-// and only when the point is genuinely at the boundary AND still moving
-// outward (vDotN > 0) at the end of the frame. Resting contact (the point
-// sitting at the boundary with ~0 outward velocity, which is most frames
-// once it settles at the bottom under gravity) naturally skips the
-// reflection entirely -- nothing left to reflect -- which is also exactly
-// what makes it come to rest at the bottom with no special-casing needed
-// for that "default resting position": it's just this system's own
-// equilibrium.
+// explicit request, it's a free physics point kept inside the circle
+// entirely by integrateChain()'s own boundaryConstraint param (see that
+// function's comment). There used to be a separate bounce step here
+// (constrainAnchorToCircle(), velocity-reflection off the boundary normal)
+// -- removed per explicit follow-up feedback: it read as the anchor
+// "suddenly zooming back to its default spot" rather than a natural
+// weighted body falling or rolling down the side of the circle. The
+// position-clamp above (a plain position-only clamp, like every other
+// constraint in that loop -- see its own comment for why touching
+// oldx/oldy there was tried and was actually wrong) already produces
+// exactly that natural roll/settle behavior on its own, with no separate
+// reflection formula needed.
 // Circle Offset (cfg.circleBoundaryOffset) lets the anchor's own confinement
 // radius differ from the circle GRAPHIC's own radius (vmin(circleSize)/2) --
 // positive shrinks the playable interior, negative lets the anchor bulge
-// past the drawn circle's own edge. Shared by constrainAnchorToCircle() and
-// update()'s own boundaryConstraint object passed into integrateChain(), so
-// the position-clamp and the bounce always agree on exactly the same
-// boundary -- if they used different radii, the bounce could fire at a
-// distance the position-clamp doesn't actually enforce (or vice versa).
+// past the drawn circle's own edge.
 function anchorBoundaryRadius(){
   // floored at a small positive minimum, not 0 -- a large enough negative
   // Circle Offset relative to a small Circle Size would otherwise go
@@ -1464,27 +1477,6 @@ function anchorBoundaryRadius(){
   // with a negative R places the clamp point on the OPPOSITE side of the
   // circle from whichever direction the anchor was actually heading).
   return Math.max(2, vmin(cfg.circleSize) / 2 + vmin(cfg.circleBoundaryOffset));
-}
-
-function constrainAnchorToCircle(){
-  const p = mainRope.points[0];
-  const center = circleAnchor();
-  const R = anchorBoundaryRadius();
-  const dx = p.x - center.x, dy = p.y - center.y;
-  const dist = Math.hypot(dx, dy) || 1e-6;
-  if (dist < R - 0.01) return;
-  const nx = dx / dist, ny = dy / dist;
-  const vx = p.x - p.oldx, vy = p.y - p.oldy;
-  const vDotN = vx * nx + vy * ny;
-  if (vDotN <= 0) return;
-  // Rope Start Bounce Intensity (restitution) -- was hardcoded 0.4,
-  // matching the floor collision's own hardcoded 0.3, until made
-  // dev-tunable per explicit request.
-  const restitution = cfg.anchorBounceIntensity;
-  const rvx = vx - (1 + restitution) * vDotN * nx;
-  const rvy = vy - (1 + restitution) * vDotN * ny;
-  p.oldx = p.x - rvx;
-  p.oldy = p.y - rvy;
 }
 
 function pileRepulsion(all){
@@ -1805,7 +1797,26 @@ function cutRopeAt(hit, clickX, clickY){
   // whole mental model is "circle-area clicks are for growing, never
   // cutting," Circle Cut Distance can never be trusted to be smaller than
   // the circle's own click-exclusion zone -- this floor guarantees that.
-  const anchorForCut = circleAnchor();
+  //
+  // Measured from mainRope.points[0] (the anchor's own ACTUAL current
+  // position), not circleAnchor() (the circle graphic's fixed center) --
+  // corrected per a later real bug: with the anchor now a free-moving
+  // physics point (see the anchor-physics work elsewhere in this file)
+  // that can rest anywhere inside the circle, measuring from the fixed
+  // graphic center made this floor's radius ALWAYS >= circleExclusionRadius(),
+  // the exact same threshold isOnCircle() uses to route a press into
+  // 'circle' mode in the first place -- meaning by construction, no click
+  // that ever reached this function via the circle-mode double-click path
+  // could pass this check, regardless of how far it actually was from
+  // where the anchor currently sits. Confirmed directly: a double-click
+  // correctly routed through to here (hitTestAnyIgnoringCircle finding a
+  // real rope point) was still always rejected, even for a point clearly
+  // NOT close to the anchor's actual position. Measuring from the anchor's
+  // real position instead keeps the same safety intent (never cut right
+  // next to wherever the rope actually starts) while no longer being
+  // structurally impossible to pass for a genuinely-far-enough point that
+  // happens to fall inside the drawn circle.
+  const anchorForCut = mainRope.points[0];
   const cutExclusionR = Math.max(vmin(cfg.circleCutDistance), circleExclusionRadius());
   if (Math.hypot(hit.x - anchorForCut.x, hit.y - anchorForCut.y) < cutExclusionR) return;
   // refuse the cut entirely if it would leave the remaining (anchor-side)
@@ -2030,6 +2041,27 @@ function hitTestAny(x, y){
   return null;
 }
 
+// Same as hitTestAny(), but resolves the rope hit directly via
+// nearestPointOnRope() instead of hitTestRope() -- deliberately skipping
+// hitTestRope()'s own isOnCircle() exclusion. That exclusion exists so a
+// SINGLE tap/hold starting on the circle graphic never misfires as a rope
+// punch/charge; used ONLY for double-click-cut resolution (see
+// onPointerUp's 'circle' branch), where the exclusion instead makes the
+// whole circle-covered area permanently uncuttable -- a real reported bug
+// now that the anchor is a free-moving point (see the anchor-physics work
+// above) that routinely rests visually inside the circle graphic. Still
+// safe: cutRopeAt()'s own Circle Cut Distance floor (independently
+// tunable, defaulting to at least circleExclusionRadius()) is the actual
+// gate against cutting too close to the anchor, not this hit test.
+function hitTestAnyIgnoringCircle(x, y){
+  const rawRopeHit = nearestPointOnRope(x, y, mainRope.points);
+  const ropeHit = rawRopeHit.dist <= vmin(cfg.clickDistance) ? rawRopeHit : null;
+  const pieceHit = hitTestPieces(x, y);
+  if (ropeHit && (!pieceHit || ropeHit.dist <= pieceHit.dist)) return { ...ropeHit, target: 'rope' };
+  if (pieceHit) return { ...pieceHit, target: 'piece' };
+  return null;
+}
+
 function onPointerDown(e){
   const x = e.clientX, y = e.clientY;
   // defensive: a pointerdown that never reaches onPointerUp/pointercancel
@@ -2078,13 +2110,37 @@ function onPointerUp(e){
   const info = downInfo;
   downInfo = null;
 
+  const now = performance.now();
+
   if (info.mode === 'circle'){
     logClick('up:circle', { wasGrowing: growing });
     growing = false;
+    // A double-click landing inside the circle's own exclusion zone still
+    // needs to be able to cut the rope near the anchor -- previously,
+    // isOnCircle() routed EVERY press starting there into this 'circle'
+    // branch, which never even checked for a double-click, so the whole
+    // circle-covered area was permanently uncuttable. Real bug, reported
+    // directly ("double click in the circle still doesn't work"), and more
+    // noticeable now that the anchor is a free-moving point that routinely
+    // rests visually inside the circle graphic. Shares the same pendingClick
+    // state the rope-side double-click path uses below, so a first click on
+    // the circle followed by a second click on (or off) the circle within
+    // Double Click Threshold still resolves as one double-click either way.
+    if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
+      clearTimeout(pendingClick.timer);
+      pendingClick = null;
+      const target = hitTestAnyIgnoringCircle(e.clientX, e.clientY);
+      logClick('up:double-click-on-circle', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
+      if (target){
+        if (target.target === 'rope') cutRopeAt(target, e.clientX, e.clientY);
+        else cutPieceAt(target.pieceIndex, target, e.clientX, e.clientY);
+      }
+      return;
+    }
+    if (pendingClick) clearTimeout(pendingClick.timer);
+    pendingClick = { time: now, timer: setTimeout(() => { pendingClick = null; }, cfg.doubleClickThreshold) };
     return;
   }
-
-  const now = performance.now();
 
   if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
     clearTimeout(pendingClick.timer);
@@ -2172,18 +2228,15 @@ function update(rawDt){
   // circle's center -- per explicit request, it's now a normal physics
   // point (subject to gravity, and pulled around by the rope's own
   // swinging motion via the distance/bend constraints, same as every
-  // other point) that's kept inside the circle by integrateChain()'s own
-  // boundaryConstraint param (position, negotiated iteratively alongside
-  // the distance/bend constraints -- see that function's comment for why
-  // a simpler post-pass clamp doesn't work here) plus
-  // constrainAnchorToCircle() (the bounce -- velocity only, called once
-  // after integrateChain() below). pinnedIndex is now -1 (no pin at all),
-  // matching how fallenPieces already integrate.
+  // other point) that's kept inside the circle entirely by
+  // integrateChain()'s own boundaryConstraint param (position, negotiated
+  // iteratively alongside the distance/bend constraints, and
+  // velocity-preserving -- see that function's comment for why). pinnedIndex
+  // is now -1 (no pin at all), matching how fallenPieces already integrate.
   if (growing) growRope(rawDt);
   const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
     { index: 0, center: circleAnchor(), radius: anchorBoundaryRadius(), weightMult: cfg.anchorWeight });
-  constrainAnchorToCircle();
   if (hasPartialTip) positionGrowingTip();
 
   // A Fall Delay > 0 cut hasn't actually split mainRope yet (see
@@ -2292,6 +2345,34 @@ function update(rawDt){
   }
 }
 
+// Draws one rope end's rounded cap as a half-ellipse bulging outward from
+// (px,py) in direction (dirx,diry): a flat chord spanning the rope's full
+// width (thicknessPx) plus a curved protrusion whose depth is
+// (thicknessPx/2)*arcMult. At arcMult=0 the protrusion degenerates to
+// nothing (a flat line, matching a straight/butt end); at arcMult=1 the
+// protrusion equals the chord's own half-width, making the shape a TRUE
+// semicircle (matching the old always-round look); values in between are
+// a proportionally flattened arc, not a smaller full circle -- per
+// explicit clarification that Rope End/Top Curve Arc controls how much of
+// a semicircle the end is, not the size of a circle sitting on top of it.
+function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult){
+  if (arcMult <= 0) return;
+  const halfW = thicknessPx / 2;
+  const protrusion = halfW * arcMult;
+  const angle = Math.atan2(diry, dirx);
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  // local +x now points in the outward `dir` direction; the arc spans
+  // -90..+90 degrees (the half where local x >= 0, i.e. the outward-facing
+  // half only), closed off by the flat chord straight back to the start.
+  ctx.ellipse(0, 0, protrusion, halfW, 0, -Math.PI / 2, Math.PI / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 function strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult){
   if (startArcMult === undefined) startArcMult = 0;
   ctx.strokeStyle = color; ctx.fillStyle = color;
@@ -2343,9 +2424,8 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult){
 
   const tip = points[n - 1];
   if (endArcMult > 0){
-    ctx.beginPath();
-    ctx.arc(tip.x, tip.y, (thicknessPx / 2) * endArcMult, 0, Math.PI * 2);
-    ctx.fill();
+    const dir = tipDirection(points);
+    drawEndArc(tip.x, tip.y, dir.x, dir.y, thicknessPx, endArcMult);
   }
   // startArcMult mirrors endArcMult at points[0] instead of points[n-1] --
   // meaningful for both a fallen piece's own free cut edge (Rope End
@@ -2354,10 +2434,10 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult){
   // of the circle graphic, per render()'s own draw order, so this end is
   // genuinely visible, not hidden underneath it).
   if (startArcMult > 0){
-    const base = points[0];
-    ctx.beginPath();
-    ctx.arc(base.x, base.y, (thicknessPx / 2) * startArcMult, 0, Math.PI * 2);
-    ctx.fill();
+    const base = points[0], next = points[1];
+    let dx = base.x - next.x, dy = base.y - next.y;
+    const dlen = Math.hypot(dx, dy) || 1;
+    drawEndArc(base.x, base.y, dx / dlen, dy / dlen, thicknessPx, startArcMult);
   }
 }
 
@@ -2433,6 +2513,40 @@ const ENDCAP_BOTTOM_Y = (function(){
   return bottoms;
 })();
 
+// The user-supplied "tip segment" shape (data/Rope/RopeEG.svg) -- an
+// optional replacement for the plain rope-colored stroke on just the LAST
+// segment (the one between the endcap and the rest of the rope), toggled
+// via the Tip Segment Shape checkbox (see drawTipSegmentShape() below).
+// Unlike the endcap designs, this SVG has no explicit alignment <line> of
+// its own -- per its own author's description, orientation is simply a
+// vertical line through the shape's horizontal center, so topCenterX
+// comes from its bounding box's own midpoint rather than a shared
+// reference line. topY/bottomY (getBBox()-derived, same technique as
+// ENDCAP_BOTTOM_Y above) bound its natural authored height, which is what
+// a live segment's CURRENT length gets stretched to match -- so the shape
+// always spans exactly from the second-to-last physics point to the tip,
+// however long that segment currently is, rather than a fixed size.
+const TIP_SEGMENT_SHAPE = (function(){
+  const d = 'M183.74,176.56c-17.44-45.3-26.85-107.11,12.71-149.24h-123.66c39.56,42.13,30.15,103.94,12.71,149.24-14.01,36.38-26.26,70.59,11.44,126.28,2.26,3.33,11.87,15.34,14.26,18.74,4.53,6.01,8.35,10.74,12.17,17.19.6,1.01.34,2.47,2.43,2.53,2.2.06,2.98-2.69,4.54-4.74,1.19-1.56,3.14-2.46,4.28-2.57,1.14.11,3.09,1.02,4.28,2.57,1.57,2.05,2.34,4.81,4.54,4.74,2.09-.06,1.84-1.52,2.43-2.53,3.82-6.46,7.64-11.18,12.17-17.19,2.39-3.4,12.01-15.41,14.26-18.74,37.7-55.69,25.44-89.9,11.44-126.28Z';
+  const path = new Path2D(d);
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.style.position = 'absolute'; svg.style.width = '0'; svg.style.height = '0'; svg.style.overflow = 'hidden';
+  document.body.appendChild(svg);
+  const p = document.createElementNS(svgNS, 'path');
+  p.setAttribute('d', d);
+  svg.appendChild(p);
+  const bbox = p.getBBox();
+  document.body.removeChild(svg);
+  return {
+    path,
+    topCenterX: bbox.x + bbox.width / 2,
+    width: bbox.width,
+    topY: bbox.y,
+    bottomY: bbox.y + bbox.height,
+  };
+})();
+
 /* ---------------------------------------------------------------------
    End Emerge -- when enabled (End Emerge Enabled), a freshly-cut edge's
    endcap doesn't appear at full size/position the instant the real split
@@ -2453,11 +2567,19 @@ const ENDCAP_BOTTOM_Y = (function(){
    created.
 --------------------------------------------------------------------- */
 const EMERGE_BASE_SEC = 0.35;
+// Each tween takes the raw progress `t` (0..1) plus `s` (End Emerge Easing
+// Strength) -- `s` generalizes the exponent each curve already used
+// (originally hardcoded to 2, i.e. t², matching a classic quadratic ease):
+// raising it makes the curve MORE pronounced/snappier, lowering it toward
+// 1 flattens it toward linear. `linear` ignores `s` entirely -- "no easing"
+// stays "no easing" regardless of the strength slider, which is the
+// intuitive behavior when that tween is selected. Added per explicit
+// feedback that the fixed built-in curves weren't a strong enough effect.
 const EMERGE_TWEENS = {
-  linear: t => t,
-  easeIn: t => t * t,
-  easeOut: t => 1 - (1 - t) * (1 - t),
-  easeInOut: t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+  linear: (t, s) => t,
+  easeIn: (t, s) => Math.pow(t, s),
+  easeOut: (t, s) => 1 - Math.pow(1 - t, s),
+  easeInOut: (t, s) => t < 0.5 ? Math.pow(2 * t, s) / 2 : 1 - Math.pow(-2 * t + 2, s) / 2,
 };
 
 function newEmergeState(){
@@ -2484,7 +2606,7 @@ function emergeFactor(emerge){
   if (!cfg.endEmergeEnabled || !emerge) return 1;
   if (emerge.delayRemaining > 0) return 0;
   const ease = EMERGE_TWEENS[cfg.endEmergeTweening] || EMERGE_TWEENS.linear;
-  return ease(emerge.progress);
+  return ease(emerge.progress, cfg.endEmergeEasingStrength);
 }
 
 // direction of the LAST segment (second-to-last point -> tip), normalized;
@@ -2507,22 +2629,29 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
   // rotation matrix (x cosθ - y sinθ, x sinθ + y cosθ) solved for
   // (-sinθ,cosθ) = (dir.x,dir.y).
   const angle = Math.atan2(-dir.x, dir.y);
-  // `factor` (End Emerge) interpolates BOTH scale and WHICH local point
-  // gets anchored to the tip. At factor==0 (spawn): scale is Endcap
-  // Starting Scale × normal, and the anchor is the design's own BOTTOM
-  // edge (ENDCAP_BOTTOM_Y) -- so the shape sits mostly BEHIND the tip,
-  // tucked into the rope. At factor==1 (fully emerged, and always the
-  // case when End Emerge is off): scale is normal, and the anchor is back
-  // to the usual top/neck edge (ENDCAP_ALIGNMENT.topY) -- identical to
-  // this app's original, pre-End-Emerge behavior. The anchor's X
-  // (topCenterX) doesn't need to vary between the two -- every design is
+  // `factor` (End Emerge) interpolates the Y (length-along-the-rope) scale
+  // AND which local point gets anchored to the tip. X scale stays at
+  // normalScale throughout -- per explicit feedback, the emerge effect
+  // should only scale along the rope's own length, not shrink the cap's
+  // width too. At factor==0 (spawn): Y-scale is Endcap Starting Scale ×
+  // normal, and the anchor is offset from the normal top/neck edge
+  // (ENDCAP_ALIGNMENT.topY) by End Emerge Hide Distance × the design's own
+  // natural bottom-minus-top span -- so the shape sits mostly BEHIND the
+  // tip, tucked into the rope (Hide Distance 0 disables this offset
+  // entirely, i.e. "already aligned with its final position", per
+  // explicit request). At factor==1 (fully emerged, and always the case
+  // when End Emerge is off): Y-scale is normal and the anchor is back to
+  // topY -- identical to this app's original, pre-End-Emerge behavior.
+  // The anchor's X (topCenterX) doesn't need to vary -- every design is
   // authored horizontally symmetric almost exactly around that same X
   // (confirmed directly: e.g. form1-c's own measured bbox center sits
   // within 0.02 units of topCenterX), so only Y needs to move.
   const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
-  const startScale = normalScale * cfg.endcapStartingScale;
-  const scale = startScale + (normalScale - startScale) * factor;
-  const startAnchorY = ENDCAP_BOTTOM_Y[designKey] !== undefined ? ENDCAP_BOTTOM_Y[designKey] : ENDCAP_ALIGNMENT.topY;
+  const startYScale = normalScale * cfg.endcapStartingScale;
+  const yScale = startYScale + (normalScale - startYScale) * factor;
+  const designBottomY = ENDCAP_BOTTOM_Y[designKey] !== undefined ? ENDCAP_BOTTOM_Y[designKey] : ENDCAP_ALIGNMENT.topY;
+  const hideRange = designBottomY - ENDCAP_ALIGNMENT.topY;
+  const startAnchorY = ENDCAP_ALIGNMENT.topY + hideRange * cfg.endEmergeHideDistance;
   const anchorY = startAnchorY + (ENDCAP_ALIGNMENT.topY - startAnchorY) * factor;
   ctx.save();
   ctx.translate(tip.x, tip.y);
@@ -2535,16 +2664,78 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
   // is used as the anchor always lands at local (0,0) regardless of scale
   // -- so THAT point stays exactly at the tip no matter how much vertical
   // stretch (heightMult), emergence shrink, or emergence anchor-shift is
-  // applied. Interpolating anchorY together with scale is what gives End
+  // applied. Interpolating anchorY together with Y-scale is what gives End
   // Emerge its "grows and slides out of the rope" look: as anchorY moves
-  // from the design's own bottom edge back up to its top/neck edge, the
+  // from its offset spawn position back up to the top/neck edge, the
   // point of the shape that's pinned to the tip moves too, dragging the
   // rest of the (simultaneously growing) shape out from behind the rope.
-  ctx.scale(scale, scale * heightMult);
+  ctx.scale(normalScale, yScale * heightMult);
   ctx.translate(-ENDCAP_ALIGNMENT.topCenterX, -anchorY);
   ctx.fillStyle = color;
   ctx.fill(design.path);
   ctx.restore();
+}
+
+// Draws TIP_SEGMENT_SHAPE anchored by its own bottom edge to the tip (same
+// point drawEndcap() anchors to, so it sits flush against the endcap),
+// scaled uniformly from rope thickness -- see the scale comment inside for
+// why this is NOT stretched to fit exactly one physics segment. Horizontal
+// scale matches the rope's current thickness, same as every endcap design.
+// Drawn UNDER the endcap (render() calls this first) so the endcap remains
+// the visible cap right at the very tip. render() must also stop the
+// plain rope stroke short of this shape's own height (see
+// pointsExcludingTipSegmentShape() below) -- both this shape and the
+// stroke render in the exact same cfg.ropeColor, so without that, the
+// full-width stroke underneath fills in exactly where this shape's own
+// narrower silhouette (waist, fork) should show as a visible cutout,
+// making the shape invisible against its own backdrop.
+function drawTipSegmentShape(points, thicknessPx, color){
+  if (points.length < 2) return;
+  const dir = tipDirection(points);
+  const angle = Math.atan2(-dir.x, dir.y);
+  const tip = points[points.length - 1];
+  // Scaled UNIFORMLY from rope thickness alone (same as drawEndcap), not
+  // stretched to match the live segment's own length. The shape's natural
+  // proportions (~2.5x taller than wide) don't fit into one physics
+  // segment (~28px at default settings, only ~9% of the shape's own
+  // natural height) -- forcing its height to match the segment exactly
+  // squashed it into an unrecognizable flat blob (confirmed: a per-row
+  // filled-width scan across the compressed shape showed almost no
+  // variation, ~37px throughout, since the neck/waist/belly/fork detail
+  // had no vertical room left to read). Per explicit choice: keep the
+  // shape looking like the shape, even though its own top edge then
+  // generally does NOT land exactly on the second-to-last physics point
+  // (it typically reaches further up the chain, past it) -- this is
+  // cosmetic-only, like the endcap, and never affects the physics chain
+  // itself in any way.
+  const scale = thicknessPx / TIP_SEGMENT_SHAPE.width;
+  ctx.save();
+  ctx.translate(tip.x, tip.y);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+  ctx.translate(-TIP_SEGMENT_SHAPE.topCenterX, -TIP_SEGMENT_SHAPE.bottomY);
+  ctx.fillStyle = color;
+  ctx.fill(TIP_SEGMENT_SHAPE.path);
+  ctx.restore();
+}
+
+// When Tip Segment Shape is enabled, the plain stroke (strokeRopeCurve)
+// must stop short of wherever that shape's own scaled height reaches back
+// to along the chain -- otherwise the two overlap in the exact same color
+// and the shape's own narrower silhouette (waist, fork) never shows
+// through (see drawTipSegmentShape()'s own comment). Approximated in whole
+// segments via the entity's own segLen rather than exact stroke arc-length
+// -- plenty precise for this purpose, since over-omitting by a fraction of
+// a segment just leaves a bit more of the shape's own natural taper
+// visible instead of stroke (never a gap: the shape's bottom is always
+// exactly anchored to the true tip regardless of how much stroke got
+// omitted above it). Returns `points` unchanged when the feature is off or
+// the chain is too short to safely trim.
+function pointsExcludingTipSegmentShape(points, segLen, thicknessPx){
+  if (!cfg.tipSegmentShapeEnabled || points.length < 3) return points;
+  const shapeHeightPx = (thicknessPx / TIP_SEGMENT_SHAPE.width) * (TIP_SEGMENT_SHAPE.bottomY - TIP_SEGMENT_SHAPE.topY);
+  const segmentsToOmit = Math.min(points.length - 2, Math.max(1, Math.ceil(shapeHeightPx / segLen)));
+  return points.slice(0, points.length - segmentsToOmit);
 }
 
 function renderCutSweep(entity){
@@ -2617,19 +2808,29 @@ function render(){
   fallenPieces.forEach(piece => {
     const tipFactor = emergeFactor(piece.tipEmerge);
     const cutFactor = emergeFactor(piece.cutEdgeEmerge);
-    const tipArcMult = (hasEndcap && tipFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
+    // the shape covers the free/tip end entirely when enabled -- no round-
+    // cap arc treatment needed there anymore, same reasoning as hasEndcap.
+    const tipArcMult = (hasEndcap && tipFactor >= 1) || cfg.tipSegmentShapeEnabled ? 0 : cfg.ropeEndCurveArc;
     const cutArcMult = (hasEndcap && cfg.endcapAtCutEnd && cutFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
-    strokeRopeCurve(piece.points, thickness, cfg.ropeColor, tipArcMult, cutArcMult);
+    const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, thickness);
+    strokeRopeCurve(strokePoints, thickness, cfg.ropeColor, tipArcMult, cutArcMult);
   });
   // mainRope's points[0] is the anchor -- free to move within the circle
-  // now (see constrainAnchorToCircle()), but still never a cut edge or a
-  // growing tip, so no endcap/End-Emerge concept ever applies there. Rope
+  // now (see integrateChain()'s own boundaryConstraint), but still never a
+  // cut edge or a growing tip, so no endcap/End-Emerge concept ever
+  // applies there. Rope
   // Top Curve Arch controls it directly and
   // unconditionally, independent of Rope End Curve Arc (which only ever
   // governed the FAR/free end). The rope is drawn AFTER (on top of) the
   // circle below, so this end is genuinely visible, not hidden underneath
   // it as an earlier version of this comment incorrectly assumed.
-  strokeRopeCurve(mainRope.points, thickness, cfg.ropeColor, mainArcMult, cfg.ropeTopCurveArc);
+  const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, thickness);
+  const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
+  strokeRopeCurve(mainStrokePoints, thickness, cfg.ropeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc);
+  if (cfg.tipSegmentShapeEnabled){
+    fallenPieces.forEach(piece => drawTipSegmentShape(piece.points, thickness, cfg.ropeColor));
+    drawTipSegmentShape(mainRope.points, thickness, cfg.ropeColor);
+  }
   if (hasEndcap){
     fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge)));
     drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, mainTipFactor);
@@ -2703,6 +2904,9 @@ if (DEV_MODE){
   resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 }
 requestAnimationFrame(loop);
+
+window.__debugTMPropo2 = { cfg, mainRope, fallenPieces, update, render, circleAnchor, anchorBoundaryRadius, hitTestRope, hitTestAny, hitTestAnyIgnoringCircle, cutRopeAt, onPointerDown, onPointerUp, emergeFactor, ENDCAP_BOTTOM_Y, ENDCAP_ALIGNMENT };
+
 })();
 </script>
 </body>
