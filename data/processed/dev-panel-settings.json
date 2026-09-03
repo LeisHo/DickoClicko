@@ -9,8 +9,9 @@
     "anchorWeight": 2.8,
     "endcapDesign": "form1-04",
     "endcapHeight": 1.3,
+    "tipSegmentShapeEnabled": false,
     "ropeThickness": 4.8,
-    "ropeLength": 24.23076923076923,
+    "ropeLength": 24.48076923076923,
     "ropeColor": "#a5815f",
     "ropeEndCurveArc": 1,
     "ropeTopCurveArc": 1,
@@ -43,9 +44,23 @@
     "floorEnabled": true,
     "floorColor": "#ffffff",
     "floorThickness": 10,
-    "floorHeight": 6
+    "floorHeight": 6,
+    "introEnabled": true,
+    "introWaitDuration": 1.5,
+    "introRiseSpeed": 35,
+    "introPauseDuration": 0.3
   },
   "order": [
+    {
+      "key": "STARTUP ANIMATION",
+      "collapsed": false,
+      "settings": [
+        "introEnabled",
+        "introWaitDuration",
+        "introRiseSpeed",
+        "introPauseDuration"
+      ]
+    },
     {
       "key": "DEV PANEL",
       "collapsed": true,
@@ -90,6 +105,7 @@
       "key": "ROPE",
       "collapsed": false,
       "settings": [
+        "tipSegmentShapeEnabled",
         "endcapDesign",
         "endcapHeight",
         "ropeThickness",
@@ -167,6 +183,23 @@
     }
   ],
   "panelGeometry": {
+    "mobile": {
+      "left": 81.42857360839844,
+      "top": 10,
+      "width": 320,
+      "height": 761.6607055664062,
+      "style": {
+        "titleFontSize": 13,
+        "tabFontSize": 11,
+        "groupFontSize": 11,
+        "labelFontSize": 11,
+        "opacity": 0.94,
+        "titleColor": "#e8e8f0",
+        "bodyFontSize": 12,
+        "bgColor": "#12121e",
+        "textColor": "#c9c9d8"
+      }
+    },
     "desktop": {
       "left": 1076,
       "top": 4.578125,
@@ -183,7 +216,6 @@
         "bgColor": "#12121e",
         "textColor": "#c9c9d8"
       }
-    },
-    "mobile": null
+    }
   }
 }
