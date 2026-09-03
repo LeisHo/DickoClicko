@@ -1843,3 +1843,35 @@ GOTCHAS
     background color at the circle's edge during `'waiting'` (no stray
     dot) and the exact rope color at the dot's position during
     `'pausing'`.
+- **`detachEntireRopeAndRestartIntro()` (double-click in the circle) is
+  literally "cut the whole rope off, then reuse Boot's own startup
+  sequence" -- no new state machine.** The whole `mainRope.points` array
+  becomes one new `fallenPieces` entry (same `topplePiece()` +
+  `cutEdgeEmerge`/`tipEmerge` convention `performMainRopeSplit()` already
+  uses), `mainRope` is rebuilt via `resetMainRope(vh(TARGET_SEG_LEN_VH))`
+  (the same minimal-starting-rope call Boot makes), and `introPhase` is
+  set back to `'waiting'` -- the existing `updateIntro()`/`render()`
+  gating from the startup animation feature (above) does the rest
+  unmodified, including `onPointerDown()`'s existing `introPhase !==
+  'done'` guard automatically blocking interaction for the whole replay.
+  Wired in at `onPointerUp`'s existing double-click-on-circle branch,
+  replacing `cutRopeAt()` specifically when the resolved target is the
+  rope (a double-click landing on an already-fallen piece is untouched,
+  still a normal `cutPieceAt()`). What initially read as a bug report
+  (from a user testing the live Vercel deployment, whose small
+  `circleSize`/`circleCutDistance`/`minRopeLength` made a correct
+  minimum-length cut's resulting stub nearly invisible against the
+  circle) turned out, once investigated (grep confirming `introPhase`
+  has exactly one `'waiting'` assignment in the whole file, plus a live
+  debug-hook test proving a normal cut leaves a real, pixel-verified,
+  attached stub with no code-level defect), to actually be describing a
+  feature the user wanted -- confirmed directly rather than assumed.
+  Verified live via a temporary debug hook: a real double-click at the
+  circle's center moved the full original rope (9 points) into a new
+  fallen piece, reset `mainRope` to 2 points, set `introPhase` to
+  `'waiting'`, and the sequence correctly replayed end to end (regrown
+  length within the same 1-frame-overshoot tolerance already documented
+  for the startup animation's own growth phase); triggering it a SECOND
+  time produced a second fallen piece and a second full replay,
+  confirming repeatability, with a double-click attempted mid-replay
+  verified as a no-op.

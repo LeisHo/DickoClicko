@@ -676,6 +676,19 @@ assuming it never shipped.
   occurred in the correct order with correct timing, plus pixel-sampling
   confirmed no stray rope/dot pixel during 'waiting' and the correct
   rope-colored pixel at the dot's position during 'pausing'.
+- A report that read like a regression ("double click in the circle...
+  entire length of visible rope falls out... then the startup animation
+  begins... and so on") turned out, after investigation, to be a feature
+  request in disguise -- confirmed directly by the user. Double-clicking
+  in the circle now detaches the WHOLE rope (not a minimum-length partial
+  cut) and replays the startup animation to grow a fresh one in, reusing
+  the exact same state machine and toppling/emerge machinery already
+  built for the startup animation and for a normal cut, respectively (new
+  `detachEntireRopeAndRestartIntro()`, wired into the existing
+  double-click-on-circle handler). Repeatable -- verified via a live
+  double-click dispatched twice in a row, each producing a full fallen
+  piece and a full replay, with interaction correctly blocked for the
+  whole sequence both times.
 
 ## What's next
 

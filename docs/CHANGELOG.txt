@@ -2941,6 +2941,65 @@ Verified:
   instead (a simple, low-risk conditional reusing the already-verified
   setMainRopeTotalLength()), per proportional verification effort.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  02:15 AM - 02:36 AM EDT
+
+User reported what read as a regression right after the startup animation
+shipped: "when I double click in the circle boundary instead of it cutting
+the rope at the minimum length... the entire length of visible rope falls
+out of the hole... rope start becomes unattached... and then after the
+same amount of time as the startup animation, the startup animation
+begins which starts a new rope and so on." Investigated first rather than
+assuming it was a bug: grepped for every assignment to `introPhase` (found
+exactly one 'waiting' assignment, at Boot -- structurally nothing else in
+the app can restart the sequence) and directly invoked the real
+`cutRopeAt()`/`performMainRopeSplit()` path via a temporary debug hook
+against a live server, confirming a normal minimum-length cut still leaves
+a correctly-attached, correctly-rendering (pixel-verified) stub -- no
+code-level bug found. Also caught via `git fetch` that the report was
+against the live Vercel deployment (2 "Update dev-panel-settings.json via
+Save Settings" auto-commits had landed there since this session's last
+push), with real settings (`circleSize: 8%vmin`, `circleCutDistance:
+3%vmin`, `minRopeLength: 0.5%vh`) small enough that a correct
+minimum-length cut leaves a stub just a few px tall, almost entirely
+hidden inside the circle graphic. Asked the user directly (AskUserQuestion)
+whether the page was actually reloading -- they clarified the described
+behavior (full detach + auto-regrow) is not a bug report at all, but a
+feature they want built.
+
+Added:
+- Double-clicking in the circle now detaches the ENTIRE rope (not a
+  minimum-length partial cut) and replays the startup animation to grow a
+  fresh one in, repeatably. New `detachEntireRopeAndRestartIntro()`: the
+  whole `mainRope.points` array becomes a new fallen piece (via the same
+  `topplePiece()`/End-Emerge-state machinery an ordinary cut already
+  uses), `mainRope` resets to Boot's own minimal single-segment starting
+  rope, and `introPhase` is set back to 'waiting' -- reusing the exact
+  same wait/rise/pause/grow sequence and state machine from the startup
+  animation feature, not a parallel implementation. Wired in at
+  `onPointerUp`'s existing double-click-on-circle branch, replacing the
+  `cutRopeAt()` call specifically for a `target.target === 'rope'`
+  resolution; double-clicking an already-fallen piece from the circle is
+  unaffected (still a normal `cutPieceAt()`), matching the original
+  report's own scope (about the live rope specifically).
+
+Verified:
+- node --check clean after every edit.
+- Live, via a temporary debug hook (removed before commit, grep -c
+  confirmed 0 references remain): a real double-click dispatched at the
+  circle's center correctly moved the FULL original rope (all 9 points)
+  into a new fallen piece, reset mainRope to the minimal 2-point starting
+  rope, and set introPhase to 'waiting'; the full replay then correctly
+  regrew the rope back to its configured length (198px vs. an original
+  196px, matching within the same 1-frame-overshoot tolerance already
+  documented for the startup animation's own growth phase). Confirmed
+  repeatability ("and so on"): triggering it a second time correctly
+  produced a second fallen piece and a second full replay. Confirmed
+  interaction is correctly blocked for the whole replay (the existing
+  onPointerDown intro-phase guard applies automatically, since no new
+  guard was needed) -- a double-click attempted mid-sequence was a
+  verified no-op.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

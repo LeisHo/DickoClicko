@@ -1585,6 +1585,31 @@ function updateIntro(rawDt){
   }
 }
 
+// Double-clicking in the circle: the whole rope lets go and falls as one
+// piece (rather than a minimum-length partial cut), then the startup
+// animation replays to grow a fresh one in -- per explicit request. Reuses
+// the exact same fresh-rope/toppling/emerge-state machinery Boot and a
+// normal cut already use, just applied to the ENTIRE points array instead
+// of a slice of it, and re-enters 'waiting' instead of leaving introPhase
+// alone.
+function detachEntireRopeAndRestartIntro(){
+  if (mainRope.points.length >= 2){
+    const fallingPoints = mainRope.points.map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
+    topplePiece(fallingPoints);
+    const piece = { points: fallingPoints, segLen: mainRope.segLen, tipEmerge: mainRope.tipEmerge };
+    // the piece's own free/tip end keeps whatever End Emerge state the
+    // rope's tip already had; its NEW cut edge (former anchor, now
+    // points[0]) starts its own fresh emerge, same convention
+    // performMainRopeSplit() already uses for an ordinary cut.
+    piece.cutEdgeEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
+    fallenPieces.push(piece);
+    if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
+  }
+  resetMainRope(vh(TARGET_SEG_LEN_VH));
+  introPhase = 'waiting';
+  introTimer = 0;
+}
+
 /* ---------------------------------------------------------------------
    Growth / cut / punch actions
 --------------------------------------------------------------------- */
@@ -2224,7 +2249,15 @@ function onPointerUp(e){
       const target = hitTestAnyIgnoringCircle(e.clientX, e.clientY);
       logClick('up:double-click-on-circle', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
       if (target){
-        if (target.target === 'rope') cutRopeAt(target, e.clientX, e.clientY);
+        // Double-clicking in the circle now detaches the WHOLE rope (not a
+        // minimum-length partial cut) and restarts the startup animation to
+        // grow a fresh one in -- per explicit request: "the entire length
+        // of visible rope falls out of the hole... after the same amount of
+        // time as the startup animation, [it] starts a new rope." A double-
+        // click resolving to an already-fallen piece is unaffected (still a
+        // normal partial cutPieceAt) -- this feature is about the live rope
+        // specifically, the same scope as the original report.
+        if (target.target === 'rope') detachEntireRopeAndRestartIntro();
         else cutPieceAt(target.pieceIndex, target, e.clientX, e.clientY);
       }
       return;
