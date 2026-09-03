@@ -3803,3 +3803,57 @@ APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
 old one in place.
+
+2026-09-03  -  08:54 AM - 09:05 AM EDT
+
+Follow-up: user pointed to J:\CLAUDE\PROJECTS\DICKOCLICKO\datalog\ where
+their screen recording actually was (it hadn't reached this session as an
+attachment). Played it directly in a Browser-pane tab via a local <video>
+element (no video-reading tool available), scrubbing with
+currentTime/seeked since there's no way to read frames otherwise.
+
+Found the real root cause of "the back rope i coming from the top or
+something" by watching the recording, not by guessing again: at ~0.95s
+into a fresh startup, a small endcap-shaped blob sits near the TOP of the
+circle, well inside it -- not hanging below the bottom edge as intended.
+Traced this to anchorBoundaryRadius() having circleBoundaryOffset's sign
+backwards relative to its OWN documented comment ("positive shrinks the
+playable interior, negative lets the anchor bulge past the drawn circle's
+own edge"): the formula ADDED the offset, so the live negative default
+(-2) actually SHRANK the radius (8.75%vmin against a 10.75%vmin circle),
+the opposite of "bulge past the edge". This is harmless once the rope has
+grown long enough to hang down and out past the anchor regardless -- but
+during the brief early-growth window, the whole tiny rope+endcap sat
+entirely inside the circle's interior, looking like it emerges from near
+the top.
+
+Fixed by subtracting circleBoundaryOffset instead of adding it, so the
+current negative default now correctly computes a 12.75%vmin radius
+(bulging past the edge) instead of 8.75%vmin (confined inside it).
+Verified 2 ways: (1) a temporary debug hook (removed before commit)
+confirmed the live-computed radius exactly matches the hand-derived
+expected value; (2) the existing "Debug: Show Rise Clear Offset Line"
+checkbox's own boundary circle now visibly bulges past the drawn circle's
+edge instead of sitting entirely inside it -- a genuine visual
+confirmation, not just a number matching another number. This same
+function backs both of the previous 2 rounds' own fixes (the rise-clear-
+offset clamp; the boundary clamp inside integrateChain()) -- neither of
+those was wrong, they were correctly clamping to whatever radius this
+function returned; the radius itself didn't match its own documented
+intent.
+
+Re-confirmed (no change from the last round): Startup Rise Clear Offset's
+positive direction already means inward. Left the user's own live value
+untouched.
+
+node --check clean. Live-verified via a temporary window.__debug hook,
+fully removed before this commit (confirmed via grep). Updated
+docs/CHANGELOG.txt (this entry), docs/CODE_SUMMARY.md (1 new Gotcha).
+Left data/Rope/End_Form1-01.svg (a different concurrent session's own
+active edit) untouched.
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.

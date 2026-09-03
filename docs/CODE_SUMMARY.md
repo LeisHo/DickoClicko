@@ -2349,3 +2349,42 @@ GOTCHAS
   right alongside `resetMainRope()` in this function, matching Boot's
   own pairing) actually closes the gap rather than just plausibly
   sounding like it should.
+- **`anchorBoundaryRadius()` had `circleBoundaryOffset`'s sign backwards
+  relative to its OWN documented intent, confining the anchor to a
+  boundary noticeably SMALLER than the drawn circle at the live default
+  offset -- confirmed by directly reviewing the user's own screen
+  recording, not just reasoning about the formula in the abstract.** The
+  function's own comment: "Circle Offset... positive shrinks the
+  playable interior, negative lets the anchor bulge past the drawn
+  circle's own edge." The formula ADDED `circleBoundaryOffset` to
+  `circleSize/2` -- for the negative default (-2), that SUBTRACTS,
+  shrinking the radius to 8.75%vmin against a 10.75%vmin circle, the
+  opposite of "bulge past the edge". Harmless once the rope has grown
+  long enough to hang down and out past the (unconstrained) anchor
+  regardless of exactly where it sits -- but during the brief early-
+  growth window, while total length is still shorter than the gap
+  between the anchor's overly-confined position and the circle's actual
+  edge, the whole tiny rope+endcap sat entirely INSIDE the circle's
+  interior. Reported as "the back rope i coming from the top or
+  something" -- confirmed by actually watching the user's own recording
+  (played via a local `<video>` element in a Browser-pane tab, seeking
+  frame by frame with `currentTime`/`seeked` since no video-reading tool
+  is available): at ~0.95s into a fresh startup, a small endcap-shaped
+  blob sits near the TOP of the circle, well inside it, nowhere near the
+  bottom edge where the rope is meant to "peek out of a hole in a wall".
+  Fixed by SUBTRACTING `circleBoundaryOffset` instead of adding it, so
+  the current negative default now correctly computes a 12.75%vmin
+  radius (bulging past the circle's own 10.75%vmin edge) instead of
+  8.75%vmin (confined inside it) -- confirmed via a temporary debug hook
+  (removed before commit) that the live-computed radius exactly matches
+  the hand-derived expected value (107.61px measured against 107.61px
+  expected, from `vmin(1) * 12.75` at the test viewport's own actual
+  `vmin(1)`). Also visually confirmed via the existing "Debug: Show Rise
+  Clear Offset Line" checkbox (added 2 rounds ago): its own boundary
+  circle now visibly bulges past the drawn circle's edge instead of
+  sitting entirely inside it. This same function backs BOTH of the
+  previous 2 rounds' own fixes (the rise-clear-offset clamp, and the
+  boundary-clamp inside `integrateChain()` itself) -- neither of those
+  fixes was wrong, they were both correctly clamping to whatever radius
+  this function returned; the radius itself was the part that didn't
+  match its own documented intent.

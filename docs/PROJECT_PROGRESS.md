@@ -870,6 +870,27 @@ assuming it never shipped.
   code change): Startup Rise Clear Offset's positive direction already
   means "inward" -- didn't touch the user's own actively-tuned live
   value.
+- Follow-up: user pointed to the actual screen recording in
+  datalog/ (hadn't reached this session as an attachment). Watched it
+  directly (played in a Browser-pane tab, scrubbed frame by frame) and
+  found the REAL root cause of "the back rope i coming from the top or
+  something": anchorBoundaryRadius() had circleBoundaryOffset's sign
+  backwards relative to its own documented comment ("negative lets the
+  anchor bulge past the drawn circle's own edge") -- the formula ADDED
+  the offset, so the live negative default actually SHRANK the boundary
+  (8.75%vmin against a 10.75%vmin circle) instead of growing it. During
+  the brief early-growth window, the whole tiny rope+endcap sat entirely
+  inside the circle's interior, looking like it emerges from near the
+  top -- confirmed at ~0.95s into the user's own recording. Fixed by
+  subtracting instead of adding, so the current negative default now
+  correctly bulges the boundary past the circle's edge (12.75%vmin).
+  Verified both numerically (a temporary debug hook confirmed the live
+  radius exactly matches the hand-derived expected value) and visually
+  (the existing debug-overlay checkbox's own boundary circle now visibly
+  extends past the drawn circle instead of sitting inside it). This same
+  function backs both of the 2 previous rounds' own fixes -- neither was
+  wrong; the radius they were clamping to just didn't match its own
+  documented intent.
 
 ## What's next
 
