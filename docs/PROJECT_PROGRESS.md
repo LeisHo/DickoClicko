@@ -523,6 +523,22 @@ lost — verified via direct state inspection at the time.
   assumption from the End Emerge round — the anchor end was believed to
   always be hidden under the circle graphic, but the rope actually draws
   ON TOP of the circle, so this is a genuinely visible change.
+- **The rope's base is no longer rigidly pinned to the circle's center.**
+  Per explicit request: it's now a free physics point confined inside the
+  circle by a real, bouncy collision — gravity pulls it to rest at the
+  bottom by default, and a hard flick that sends the rope's far end well
+  above the circle will pull the base up too, up to and including
+  bouncing off the far side and falling back to rest, exactly as
+  described. Found and fixed a real instability along the way (a first
+  implementation attempt caused a permanent ~1.4-1.7x stretch at the
+  anchor segment under repeated stress, since the boundary's position-clamp
+  was overriding the rope's own distance constraint every frame) by moving
+  the clamp into the same iterative solver the rest of the rope's
+  constraints already use. The residual after the fix (~1.29x under an
+  adversarial repeated-stress test, healthy ~0.96x for the actual
+  described single-flick scenario) is the SAME already-documented
+  low-Constraint-Iterations tradeoff visible everywhere else in the rope,
+  not a new bug — see CODE_SUMMARY's Gotchas for the full investigation.
 
 ## What's next
 

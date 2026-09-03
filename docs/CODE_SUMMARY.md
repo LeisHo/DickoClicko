@@ -1301,3 +1301,101 @@ GOTCHAS
   active there); separately regression-checked Rope End Curve Arc's own
   mechanism still works unchanged (r=38.4px = thickness × 2 at the tip,
   `endcapDesign: 'none'`).
+- **`mainRope.points[0]` (the anchor) is no longer rigidly pinned to
+  `circleAnchor()`** -- per explicit request, it's now a free physics
+  point kept inside the circle graphic by a real, bouncy collision, so
+  gravity/momentum affect it exactly like every other point, and it comes
+  to rest at the bottom of the circle by default (no special-casing --
+  just this constraint's own natural equilibrium). `update()`'s old
+  `mainRope.points[0].x = circleAnchor().x; ...y = ...y;` pin is gone;
+  `integrateChain()`'s `pinnedIndex` for mainRope is now `-1` (no pin at
+  all), matching how `fallenPieces` already integrate.
+  - The circular boundary itself is split into TWO separate mechanisms,
+    not one, after a real bug was found and fixed mid-implementation (see
+    below): `integrateChain()` gained an optional `boundaryConstraint`
+    param (`{index, center, radius}`) that clamps that point's POSITION
+    back inside the circle, applied once per solve iteration alongside
+    the existing distance/bend constraints (not as a one-shot post-pass).
+    Separately, `constrainAnchorToCircle()` (called once per frame, right
+    after `integrateChain()`) handles ONLY the bounce -- reflecting the
+    point's implied velocity off the boundary normal (`v' = v -
+    (1+restitution)*(v.n)*n`, `restitution = 0.4`, hardcoded matching the
+    floor collision's own hardcoded 0.3) -- and deliberately never
+    touches position, only `oldx`/`oldy`, and only when the point is
+    genuinely still moving outward at the boundary (`vDotN > 0`); resting
+    contact (most frames, once settled) naturally skips it.
+  - **Why it's split this way, not one function:** the FIRST
+    implementation attempt did the position-clamp AND the bounce together
+    in a single post-pass, called once after `integrateChain()` finished
+    (same shape as the floor collision). This produced a real, measured,
+    PERSISTENT instability -- not a transient stress artifact: a gentle
+    5-round alternating-flick test, replayed with the anchor's own
+    Constraint Iterations (3, the user's live setting), left
+    segment(0,1)'s length ratio permanently elevated at ~1.4-1.7x even
+    after 30 full simulated seconds of otherwise undisturbed settling
+    (confirmed via a 30s timeline sample: flat at ~1.29-1.3x from ~6s
+    onward, never trending toward 1.0), while every OTHER segment settled
+    near a healthy ~1.0-1.1x -- clearly localized to the one segment
+    fighting this constraint. Root cause: unilaterally snapping the point
+    to an EXACT boundary position every frame discards whatever the
+    distance constraint (segment 0-1) had just computed for it, and
+    unlike the floor's collision (which only clamps ONE axis, `y`,
+    leaving `x` fully free for the distance constraint to satisfy segLen
+    through), a CIRCULAR boundary has no spare axis -- clamping position
+    at all necessarily fixes both `x` and `y` simultaneously, leaving the
+    distance constraint nothing to work with. Fixed by moving the
+    position-clamp into the SAME iterative loop the distance/bend
+    constraints already use, so they negotiate a mutually-acceptable
+    position over `constraintIterations` rounds instead of one
+    unconditionally overriding the other -- the same general lesson this
+    project already learned once before with `pileRepulsion` fighting the
+    distance constraint (see that Gotcha above), applied to a new site.
+  - After the fix, the SAME adversarial 5-round test's residual dropped
+    to ~1.29x and PLATEAUS there (confirmed flat via the same 30s
+    timeline) rather than the earlier open-ended-looking elevation --
+    and critically, this residual shrinks monotonically as
+    `constraintIterations` increases (3 → 1.293, 6 → 1.138, 10 → 1.076,
+    20 → 1.033), the EXACT SAME pattern Constraint Iterations already
+    produces everywhere else in the rope (documented directly to the user
+    this session: "fewer iterations = the solver doesn't fully converge
+    each frame... a stretchier, springier, less stable look") -- so this
+    isn't a new class of bug, just the same existing, already-understood,
+    already-user-tunable tradeoff showing up at a site (the anchor) that
+    never had to negotiate anything before. The user's own live
+    Constraint Iterations (3) is a deliberate choice already accepted
+    project-wide; no further change made without their direction.
+  - Verified the actual described scenario directly, not just synthetic
+    stress: a single hard, sustained upward drag of the tip well above
+    the circle (`center.y - R*4`, held 20 frames, then released) showed
+    the anchor point rise cleanly from resting at the bottom
+    (dist=R=32px, below center) up through the center and out the TOP
+    (dist=32px, ABOVE center -- confirmed hitting the exact opposite
+    boundary), held there while the tip stayed forced, then fell back
+    through center and resettled at the bottom after a decaying
+    oscillation -- exactly the user's own described mechanism ("rope
+    start will also move upwards until it hits the other side of the
+    circle, bounces off and falls back down and finds equilibrium at the
+    bottom"). Final settled ratio for this exact scenario: 0.96 (healthy,
+    not the adversarial test's 1.29 -- that residual is specific to
+    rapid, repeated, uninterrupted re-stressing, not normal single-flick
+    usage). Growth and cutting both regression-checked afterward (grew
+    5→14 points cleanly with the anchor still correctly held at the
+    boundary throughout; a mid-rope cut produced a normal fallen piece,
+    no errors) to confirm neither mechanism silently assumed a fixed
+    anchor position anywhere else.
+  - One real test-methodology trap hit and worked around while
+    investigating, worth recording since it wasted real time: calling
+    `resetMainRope()` again from a debug-hook test (after the hook's
+    `mainRope` reference was already captured at page load) silently
+    reassigns the MODULE-LEVEL `mainRope` variable to a brand-new object
+    (`resetMainRope()`'s own `mainRope = {...}` line) -- the debug hook's
+    `mainRope` property still points to the old, now-abandoned object,
+    so every subsequent `d.update()` call correctly simulates the REAL
+    (new) rope while every readback via `d.mainRope` reads the orphaned
+    old one, which never appears to move no matter how many frames run.
+    Same trap doesn't apply when mutating `d.mainRope.points`/other
+    fields in place (the established pattern all session), only when
+    calling a function that REASSIGNS the module-level variable.
+    Confirmed as the actual explanation (not a rendering/physics bug) by
+    re-running the identical test via in-place mutation instead, which
+    immediately showed correct movement.

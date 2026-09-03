@@ -1268,7 +1268,7 @@ function nearestPointOnRope(px, py, points){
   return best;
 }
 
-function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastSegment){
+function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastSegment, boundaryConstraint){
   // skipLastSegment also excludes the growing-tip POINT itself (not just its
   // segment's distance/bend constraints, handled further below) from this
   // basic Verlet step -- positionGrowingTip() places it directly every
@@ -1376,7 +1376,80 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
         b.y += (midY - b.y) * cfg.bendStiffness;
       }
     }
+    // boundaryConstraint ({index, center, radius}): keeps points[index]
+    // inside a circular boundary, e.g. mainRope.points[0] inside the
+    // circle graphic (see constrainAnchorToCircle()'s own comment for the
+    // full feature). Applied EVERY iteration, alongside distance/bend
+    // above, rather than once as a post-pass after the whole solve
+    // finishes -- a post-pass version was tried first and produced a real,
+    // measured, persistent instability: clamping the point to an EXACT
+    // boundary position unilaterally overrides whatever the distance
+    // constraint (segment 0-1) had just computed for it, discarding that
+    // correction every single frame the point rests against the boundary
+    // (confirmed via direct simulation: segment(0,1)'s own length ratio
+    // sat around 1.4-1.7x and never recovered even after 2s of otherwise
+    // undisturbed settling, while every other segment stayed near a
+    // healthy ~1.0-1.1x -- clearly localized to the one segment fighting
+    // this constraint, not a general chain-wide problem). A flat boundary
+    // (the floor) doesn't have this problem because clamping only ONE
+    // axis (y) still leaves x fully free for the distance constraint to
+    // satisfy segLen through; a circular boundary has no such spare axis
+    // -- clamping position at all necessarily fixes BOTH x and y. Solved
+    // the same way the bend-vs-distance interaction two constraints ago
+    // already solves it: let both constraints iterate together
+    // `constraintIterations` times so they can negotiate a position that
+    // reasonably satisfies both, instead of one unconditionally
+    // overriding the other's result.
+    if (boundaryConstraint){
+      const bp = points[boundaryConstraint.index];
+      const bdx = bp.x - boundaryConstraint.center.x, bdy = bp.y - boundaryConstraint.center.y;
+      const bdist = Math.hypot(bdx, bdy) || 1e-6;
+      if (bdist > boundaryConstraint.radius){
+        bp.x = boundaryConstraint.center.x + (bdx / bdist) * boundaryConstraint.radius;
+        bp.y = boundaryConstraint.center.y + (bdy / bdist) * boundaryConstraint.radius;
+      }
+    }
   }
+}
+
+// mainRope.points[0] is no longer rigidly pinned to circleAnchor() -- per
+// explicit request, it's a free physics point kept inside the circle by
+// integrateChain()'s own boundaryConstraint param (see that function's
+// comment -- the actual position-clamping now happens THERE, iteratively,
+// not here). This function's only remaining job is the BOUNCE: reflecting
+// the point's implied velocity off the boundary normal on genuine impact
+// (standard v' = v - (1+restitution)*(v.n)*n, damped by `restitution` so
+// repeated bounces settle rather than oscillating forever), matching the
+// explicit request ("hits the other side of the circle, bounces off and
+// falls back down"). Deliberately does NOT touch p.x/p.y at all -- position
+// is already correct from the iterative solve; only oldx/oldy are adjusted,
+// and only when the point is genuinely at the boundary AND still moving
+// outward (vDotN > 0) at the end of the frame. Resting contact (the point
+// sitting at the boundary with ~0 outward velocity, which is most frames
+// once it settles at the bottom under gravity) naturally skips the
+// reflection entirely -- nothing left to reflect -- which is also exactly
+// what makes it come to rest at the bottom with no special-casing needed
+// for that "default resting position": it's just this system's own
+// equilibrium.
+function constrainAnchorToCircle(){
+  const p = mainRope.points[0];
+  const center = circleAnchor();
+  const R = vmin(cfg.circleSize) / 2;
+  const dx = p.x - center.x, dy = p.y - center.y;
+  const dist = Math.hypot(dx, dy) || 1e-6;
+  if (dist < R - 0.01) return;
+  const nx = dx / dist, ny = dy / dist;
+  const vx = p.x - p.oldx, vy = p.y - p.oldy;
+  const vDotN = vx * nx + vy * ny;
+  if (vDotN <= 0) return;
+  // hardcoded, matching the floor collision's own hardcoded 0.3
+  // bounce-damping constant elsewhere in this same function -- not a dev
+  // slider, same precedent.
+  const restitution = 0.4;
+  const rvx = vx - (1 + restitution) * vDotN * nx;
+  const rvy = vy - (1 + restitution) * vDotN * ny;
+  p.oldx = p.x - rvx;
+  p.oldy = p.y - rvy;
 }
 
 function pileRepulsion(all){
@@ -2060,11 +2133,22 @@ function update(rawDt){
   const dt = rawDt * cfg.ropeAnimSpeed;
   const gravityAccel = vh(90) * cfg.gravityStrength;
 
-  mainRope.points[0].x = circleAnchor().x;
-  mainRope.points[0].y = circleAnchor().y;
+  // mainRope.points[0] (the anchor end) is no longer rigidly pinned to the
+  // circle's center -- per explicit request, it's now a normal physics
+  // point (subject to gravity, and pulled around by the rope's own
+  // swinging motion via the distance/bend constraints, same as every
+  // other point) that's kept inside the circle by integrateChain()'s own
+  // boundaryConstraint param (position, negotiated iteratively alongside
+  // the distance/bend constraints -- see that function's comment for why
+  // a simpler post-pass clamp doesn't work here) plus
+  // constrainAnchorToCircle() (the bounce -- velocity only, called once
+  // after integrateChain() below). pinnedIndex is now -1 (no pin at all),
+  // matching how fallenPieces already integrate.
   if (growing) growRope(rawDt);
   const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
-  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, 0, hasPartialTip);
+  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
+    { index: 0, center: circleAnchor(), radius: vmin(cfg.circleSize) / 2 });
+  constrainAnchorToCircle();
   if (hasPartialTip) positionGrowingTip();
 
   // A Fall Delay > 0 cut hasn't actually split mainRope yet (see
@@ -2484,9 +2568,10 @@ function render(){
     const cutArcMult = (hasEndcap && cfg.endcapAtCutEnd && cutFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
     strokeRopeCurve(piece.points, thickness, cfg.ropeColor, tipArcMult, cutArcMult);
   });
-  // mainRope's points[0] is the anchor -- always pinned to the circle,
-  // never a cut edge or a growing tip, so no endcap/End-Emerge concept
-  // ever applies there. Rope Top Curve Arch controls it directly and
+  // mainRope's points[0] is the anchor -- free to move within the circle
+  // now (see constrainAnchorToCircle()), but still never a cut edge or a
+  // growing tip, so no endcap/End-Emerge concept ever applies there. Rope
+  // Top Curve Arch controls it directly and
   // unconditionally, independent of Rope End Curve Arc (which only ever
   // governed the FAR/free end). The rope is drawn AFTER (on top of) the
   // circle below, so this end is genuinely visible, not hidden underneath

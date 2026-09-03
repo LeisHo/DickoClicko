@@ -2347,6 +2347,106 @@ groups -- direct, real-world confirmation the collapse-state feature from
 same practice as every prior round this session.
 
 --------------------------------------------------------------------------------
+2026-09-02  -  8:16 PM - 8:36 PM EDT
+
+Made the rope's base a free physics point instead of rigidly pinned to
+the circle's center, per an explicit, detailed request: it should rest
+at the bottom of the circle under gravity by default, and be pushed
+around by the rope's own momentum -- including, on a hard enough flick,
+rising to hit and bounce off the far side of the circle before settling
+back at the bottom.
+
+Removed update()'s `mainRope.points[0].x = circleAnchor().x; ...y = ...;`
+hard pin. integrateChain()'s pinnedIndex for mainRope is now -1 (no pin
+at all), matching how fallenPieces already integrate -- so the anchor now
+gets gravity, velocity, and the same distance/bend constraints as every
+other point, letting the rope's own swinging motion genuinely transmit
+force to it via segment(0,1), exactly as described ("when the rope gets
+flicked, the rope start will also feel the effects of that momentum").
+
+Added the circular confinement in two separate pieces, after finding a
+real bug in the first, combined attempt: integrateChain() gained an
+optional boundaryConstraint param ({index, center, radius}) that clamps
+a point's POSITION back inside a circle, applied once per solve
+iteration alongside the existing distance/bend constraints. Separately,
+a new constrainAnchorToCircle() (called once per frame after
+integrateChain()) handles only the BOUNCE -- reflecting the point's
+implied velocity off the boundary normal (v' = v - (1+restitution)*(v.n)*n,
+restitution 0.4, hardcoded matching the floor collision's own hardcoded
+0.3) -- touching only oldx/oldy, never position, and only when the point
+is genuinely still moving outward at the boundary.
+
+Why two pieces, not one: the first implementation did the position-clamp
+and the bounce together in a single post-pass (same shape as the floor
+collision). Verified via direct simulation (a 5-round alternating gentle
+flick test, at the user's own live Constraint Iterations of 3) that this
+produced a REAL, PERSISTENT instability, not a transient stress
+artifact -- segment(0,1)'s length ratio sat at ~1.4-1.7x and never
+recovered even after 30 full simulated seconds of otherwise undisturbed
+settling (confirmed flat via a 30s timeline sample), while every other
+segment settled near a healthy ~1.0-1.1x. Root cause: unconditionally
+snapping the point to an exact boundary position every frame discards
+whatever the distance constraint had just computed for it that same
+frame -- and unlike the floor collision (which only clamps ONE axis, y,
+leaving x fully free for the distance constraint to satisfy segLen
+through), a circular boundary has no spare axis; clamping position at
+all necessarily fixes both x and y simultaneously, leaving the distance
+constraint nothing left to negotiate with. Fixed by moving the
+position-clamp into the SAME iterative loop the distance/bend
+constraints already use, letting all three negotiate a mutually
+acceptable position over multiple rounds instead of one unconditionally
+overriding the other -- the same general lesson this project already
+learned once before with pileRepulsion fighting the distance constraint,
+applied to a new site.
+
+After the fix, the same adversarial test's residual dropped to ~1.29x
+and plateaus there (confirmed via the same 30s timeline) rather than the
+earlier open-ended-looking elevation -- and the residual shrinks
+monotonically as constraintIterations increases (3 -> 1.293, 6 -> 1.138,
+10 -> 1.076, 20 -> 1.033), the exact same pattern Constraint Iterations
+already produces everywhere else in the rope. Concluded this is the
+same pre-existing, already-documented, already-user-tunable tradeoff
+showing up at a site (the anchor) that never had to negotiate anything
+before -- not a new class of bug -- so left the user's own live
+Constraint Iterations (3) untouched rather than silently "fixing" it.
+
+Verified the actual described scenario directly: a single hard, sustained
+upward drag of the tip well above the circle (held 20 frames, then
+released) showed the anchor rise cleanly from resting at the bottom
+(dist=R=32px below center) up through the center and out the TOP
+(dist=32px ABOVE center -- the exact opposite boundary), held there while
+still forced, then fall back through center and resettle at the bottom
+after a decaying oscillation -- precisely the described mechanism. Final
+settled ratio for this exact scenario: 0.96 (healthy) -- the 1.29
+residual is specific to rapid, repeated, uninterrupted re-stressing, not
+normal single-flick usage. Growth and cutting both regression-checked
+afterward (grew 5->14 points cleanly with the anchor correctly held at
+the boundary throughout; a mid-rope cut produced a normal fallen piece,
+no errors).
+
+One real test-methodology trap hit and worked around mid-investigation,
+worth recording since it wasted real time and produced a convincing false
+signal: calling resetMainRope() again from a debug-hook test (after the
+hook's own `mainRope` reference was already captured at page load)
+silently reassigns the MODULE-LEVEL mainRope variable to a brand-new
+object -- the debug hook's own reference still points to the old,
+now-abandoned object, so every subsequent d.update() call correctly
+simulated the REAL (new) rope while every readback via the hook read the
+orphaned old one, which never appeared to move no matter how many frames
+ran (looked exactly like "gravity isn't working at all," a much bigger
+and scarier-looking bug than the real one). Confirmed as a test artifact,
+not a real bug, by re-running the identical test via in-place mutation of
+the existing points array instead (the pattern already established all
+session), which immediately showed correct movement.
+
+node --check clean at every checkpoint. Live-tested via a temporary debug
+hook (window.__debugTMPropo, removed before commit, grep-confirmed 0
+references) against a standalone static server throughout. 0 console
+errors on a confirmed-fresh real page load (only the same stale,
+unrelated ERR_CONNECTION_RESET entries accumulated from earlier
+redundant reload attempts this session, not from index.html).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
