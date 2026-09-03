@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 10,
-    "ropeLength": 3.4615384615384612,
+    "ropeLength": 31.153846153846153,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": false,
     "ropeGradientColors": [
@@ -51,7 +51,7 @@
     "circleCutDistance": 3,
     "clickDistance": 11.4,
     "doubleClickThreshold": 180,
-    "ropeFallSpeed": 1,
+    "ropeFallSpeed": 0.3,
     "cutSpeed": 1.6,
     "endcapAtCutEnd": true,
     "cutSweepColor": "#ffffff",
@@ -77,10 +77,10 @@
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2,
-    "detachPauseDuration": 5,
+    "detachPauseDuration": 20,
     "detachTipStartScale": 0.1,
-    "detachTipGrowDuration": 2.8,
-    "detachThicknessMultiplier": 1.1
+    "detachTipGrowDuration": 3.9,
+    "detachThicknessMultiplier": 1.15
   },
   "order": [
     {
@@ -189,7 +189,7 @@
     },
     {
       "key": "ROPE CUT",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "minRopeLength",
         "circleCutDistance",
@@ -207,7 +207,7 @@
     },
     {
       "key": "END EMERGE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "endEmergeEnabled",
         "endcapStartingScale",
