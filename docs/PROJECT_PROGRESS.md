@@ -770,6 +770,34 @@ assuming it never shipped.
   endcap's own instrumented slide/scale factors confirmed scaling
   genuinely holds at 0 until the slide fully lands (slideFactor=1),
   exactly matching the requested sequencing.
+- A rapid-fire round of 13 requests (full details in CHANGELOG): (1) the
+  startup animation's mainRope now spawns exactly where bgRope's climb
+  ended, then naturally settles via its own physics -- no more jump when
+  the two positions differed. (2-3) Detach-specific endcap start-scale/
+  grow-duration and a compounding Detach Thickness Multiplier (fallen
+  pieces keep whatever thickness they had when they fell, only the live
+  rope/background-rope thicken). (4-6) Damping/End Emerge Speed slider
+  range tweaks. (7) A separate Detach Pause Duration, distinct from the
+  boot-time Startup Pause Duration. (8) Root-caused a reported "endcap
+  emerge takes longer than my delay to see" to the slide phase (from
+  last round's redesign) being visually imperceptible and eating half
+  the animation before the visible growth started -- rebalanced so
+  growth begins almost immediately after the delay. (9-10) The dev panel
+  now re-clamps to the viewport on window resize (not just during a
+  drag), and rows wrap instead of overflowing when resized too narrow.
+  (11) Fallen pieces now decay in thickness over their own independent
+  lifetime, down to a configurable floor. (12) The endcap now shares the
+  SAME gradient as the rope's own stroke (built via the inverse of
+  drawEndcap's own transform, since a gradient object is itself subject
+  to whatever transform is active when painted). (13) The gradient
+  editor was completely rebuilt per direct correction -- no longer an
+  evenly-spaced stop-count-plus-color-pickers control; now a Photoshop-
+  style draggable-position bar where a real click (not a drag) opens a
+  native color picker per stop. Merged this round's own new settings
+  keys against 2 more live-deployment auto-saves that landed mid-round
+  from a concurrent session (`git reset --mixed origin/master` after a
+  manual 3-way merge of the settings file) rather than overwrite either
+  side.
 
 ## What's next
 

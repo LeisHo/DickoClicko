@@ -71,7 +71,11 @@
     flex:0 0 auto; cursor:grab; color:#666; touch-action:none; padding:0 2px;
   }
   .dp-drag-handle:active { cursor:grabbing; }
-  .dp-row { display:flex; align-items:center; gap:6px; padding:3px 2px; }
+  /* wrap, not clip: when the panel is resized narrow enough that a row's
+     control (slider/color-picker/dropdown/gradient) no longer fits next
+     to its label, it drops to its own line beneath the label instead of
+     overflowing/getting cut off -- reported directly. */
+  .dp-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 2px; }
   .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); color:var(--dp-text-color, #c9c9d8); }
   .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:#7d8cff; }
   .dp-num {
@@ -88,10 +92,35 @@
     background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
     padding:2px 4px;
   }
-  .dp-gradient { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:4px; }
-  .dp-gradient-count { display:flex; align-items:center; gap:6px; }
-  .dp-gradient-count input[type=range] { flex:1 1 auto; min-width:0; accent-color:#7d8cff; }
-  .dp-gradient-colors { display:flex; flex-wrap:wrap; gap:4px; }
+  .dp-gradient { flex:1 1 auto; min-width:80px; position:relative; }
+  .dp-gradient-bar {
+    position:relative; height:22px; border:1px solid #3a3a4a; border-radius:4px;
+    /* a faint checkerboard shows through before any stops exist */
+    background-image: linear-gradient(45deg, #2a2a36 25%, transparent 25%),
+      linear-gradient(-45deg, #2a2a36 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #2a2a36 75%),
+      linear-gradient(-45deg, transparent 75%, #2a2a36 75%);
+    background-size:8px 8px; background-position:0 0, 0 4px, 4px -4px, -4px 0px;
+    cursor:copy; touch-action:none;
+  }
+  .dp-gradient-marker {
+    position:absolute; bottom:-1px; width:12px; height:14px; transform:translateX(-50%);
+    cursor:grab; touch-action:none;
+  }
+  .dp-gradient-marker::before {
+    content:''; position:absolute; left:0; right:0; top:2px; bottom:0;
+    background:var(--marker-color, #fff); border:1px solid #12121e; border-radius:2px;
+  }
+  .dp-gradient-marker::after {
+    content:''; position:absolute; left:50%; top:0; transform:translateX(-50%);
+    border-left:5px solid transparent; border-right:5px solid transparent;
+    border-bottom:4px solid #e8e8f0;
+  }
+  .dp-gradient-marker:active { cursor:grabbing; }
+  .dp-gradient-color-input {
+    position:absolute; bottom:-14px; transform:translateX(-50%);
+    width:1px; height:1px; padding:0; border:0; opacity:0; pointer-events:none;
+  }
   .dp-click-log-wrap { border-top:1px solid #33333f; margin-top:4px; }
   .dp-click-log-header {
     padding:7px 2px; display:flex; align-items:center; justify-content:space-between;
@@ -244,9 +273,14 @@ const DEV_GROUPS = [
       onChange: v => { if (mainRope && introPhase === 'done') setMainRopeTotalLength(vh(v)); } },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#a5815f' },
     { key:'ropeGradientEnabled', label:'Rope Gradient Enabled', type:'checkbox', def:false },
-    { key:'ropeGradientColors',  label:'Rope Gradient Colors',  type:'gradient', def:['#a5815f', '#3d2817'] },
+    // Each stop is { pos: 0-1, color: hex } -- position along the gradient
+    // is independently draggable per stop (NOT evenly spaced), per
+    // explicit request ("I want to be able to slide the sliders to
+    // determine where a gradient color kicks in"). See buildRow()'s
+    // 'gradient' case for the actual editor UI.
+    { key:'ropeGradientColors',  label:'Rope Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
     { key:'bgRopeGradientEnabled', label:'Background Rope Gradient Enabled', type:'checkbox', def:false },
-    { key:'bgRopeGradientColors',  label:'Background Rope Gradient Colors',  type:'gradient', def:['#a5815f', '#3d2817'] },
+    { key:'bgRopeGradientColors',  label:'Background Rope Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
     { key:'ropeTopCurveArc',label:'Rope Top Curve Arch',type:'slider', unit:'x',    min:0,   max:3,  step:0.1, def:0.8 },
   ]},
@@ -258,7 +292,7 @@ const DEV_GROUPS = [
     { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0 },
     { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1.2 },
     { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:4.1 },
-    { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.7, max:0.999, step:0.001, def:0.999 },
+    { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.8, max:0.999, step:0.001, def:0.999 },
     { key:'constraintIterations', label:'Constraint Iterations', type:'slider', unit:'x', min:1, max:20, step:1, def:1 },
   ]},
   { title:'ROPE GROWTH', controls:[
@@ -276,12 +310,20 @@ const DEV_GROUPS = [
     { key:'endcapAtCutEnd',  label:'Endcap At Cut End', type:'checkbox', def:true },
     { key:'cutSweepColor',     label:'Cut Sweep Color',     type:'color',  def:'#ffffff' },
     { key:'cutSweepThickness', label:'Cut Sweep Thickness', type:'slider', unit:'%vmin', min:0.1, max:5, step:0.1, def:0.2 },
+    // A fallen piece's OWN thickness decays over its own lifetime, per
+    // explicit request -- independent per piece (each piece tracks its
+    // own age/starting thickness, see performMainRopeSplit()/
+    // performPieceSplit()/detachEntireRopeAndRestartIntro()), never
+    // affecting mainRope/bgRope's own live thickness.
+    { key:'pieceDecayDelay',   label:'Piece Decay Delay',      type:'slider', unit:'s',      min:0, max:10, step:0.1,  def:1 },
+    { key:'pieceDecaySpeed',   label:'Piece Decay Speed',      type:'slider', unit:'%vmin/s', min:0, max:5,  step:0.05, def:0.5 },
+    { key:'pieceMinThickness', label:'Piece Minimum Thickness', type:'slider', unit:'%vmin',  min:0.1, max:10, step:0.1, def:1 },
   ]},
   { title:'END EMERGE', controls:[
     { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:true },
     { key:'endcapStartingScale', label:'Endcap Starting Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.1 },
     { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:1.85 },
-    { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.2, max:5, step:0.1, def:0.54 },
+    { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.02, max:1.5, step:0.01, def:0.54 },
     { key:'endEmergeEasingStrength', label:'End Emerge Easing Strength', type:'slider', unit:'x', min:1, max:6, step:0.1, def:6 },
     { key:'endEmergeTweening', label:'End Emerge Tweening', type:'dropdown', def:'easeInOut',
       options:[
@@ -306,6 +348,14 @@ const DEV_GROUPS = [
     { key:'introExtendSpeed',    label:'Startup Extension Speed',   type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:15 },
     { key:'introExtendSpeedTweenEnabled', label:'Startup Extension Speed Tween Enabled', type:'checkbox', def:false },
     { key:'introExtendStartSpeed', label:'Startup Extension Starting Speed', type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:2 },
+    // Detach = the double-click-in-circle full-rope-detach-and-regrow
+    // sequence (reuses this ENTIRE state machine, see
+    // detachEntireRopeAndRestartIntro()) -- these 4 controls are specific
+    // to THAT trigger, never the original boot-time run.
+    { key:'detachPauseDuration', label:'Detach Pause Duration', type:'slider', unit:'s', min:0, max:5, step:0.1, def:2 },
+    { key:'detachTipStartScale', label:'Detach Endcap Start Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.3 },
+    { key:'detachTipGrowDuration', label:'Detach Endcap Grow Duration', type:'slider', unit:'s', min:0.1, max:5, step:0.1, def:1 },
+    { key:'detachThicknessMultiplier', label:'Detach Thickness Multiplier', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1 },
   ]},
 ];
 
@@ -315,7 +365,12 @@ const cfg = {};
 // would mutate the DEV_GROUPS control's own `def` array in place, so
 // every future reset/reload would silently inherit whatever the LAST
 // live edit happened to leave behind instead of the real default.
-DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = Array.isArray(c.def) ? [...c.def] : c.def));
+// A DEEP clone -- gradient stops are themselves objects ({pos, color}),
+// so a shallow [...arr] copy would still share those inner objects with
+// the DEV_GROUPS default, and dragging a stop's position or picking its
+// color would mutate the shared default in place, same bug the shallow
+// clone above was already written to avoid for the array itself.
+DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = Array.isArray(c.def) ? c.def.map(v => (v && typeof v === 'object') ? { ...v } : v) : c.def));
 
 /* ---------------------------------------------------------------------
    §12i: built-in "Dev Panel" settings group — the panel's own text sizing/
@@ -582,49 +637,104 @@ function buildRow(ctrl){
     row.appendChild(select);
     numEls[ctrl.key] = { type:'dropdown' };
   } else if (ctrl.type === 'gradient') {
-    // "a single slider which takes multiple inputs, each of these inputs
-    // is a color picker" -- a stop-COUNT slider (2-8) followed by that
-    // many color pickers, regenerated whenever the count changes.
-    // cfg[key] holds the plain array of hex strings; the count itself
-    // isn't separately stored, it's just colors.length.
+    // A Photoshop-style gradient bar: each stop is a draggable marker
+    // along the bottom edge (position, NOT evenly spaced -- "I want to
+    // be able to slide the sliders to determine where a gradient color
+    // kicks in"), and clicking a marker (a real click/tap, not a drag)
+    // opens a native color picker for that stop -- per explicit request
+    // and reference image. cfg[key] holds an array of {pos: 0-1, color}
+    // objects, order-independent (always re-sorted before building the
+    // actual canvas gradient -- see ropeStrokeColor()).
     const wrap = document.createElement('div');
     wrap.className = 'dp-gradient';
-    const countRow = document.createElement('div');
-    countRow.className = 'dp-gradient-count';
-    const countSlider = document.createElement('input');
-    countSlider.type = 'range'; countSlider.min = 2; countSlider.max = 8; countSlider.step = 1;
-    const countNum = document.createElement('input');
-    countNum.type = 'text'; countNum.className = 'dp-num';
-    const colorsWrap = document.createElement('div');
-    colorsWrap.className = 'dp-gradient-colors';
+    const bar = document.createElement('div');
+    bar.className = 'dp-gradient-bar';
+    wrap.appendChild(bar);
 
-    function renderColors(colors){
-      colorsWrap.innerHTML = '';
-      colors.forEach((c, i) => {
-        const inp = document.createElement('input');
-        inp.type = 'color'; inp.value = c;
-        inp.addEventListener('input', () => { cfg[ctrl.key][i] = inp.value; });
-        colorsWrap.appendChild(inp);
+    // One hidden native color input, repositioned and reused for
+    // whichever stop is currently being edited -- simpler and lighter
+    // than a separate <input type=color> per stop.
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'dp-gradient-color-input';
+    wrap.appendChild(colorInput);
+    let editingStop = null;
+
+    function sortedStops(){ return [...cfg[ctrl.key]].sort((a, b) => a.pos - b.pos); }
+
+    function renderStops(){
+      const sorted = sortedStops();
+      bar.style.background = sorted.length >= 2
+        ? `linear-gradient(to right, ${sorted.map(s => `${s.color} ${Math.round(Math.max(0, Math.min(1, s.pos)) * 100)}%`).join(', ')})`
+        : (sorted[0] ? sorted[0].color : '#888888');
+      bar.querySelectorAll('.dp-gradient-marker').forEach(m => m.remove());
+      cfg[ctrl.key].forEach(stop => {
+        const marker = document.createElement('div');
+        marker.className = 'dp-gradient-marker';
+        marker.style.left = (Math.max(0, Math.min(1, stop.pos)) * 100) + '%';
+        marker.style.setProperty('--marker-color', stop.color);
+        bar.appendChild(marker);
+        marker.addEventListener('pointerdown', e => {
+          e.stopPropagation();
+          tryCapture(marker, e.pointerId);
+          const barRect = bar.getBoundingClientRect();
+          let dragged = false;
+          function move(ev){
+            dragged = true;
+            stop.pos = Math.max(0, Math.min(1, (ev.clientX - barRect.left) / barRect.width));
+            renderStops();
+          }
+          function up(ev){
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            if (!dragged){
+              // A real click, not a drag -- open the color picker for
+              // this stop rather than treat it as a (no-op) position edit.
+              editingStop = stop;
+              colorInput.value = stop.color;
+              colorInput.style.left = (Math.max(0, Math.min(1, stop.pos)) * 100) + '%';
+              colorInput.click();
+            }
+          }
+          window.addEventListener('pointermove', move);
+          window.addEventListener('pointerup', up);
+        });
+        marker.addEventListener('dblclick', e => {
+          e.stopPropagation();
+          // Never below 2 stops -- a gradient needs at least a start and end.
+          if (cfg[ctrl.key].length > 2){
+            cfg[ctrl.key] = cfg[ctrl.key].filter(s => s !== stop);
+            renderStops();
+          }
+        });
       });
     }
-    function setCount(n){
-      n = Math.max(2, Math.min(8, Math.round(n) || 2));
-      const prev = Array.isArray(cfg[ctrl.key]) ? cfg[ctrl.key] : [...ctrl.def];
-      const colors = prev.slice(0, n);
-      while (colors.length < n) colors.push(colors[colors.length - 1] || '#ffffff');
-      cfg[ctrl.key] = colors;
-      countSlider.value = n; countNum.value = n;
-      renderColors(colors);
-    }
-    countSlider.addEventListener('input', () => setCount(countSlider.value));
-    countNum.addEventListener('change', () => setCount(countNum.value));
-    countNum.addEventListener('keydown', e => { if (e.key === 'Enter') countNum.blur(); });
 
-    countRow.appendChild(countSlider); countRow.appendChild(countNum);
-    wrap.appendChild(countRow); wrap.appendChild(colorsWrap);
+    // Clicking empty bar space (not a marker -- those stop propagation
+    // above) adds a new stop there, seeded with whatever color the
+    // gradient already shows at that position so it doesn't visibly
+    // jump.
+    bar.addEventListener('pointerdown', e => {
+      if (e.target !== bar) return;
+      const barRect = bar.getBoundingClientRect();
+      const frac = Math.max(0, Math.min(1, (e.clientX - barRect.left) / barRect.width));
+      const sorted = sortedStops();
+      let color = sorted.length ? sorted[0].color : '#ffffff';
+      for (let k = 0; k < sorted.length - 1; k++){
+        if (frac >= sorted[k].pos && frac <= sorted[k + 1].pos){ color = sorted[k].color; break; }
+        if (frac >= sorted[k].pos) color = sorted[k].color;
+      }
+      cfg[ctrl.key] = [...cfg[ctrl.key], { pos: frac, color }];
+      renderStops();
+    });
+
+    colorInput.addEventListener('input', () => {
+      if (editingStop){ editingStop.color = colorInput.value; renderStops(); }
+    });
+
     row.appendChild(wrap);
-    numEls[ctrl.key] = { type:'gradient', setCount, renderColors, countSlider, countNum };
-    setCount((ctrl.def && ctrl.def.length) || 2);
+    numEls[ctrl.key] = { type:'gradient', renderStops, setStops: newStops => { cfg[ctrl.key] = newStops.map(s => ({ ...s })); renderStops(); } };
+    renderStops();
   }
   return row;
 }
@@ -661,6 +771,32 @@ function initPanelDrag(){
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   });
+  // §12c clamping only ever fired during an active drag -- resizing the
+  // BROWSER WINDOW itself (e.g. dragging it down to phone width, or a
+  // real device rotation) never triggered a drag, so a panel positioned
+  // fine at a wide viewport could end up with its saved `left`/`top`
+  // now past the new, narrower window's own edge, with nothing to pull
+  // it back -- reported directly ("when i resize my browser to phone
+  // size, the panel will end up out of frame"). Reuses the exact same
+  // clamp formula the drag handler above already uses, just triggered by
+  // `resize` instead of `pointermove`, and also run once immediately (a
+  // saved geometry from a wider device, loaded fresh on a narrower one,
+  // needs the same correction before any resize event ever fires).
+  function clampToViewport(){
+    if (panel.classList.contains('hidden')) return;
+    const r = panel.getBoundingClientRect();
+    const maxLeft = Math.max(0, window.innerWidth - r.width);
+    const maxTop = Math.max(0, window.innerHeight - r.height);
+    const left = Math.max(0, Math.min(maxLeft, r.left));
+    const top = Math.max(0, Math.min(maxTop, r.top));
+    if (left !== r.left || top !== r.top){
+      panel.style.right = 'auto';
+      panel.style.left = left + 'px';
+      panel.style.top = top + 'px';
+    }
+  }
+  window.addEventListener('resize', clampToViewport);
+  clampToViewport();
 }
 
 // §12c: "minimum size is whatever is functionally necessary" -- derived
@@ -800,10 +936,14 @@ function applyValues(values){
       if (select) select.value = v;
       if (ctrl.onChange) ctrl.onChange(v);
     } else if (ctrl.type === 'gradient'){
-      if (el && el.setCount && Array.isArray(v)){
-        cfg[ctrl.key] = [...v];
-        el.setCount(v.length);
-        el.renderColors(cfg[ctrl.key]);
+      if (el && el.setStops && Array.isArray(v) && v.length){
+        // Auto-converts a pre-existing save from the OLD gradient format
+        // (a plain array of hex strings, evenly spaced) to the current
+        // {pos, color} shape, rather than silently doing nothing with it
+        // -- a save from before this round's editor rebuild should still
+        // load correctly, not just get dropped.
+        const stops = typeof v[0] === 'object' ? v : v.map((c, i) => ({ pos: v.length > 1 ? i / (v.length - 1) : 0, color: c }));
+        el.setStops(stops);
       }
     }
   }));
@@ -1627,6 +1767,21 @@ function anchorBoundaryRadius(){
   return Math.max(2, vmin(cfg.circleSize) / 2 + vmin(cfg.circleBoundaryOffset));
 }
 
+// A fallen piece's own rendered thickness at its CURRENT age -- holds at
+// its baseThickness (captured when it was created) until Piece Decay
+// Delay elapses, then decreases at Piece Decay Speed (%vmin/s) down to a
+// floor of Piece Minimum Thickness. Per explicit request: "the speed at
+// which cut off rope segments 'decay'... decrease in rope thickness
+// until they hit the minimum thickness" plus a separate delay before
+// decay starts. Falls back to a piece's own baseThickness unconditionally
+// (no decay math at all) if either field is missing -- defensive only,
+// every real piece-creation site sets both.
+function pieceThickness(piece){
+  if (piece.baseThickness === undefined || piece.age === undefined) return vmin(cfg.ropeThickness);
+  const decaying = Math.max(0, piece.age - cfg.pieceDecayDelay);
+  return Math.max(vmin(cfg.pieceMinThickness), piece.baseThickness - vmin(cfg.pieceDecaySpeed) * decaying);
+}
+
 // Cross-PIECE collision only -- two different fallen pieces push each
 // other apart (so cut-off segments stack or shove each other around
 // instead of freely overlapping, per explicit request), but a piece
@@ -1700,6 +1855,21 @@ let introTargetLengthPx = 0;
 // own 0% point, so progress is measured against how far THIS extension has
 // actually come, not an assumed-fixed starting length.
 let introGrowStartLengthPx = 0;
+// false for the boot-time (page-load) run of this state machine, true for
+// every run triggered by detachEntireRopeAndRestartIntro() -- lets
+// 'pausing' pick Detach Pause Duration instead of Startup Pause Duration.
+// Never reset back to false: once the first detach happens, every LATER
+// 'waiting' in this same page session is also detach-triggered by
+// definition (the only way to re-enter 'waiting' after boot is another
+// detach), so staying true is correct, not stale.
+let introTriggeredByDetach = false;
+// Compounds by cfg.detachThicknessMultiplier on every full-rope detach --
+// "every subsequent time the rope is fully cut, it increases in
+// thickness by [the multiplier]", per explicit request. Applied only to
+// mainRope's and bgRope's own live rendering (see render()'s
+// liveThickness), never to already-fallen pieces, which keep whatever
+// thickness they had at the moment they existed.
+let ropeThicknessMultiplier = 1;
 
 // The rate growRope() extends at during the startup animation's own
 // 'growing' phase -- either a flat Startup Extension Speed, or (when
@@ -1761,13 +1931,31 @@ function updateIntro(rawDt){
       bgRope.points[0].y = clearY;
       introPhase = 'pausing';
       introTimer = 0;
+      // mainRope "spawns" exactly where bgRope's climb just ended -- no
+      // jump -- then, from this frame on, mainRope's own already-running
+      // physics (the same boundaryConstraint every other frame already
+      // uses) naturally settles it toward wherever it actually wants to
+      // rest, exactly like a real drop rather than a teleport. Per
+      // explicit request: "the main rope [will] start with the rope
+      // start at background rope's rope start... will then naturally
+      // fall back to its default position. There will not be a sudden
+      // jump." oldx/oldy are set equal to x/y (zero implied velocity) so
+      // the following frame's integration doesn't compute a spurious
+      // "teleport" velocity from wherever mainRope's own anchor had
+      // independently drifted to while hidden during waiting/rising.
+      mainRope.points[0].x = bgRope.points[0].x;
+      mainRope.points[0].y = bgRope.points[0].y;
+      mainRope.points[0].oldx = mainRope.points[0].x;
+      mainRope.points[0].oldy = mainRope.points[0].y;
       // bgRope resumes following mainRope's own anchor from here on (see
       // update()'s own bgRope sync) -- rebuild it HERE, at the moment of
       // that handoff, both for the usual race-avoidance reason (locks its
       // fixed length in against the real settings-loaded Rope Length, not
       // a possible pre-load default) and so the rebuild's own reset-to-
       // circleAnchor() happens at a point we immediately correct, rather
-      // than causing a visible snap later mid-pause or mid-growth.
+      // than causing a visible snap later mid-pause or mid-growth. Synced
+      // to mainRope's NEW spawn position (set just above), so bgRope
+      // doesn't jump either.
       resetBgRope();
       bgRope.points[0].x = mainRope.points[0].x;
       bgRope.points[0].y = mainRope.points[0].y;
@@ -1776,7 +1964,14 @@ function updateIntro(rawDt){
     }
   } else if (introPhase === 'pausing'){
     introTimer += rawDt;
-    if (introTimer >= cfg.introPauseDuration){
+    // Boot's own (first-ever) startup animation uses Startup Pause
+    // Duration; a double-click-triggered full detach (see
+    // detachEntireRopeAndRestartIntro()) reuses this ENTIRE state
+    // machine but pauses for its own, separately-tunable Detach Pause
+    // Duration instead -- per explicit request ("give me a duplicate,
+    // but this is the pause for when the rope is fully cut").
+    const pauseDuration = introTriggeredByDetach ? cfg.detachPauseDuration : cfg.introPauseDuration;
+    if (introTimer >= pauseDuration){
       // Captured HERE, not at boot -- by this point (wait + rise + pause,
       // several seconds in) any async settings load has long since
       // resolved, so this is guaranteed to be the real configured target,
@@ -1805,7 +2000,11 @@ function detachEntireRopeAndRestartIntro(){
   if (mainRope.points.length >= 2){
     const fallingPoints = mainRope.points.map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
     topplePiece(fallingPoints);
-    const piece = { points: fallingPoints, segLen: mainRope.segLen, tipEmerge: mainRope.tipEmerge };
+    // Captured BEFORE ropeThicknessMultiplier compounds further below --
+    // this piece is the OLD rope, falling at whatever thickness it
+    // actually had, not the NEW (about to be thicker) one the fresh
+    // regrowth will use.
+    const piece = { points: fallingPoints, segLen: mainRope.segLen, tipEmerge: mainRope.tipEmerge, age: 0, baseThickness: vmin(cfg.ropeThickness) * ropeThicknessMultiplier };
     // the piece's own free/tip end keeps whatever End Emerge state the
     // rope's tip already had; its NEW cut edge (former anchor, now
     // points[0]) starts its own fresh emerge, same convention
@@ -1815,6 +2014,17 @@ function detachEntireRopeAndRestartIntro(){
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
   resetMainRope(vh(TARGET_SEG_LEN_VH));
+  // The fresh rope's own tip endcap starts scaled down and grows back to
+  // normal size over Detach Endcap Grow Duration -- per explicit request
+  // ("the end cap at the rope end will not be at full height... within a
+  // duration of time that endcap grows back to normal size"). Deliberately
+  // NOT the End Emerge system (that's delay+slide+scale for CUT edges);
+  // this is its own simple linear scale-up tied to the detach-and-regrow
+  // sequence specifically, undefined (-> full size, current/original
+  // behavior) for the very first boot-time rope, which never sets this.
+  mainRope.detachTipScaleProgress = 0;
+  introTriggeredByDetach = true;
+  ropeThicknessMultiplier *= cfg.detachThicknessMultiplier;
   introPhase = 'waiting';
   introTimer = 0;
 }
@@ -2225,7 +2435,13 @@ function performMainRopeSplit(idx){
     // actually falling, which is also the only instant toppling makes
     // physical sense (a still-attached piece has no reason to tumble).
     topplePiece(lowerPoints);
-    const piece = { points: lowerPoints, segLen: mainRope.segLen, tipEmerge: null };
+    // age/baseThickness drive this piece's own independent thickness
+    // decay (see pieceThickness()) -- baseThickness captures mainRope's
+    // real live thickness AT THE MOMENT of falling (including whatever
+    // Detach Thickness Multiplier has already compounded), so a piece
+    // that falls off a thickened rope starts decaying from that real
+    // thickness, not the plain unmultiplied default.
+    const piece = { points: lowerPoints, segLen: mainRope.segLen, tipEmerge: null, age: 0, baseThickness: vmin(cfg.ropeThickness) * ropeThicknessMultiplier };
     // the new piece's OWN near/cut edge (points[0]) is its own fresh cut
     // edge -- separate End Emerge state from mainRope's tipEmerge above,
     // since it's a different entity's different end.
@@ -2278,7 +2494,15 @@ function performPieceSplit(piece, idx){
   piece.tipEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
   if (lowerPoints.length >= 2){
     topplePiece(lowerPoints);
-    const newPiece = { points: lowerPoints, segLen: piece.segLen, tipEmerge: null };
+    // The new lower half starts its OWN fresh decay from `piece`'s
+    // CURRENT thickness (not the plain default) -- it's splitting off a
+    // piece that may already be partway through its own decay, so the
+    // split-off half should visually continue from there, not reset to
+    // full thickness. `piece` itself (the upper, identity-keeping half)
+    // keeps its own existing age/baseThickness untouched -- it's the
+    // same continuous piece, just shorter now, so its decay timeline
+    // doesn't restart.
+    const newPiece = { points: lowerPoints, segLen: piece.segLen, tipEmerge: null, age: 0, baseThickness: pieceThickness(piece) };
     newPiece.cutEdgeEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
     fallenPieces.push(newPiece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
@@ -2605,6 +2829,14 @@ function update(rawDt){
   integrateChain(bgRope.points, bgRope.segLen, dt, gravityAccel, 0);
   maintainBgRopeEnd();
 
+  // Detach-triggered tip endcap scale-up (see detachEntireRopeAndRestartIntro())
+  // -- a simple linear ramp, deliberately separate from the End Emerge
+  // system. undefined (the boot-time rope never sets this) means "always
+  // full size", the pre-existing behavior.
+  if (mainRope.detachTipScaleProgress !== undefined && mainRope.detachTipScaleProgress < 1){
+    mainRope.detachTipScaleProgress = Math.min(1, mainRope.detachTipScaleProgress + rawDt / cfg.detachTipGrowDuration);
+  }
+
   // A Fall Delay > 0 cut hasn't actually split mainRope yet (see
   // cutRopeAt's pendingCut) -- it just integrated as one whole chain above,
   // identically to an uncut rope. Once the countdown elapses, perform the
@@ -2644,6 +2876,7 @@ function update(rawDt){
 
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeFallSpeed;
   fallenPieces.forEach(piece => {
+    if (piece.age !== undefined) piece.age += rawDt;
     integrateChain(piece.points, piece.segLen, dt, fallGravity, -1);
     // A piece-on-piece cut (cutPieceAt) hasn't actually split `piece` yet
     // -- same pendingCut deferral as mainRope's, checked after this
@@ -2732,11 +2965,18 @@ function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult){
 // a CanvasGradient exactly like a string, so every existing caller of
 // strokeRopeCurve()/drawEndcap()/etc. needs no change beyond passing this
 // through instead of a raw color.
-function ropeStrokeColor(points, enabled, colors, fallbackColor){
-  if (!enabled || !colors || colors.length < 2) return fallbackColor;
+function ropeStrokeColor(points, enabled, stops, fallbackColor){
+  if (!enabled || !stops || stops.length < 2) return fallbackColor;
   const top = points[0], bottom = points[points.length - 1];
   const grad = ctx.createLinearGradient(top.x, top.y, bottom.x, bottom.y);
-  colors.forEach((c, i) => grad.addColorStop(i / (colors.length - 1), c));
+  // Each stop's own `pos` (0-1, independently draggable -- see
+  // buildRow()'s 'gradient' editor) decides where it kicks in, NOT an
+  // even 1/(n-1) spacing -- per explicit request. addColorStop() itself
+  // requires an ascending-order sequence of calls; stops are sorted by
+  // pos here rather than trusted to already be in order (the editor
+  // keeps them sorted as stored, but this is what actually enforces it
+  // for the gradient itself).
+  [...stops].sort((a, b) => a.pos - b.pos).forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
   return grad;
 }
 
@@ -2995,7 +3235,27 @@ function tipDirection(points){
   return { x: dx / len, y: dy / len };
 }
 
-function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
+// gradientInfo: optional { colors, worldTop } -- when present (and the
+// relevant Rope/Background Rope Gradient checkbox is on), the endcap
+// fills with the SAME gradient the rope's own stroke uses (same colors,
+// same world-space anchor-to-tip span), not a separately-computed one,
+// so there's no visible seam where the rope's own color ends and the
+// endcap's begins -- "the gradient applies to both the rope and the
+// endcap such that it is one consistent gradient", per explicit request.
+// Built using LOCAL coordinates (the current point's position under the
+// inverse of the CTM active at this point in the transform stack, via
+// ctx.getTransform()) rather than a gradient object created in world
+// space and reused here -- a gradient's own stored coordinates are
+// themselves subject to whatever transform is active when it's PAINTED
+// (same as the path it colors), so a world-space gradient built outside
+// drawEndcap's own translate/rotate/scale would get transformed a SECOND
+// time and land in the wrong place entirely. Mapping the same 2 world
+// points (rope anchor -> tip, identical to ropeStrokeColor()'s own pair)
+// through the inverse CTM first means the gradient renders in exactly
+// the same world position the rope's own stroke gradient already
+// occupies, regardless of the endcap's current rotation/scale/slide
+// position.
+function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, gradientInfo){
   const design = ENDCAP_DESIGNS[designKey];
   if (!design) return;
   if (factor === undefined) factor = 1;
@@ -3010,15 +3270,20 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
   // Sequential, not simultaneous, per explicit request ("instead of
   // simultaneously rescaling the endcap back up, the rescaling only
   // begins once the endcap top edge has aligned with the rope end"):
-  // the first half of `factor` (0->0.5, remapped to 0->1) slides the
-  // hidden endcap down to the tip at a CONSTANT (starting) scale;
-  // only once that slide has fully landed does the second half
-  // (0.5->1) begin scaling it up to full size. Both phases still run
-  // off the same single End Emerge Delay/Speed/Easing timeline -- no
-  // new duration controls needed, they're just sequenced within it now
-  // instead of interpolated together.
-  const slideFactor = Math.min(1, factor * 2);
-  const scaleFactor = Math.max(0, Math.min(1, (factor - 0.5) * 2));
+  // the SLIDE_SHARE of `factor` slides the hidden endcap down to the tip
+  // at a CONSTANT (starting) scale; only once that slide has fully
+  // landed does the rest begin scaling it up to full size. A tiny,
+  // rope-colored endcap sliding along the rope reads as essentially
+  // invisible against the rope's own body -- an even 50/50 split (the
+  // original implementation) meant the visibly-obvious part (growth)
+  // didn't start until HALF the total configured duration had already
+  // passed, which read as "waiting longer than my delay to see the
+  // animation" (reported directly). SLIDE_SHARE is deliberately small so
+  // the (largely invisible) slide resolves quickly and nearly all of the
+  // configured duration goes to the part that's actually visible.
+  const SLIDE_SHARE = 0.15;
+  const slideFactor = Math.min(1, factor / SLIDE_SHARE);
+  const scaleFactor = Math.max(0, Math.min(1, (factor - SLIDE_SHARE) / (1 - SLIDE_SHARE)));
   const yScale = startYScale + (normalScale - startYScale) * scaleFactor;
   // The hidden endcap starts exactly ONE full natural design-height up
   // the rope from the tip -- "it will be up the rope exactly the height
@@ -3060,7 +3325,16 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
   // applied.
   ctx.scale(normalScale, yScale * heightMult);
   ctx.translate(-ENDCAP_ALIGNMENT.topCenterX, -anchorY);
-  ctx.fillStyle = color;
+  if (gradientInfo && gradientInfo.stops && gradientInfo.stops.length >= 2){
+    const inv = ctx.getTransform().inverse();
+    const localTop = inv.transformPoint(gradientInfo.worldTop);
+    const localBottom = inv.transformPoint(tip);
+    const grad = ctx.createLinearGradient(localTop.x, localTop.y, localBottom.x, localBottom.y);
+    [...gradientInfo.stops].sort((a, b) => a.pos - b.pos).forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    ctx.fillStyle = grad;
+  } else {
+    ctx.fillStyle = color;
+  }
   ctx.fill(design.path);
   ctx.restore();
 }
@@ -3181,6 +3455,14 @@ function render(){
   ctx.fill();
 
   const thickness = vmin(cfg.ropeThickness);
+  // mainRope's and bgRope's own LIVE thickness, distinct from the plain
+  // `thickness` above (which fallenPieces keep using) -- compounds by
+  // Detach Thickness Multiplier every time the whole rope is fully cut
+  // (see detachEntireRopeAndRestartIntro()), per explicit request: "every
+  // subsequent time the rope is fully cut, it increase[s] in thickness".
+  // Already-fallen pieces deliberately keep whatever thickness they had
+  // at the moment they existed, rather than retroactively thickening.
+  const liveThickness = thickness * ropeThicknessMultiplier;
   // Background "peeking" rope: a second, non-interactive chain whose own
   // anchor is forced to follow mainRope's real anchor every frame (see
   // update()) -- "the only factor driving its movement is the movement of
@@ -3200,7 +3482,7 @@ function render(){
     ctx.beginPath();
     ctx.arc(anchor.x, anchor.y, vmin(cfg.circleSize) / 2, 0, Math.PI * 2);
     ctx.clip();
-    strokeRopeCurve(bgRope.points, thickness, ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor), cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+    strokeRopeCurve(bgRope.points, liveThickness, ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor), cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
     ctx.restore();
   }
   // an SVG endcap replaces the plain round cap entirely (drawn separately,
@@ -3223,8 +3505,12 @@ function render(){
     // cap arc treatment needed there anymore, same reasoning as hasEndcap.
     const tipArcMult = (hasEndcap && tipFactor >= 1) || cfg.tipSegmentShapeEnabled ? 0 : cfg.ropeEndCurveArc;
     const cutArcMult = (hasEndcap && cfg.endcapAtCutEnd && cutFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
-    const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, thickness);
-    strokeRopeCurve(strokePoints, thickness, cfg.ropeColor, tipArcMult, cutArcMult);
+    // Each fallen piece renders at its OWN current (possibly decayed)
+    // thickness -- see pieceThickness() -- never mainRope/bgRope's live
+    // (possibly Detach-Thickness-Multiplier-boosted) thickness.
+    const pieceThick = pieceThickness(piece);
+    const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
+    strokeRopeCurve(strokePoints, pieceThick, cfg.ropeColor, tipArcMult, cutArcMult);
   });
   // mainRope's points[0] is the anchor -- free to move within the circle
   // now (see integrateChain()'s own boundaryConstraint), but still never a
@@ -3242,16 +3528,23 @@ function render(){
   // 'growing' starts (or immediately, when the animation is off/done),
   // mainRope draws exactly as it always has, no different code path.
   const showMainRope = introPhase === 'done' || introPhase === 'growing';
-  const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, thickness);
+  const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, liveThickness);
   const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
-  if (showMainRope) strokeRopeCurve(mainStrokePoints, thickness, ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor), mainEffectiveArcMult, cfg.ropeTopCurveArc);
+  if (showMainRope) strokeRopeCurve(mainStrokePoints, liveThickness, ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor), mainEffectiveArcMult, cfg.ropeTopCurveArc);
   if (cfg.tipSegmentShapeEnabled){
-    fallenPieces.forEach(piece => drawTipSegmentShape(piece.points, thickness, cfg.ropeColor));
-    if (showMainRope) drawTipSegmentShape(mainRope.points, thickness, cfg.ropeColor);
+    fallenPieces.forEach(piece => drawTipSegmentShape(piece.points, pieceThickness(piece), cfg.ropeColor));
+    if (showMainRope) drawTipSegmentShape(mainRope.points, liveThickness, cfg.ropeColor);
   }
   if (hasEndcap){
-    fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge)));
-    if (showMainRope) drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, mainTipFactor);
+    fallenPieces.forEach(piece => drawEndcap(piece.points, pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge)));
+    // detachScale: 1 for the boot-time rope (detachTipScaleProgress never
+    // set) or once its own grow-back has finished; otherwise blends from
+    // Detach Endcap Start Scale up to 1 as detachTipScaleProgress rises --
+    // see detachEntireRopeAndRestartIntro()/update()'s own tick.
+    const detachScale = mainRope.detachTipScaleProgress === undefined ? 1
+      : cfg.detachTipStartScale + (1 - cfg.detachTipStartScale) * mainRope.detachTipScaleProgress;
+    const mainGradientInfo = cfg.ropeGradientEnabled ? { stops: cfg.ropeGradientColors, worldTop: mainRope.points[0] } : null;
+    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight * detachScale, mainTipFactor, mainGradientInfo);
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
     // points array before reusing drawEndcap() puts that cut point at
@@ -3268,7 +3561,7 @@ function render(){
       // cutEdgeEmerge (separate from tipEmerge above) governs how far
       // along ITS emergence is.
       fallenPieces.forEach(piece => {
-        drawEndcap([...piece.points].reverse(), thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.cutEdgeEmerge));
+        drawEndcap([...piece.points].reverse(), pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.cutEdgeEmerge));
       });
     }
   }

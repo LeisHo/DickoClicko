@@ -15,13 +15,25 @@
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": false,
     "ropeGradientColors": [
-      "#a5815f",
-      "#3d2817"
+      {
+        "pos": 0,
+        "color": "#a5815f"
+      },
+      {
+        "pos": 1,
+        "color": "#3d2817"
+      }
     ],
     "bgRopeGradientEnabled": false,
     "bgRopeGradientColors": [
-      "#a5815f",
-      "#3d2817"
+      {
+        "pos": 0,
+        "color": "#a5815f"
+      },
+      {
+        "pos": 1,
+        "color": "#3d2817"
+      }
     ],
     "ropeEndCurveArc": 1,
     "ropeTopCurveArc": 0.8,
@@ -61,7 +73,14 @@
     "introPauseDuration": 0.4,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
-    "introExtendStartSpeed": 2
+    "introExtendStartSpeed": 2,
+    "detachPauseDuration": 2,
+    "detachTipStartScale": 0.3,
+    "detachTipGrowDuration": 1,
+    "detachThicknessMultiplier": 1,
+    "pieceDecayDelay": 1,
+    "pieceDecaySpeed": 0.5,
+    "pieceMinThickness": 1
   },
   "order": [
     {
@@ -75,7 +94,11 @@
         "introWaitDuration",
         "introRiseSpeed",
         "introRiseClearOffset",
-        "introPauseDuration"
+        "introPauseDuration",
+        "detachPauseDuration",
+        "detachTipStartScale",
+        "detachTipGrowDuration",
+        "detachThicknessMultiplier"
       ]
     },
     {
@@ -176,7 +199,10 @@
         "cutSpeed",
         "endcapAtCutEnd",
         "cutSweepColor",
-        "cutSweepThickness"
+        "cutSweepThickness",
+        "pieceDecayDelay",
+        "pieceDecaySpeed",
+        "pieceMinThickness"
       ]
     },
     {

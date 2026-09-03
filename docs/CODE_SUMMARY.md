@@ -2055,3 +2055,68 @@ GOTCHAS
   permanent, unrecoverable freeze rather than a single bad frame) -- a
   real, generally-applicable resilience improvement, kept independent of
   whatever specific exception triggers it.
+- **A CanvasGradient's own stored coordinates are subject to whatever
+  transform is active when it's PAINTED, not when it was created --**
+  drawEndcap()'s own gradient (rope+endcap "one consistent gradient")
+  has to account for this or it renders in completely the wrong place.
+  drawEndcap() runs its fill deep inside its own `translate(tip)` /
+  `rotate(angle)` / `scale(normalScale, yScale*heightMult)` /
+  `translate(-topCenterX,-anchorY)` stack; a gradient built with WORLD
+  coordinates (e.g. mainRope's own anchor-to-tip span, matching
+  ropeStrokeColor()'s gradient exactly) and then used as `fillStyle`
+  INSIDE that stack gets transformed a SECOND time by it, landing
+  nowhere near the rope's own gradient. Fixed by mapping the same 2
+  world points through the INVERSE of the CTM active at that point
+  (`ctx.getTransform().inverse().transformPoint(worldPoint)`) to get
+  LOCAL coordinates, then building `createLinearGradient` from those --
+  since the gradient and the `design.path` it colors now live in the
+  same local space, the SAME forward transform that correctly places
+  the path also correctly places the gradient, landing it in exactly
+  the world position the rope's own stroke gradient already occupies.
+- **The gradient dev-panel control (`type:'gradient'`) went through 2
+  designs this session -- the current one is a Photoshop-style
+  draggable bar, NOT the original stop-count-slider-plus-N-color-
+  pickers version.** Direct correction: "I dont want gradients equally
+  spaced. I want to be able to slide the sliders to determine where a
+  gradient color kicks in... clickable... opens color picker ui".
+  `cfg[key]` is an array of `{pos: 0-1, color}` objects (order-
+  independent -- always re-sorted by `pos` before building the real
+  canvas gradient, both in `ropeStrokeColor()` and `drawEndcap()`'s
+  gradientInfo path). The editor itself (`buildRow()`'s 'gradient'
+  case): one shared hidden `<input type=color>` per row, repositioned
+  and reused for whichever stop is currently being edited (not one
+  color input per stop) -- opened via `.click()` only when a marker's
+  own pointerdown+pointerup resolve to the SAME position (a real click,
+  tracked via a `dragged` flag set the instant `pointermove` fires
+  during that press) rather than a drag. Clicking empty bar space adds
+  a new stop, color-interpolated from the gradient's own current value
+  at that position; double-clicking a marker removes it, floored at 2
+  stops (a gradient needs a start and end). A settings file saved under
+  the OLD plain-hex-array format still loads correctly: `applyValues()`'s
+  own gradient case checks `typeof v[0]` and auto-converts a plain array
+  of hex strings to evenly-spaced `{pos,color}` stops before handing it
+  to `el.setStops()` -- caught as a real gap while writing this note
+  (the original implementation would have silently done nothing with an
+  old-format array, since `el.setStops` expects objects) and fixed
+  before shipping, not left as a known limitation.
+- **A fallen piece's own thickness decay is fully independent per
+  piece, not a single global timer.** Each piece created via
+  `performMainRopeSplit()`, `performPieceSplit()`, or
+  `detachEntireRopeAndRestartIntro()` gets its own `age` (ticked by
+  `rawDt` every frame in `update()`'s existing fallenPieces loop) and
+  `baseThickness` (captured once, at the moment it fell, from
+  mainRope's/the parent piece's REAL live thickness at that instant --
+  including whatever Detach Thickness Multiplier had already
+  compounded, so a piece that falls off an already-thickened rope
+  starts decaying from that real thickness, not the plain unmultiplied
+  default). `pieceThickness(piece)` computes the current value fresh
+  each render call: holds at `baseThickness` until `age` exceeds Piece
+  Decay Delay, then decreases at Piece Decay Speed (%vmin/s) down to a
+  floor of Piece Minimum Thickness. The "upper" half of a piece-on-piece
+  cut (`performPieceSplit()`'s `piece` itself, which keeps its identity)
+  deliberately does NOT get a fresh age/baseThickness -- it's the same
+  continuous piece, just shorter, so its decay timeline doesn't restart;
+  only the newly-split-off lower half starts fresh, seeded from the
+  parent's CURRENT (possibly already-decayed) thickness via
+  `pieceThickness(piece)` at the moment of the split, so the split-off
+  piece doesn't visually jump back to full thickness.

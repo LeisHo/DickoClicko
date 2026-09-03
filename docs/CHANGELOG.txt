@@ -3319,6 +3319,151 @@ the real root cause above). Committed only
 data/processed/dev-panel-settings.json + these doc updates -- index.html
 itself needed no commit from this session, per the attribution note above.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  04:51 AM - 05:18 AM EDT
+
+A rapid-fire round of 13 distinct requests, most arriving mid-turn while
+earlier ones were still being implemented -- listed in the order they
+landed:
+
+1. Startup animation: no-jump handoff. When bgRope's climb reaches the
+   clear-boundary threshold, mainRope's own anchor now SPAWNS exactly at
+   that same point (previously it independently settled to its own
+   resting position during 'waiting'/'rising', then bgRope snapped to
+   THAT position at the handoff -- a visible jump whenever the two
+   differed). mainRope's own physics (already running every frame) then
+   naturally settles it toward its real equilibrium afterward -- a real
+   physical fall, not a teleport. Verified live: a real cycle showed a
+   smooth 7-frame settle curve (155.9 -> 185.4 -> 188.1 -> ... -> 214px),
+   not a discontinuous jump.
+2. Detach endcap start-scale + grow duration: after a full-rope detach
+   (double-click in the circle), the fresh rope's own tip endcap now
+   starts scaled down (new Detach Endcap Start Scale slider) and grows
+   to normal size over a new Detach Endcap Grow Duration -- deliberately
+   NOT the End Emerge system (delay+slide+scale, for CUT edges); a
+   simple linear ramp specific to this sequence, undefined (full size)
+   for the original boot-time rope.
+3. Detach Thickness Multiplier: compounds on every full-rope detach --
+   "every subsequent time the rope is fully cut, it increases in
+   thickness by [the multiplier]". New module-level
+   ropeThicknessMultiplier, applied only to mainRope's/bgRope's own live
+   rendering (new `liveThickness`, distinct from the plain `thickness`
+   fallenPieces keep using). Verified: 1 -> 1.5 -> 2.25 across 2 detaches
+   with the multiplier set to 1.5, exact compounding.
+4. Damping's slider minimum raised 0.7 -> 0.8.
+5. End Emerge Speed's slider maximum lowered 5 -> 1.5.
+6. End Emerge Speed's slider minimum lowered 0.2 -> 0.02 ("0.1 still
+   isnt slow enough. i want it at least 5x slower").
+7. Detach Pause Duration: a duplicate of Startup Pause Duration, used
+   specifically when the intro state machine is re-entered via a full
+   detach rather than the original page-load boot -- new
+   introTriggeredByDetach flag (set once, on the first detach, and never
+   reset -- every later 'waiting' in the same session is detach-
+   triggered by definition) picks which duration 'pausing' waits for.
+8. Endcap-emerge timing investigation ("are you sure the endcap is right
+   under the rope end line? ...i have to wait for longer than my end
+   emerge delay to see the animation"): instrumented the real
+   factor/slideFactor/scaleFactor progression on a live cut and found
+   the position math was already correct, but the 50/50 slide/scale
+   split from the previous round meant the visually-obvious part
+   (growth) didn't start until HALF the total configured duration had
+   passed -- a tiny, rope-colored endcap sliding into place reads as
+   essentially invisible, so that whole first half felt like "nothing is
+   happening" on top of the real delay. Fixed by rebalancing to a small
+   SLIDE_SHARE (15%) so the slide resolves quickly and nearly all of the
+   configured duration goes to the part that's actually visible.
+9. Dev panel: clamped to the browser viewport on WINDOW RESIZE, not just
+   during an active drag ("when i resize my browser to phone size, the
+   panel will end up out of frame"). The existing §12c drag-time clamp
+   formula never fired on a resize event (only on pointermove during a
+   drag), so a panel positioned fine at a wide viewport could end up
+   with its saved left/top past a newly-narrow window's edge with
+   nothing to pull it back. New clampToViewport(), reusing the same
+   formula, on `resize` and once at init. Verified: forcing left:1200px
+   at innerWidth:1280 (panel width 526, would put the right edge at
+   1726) and dispatching resize correctly clamped left to exactly 754
+   (1280-526).
+10. Dev panel: rows now wrap (`flex-wrap:wrap` on .dp-row) instead of
+    overflowing when the panel is resized too narrow for a row's control
+    to fit next to its label -- "shift it to the row beneath the setting
+    title".
+11. Fallen-piece thickness decay: 3 new sliders (Piece Decay Delay,
+    Piece Decay Speed %vmin/s, Piece Minimum Thickness) -- each fallen
+    piece tracks its own age and baseThickness (captured at the moment
+    it fell, including whatever Detach Thickness Multiplier had already
+    compounded), decaying independently after its own delay down to the
+    shared floor. New pieceThickness() helper, used at every fallenPiece
+    render call site (stroke/tip-segment-shape/endcap/endcap-at-cut-end)
+    in place of the flat `thickness` those used before -- mainRope/
+    bgRope's own live thickness is unaffected. Verified: 3 synthetic
+    pieces (51.2px, 51.2px, 76.8px starting thickness) all correctly
+    decayed to the configured 8px floor within 5 simulated seconds at
+    Piece Decay Speed=2%vmin/s.
+12. Rope+endcap gradient consistency ("the gradient applies to both the
+    rope and the endcap such that it is one consistent gradient"): the
+    endcap now fills with the SAME gradient (same stops, same world-
+    space anchor-to-tip span) the rope's own stroke uses, not a separate
+    solid color. Built using LOCAL coordinates -- the same 2 world
+    points mapped through the INVERSE of drawEndcap()'s own current
+    transform (`ctx.getTransform().inverse().transformPoint(...)`) --
+    since a gradient's own stored coordinates are themselves subject to
+    whatever transform is active when it's painted, reusing a world-
+    space gradient object built outside drawEndcap's translate/rotate/
+    scale would have gotten transformed a SECOND time and landed in the
+    wrong place entirely.
+13. Gradient editor rebuilt from scratch per direct correction ("your
+    gradient slider is wrong. I dont want gradients equally spaced. I
+    want to be able to slide the sliders to determine where a gradient
+    color kicks in... Each slider UI is clickable... opens color picker
+    ui", with a reference image) -- the count-slider-plus-N-color-
+    pickers control from 2 rounds ago is gone entirely, replaced by a
+    Photoshop-style gradient bar: draggable markers set each stop's
+    OWN position (never evenly spaced), and a real click (press+release
+    with no movement, distinguished from a drag) opens a native color
+    picker for that stop. cfg[key] is now an array of {pos, color}
+    objects instead of a plain hex-string array -- ropeStrokeColor()
+    and drawEndcap()'s gradientInfo consumption, the DEV_GROUPS defaults,
+    and the git-tracked settings file were all updated to the new shape
+    (old plain-array saves from before this change are auto-converted on
+    load, evenly-spaced, so a settings file saved under the old format
+    doesn't break). Clicking empty bar space adds a new stop there
+    (color interpolated from the gradient's own current value at that
+    position); double-clicking a marker removes it (floored at 2 stops).
+    Verified live via real dispatched PointerEvents: drag moved a
+    stop's pos exactly to the drop position; a same-position press+
+    release (a click) opened the color picker pre-loaded with that
+    exact stop's color, confirmed via a monkey-patched .click() call;
+    changing the native input's value correctly updated only that one
+    stop's color; click-empty-space-to-add and dblclick-to-remove both
+    round-tripped correctly.
+
+Also caught and fixed, while investigating item 8: a genuine data race
+in DEV_GROUPS' own array-default cloning -- the existing shallow
+`[...c.def]` clone (added last round to stop a live edit from mutating
+the shared default array) doesn't protect against mutating the objects
+INSIDE that array, which the new {pos,color} stop shape now has. Cfg-init
+now deep-clones each object element too.
+
+A significant complication mid-round: another concurrent session
+(working on endcap SVGs, its own settings.json edits still auto-saving
+from the live deployment throughout this whole round) pushed 2 more
+"Update dev-panel-settings.json via Save Settings" commits while this
+round was in progress. Rather than overwrite either side, manually
+merged: took the deployment's own latest live-tuned VALUES (their real
+ropeThickness/ropeLength/endEmergeSpeed/etc. tuning, including having
+ALREADY turned End Emerge Speed down to the new 0.02 floor) as the base,
+converted their still-old-format gradient arrays to the new {pos,color}
+shape, and layered this round's own new keys on top with sensible
+defaults (the live deployment had never seen them, since it's still
+running the previously-deployed code). `git reset --mixed origin/master`
+brought the local branch pointer up to date without touching the
+already-correctly-merged working-tree file.
+
+node --check clean after every edit throughout (39 checks total across
+the round). Updated docs/CHANGELOG.txt (this entry), docs/PROJECT_PROGRESS.md,
+docs/CODE_SUMMARY.md. Left data/Rope/End_Form1-01.svg (actively being
+re-edited by the other concurrent session) untouched/unstaged.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
