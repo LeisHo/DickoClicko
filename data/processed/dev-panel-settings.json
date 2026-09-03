@@ -72,7 +72,7 @@
     "introEnabled": true,
     "introWaitDuration": 1.4,
     "introRiseSpeed": 145.5,
-    "introRiseClearOffset": -18.5,
+    "introRiseClearOffset": -1.5,
     "introPauseDuration": 0,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
@@ -230,9 +230,9 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 1236,
+      "left": 1036.800048828125,
       "top": 4.575000286102295,
-      "width": 526,
+      "width": 725.1875,
       "height": 583.6500244140625,
       "style": {
         "titleFontSize": 13,
