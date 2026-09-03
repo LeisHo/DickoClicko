@@ -2869,6 +2869,78 @@ Verified:
   presence-based (non-empty, plausible-magnitude fill), not a rendered
   visual comparison against the source SVGs.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  01:58 AM - 02:11 AM EDT
+
+Startup animation, from the explicit spec: "on startup, there is no rope,
+just the circle... 2 seconds pass, a circular shape the color of the rope
+appears from 'within' the circle... as this circle rises up, when it
+reaches the top point of the Rope Start in its equilibrium position, it
+stops climbing, then our rope begins to emerge from this circle downwards,
+the same as the extension animation... App resumes as normal. implement
+then push", plus a mid-turn follow-up adding *D* controls for the rise
+speed and the wait-before-growing pause (set to 0.5s).
+
+Added:
+- New dev-panel group STARTUP ANIMATION: Startup Animation Enabled
+  (checkbox), Startup Wait Duration (0-10s, def 2s), Startup Rise Speed
+  (5-300%vh/s, def 80%vh/s), Startup Pause Duration (0-5s, def 0.5s).
+- A 4-phase state machine (introPhase: waiting -> rising -> pausing ->
+  growing -> done) driving the whole sequence each frame from update():
+  - waiting: mainRope exists and physically integrates (so its anchor
+    settles to its real equilibrium position) but isn't drawn -- only the
+    background/floor/circle show, per "there is no rope, just the circle".
+    cfg.introEnabled is re-checked every frame here (not just once), so a
+    late-arriving async settings load (resetSettings() is unawaited) that
+    turns the feature off self-corrects immediately to a full-length,
+    'done' rope instead of getting stuck mid-animation on a stale flag.
+  - rising: a rope-colored dot (radius = rope thickness / 2) climbs from
+    just below the circle's edge up to mainRope.points[0]'s LIVE position
+    -- read fresh every frame rather than computed from a hardcoded
+    circleAnchor()+anchorBoundaryRadius() formula, so the target always
+    matches whatever the real anchor physics actually settle to.
+  - pausing: the dot holds at that position for Startup Pause Duration.
+  - growing: reuses the EXISTING hold-to-grow mechanic verbatim -- sets
+    the same module-level `growing` flag the manual click-and-hold
+    interaction already drives, so growRope()/positionGrowingTip() run
+    completely unmodified. updateIntro() only watches
+    mainRope.totalLength against a target (vh(cfg.ropeLength), captured
+    at the pausing->growing transition, well after any settings-load
+    race could matter) to know when to flip `growing` back off.
+- resetMainRope() now takes an optional startingLengthPx override, used
+  only by Boot to build a minimal single-segment rope for the animation
+  to visibly extend from (every other caller is unchanged and still gets
+  the full configured length).
+- render() gates mainRope's own stroke/tip-segment-shape/endcap calls
+  behind introPhase being 'done' or 'growing' (fallenPieces' rendering is
+  untouched and unconditional -- nothing can be cut before the intro
+  finishes anyway), and draws the rising/pausing dot in the same spot.
+- onPointerDown() now no-ops for the whole animation (any phase other
+  than 'done'), so a stray click during waiting/rising/pausing/growing
+  can't interrupt or interact with it.
+
+Verified:
+- node --check clean after every edit in this round.
+- Live, via a temporary window.__debugTMP1() state hook (removed before
+  commit; grep -c confirms 0 references remain) polled with
+  requestAnimationFrame across a full run: confirmed all 5 phases occur
+  in order (waiting -> rising -> pausing -> growing -> done) with
+  correct timing (~2.0s wait, pause duration landing at 0.526s against a
+  configured 0.5s -- one fixed-timestep's worth of quantization, expected)
+  and correct dot behavior (starts below the circle, ends exactly at the
+  live anchor position).
+- Live, via ctx.getImageData pixel sampling (this session's screenshot
+  compositor has been unreliable after direct ctx draws in earlier
+  rounds, so pixel sampling is the established verification method):
+  confirmed the pixel at the circle's edge is exactly the configured
+  background color during 'waiting' (no stray dot/rope pixel), and the
+  pixel at the dot's position during 'pausing' is exactly the configured
+  rope color.
+- Did not live-test the introEnabled=false disabled path (toggling the
+  checkbox and reloading) -- confirmed correct by direct code inspection
+  instead (a simple, low-risk conditional reusing the already-verified
+  setMainRopeTotalLength()), per proportional verification effort.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

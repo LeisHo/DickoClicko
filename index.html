@@ -273,6 +273,12 @@ const DEV_GROUPS = [
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:5 },
     { key:'floorHeight',     label:'Floor Height',     type:'slider',   unit:'%vh', min:0,   max:50, step:1,   def:5 },
   ]},
+  { title:'STARTUP ANIMATION', controls:[
+    { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
+    { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:2 },
+    { key:'introRiseSpeed',      label:'Startup Rise Speed',        type:'slider', unit:'%vh/s', min:5,   max:300, step:5,   def:80 },
+    { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:0.5 },
+  ]},
 ];
 
 const cfg = {};
@@ -1174,9 +1180,15 @@ function makeChain(n, x, y, segLen){
 let mainRope = null;
 let fallenPieces = [];
 
-function resetMainRope(){
+// startingLengthPx: optional override for the built rope's initial total
+// length -- used by the startup animation to build a minimal (single-
+// segment) rope instead of the full configured length, so there's
+// something for the intro's own growth phase to visibly extend from
+// scratch. Defaults to the normal full cfg.ropeLength when omitted, same
+// as every pre-intro caller of this function already expects.
+function resetMainRope(startingLengthPx){
   const anchor = circleAnchor();
-  const totalLen = vh(cfg.ropeLength);
+  const totalLen = startingLengthPx !== undefined ? startingLengthPx : vh(cfg.ropeLength);
   // Must build with the SAME segLen (targetSeg) that setMainRopeTotalLength()
   // pins everything to, not a POINT_COUNT-derived one -- those two used to
   // disagree whenever cfg.ropeLength's default no longer matched the fixed
@@ -1497,6 +1509,78 @@ function pileRepulsion(all){
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
       }
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Startup animation -- 'waiting' (nothing but the circle) -> 'rising' (a
+   small rope-colored dot climbs from within the circle up to where the
+   rope's anchor naturally settles) -> 'pausing' (brief hold) -> 'growing'
+   (the rope extends downward from there, reusing the SAME `growing`-flag
+   mechanic hold-to-grow already drives -- no separate growth code) ->
+   'done' (normal operation). mainRope is built as a minimal single-
+   segment rope at boot when this is active (see the Boot section), so
+   it's always structurally valid (physics can integrate it every frame,
+   letting the anchor settle naturally during 'waiting'/'rising' the same
+   way it would during ordinary play) -- render() is what actually hides
+   it/shows the dot instead, per phase.
+--------------------------------------------------------------------- */
+let introPhase = 'done'; // set to 'waiting' at boot when cfg.introEnabled
+let introTimer = 0;
+let introDotY = 0;
+let introTargetLengthPx = 0;
+
+function updateIntro(rawDt){
+  if (introPhase === 'waiting'){
+    // Re-checked every frame (not just once at boot) rather than decided
+    // once at boot time -- resetSettings() loads saved config
+    // asynchronously, so cfg.introEnabled may not reflect a saved
+    // override yet on the very first frames. If it turns out to be off
+    // (now, or once the async load catches up), skip straight to a full-
+    // length rope instead of running the animation.
+    if (!cfg.introEnabled){
+      setMainRopeTotalLength(vh(cfg.ropeLength));
+      introPhase = 'done';
+      return;
+    }
+    introTimer += rawDt;
+    if (introTimer >= cfg.introWaitDuration){
+      introPhase = 'rising';
+      introDotY = circleAnchor().y + vmin(cfg.circleSize) / 2;
+    }
+  } else if (introPhase === 'rising'){
+    // Target is mainRope.points[0]'s CURRENT (live-settling) position, not
+    // an analytically-derived formula -- the anchor is a normal physics
+    // point (see update()'s own boundaryConstraint) that's been settling
+    // under gravity since 'waiting' started, so reading it fresh each
+    // frame automatically matches wherever it actually equilibrates,
+    // regardless of Anchor Physics settings.
+    const targetY = mainRope.points[0].y;
+    const step = vh(cfg.introRiseSpeed) * rawDt;
+    const dy = targetY - introDotY;
+    if (Math.abs(dy) <= step){
+      introDotY = targetY;
+      introPhase = 'pausing';
+      introTimer = 0;
+    } else {
+      introDotY += Math.sign(dy) * step;
+    }
+  } else if (introPhase === 'pausing'){
+    introTimer += rawDt;
+    if (introTimer >= cfg.introPauseDuration){
+      // Captured HERE, not at boot -- by this point (wait + rise + pause,
+      // several seconds in) any async settings load has long since
+      // resolved, so this is guaranteed to be the real configured target,
+      // never a stale pre-load default.
+      introTargetLengthPx = vh(cfg.ropeLength);
+      introPhase = 'growing';
+      growing = true; // reuses growRope()/positionGrowingTip() unchanged
+    }
+  } else if (introPhase === 'growing'){
+    if (mainRope.totalLength >= introTargetLengthPx){
+      growing = false;
+      introPhase = 'done';
     }
   }
 }
@@ -2066,6 +2150,11 @@ function hitTestAnyIgnoringCircle(x, y){
 }
 
 function onPointerDown(e){
+  // no interaction until the startup animation finishes -- there's either
+  // no visible rope yet (waiting/rising/pausing) or it's mid-scripted-
+  // growth (growing), neither of which should be interruptible by a
+  // stray click.
+  if (introPhase !== 'done') return;
   const x = e.clientX, y = e.clientY;
   // defensive: a pointerdown that never reaches onPointerUp/pointercancel
   // (dropped event, capture stolen by another element, etc.) would otherwise
@@ -2224,6 +2313,7 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 function floorY(){ return window.innerHeight - vh(cfg.floorHeight); }
 
 function update(rawDt){
+  if (introPhase !== 'done') updateIntro(rawDt);
   const dt = rawDt * cfg.ropeAnimSpeed;
   const gravityAccel = vh(90) * cfg.gravityStrength;
 
@@ -2832,16 +2922,23 @@ function render(){
   // governed the FAR/free end). The rope is drawn AFTER (on top of) the
   // circle below, so this end is genuinely visible, not hidden underneath
   // it as an earlier version of this comment incorrectly assumed.
+  // The startup animation keeps mainRope itself structurally valid (and
+  // physically integrating, so its anchor settles naturally) throughout
+  // 'waiting'/'rising'/'pausing' -- it just isn't DRAWN yet, per the
+  // "no rope, just the circle" / "the dot climbs, not a rope" spec. Once
+  // 'growing' starts (or immediately, when the animation is off/done),
+  // mainRope draws exactly as it always has, no different code path.
+  const showMainRope = introPhase === 'done' || introPhase === 'growing';
   const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, thickness);
   const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
-  strokeRopeCurve(mainStrokePoints, thickness, cfg.ropeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc);
+  if (showMainRope) strokeRopeCurve(mainStrokePoints, thickness, cfg.ropeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc);
   if (cfg.tipSegmentShapeEnabled){
     fallenPieces.forEach(piece => drawTipSegmentShape(piece.points, thickness, cfg.ropeColor));
-    drawTipSegmentShape(mainRope.points, thickness, cfg.ropeColor);
+    if (showMainRope) drawTipSegmentShape(mainRope.points, thickness, cfg.ropeColor);
   }
   if (hasEndcap){
     fallenPieces.forEach(piece => drawEndcap(piece.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge)));
-    drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, mainTipFactor);
+    if (showMainRope) drawEndcap(mainRope.points, thickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, mainTipFactor);
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
     // points array before reusing drawEndcap() puts that cut point at
@@ -2864,6 +2961,18 @@ function render(){
   }
   if (mainRope.cutSweep && mainRope.cutSweep.progress < 1) renderCutSweep(mainRope);
   fallenPieces.forEach(piece => { if (piece.cutSweep && piece.cutSweep.progress < 1) renderCutSweep(piece); });
+
+  // The rising/pausing dot stands in for the rope while it isn't real yet --
+  // rope-colored, the same diameter as the rope's own thickness, centered on
+  // the circle's X and riding introDotY (driven by updateIntro()). Nothing
+  // extra draws during 'waiting' (just the circle, already unconditional
+  // above); once 'growing' starts, showMainRope takes over and this stops.
+  if (introPhase === 'rising' || introPhase === 'pausing'){
+    ctx.beginPath();
+    ctx.arc(anchor.x, introDotY, thickness / 2, 0, Math.PI * 2);
+    ctx.fillStyle = cfg.ropeColor;
+    ctx.fill();
+  }
 }
 
 // Fixed-timestep physics: update() always advances by exactly this much,
@@ -2899,7 +3008,20 @@ function loop(now){
 /* ---------------------------------------------------------------------
    Boot
 --------------------------------------------------------------------- */
-resetMainRope();
+// Start with a minimal (single-segment) rope so mainRope.points[0] (the
+// anchor) is a real, physically-integrating point from frame one -- the
+// startup animation reads its LIVE settled position as the rising dot's
+// target, and integrateChain() needs something valid to integrate during
+// 'waiting'/'rising'/'pausing' even though nothing is drawn yet (see
+// render()'s showMainRope gate). introPhase is always set to 'waiting'
+// here rather than being gated on cfg.introEnabled, which may not have
+// finished loading from saved settings yet (resetSettings() below is
+// async and unawaited) -- updateIntro() re-checks cfg.introEnabled every
+// frame during 'waiting' and jumps straight to a full-length 'done' rope
+// the instant it sees the feature is actually off.
+resetMainRope(vh(TARGET_SEG_LEN_VH));
+introPhase = 'waiting';
+introTimer = 0;
 if (DEV_MODE){
   document.getElementById('devPanel').classList.remove('hidden');
   buildDevPanel();

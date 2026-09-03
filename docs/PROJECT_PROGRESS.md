@@ -660,6 +660,22 @@ assuming it never shipped.
   designs (up from 14). Verified via a real dropdown `change` event for
   each new/changed key plus a direct pixel-fill check after each render,
   not just `node --check` (which can't catch broken SVG path syntax).
+- Added a startup animation, per explicit spec: on load there's no rope,
+  just the circle; after a wait (new "STARTUP ANIMATION" group: Startup
+  Animation Enabled, Startup Wait Duration def 2s), a rope-colored dot
+  (rope-thickness diameter) climbs from within the circle up to the
+  anchor's own live equilibrium position (Startup Rise Speed), pauses
+  (Startup Pause Duration def 0.5s), then the rope extends downward using
+  the EXISTING hold-to-grow mechanic unmodified (same `growing` flag) until
+  it reaches the configured Rope Length, at which point normal interaction
+  resumes. Clicking is a no-op for the whole sequence. `resetMainRope()`
+  gained an optional starting-length override so Boot can seed a minimal
+  single-segment rope for the growth phase to visibly extend from.
+  Verified live via a temporary debug hook (removed before commit) polled
+  every animation frame: all 5 phases (waiting/rising/pausing/growing/done)
+  occurred in the correct order with correct timing, plus pixel-sampling
+  confirmed no stray rope/dot pixel during 'waiting' and the correct
+  rope-colored pixel at the dot's position during 'pausing'.
 
 ## What's next
 

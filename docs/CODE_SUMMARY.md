@@ -1796,3 +1796,50 @@ GOTCHAS
   consistent, no degenerate/empty outliers), catching any silently-broken
   path data before reporting the sync as complete rather than trusting
   `node --check` (which can't validate SVG path syntax) alone.
+- **Startup animation (`introPhase`) reuses existing physics/growth code
+  wholesale instead of introducing a parallel implementation.** A 5-value
+  state machine (`'waiting' -> 'rising' -> 'pausing' -> 'growing' ->
+  'done'`), ticked once per frame from the very top of `update()` via
+  `updateIntro(rawDt)`. Key design choices, for any future session
+  touching this:
+  - `mainRope` is built (minimal, single-segment, via `resetMainRope()`'s
+    new optional `startingLengthPx` param) and physically integrates
+    normally throughout `'waiting'`/`'rising'`/`'pausing'` -- it's just not
+    DRAWN (`render()`'s `showMainRope = introPhase === 'done' ||
+    introPhase === 'growing'` gates the 3 mainRope-specific draw calls:
+    `strokeRopeCurve`, `drawTipSegmentShape`, `drawEndcap`; `fallenPieces`
+    rendering is untouched and unconditional, since nothing can be cut
+    before the intro finishes). This means the rising dot's target
+    (`mainRope.points[0]`, read live every frame) is always the REAL
+    settled anchor position under whatever Anchor Physics settings are
+    currently live, never a hardcoded `circleAnchor()+anchorBoundaryRadius()`
+    formula that could drift out of sync if that physics changes later.
+  - The `'growing'` phase does NOT reimplement extension -- it sets the
+    same module-level `growing` flag the manual hold-to-grow-on-circle
+    interaction already drives, so `growRope()`/`positionGrowingTip()` run
+    completely unmodified. `updateIntro()` only watches
+    `mainRope.totalLength` against `introTargetLengthPx` (captured at the
+    `'pausing'->'growing'` transition) to flip `growing` back to `false`.
+    A 1-frame overshoot past the target (observed: target 193.85px,
+    landed at 195.85px) is expected and harmless -- the check happens
+    AFTER that frame's growth already applied, same tolerance the
+    existing growth-commit logic elsewhere already accepts.
+  - `resetSettings()` is async and unawaited at boot, so `cfg.introEnabled`
+    may not reflect a saved `false` value for the first several frames.
+    Solved WITHOUT awaiting anything: `'waiting'` re-checks
+    `cfg.introEnabled` every single frame (not once at boot) and jumps
+    straight to a full-length `'done'` rope the instant it sees the
+    feature is off, however late that arrives.
+  - `onPointerDown()`'s very first line is `if (introPhase !== 'done')
+    return;` -- the whole animation (including `'growing'`, which is
+    otherwise indistinguishable from a normal interactive grow) is
+    non-interruptible by a stray click.
+  - Verified live via a temporary `window.__debugTMP1()` state-dump hook
+    (removed before commit, `grep -c "__debugTMP"` confirmed 0 references
+    remain) polled every animation frame across a real run: all 5 phases
+    fire in order with correct timing (~2.0s wait; pause landed at 0.526s
+    against a configured 0.5s, one `FIXED_DT` step of quantization,
+    expected), and `ctx.getImageData` pixel sampling confirmed the exact
+    background color at the circle's edge during `'waiting'` (no stray
+    dot) and the exact rope color at the dot's position during
+    `'pausing'`.
