@@ -2103,6 +2103,24 @@ function detachEntireRopeAndRestartIntro(){
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
   resetMainRope(vh(TARGET_SEG_LEN_VH));
+  // Boot's own version of this restart also rebuilds bgRope from scratch
+  // (see resetBgRope() at Boot) -- this path used to skip that entirely,
+  // leaving bgRope's OWN chain (points[1] onward; point 0 alone gets
+  // explicitly repositioned when 'rising' begins, a few lines below in
+  // updateIntro()) at whatever stale positions it last held from normal
+  // 'done'-phase operation, swinging wherever mainRope's old anchor had
+  // last taken it. The instant 'rising' snapped point 0 to the fresh
+  // "below the circle" start while the REST of the chain stayed stale
+  // and far away, the distance/bend constraints spent several real
+  // seconds violently whipping those stale points back into a normal
+  // chain shape relative to the new point 0 -- reported as "the
+  // background rope act[s] weird" for "5-8 seconds", "coming from the
+  // top or something" (wherever the old rope happened to be swinging,
+  // often above the circle), reproduced by repeatedly double-clicking to
+  // trigger this exact path ("I cut it 3 times"). Rebuilding bgRope HERE
+  // means every point starts fresh and consistent on every detach-
+  // triggered restart, not just the very first boot.
+  resetBgRope();
   // The fresh rope's own tip endcap starts scaled down and grows back to
   // normal size over Detach Endcap Grow Duration -- per explicit request
   // ("the end cap at the rope end will not be at full height... within a

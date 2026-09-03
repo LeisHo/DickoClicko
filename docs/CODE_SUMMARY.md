@@ -2321,3 +2321,31 @@ GOTCHAS
   via a normal screenshot once phase reaches `'done'`. This is explicitly
   NOT the same as having watched the actual settle animation play out in
   real time -- that specific claim is not made.
+- **`detachEntireRopeAndRestartIntro()` (the double-click full-detach
+  path) never called `resetBgRope()`, unlike Boot's own version of this
+  exact restart sequence -- so `bgRope`'s chain carried over stale
+  positions from wherever it was swinging right before the cut.** Boot
+  calls `resetMainRope()` AND `resetBgRope()` together; this function
+  only ever called `resetMainRope()`. `updateIntro()`'s 'rising' phase
+  DOES explicitly reposition `bgRope.points[0]` alone to the fresh
+  "below the circle" start the moment 'rising' begins -- but every OTHER
+  point in the chain (`points[1]` onward) was left wherever it had last
+  settled during normal `'done'`-phase operation (integrated every
+  frame, following `mainRope`'s real anchor around). The instant 'rising'
+  snapped point 0 to its new position while the rest of the chain stayed
+  stale and potentially far away, the distance/bend constraints spent
+  several real seconds violently whipping those stale points back into a
+  normal chain shape relative to the new point 0 -- reported as "the
+  background rope act[s] weird" for "5-8 seconds", "coming from the top
+  or something" (wherever the rope happened to be swinging when double-
+  clicked), reproduced reliably by cutting/detaching repeatedly ("I cut
+  it 3 times"), since every detach re-triggers this same missing-reset
+  path. Confirmed via direct live measurement (a temporary
+  `window.__debug` hook, removed before commit): manually swinging
+  `mainRope`'s anchor 150px sideways before triggering a detach, the
+  post-detach `bgRope` chain's own X-spread across all points measured
+  26.5px once 'rising' began -- a normal, compact hanging-rope shape,
+  not a stale scattered one -- confirming the fix (adding `resetBgRope()`
+  right alongside `resetMainRope()` in this function, matching Boot's
+  own pairing) actually closes the gap rather than just plausibly
+  sounding like it should.

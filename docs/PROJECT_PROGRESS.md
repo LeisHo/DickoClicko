@@ -855,6 +855,21 @@ assuming it never shipped.
   unreliable here -- confidence rests on confirmed construction-time
   displacement plus the physics math (FIXED_DT/damping), not a watched
   repro.
+- Follow-up: "the background rope act weird" for "5-8 seconds", "coming
+  from the top or something" -- a genuinely separate bug from the one
+  above, specific to the double-click full-detach path.
+  detachEntireRopeAndRestartIntro() called resetMainRope() but never
+  resetBgRope() (Boot pairs both together); bgRope's own chain (besides
+  point 0, which 'rising' explicitly repositions) carried over stale
+  positions from wherever it was swinging right before the cut, and the
+  constraint solver spent several real seconds visibly whipping those
+  stale points back into shape. Fixed by adding resetBgRope() alongside
+  resetMainRope(). Live-verified: swung mainRope's anchor 150px sideways,
+  triggered a detach, measured bgRope's chain spread once 'rising' began
+  -- 26.5px, a normal compact shape, not scattered. Also clarified (no
+  code change): Startup Rise Clear Offset's positive direction already
+  means "inward" -- didn't touch the user's own actively-tuned live
+  value.
 
 ## What's next
 

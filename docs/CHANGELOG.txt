@@ -3745,3 +3745,61 @@ APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
 old one in place.
+
+2026-09-03  -  08:46 AM - 08:52 AM EDT
+
+Follow-up: "still no good... It starts from startup where you see the
+background rope act weird, then it disappears after 5-8 seconds. I cut it
+3 times to show what happens. Its basically the same where the back rope
+i coming from the top or something." Also: "i expected the startup rise
+clear offset to be an offset of the blue circle inwards." No screen
+recording actually reached this session (text description only) -- flagged
+that honestly rather than acting as if it had been reviewed.
+
+Found a real, separate bug via direct code reading, not guessing:
+detachEntireRopeAndRestartIntro() (the double-click full-detach path)
+never called resetBgRope(), unlike Boot's own version of this exact
+restart sequence -- Boot pairs resetMainRope()+resetBgRope() together;
+this function only ever called resetMainRope(). updateIntro()'s 'rising'
+phase explicitly repositions bgRope.points[0] alone to the fresh "below
+the circle" start the moment 'rising' begins, but every OTHER point in
+bgRope's chain was left wherever it had last settled during normal
+'done'-phase operation (following mainRope's real anchor around). The
+instant point 0 snapped to its new spot while the rest of the chain
+stayed stale and potentially far away (e.g. wherever the rope was
+swinging when double-clicked), the constraint solver spent several real
+seconds violently whipping those stale points back into a normal shape --
+matching "acts weird" for "5-8 seconds", "coming from the top or
+something", and reproducing reliably on every repeated cut/detach.
+
+Fixed by adding resetBgRope() right alongside resetMainRope() in
+detachEntireRopeAndRestartIntro(), matching Boot's own pairing.
+Live-verified via a temporary debug hook (removed before commit): manually
+swung mainRope's anchor 150px sideways, let bgRope sync to that stale
+position, triggered a detach, and measured bgRope's chain once 'rising'
+began -- X-spread across all points measured 26.5px, a normal compact
+hanging shape, not a scattered stale one.
+
+Re: "offset... inwards" -- checked the sign convention directly: positive
+Startup Rise Clear Offset already moves the climb target INWARD (toward
+center), negative moves it outward (below the circle edge). This hasn't
+changed. The LIVE value has been through several rounds of manual tuning
+this session and is currently deep in negative/outward territory, which
+-- combined with the earlier round's boundary clamp fix -- means it's
+likely sitting at a value that's functionally maxed-out-outward (clamped)
+rather than doing anything meaningfully different from a smaller negative
+value. Did not change the live value or the slider default -- explained
+the convention to the user directly instead of guessing at what number
+they'd want, since this is their own actively-tuned setting.
+
+node --check clean. Live-verified via a temporary window.__debug hook,
+fully removed before this commit (confirmed via grep). Updated
+docs/CHANGELOG.txt (this entry), docs/CODE_SUMMARY.md (1 new Gotcha).
+Left data/Rope/End_Form1-01.svg (a different concurrent session's own
+active edit) untouched.
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.
