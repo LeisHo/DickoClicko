@@ -10,8 +10,8 @@
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
-    "ropeThickness": 6.4,
-    "ropeLength": 27.16153846153837,
+    "ropeThickness": 10,
+    "ropeLength": 3.4615384615384612,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": false,
     "ropeGradientColors": [
@@ -45,9 +45,9 @@
     "cutSweepColor": "#ffffff",
     "cutSweepThickness": 0.2,
     "endEmergeEnabled": true,
-    "endcapStartingScale": 0.1,
-    "endEmergeDelay": 1.85,
-    "endEmergeSpeed": 0.54,
+    "endcapStartingScale": 0.6,
+    "endEmergeDelay": 0.75,
+    "endEmergeSpeed": 0.02,
     "endEmergeEasingStrength": 6,
     "endEmergeTweening": "easeInOut",
     "floorEnabled": true,
@@ -120,7 +120,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "tipSegmentShapeEnabled",
         "endcapDesign",
@@ -157,7 +157,7 @@
     },
     {
       "key": "ROPE GROWTH",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "ropeGrowthRate",
         "clickHoldMaxDuration",
@@ -181,7 +181,7 @@
     },
     {
       "key": "END EMERGE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "endEmergeEnabled",
         "endcapStartingScale",
@@ -203,11 +203,11 @@
     }
   ],
   "panelGeometry": {
-    "desktop": {
-      "left": 1236,
-      "top": 4.578125,
-      "width": 526,
-      "height": 583.65625,
+    "mobile": {
+      "left": -1,
+      "top": 0,
+      "width": 229,
+      "height": 830.71875,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -220,11 +220,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "mobile": {
-      "left": 74.03571319580078,
-      "top": 439.1428527832031,
-      "width": 320,
-      "height": 438.9821472167969,
+    "desktop": {
+      "left": 1236,
+      "top": 4.578125,
+      "width": 526,
+      "height": 583.65625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
