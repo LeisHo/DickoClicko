@@ -2237,3 +2237,87 @@ GOTCHAS
   lines render at the expected positions, the cyan boundary circle sits
   visibly inside the drawn circle graphic's own bottom edge at default
   settings) before concluding the fix was correct.
+- **The clamp-fix above ("Fix startup rope jump/bounce") only stopped
+  the OVERSHOOT -- it didn't fix a second, deeper bug it exposed:
+  `makeChain()` builds every point at the EXACT same x with `oldx===x`
+  (zero implied velocity), so a freshly-reset mainRope is perfectly
+  vertically symmetric from frame one.** With the clamp fix in place,
+  mainRope's anchor spawns exactly at the boundary's own bottom-most
+  point (x identical to `circleAnchor().x`) -- gravity pulls it straight
+  down, `integrateChain()`'s own `boundaryConstraint` clamps it straight
+  back up along that SAME line every single frame, and nothing ever
+  introduces a net lateral force to break the symmetry. Confirmed via
+  live tracing (a temporary `window.__debug` hook, removed before
+  commit): mainRope's anchor sat frozen at EXACTLY its boundary radius,
+  every point's x identical to `circleAnchor().x`, `oldx`/`oldy`
+  identical to `x`/`y`, for 10+ real seconds with zero net motion --
+  reported as "on startup... it stays this way for 5-10 seconds then it
+  settles to the position i expect". On a real device, ordinary
+  floating-point/timing noise eventually perturbs it enough to fall
+  off-axis (explaining the reported, variable delay), but nothing
+  GUARANTEED that happened promptly, or at all -- this sandbox's own
+  more deterministic timing never once escaped it across 10+ seconds of
+  direct measurement.
+
+  Two fix attempts were tried and measured before landing on the right
+  one, each confirmed via the same live-tracing technique rather than
+  assumed:
+  1. A one-frame nudge to `oldx` at the intro handoff itself (giving
+     mainRope's spawn a small deterministic sideways velocity). Measured
+     to fail even at a substantial magnitude (8% of the anchor's own
+     boundary radius): by the time handoff runs, mainRope has already
+     been integrating hidden for the entire waiting+rising duration,
+     long enough to have settled deep into the symmetric trap across the
+     WHOLE chain, not just the anchor -- a one-frame nudge that late is
+     fighting already-settled inertia across every point, not preventing
+     it, and decayed back to the exact same frozen x within the
+     measurement window.
+  2. Fixing `makeChain()` itself, at a small magnitude (max 3% of
+     `segLen`) first -- also measured to fail: confirmed via direct
+     chain-construction inspection (calling `makeChain()` fresh via the
+     debug hook, bypassing the running loop) that it DID apply real,
+     nonzero per-point offsets, but they were far too small relative to
+     `damping` (0.984/tick) to survive the many physics ticks that
+     elapse before mainRope is ever inspected/rendered -- decayed to
+     floating-point-noise levels (~1e-12px) well before becoming
+     visible, functionally indistinguishable from the original bug.
+
+  **The actual fix**: `makeChain()` now gives every point a real,
+  substantial per-point random x lean (`segLen * 0.4` range) at
+  construction time, confirmed via the same fresh-construction check to
+  produce real, meaningfully-sized offsets (e.g. one live sample:
+  427.76/420.96/422.39/424.85 against a 422 center, for a chain built
+  with `segLen≈31.6`). This gives mainRope a real, deterministic reason
+  to settle off-axis from frame one, with the ENTIRE hidden
+  wait+rise+pause duration available to do so naturally before it's ever
+  shown (mainRope isn't rendered until `introPhase` reaches
+  `'growing'`/`'done'`, per `render()`'s own `showMainRope` gate) --
+  fixing the chain's own construction means there's nothing left for a
+  late handoff-time nudge to fight.
+
+  **A genuine environment limitation, disclosed rather than papered
+  over**: this sandbox's own `performance.now()`/frame timing runs at an
+  effectively extreme, accelerated rate relative to real wall-clock time
+  (hundreds of "fps" reported by the panel's own counter, and repeated
+  live tracing showed even large, deliberate perturbations -- a manual
+  5px/frame kick applied directly via the debug hook -- fully decaying
+  back to floating-point-precision zero within what this environment
+  reports as only ~100ms of real elapsed time). This makes any
+  wall-clock/screenshot-based attempt to directly OBSERVE the fix's
+  settling motion unreliable here -- by the time a screenshot can be
+  taken, thousands of physics ticks (at the code's own genuine,
+  unaccelerated `FIXED_DT = 1/60`) may have already elapsed by this
+  sandbox's own clock. Verification for this fix therefore rests on: (1)
+  direct confirmation the lean mechanism produces real, substantial
+  displacement at construction time (measured above, not assumed), (2)
+  the physics math connecting `FIXED_DT`/`damping` (both genuine,
+  device-independent code constants) to an estimated real-world settling
+  time -- decaying a lean of this magnitude down to a perceptually-still
+  ~1px amplitude takes roughly 150-200 ticks at `damping=0.984`, i.e.
+  roughly 2.5-3.5 real seconds at a true 60Hz tick rate, the right order
+  of magnitude for the reported "5-10 seconds" without claiming an exact
+  match, and (3) confirming the app's final resting pose and everything
+  else about it renders identically to before (no visual regression),
+  via a normal screenshot once phase reaches `'done'`. This is explicitly
+  NOT the same as having watched the actual settle animation play out in
+  real time -- that specific claim is not made.

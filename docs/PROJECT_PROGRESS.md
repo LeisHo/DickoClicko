@@ -835,6 +835,26 @@ assuming it never shipped.
   visible climb's real reach. Added a "Debug: Show Rise Clear Offset
   Line" checkbox (STARTUP ANIMATION group) showing both the raw target
   and the boundary circle for tuning.
+- Follow-up: that fix stopped the overshoot but exposed a deeper bug --
+  "it stays this way for 5-10 seconds then it settles to the position i
+  expect". makeChain() built every point at the exact same x with zero
+  implied velocity, so a freshly-reset mainRope started perfectly
+  vertically symmetric; with the anchor now landing exactly on the
+  boundary's own bottom point, gravity and the boundary clamp cancelled
+  along the same line every frame with nothing to ever break the
+  symmetry -- confirmed via live tracing to sit frozen for 10+ real
+  seconds with zero net motion. 2 fix attempts were tried and measured to
+  fail (a late nudge at handoff; a too-small nudge in makeChain()) before
+  landing on the real fix: makeChain() now gives every point a real,
+  substantial random x lean, giving mainRope a genuine reason to settle
+  off-axis during its own hidden wait+rise+pause duration, well before
+  it's ever shown. Full mechanism + measured numbers for both failed
+  attempts are in docs/CODE_SUMMARY.md. Verification limitation disclosed
+  honestly: this sandbox's own timing runs at an extreme accelerated
+  rate, making direct real-time observation of the settle motion
+  unreliable here -- confidence rests on confirmed construction-time
+  displacement plus the physics math (FIXED_DT/damping), not a watched
+  repro.
 
 ## What's next
 

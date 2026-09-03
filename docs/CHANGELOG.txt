@@ -3677,3 +3677,71 @@ APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
 old one in place.
+
+2026-09-03  -  07:35 AM - 07:58 AM EDT
+
+Follow-up report on the previous round's own fix: "no its sitll bad. on
+startup this is what i see [screenshot: a straight, motionless rope
+hanging from the circle]. it stays this way for 5-10 seconds then it
+settles toteh position i expect."
+
+The previous round's clamp fix (capping the 'rising' phase's own climb
+target to the anchor's physics boundary) correctly stopped the OVERSHOOT/
+bounce, but exposed a second, deeper bug: makeChain() builds every point
+at the exact same x with oldx===x (zero implied velocity), so a freshly-
+reset mainRope starts perfectly vertically symmetric. With the anchor now
+landing exactly at the boundary's own bottom-most point, gravity pulling
+straight down and the boundary clamp pushing straight back up along that
+SAME line every frame meant nothing ever introduced a net lateral force
+to break the symmetry -- confirmed via a temporary window.__debug hook
+(added, used, then fully removed before this commit): mainRope's anchor
+sat frozen at EXACTLY its boundary radius for 10+ real seconds with zero
+net motion, every point's x identical to circleAnchor().x. On a real
+device, ordinary floating-point/timing noise eventually perturbs it
+enough to escape (explaining the reported, variable 5-10s), but nothing
+guaranteed that happened promptly, or at all.
+
+Two fix attempts were tried and MEASURED to fail before landing on the
+real one (documented in full, including the actual measured numbers, in
+docs/CODE_SUMMARY.md -- not repeated here): (1) a one-frame nudge at the
+handoff itself, which was already fighting seconds of settled inertia
+across the whole chain by the time it ran; (2) a small nudge inside
+makeChain() (max 3% of segLen), which was real but far too small to
+survive the damping (0.984/tick) between construction and when mainRope
+is ever inspected. The actual fix: makeChain() now gives every point a
+substantial per-point random x lean (segLen * 0.4 range) at construction
+time, confirmed via direct fresh-construction inspection to produce real,
+meaningfully-sized offsets. This gives mainRope a real, deterministic
+reason to settle off-axis from frame one, with the entire hidden
+wait+rise+pause duration available to do so naturally before it's ever
+shown -- fixing the construction means there's nothing left for a late
+nudge to fight.
+
+Verification note, disclosed honestly rather than overclaimed: this
+sandbox's own frame timing runs at an effectively extreme, accelerated
+rate (hundreds of fps reported by the panel's own counter) -- repeated
+live tracing showed even a large, deliberate manual kick fully decaying
+back to floating-point-zero within what this environment reports as only
+~100ms of real elapsed time, making a direct screenshot-based observation
+of the fix's own settle animation unreliable here. Verification instead
+rests on: direct confirmation the lean mechanism produces real,
+substantial displacement at construction (measured, not assumed); the
+physics math connecting FIXED_DT (1/60, a genuine unaccelerated code
+constant) and damping to an estimated real-world settle time (~2.5-3.5s
+to decay to a barely-perceptible ~1px amplitude at 60Hz -- the right
+order of magnitude for "5-10 seconds", not claimed as an exact match);
+and a normal screenshot confirming the final resting pose and everything
+else renders identically to before, no regression. This does NOT claim
+to have watched the actual settle motion play out in real time.
+
+node --check clean after each edit. Updated docs/CHANGELOG.txt (this
+entry), docs/CODE_SUMMARY.md (1 new Gotcha, documenting both failed
+attempts with their measured numbers, not just the final fix). Left
+data/Rope/End_Form1-01.svg (a different concurrent session's own active
+edit) untouched.
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.

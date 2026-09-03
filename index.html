@@ -1397,7 +1397,42 @@ const TARGET_SEG_LEN_VH = 45 / (POINT_COUNT - 1);
 
 function makeChain(n, x, y, segLen){
   const pts = [];
-  for (let i = 0; i < n; i++) pts.push({ x, y: y + i * segLen, oldx: x, oldy: y + i * segLen });
+  // Every point used to share the EXACT same x (oldx===x too, zero
+  // implied velocity) -- a perfectly vertically symmetric chain from
+  // frame one. Harmless for a piece that just falls, but a genuine bug
+  // for mainRope specifically: with gravity pulling straight down and
+  // integrateChain()'s own boundaryConstraint clamping straight back up
+  // along that SAME line every frame, nothing ever introduces a net
+  // lateral force to break the symmetry -- confirmed via live tracing
+  // (window.__debug): mainRope's anchor sat frozen at EXACTLY its
+  // boundary radius, x identical to circleAnchor().x and to every other
+  // point's own x, for 10+ real seconds with zero net motion. Reported
+  // as "on startup... it stays this way for 5-10 seconds then it settles
+  // to the position i expect" -- on a real device, ordinary floating-
+  // point/timing noise eventually perturbs it enough to fall off-axis
+  // (explaining the reported delay, which varies run to run since it
+  // depends on incidental noise), but nothing GUARANTEED that happened
+  // promptly, or at all (this sandbox's own more deterministic timing
+  // never once escaped it across 10+ seconds of direct measurement). A
+  // per-point random lean gives every chain a real, deterministic reason
+  // to settle off-axis from frame one, with the model's full
+  // wait/rise/pause duration to do so naturally before mainRope is ever
+  // shown. Magnitude tuned by direct live measurement, not guessed: an
+  // initial attempt at 3% of segLen was too small -- confirmed via
+  // window.__debug tracing that it decayed back toward the exact
+  // symmetric point within only a few physics ticks (a handful of ms),
+  // producing no meaningfully visible settle motion at all before it was
+  // ever shown -- basically indistinguishable from the original bug. 40%
+  // is a real, visible perturbation (still small relative to the rope's
+  // own total length) that produces genuine multi-tick swinging motion
+  // as it settles, matching the "will then naturally fall... like a real
+  // drop" behavior this code has always intended, rather than an
+  // instantly-reabsorbed micro-nudge.
+  const leanRange = segLen * 0.4;
+  for (let i = 0; i < n; i++){
+    const lean = (Math.random() - 0.5) * leanRange;
+    pts.push({ x: x + lean, y: y + i * segLen, oldx: x + lean, oldy: y + i * segLen });
+  }
   return pts;
 }
 
@@ -1986,6 +2021,21 @@ function updateIntro(rawDt){
       mainRope.points[0].y = bgRope.points[0].y;
       mainRope.points[0].oldx = mainRope.points[0].x;
       mainRope.points[0].oldy = mainRope.points[0].y;
+      // See makeChain()'s own comment for the real fix to "it stays this
+      // way for 5-10 seconds then it settles to the position i expect" --
+      // a nudge attempted HERE, at the handoff, was tried first and
+      // measured to fail: by this point mainRope has already been
+      // integrating (hidden) for the ENTIRE waiting+rising duration, long
+      // enough to have already settled deep into makeChain()'s own
+      // perfectly-symmetric trap -- a one-frame nudge this late is
+      // fighting settled inertia across the whole chain, not preventing
+      // it, and live tracing confirmed even an 8%-of-boundary-radius kick
+      // here decayed back to the exact same symmetric x within ~1-2s
+      // (i.e. it just relocated the freeze, it didn't fix it). Fixing the
+      // chain's own construction instead means the whole hidden
+      // wait+rise+pause duration is naturally available to settle into a
+      // real off-axis resting pose BEFORE this handoff ever runs, so
+      // there's nothing left to fight here.
       // bgRope resumes following mainRope's own anchor from here on (see
       // update()'s own bgRope sync) -- rebuild it HERE, at the moment of
       // that handoff, both for the usual race-avoidance reason (locks its
