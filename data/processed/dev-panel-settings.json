@@ -5,28 +5,28 @@
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#000000",
-    "circleBoundaryOffset": 0,
-    "anchorBounceIntensity": 0.4,
-    "anchorWeight": 1,
+    "circleBoundaryOffset": -1.5,
+    "anchorBounceIntensity": 0,
+    "anchorWeight": 2.8,
     "endcapDesign": "form1-04",
     "endcapHeight": 1.3,
     "ropeThickness": 4.8,
-    "ropeLength": 39.92429516185174,
-    "ropeColor": "#8b5a2b",
+    "ropeLength": 13.846153846153845,
+    "ropeColor": "#a5815f",
     "ropeEndCurveArc": 0,
     "ropeTopCurveArc": 1,
     "clickIntensity": 1.6,
     "holdDistance": 22,
-    "bendStiffness": 0.07,
+    "bendStiffness": 0,
     "ropeAnimSpeed": 1.1,
-    "gravityStrength": 4.5,
+    "gravityStrength": 4.1,
     "damping": 0.999,
-    "constraintIterations": 3,
+    "constraintIterations": 2,
     "ropeGrowthRate": 15,
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 7.5,
     "minRopeLength": 0.1,
-    "circleCutDistance": 9.5,
+    "circleCutDistance": 0,
     "clickDistance": 11.4,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 1,
@@ -41,8 +41,8 @@
     "endEmergeTweening": "easeOut",
     "floorEnabled": true,
     "floorColor": "#ffffff",
-    "floorThickness": 5,
-    "floorHeight": 5
+    "floorThickness": 10,
+    "floorHeight": 6
   },
   "order": [
     {
@@ -101,7 +101,7 @@
     },
     {
       "key": "CLICK",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "clickIntensity",
         "holdDistance"
@@ -109,7 +109,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "bendStiffness",
         "ropeAnimSpeed",
@@ -129,7 +129,7 @@
     },
     {
       "key": "ROPE CUT",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "minRopeLength",
         "circleCutDistance",
@@ -167,9 +167,9 @@
   "panelGeometry": {
     "desktop": {
       "left": 1076,
-      "top": 4.579545497894287,
+      "top": 4.578125,
       "width": 320,
-      "height": 583.6704711914062,
+      "height": 583.65625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
