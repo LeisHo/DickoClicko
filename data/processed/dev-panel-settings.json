@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.4,
-    "ropeLength": 6.961538461538458,
+    "ropeLength": 27.16153846153837,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": false,
     "ropeGradientColors": [
@@ -29,12 +29,12 @@
     "holdDistance": 22,
     "bendStiffness": 0,
     "ropeAnimSpeed": 1.2,
-    "gravityStrength": 4.1,
-    "damping": 0.999,
+    "gravityStrength": 4.6,
+    "damping": 0.984,
     "constraintIterations": 1,
-    "ropeGrowthRate": 15,
+    "ropeGrowthRate": 12,
     "clickHoldMaxDuration": 800,
-    "intensityCeiling": 7.5,
+    "intensityCeiling": 10,
     "minRopeLength": 0.5,
     "circleCutDistance": 3,
     "clickDistance": 11.4,
@@ -146,7 +146,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "bendStiffness",
         "ropeAnimSpeed",
@@ -157,7 +157,7 @@
     },
     {
       "key": "ROPE GROWTH",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "ropeGrowthRate",
         "clickHoldMaxDuration",
