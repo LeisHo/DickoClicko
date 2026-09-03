@@ -539,6 +539,24 @@ lost — verified via direct state inspection at the time.
   described single-flick scenario) is the SAME already-documented
   low-Constraint-Iterations tradeoff visible everywhere else in the rope,
   not a new bug — see CODE_SUMMARY's Gotchas for the full investigation.
+- Anchor physics made tunable, per a 4-note follow-up request: new
+  "ANCHOR PHYSICS" dev group (Circle Offset, Rope Start Bounce Intensity,
+  Rope Start Weight) exposes the boundary radius offset, bounce
+  restitution, and a per-point gravity multiplier that were previously
+  either hardcoded or absent. Caught and fixed a real bug during
+  verification — the new boundary-radius helper could go negative when a
+  large negative offset combined with a small circle size, now floored at
+  2px. Also redesigned End Emerge's actual spawn mechanism: a freshly-cut
+  endcap now spawns bottom-edge-aligned to the cut point at a tunable
+  reduced scale (`Endcap Starting Scale`, default 0.5), then scales up and
+  slides down the rope into its normal top-anchored position over the
+  existing delay/speed/tweening window, instead of just scaling up in
+  place. All 4 new settings verified directly (isolated bounce-formula
+  test, cut-and-step emerge-factor trace, general segment-length
+  regression) — see CODE_SUMMARY's Gotchas for the full investigation,
+  including a test-methodology trap (routing a bounce test through the
+  full update() pipeline masked the restitution effect) caught and worked
+  around before it could be mistaken for a real bug.
 
 ## What's next
 

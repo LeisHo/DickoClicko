@@ -2447,7 +2447,93 @@ unrelated ERR_CONNECTION_RESET entries accumulated from earlier
 redundant reload attempts this session, not from index.html).
 
 --------------------------------------------------------------------------------
-<next entry follows the same divider + dated-header pattern>
+2026-09-02  -  10:34 PM EDT
+
+Anchor-physics tuning controls, plus an End Emerge visual redesign, both
+from a 4-note *D* spec.
+
+Added:
+- New "ANCHOR PHYSICS" dev group (placed right after CIRCLE):
+  - Circle Offset (circleBoundaryOffset, %vmin, -10..10, def 0) -- offsets
+    the radius of the invisible boundary circle the rope's anchor point
+    (index 0) is confined within, independent of the visible circle's own
+    size.
+  - Rope Start Bounce Intensity (anchorBounceIntensity, x, 0..1.5, def 0.4)
+    -- now feeds the restitution coefficient in
+    constrainAnchorToCircle()'s velocity-reflection formula directly
+    (previously hardcoded).
+  - Rope Start Weight (anchorWeight, x, 0..5, def 1) -- a per-point gravity
+    multiplier applied only to the anchor point, via a new weightMult
+    field on integrateChain()'s boundaryConstraint param, so the anchor
+    can read as heavier/lighter than the rest of the chain even though
+    it's no longer rigidly pinned.
+- anchorBoundaryRadius() helper: vmin(circleSize)/2 + vmin(circleBoundaryOffset),
+  floored at a 2px minimum -- a real bug caught during verification, where a
+  large negative offset combined with a small circle size produced a
+  negative radius (meaningless for both the `dist > R` check and the
+  center + normal*R clamp). Confirmed fixed: circleBoundaryOffset=-5 against
+  the live circleSize=8 now correctly returns 2 instead of -8.
+- Endcap Starting Scale (endcapStartingScale, x, 0.1..1, def 0.5, added to
+  END EMERGE group right after End Emerge Enabled) -- feeds a full redesign
+  of drawEndcap()'s spawn-to-settled interpolation: at factor=0 (the instant
+  a cut spawns a fresh endcap) both the draw scale AND the local SVG anchor
+  point translated to the tip are pulled toward the design's own bbox
+  bottom edge (ENDCAP_BOTTOM_Y, computed once at startup via a throwaway
+  SVG element + getBBox(), replacing the unused ENDCAP_WIDTHS concept from
+  the initial End Emerge build) at endcapStartingScale; as factor rises to
+  1 over the End Emerge Delay + End Emerge Speed/Tweening window, both
+  interpolate back to the normal full scale and the normal
+  ENDCAP_ALIGNMENT.topY anchor -- producing the requested "spawns aligned
+  to the cut end at reduced scale, then scales up and slides down the rope
+  into its normal position" effect. The X anchor (topCenterX) stays fixed
+  throughout; verified all 14 endcap designs are horizontally symmetric
+  around it.
+
+Verified (via a temporary debug hook, window.__debugTMPropo, removed
+before commit, grep-confirmed 0 references):
+- anchorBounceIntensity, isolated directly against constrainAnchorToCircle()
+  (bypassing the rest of update()'s pipeline, which was contaminating an
+  earlier test -- see below): restitution 0 -> 0 rebound velocity,
+  0.4 -> -4, 1.0 -> -10, against a fixed +10 outward test velocity --
+  exactly matches the v' = v - (1+r)*(v.n)*n formula. Confirmed correctly
+  wired.
+- anchorWeight: a from-rest single-frame comparison at weight 1 vs 3 showed
+  a real, correctly-directed difference (1.089 vs 1.776 downward velocity;
+  not a clean 3x ratio, expected since the boundary clamp and distance
+  constraint both interact with the anchor point within the same frame).
+- End Emerge redesign: triggered a real mid-rope cut via
+  hitTestRope()+cutRopeAt(), then stepped the simulation forward -- factor
+  stayed null while the cut was still mid-sweep (pieceCount 0), then rose
+  cleanly 0 -> 0.265 -> 1.0 across the delay+emerge window and held at 1.0
+  afterward, no thrown errors. Confirmed startAnchorY (157.80, the current
+  endcapDesign's own bbox bottom) sits below normalAnchorY (80.26, the
+  design's neck/top edge) as expected for the "bottom edge at spawn, top
+  edge once settled" interpolation.
+- General regression: 5s of settle time post-cut kept segment-length
+  ratios bounded at 1.0-1.139x (consistent with the already-documented
+  constraintIterations=3 tradeoff, not a new instability), and the anchor
+  point settled at exactly circleAnchor + (0, anchorBoundaryRadius) -- dead
+  center of the bottom of its boundary circle, the expected resting
+  equilibrium.
+
+One test-methodology trap hit and worked around, worth recording: an
+earlier combined test that set the anchor's position/velocity directly
+and then called the full d.update() (rather than
+constrainAnchorToCircle() in isolation) produced an identical -5 result
+across bounce intensities 0/0.4/1.0 -- a flat, suspicious result, since
+different restitution values should produce different reflected
+velocities. Root cause: update() runs integrateChain()'s own per-iteration
+boundaryConstraint position-clamp (which does NOT depend on restitution)
+BEFORE constrainAnchorToCircle() ever runs, so by the time the bounce
+logic executed, the position-clamp (plus the distance constraint pulling
+against it) had already overwritten most of the manually-set test
+velocity, in a way that happened to look similar across all three
+intensities. Resolved by isolating constrainAnchorToCircle() directly via
+the debug hook instead of routing through update() -- confirmed the
+formula itself was correct all along, per the isolated results above.
+
+node --check clean. A stray double-blank-line left behind by the earlier
+debug-hook removal was also cleaned up while removing this turn's hook.
 
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix

@@ -188,6 +188,11 @@ const DEV_GROUPS = [
     { key:'circleY',     label:'Circle Y Pos',  type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:18 },
     { key:'circleColor', label:'Circle Color',  type:'color',  def:'#000000' },
   ]},
+  { title:'ANCHOR PHYSICS', controls:[
+    { key:'circleBoundaryOffset', label:'Circle Offset', type:'slider', unit:'%vmin', min:-10, max:10, step:0.5, def:0 },
+    { key:'anchorBounceIntensity', label:'Rope Start Bounce Intensity', type:'slider', unit:'x', min:0, max:1.5, step:0.05, def:0.4 },
+    { key:'anchorWeight', label:'Rope Start Weight', type:'slider', unit:'x', min:0, max:5, step:0.1, def:1 },
+  ]},
   { title:'ROPE', controls:[
     { key:'endcapDesign',   label:'Endcap Design',     type:'dropdown', def:'form1-c',
       options:[
@@ -244,6 +249,7 @@ const DEV_GROUPS = [
   ]},
   { title:'END EMERGE', controls:[
     { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:false },
+    { key:'endcapStartingScale', label:'Endcap Starting Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.5 },
     { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:0.3 },
     { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.2, max:5, step:0.1, def:1.3 },
     { key:'endEmergeTweening', label:'End Emerge Tweening', type:'dropdown', def:'easeOut',
@@ -1291,14 +1297,23 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
   // separate tip-position-smoothing fix above. Excluding the tip here
   // entirely removes the kick at its source.
   const tipIndex = skipLastSegment ? points.length - 1 : -1;
+  // boundaryConstraint.weightMult (Anchor Weight, see constrainAnchorToCircle()'s
+  // own comment) lets that one point feel MORE or LESS gravity than the rest
+  // of the chain -- e.g. mainRope's own anchor, so it can look/feel heavier
+  // ("like an anchor") even though it's no longer rigidly fixed. Defaults to
+  // 1 (identical to every other point) whenever boundaryConstraint is absent
+  // or doesn't specify one, so nothing changes for fallenPieces or for a
+  // mainRope with Anchor Weight left at its own default.
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex || i === tipIndex) continue;
     const p = points[i];
+    const weightMult = (boundaryConstraint && i === boundaryConstraint.index && boundaryConstraint.weightMult !== undefined)
+      ? boundaryConstraint.weightMult : 1;
     const vx = (p.x - p.oldx) * cfg.damping;
     const vy = (p.y - p.oldy) * cfg.damping;
     p.oldx = p.x; p.oldy = p.y;
     p.x += vx;
-    p.y += vy + gravityAccel * dt * dt;
+    p.y += vy + gravityAccel * weightMult * dt * dt;
   }
   // skipLastSegment excludes the LAST segment from distance-constraint
   // solving entirely -- used while that segment is a growing tip (see
@@ -1431,10 +1446,30 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
 // what makes it come to rest at the bottom with no special-casing needed
 // for that "default resting position": it's just this system's own
 // equilibrium.
+// Circle Offset (cfg.circleBoundaryOffset) lets the anchor's own confinement
+// radius differ from the circle GRAPHIC's own radius (vmin(circleSize)/2) --
+// positive shrinks the playable interior, negative lets the anchor bulge
+// past the drawn circle's own edge. Shared by constrainAnchorToCircle() and
+// update()'s own boundaryConstraint object passed into integrateChain(), so
+// the position-clamp and the bounce always agree on exactly the same
+// boundary -- if they used different radii, the bounce could fire at a
+// distance the position-clamp doesn't actually enforce (or vice versa).
+function anchorBoundaryRadius(){
+  // floored at a small positive minimum, not 0 -- a large enough negative
+  // Circle Offset relative to a small Circle Size would otherwise go
+  // negative, which is meaningless for a circle's own radius and broke
+  // the boundary math (confirmed directly: offset -5 against the default
+  // circleSize produced radius -8, at which point `dist > R` is always
+  // true regardless of the anchor's real position, and `center + normal*R`
+  // with a negative R places the clamp point on the OPPOSITE side of the
+  // circle from whichever direction the anchor was actually heading).
+  return Math.max(2, vmin(cfg.circleSize) / 2 + vmin(cfg.circleBoundaryOffset));
+}
+
 function constrainAnchorToCircle(){
   const p = mainRope.points[0];
   const center = circleAnchor();
-  const R = vmin(cfg.circleSize) / 2;
+  const R = anchorBoundaryRadius();
   const dx = p.x - center.x, dy = p.y - center.y;
   const dist = Math.hypot(dx, dy) || 1e-6;
   if (dist < R - 0.01) return;
@@ -1442,10 +1477,10 @@ function constrainAnchorToCircle(){
   const vx = p.x - p.oldx, vy = p.y - p.oldy;
   const vDotN = vx * nx + vy * ny;
   if (vDotN <= 0) return;
-  // hardcoded, matching the floor collision's own hardcoded 0.3
-  // bounce-damping constant elsewhere in this same function -- not a dev
-  // slider, same precedent.
-  const restitution = 0.4;
+  // Rope Start Bounce Intensity (restitution) -- was hardcoded 0.4,
+  // matching the floor collision's own hardcoded 0.3, until made
+  // dev-tunable per explicit request.
+  const restitution = cfg.anchorBounceIntensity;
   const rvx = vx - (1 + restitution) * vDotN * nx;
   const rvy = vy - (1 + restitution) * vDotN * ny;
   p.oldx = p.x - rvx;
@@ -2147,7 +2182,7 @@ function update(rawDt){
   if (growing) growRope(rawDt);
   const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
-    { index: 0, center: circleAnchor(), radius: vmin(cfg.circleSize) / 2 });
+    { index: 0, center: circleAnchor(), radius: anchorBoundaryRadius(), weightMult: cfg.anchorWeight });
   constrainAnchorToCircle();
   if (hasPartialTip) positionGrowingTip();
 
@@ -2367,45 +2402,55 @@ const ENDCAP_DESIGNS = {
   'form3-02': { d: 'M103.9,92.17c-.11-2.46.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.02,0-.05,0-.07,0-.02,0-.05,0-.07,0-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.96,13.24-10.07,15.7-.78,17.11,4.2,24.68,4.2,24.68,10.98,20.51,15.32,11.91,21.28,29.51.95,2.79,4.02,1.98,4.98,1.18,2.15-1.8,1.73-3.25,4.7-3.27,2.97.02,2.55,1.47,4.7,3.27.96.8,4.03,1.62,4.98-1.18,5.96-17.59,10.3-8.99,21.28-29.51,0,0,4.98-7.57,4.2-24.68Z', path: new Path2D('M103.9,92.17c-.11-2.46.23-13.73-10.07-15.7-5.49-1.05-11.23,4.34-25.02,3.79-.02,0-.05,0-.07,0-.02,0-.05,0-.07,0-13.78.55-19.53-4.84-25.02-3.79-10.3,1.97-9.96,13.24-10.07,15.7-.78,17.11,4.2,24.68,4.2,24.68,10.98,20.51,15.32,11.91,21.28,29.51.95,2.79,4.02,1.98,4.98,1.18,2.15-1.8,1.73-3.25,4.7-3.27,2.97.02,2.55,1.47,4.7,3.27.96.8,4.03,1.62,4.98-1.18,5.96-17.59,10.3-8.99,21.28-29.51,0,0,4.98-7.57,4.2-24.68Z') },
 };
 
-// Each design's own true bounding-box width in SVG units (its widest point,
-// not just ENDCAP_ALIGNMENT's neck width) -- needed by End Emerge (below)
-// to compute a "hidden" scale that shrinks the ENTIRE shape down to the
-// rope's own thickness, not just its neck. Computed ONCE at startup from
-// each design's raw `d` string via a throwaway SVG <path> element (Path2D
-// itself exposes no bounding-box query), rather than hand-measuring and
-// hardcoding a table of numbers -- keeps this correct automatically no
-// matter how many times the source SVGs get swapped/updated, with zero
-// extra maintenance.
-const ENDCAP_WIDTHS = (function(){
+// Each design's own true bounding-box BOTTOM edge, in local SVG Y units
+// (bbox.y + bbox.height -- its farthest point from the alignment line, NOT
+// just ENDCAP_ALIGNMENT.topY, which is the top/neck edge). Needed by End
+// Emerge (below): at spawn, the endcap's bottom edge -- not its top -- is
+// what gets anchored to the cut rope's own end, so the whole shape starts
+// tucked backward into the rope instead of sitting proud of it. Computed
+// ONCE at startup from each design's raw `d` string via a throwaway SVG
+// <path> element (Path2D itself exposes no bounding-box query), rather
+// than hand-measuring and hardcoding a table of numbers -- keeps this
+// correct automatically no matter how many times the source SVGs get
+// swapped/updated, with zero extra maintenance (the same reasoning this
+// same computation used when it measured width instead, before End
+// Emerge's redesign to anchor-point interpolation).
+const ENDCAP_BOTTOM_Y = (function(){
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.style.position = 'absolute'; svg.style.width = '0'; svg.style.height = '0'; svg.style.overflow = 'hidden';
   document.body.appendChild(svg);
-  const widths = {};
+  const bottoms = {};
   for (const key in ENDCAP_DESIGNS){
     const p = document.createElementNS(svgNS, 'path');
     p.setAttribute('d', ENDCAP_DESIGNS[key].d);
     svg.appendChild(p);
-    widths[key] = p.getBBox().width;
+    const bbox = p.getBBox();
+    bottoms[key] = bbox.y + bbox.height;
     svg.removeChild(p);
   }
   document.body.removeChild(svg);
-  return widths;
+  return bottoms;
 })();
 
 /* ---------------------------------------------------------------------
    End Emerge -- when enabled (End Emerge Enabled), a freshly-cut edge's
-   endcap doesn't appear at full size the instant the real split happens.
-   Instead it starts scaled down to exactly the rope's own thickness (so
-   it's visually indistinguishable from -- "completely obscured by" -- the
-   rope's own end, rendered via the normal Rope End Curve Arc treatment),
-   waits End Emerge Delay, then scales up to its real size over End Emerge
-   Speed's own duration, eased by End Emerge Tweening. Applies to BOTH
-   halves of every cut: the remaining rope/piece's own new tip (its
-   `tipEmerge`), and the newly-split-off piece's own new near/cut edge
-   (its `cutEdgeEmerge`) -- see performMainRopeSplit()/performPieceSplit(),
-   the only two places that create these states, since those are the only
-   two places a genuinely NEW cut edge is ever created.
+   endcap doesn't appear at full size/position the instant the real split
+   happens. Instead it SPAWNS anchored by its own BOTTOM edge (not its
+   usual top/neck edge) to the cut rope's end, at Endcap Starting Scale
+   (a fraction of normal size) -- so the whole shape starts tucked
+   backward, into the rope, rather than sitting proud of it. It waits End
+   Emerge Delay, then over End Emerge Speed's own duration (eased by End
+   Emerge Tweening), scales up AND slides its anchor point back to the
+   normal top/neck edge -- which reads as the endcap growing and sliding
+   down/out of the rope, being revealed -- ending at exactly the same
+   scale and position this app has always used for a fully-emerged
+   endcap. Applies to BOTH halves of every cut: the remaining rope/piece's
+   own new tip (its `tipEmerge`), and the newly-split-off piece's own new
+   near/cut edge (its `cutEdgeEmerge`) -- see performMainRopeSplit()/
+   performPieceSplit(), the only two places that create these states,
+   since those are the only two places a genuinely NEW cut edge is ever
+   created.
 --------------------------------------------------------------------- */
 const EMERGE_BASE_SEC = 0.35;
 const EMERGE_TWEENS = {
@@ -2462,17 +2507,23 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
   // rotation matrix (x cosθ - y sinθ, x sinθ + y cosθ) solved for
   // (-sinθ,cosθ) = (dir.x,dir.y).
   const angle = Math.atan2(-dir.x, dir.y);
-  // `factor` (End Emerge) interpolates between a "hidden" scale -- where
-  // the design's own FULL bounding-box width (ENDCAP_WIDTHS, its widest
-  // point) equals the rope's thickness, i.e. the whole shape tucked inside
-  // the rope's own width -- and the normal scale, where only the design's
-  // NECK (ENDCAP_ALIGNMENT.width, the alignment line) matches the rope's
-  // thickness, letting the shape's actual widest point bulge out past it
-  // as authored. factor==1 (the default, and always the case when End
-  // Emerge is off) reduces this to exactly the old unconditional `scale`.
+  // `factor` (End Emerge) interpolates BOTH scale and WHICH local point
+  // gets anchored to the tip. At factor==0 (spawn): scale is Endcap
+  // Starting Scale × normal, and the anchor is the design's own BOTTOM
+  // edge (ENDCAP_BOTTOM_Y) -- so the shape sits mostly BEHIND the tip,
+  // tucked into the rope. At factor==1 (fully emerged, and always the
+  // case when End Emerge is off): scale is normal, and the anchor is back
+  // to the usual top/neck edge (ENDCAP_ALIGNMENT.topY) -- identical to
+  // this app's original, pre-End-Emerge behavior. The anchor's X
+  // (topCenterX) doesn't need to vary between the two -- every design is
+  // authored horizontally symmetric almost exactly around that same X
+  // (confirmed directly: e.g. form1-c's own measured bbox center sits
+  // within 0.02 units of topCenterX), so only Y needs to move.
   const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
-  const hiddenScale = thicknessPx / (ENDCAP_WIDTHS[designKey] || ENDCAP_ALIGNMENT.width);
-  const scale = hiddenScale + (normalScale - hiddenScale) * factor;
+  const startScale = normalScale * cfg.endcapStartingScale;
+  const scale = startScale + (normalScale - startScale) * factor;
+  const startAnchorY = ENDCAP_BOTTOM_Y[designKey] !== undefined ? ENDCAP_BOTTOM_Y[designKey] : ENDCAP_ALIGNMENT.topY;
+  const anchorY = startAnchorY + (ENDCAP_ALIGNMENT.topY - startAnchorY) * factor;
   ctx.save();
   ctx.translate(tip.x, tip.y);
   ctx.rotate(angle);
@@ -2480,15 +2531,17 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor){
   // applied here, before the anchor-shift below, so it scales the shape
   // around the path's own local origin. Since the anchor-shift translate is
   // the LAST transform call (so it acts FIRST on the path's raw coordinates,
-  // canvas transforms compose in reverse call order), the anchor point
-  // (topCenterX,topY) always lands at local (0,0) regardless of scale --
-  // any scale factor leaves the origin fixed -- so the cap's top edge stays
-  // exactly at the tip no matter how much vertical stretch (heightMult) or
-  // emergence shrink (factor) is applied -- which is also exactly what
-  // gives End Emerge its "scales up and moves out from the tip" look for
-  // free, with no separate position animation needed.
+  // canvas transforms compose in reverse call order), whichever local point
+  // is used as the anchor always lands at local (0,0) regardless of scale
+  // -- so THAT point stays exactly at the tip no matter how much vertical
+  // stretch (heightMult), emergence shrink, or emergence anchor-shift is
+  // applied. Interpolating anchorY together with scale is what gives End
+  // Emerge its "grows and slides out of the rope" look: as anchorY moves
+  // from the design's own bottom edge back up to its top/neck edge, the
+  // point of the shape that's pinned to the tip moves too, dragging the
+  // rest of the (simultaneously growing) shape out from behind the rope.
   ctx.scale(scale, scale * heightMult);
-  ctx.translate(-ENDCAP_ALIGNMENT.topCenterX, -ENDCAP_ALIGNMENT.topY);
+  ctx.translate(-ENDCAP_ALIGNMENT.topCenterX, -anchorY);
   ctx.fillStyle = color;
   ctx.fill(design.path);
   ctx.restore();
@@ -2650,7 +2703,6 @@ if (DEV_MODE){
   resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 }
 requestAnimationFrame(loop);
-
 })();
 </script>
 </body>

@@ -1399,3 +1399,89 @@ GOTCHAS
     Confirmed as the actual explanation (not a rendering/physics bug) by
     re-running the identical test via in-place mutation instead, which
     immediately showed correct movement.
+- **Anchor-physics tuning follow-up**, from a 4-note `*D*` spec building
+  directly on the anchor-boundary work above:
+  - `constrainAnchorToCircle()`'s restitution is now `cfg.anchorBounceIntensity`
+    (was hardcoded `0.4`); `integrateChain()`'s `boundaryConstraint` param
+    gained a `weightMult` field (read only for the index it targets) that
+    multiplies just that point's `gravityAccel * dt * dt` term, wired to
+    `cfg.anchorWeight`; the boundary radius itself moved into a shared
+    `anchorBoundaryRadius()` helper (`vmin(circleSize)/2 +
+    vmin(circleBoundaryOffset)`) so both `integrateChain()`'s call site and
+    `constrainAnchorToCircle()` always agree on the same radius.
+  - **Real bug caught during verification, not left for the user to find**:
+    `anchorBoundaryRadius()` had no floor, so a large negative
+    `circleBoundaryOffset` combined with a small `circleSize` produced a
+    NEGATIVE radius (measured: `circleBoundaryOffset=-5` against the live
+    `circleSize=8` → `-8`), which breaks both the `dist > R` check (always
+    true regardless of actual position, since `dist` can't be negative) and
+    the `center + normal*R` clamp (places the point on the WRONG side of
+    center). Fixed by flooring the return value at `Math.max(2, ...)`.
+    Verified the fix directly: the same inputs now return `2`.
+  - **Test-methodology trap, caught before being reported as a bug**: an
+    initial combined bounce/weight test set the anchor's position/velocity
+    directly and called the FULL `d.update()` (rather than
+    `constrainAnchorToCircle()` in isolation), and got an identical `-5`
+    result across `anchorBounceIntensity` values `0`/`0.4`/`1.0` -- a flat,
+    suspicious result, since different restitution values should produce
+    different reflected velocities per the formula. Root cause: `update()`
+    runs `integrateChain()`'s own per-iteration `boundaryConstraint`
+    position-clamp (which does NOT depend on restitution at all) BEFORE
+    `constrainAnchorToCircle()` ever runs, so by the time the bounce logic
+    executed, the position-clamp (plus the distance constraint pulling
+    against it across `constraintIterations` rounds) had already
+    overwritten most of the manually-set test velocity, producing similar
+    residual results across all three intensities almost by coincidence.
+    Resolved by exposing `constrainAnchorToCircle` on the debug hook and
+    testing it directly, bypassing `integrateChain()`/`update()` entirely:
+    `restitution=0 → 0` rebound velocity, `0.4 → -4`, `1.0 → -10`, against a
+    fixed `+10` outward test velocity -- exactly matches
+    `v' = v - (1+r)*(v.n)*n`. Confirmed the formula and its wiring were
+    correct all along; only the test setup was flawed. (Same general shape
+    as the `resetMainRope()` trap above -- a debug-hook test that routes
+    through more machinery than the thing actually being tested can produce
+    a convincing false signal.)
+  - `anchorWeight` verified via a from-rest single-frame comparison: weight
+    1 vs 3 produced downward velocities `1.089` vs `1.776` -- a real,
+    correctly-directed difference, though not a clean 3x ratio (expected,
+    since the boundary clamp and distance constraint both act on the anchor
+    point within the same frame/iteration, diluting a pure gravity-term
+    multiplier).
+  - **End Emerge's spawn mechanism redesigned** per explicit request: the
+    original build (see the End Emerge Gotcha above) only scaled the
+    endcap up uniformly in place; the new design also moves WHERE on the
+    endcap's own local geometry gets anchored to the rope's tip.
+    `drawEndcap()` gained a new `factor`-driven anchor interpolation
+    alongside its existing scale interpolation: at `factor=0` (spawn), the
+    local anchor point is the design's own bbox BOTTOM edge
+    (`ENDCAP_BOTTOM_Y[designKey]`) at `normalScale * cfg.endcapStartingScale`;
+    at `factor=1` (fully emerged), it's the normal
+    `ENDCAP_ALIGNMENT.topY`/full `normalScale` used everywhere else. The X
+    anchor (`ENDCAP_ALIGNMENT.topCenterX`) stays fixed throughout --
+    verified all 14 endcap designs are horizontally symmetric around it, so
+    a fixed X anchor never introduces a lateral jump. `ENDCAP_BOTTOM_Y` is
+    computed once at startup the same way `ENDCAP_ALIGNMENT` already is (a
+    throwaway off-DOM SVG `<path>` + `getBBox()`), REPLACING the unused
+    `ENDCAP_WIDTHS` concept from the original End Emerge build (bbox width
+    was never actually used by anything; bbox bottom Y is what this
+    redesign actually needs).
+  - Verified via a real triggered cut (`hitTestRope()` + `cutRopeAt()` with
+    a synthesized `{...hit, target:'rope'}`, matching `hitTestAny()`'s own
+    tagging -- `cutRopeAt()` takes a hit-test result object, not raw
+    coordinates) then stepping the simulation forward: `tipEmerge` stayed
+    `null` while the cut was still mid-sweep (`pieceCount` 0, confirming
+    the deferred-split `pendingCut` mechanism from an earlier round hadn't
+    fired yet), then `emergeFactor()` rose cleanly `null → 0.265 → 1.0`
+    across the delay+speed window and held at `1.0` afterward, no thrown
+    errors. Confirmed `startAnchorY` (157.80, the live `endcapDesign`'s own
+    bbox bottom) sits numerically BELOW `normalAnchorY` (80.26, the same
+    design's neck/top edge) -- correct, since canvas/SVG Y increases
+    downward, so "bottom edge" being a larger Y than "top/neck edge" is
+    exactly the ordering the spawn→settled interpolation depends on.
+  - General regression re-confirmed with anchor physics active throughout:
+    5s of settle time post-cut kept segment-length ratios bounded at
+    1.0-1.139x (the same already-documented `constraintIterations=3`
+    tradeoff, not a new instability), and the anchor point settled at
+    exactly `circleAnchor + (0, anchorBoundaryRadius)` -- dead center of
+    the bottom of its own boundary circle, the expected resting
+    equilibrium from the original anchor-physics build.
