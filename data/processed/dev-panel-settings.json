@@ -11,7 +11,7 @@
     "endcapHeight": 1.3,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.4,
-    "ropeLength": 31.45210681038715,
+    "ropeLength": 31.702106810387154,
     "ropeColor": "#a5815f",
     "ropeEndCurveArc": 1,
     "ropeTopCurveArc": 1,
@@ -48,7 +48,7 @@
     "introEnabled": true,
     "introWaitDuration": 2,
     "introRiseSpeed": 5,
-    "introPauseDuration": 0.1
+    "introPauseDuration": 2
   },
   "order": [
     {
