@@ -1875,3 +1875,70 @@ GOTCHAS
   time produced a second fallen piece and a second full replay,
   confirming repeatability, with a double-click attempted mid-replay
   verified as a no-op.
+- **`bgRope` (the background "peeking" rope) is a second, fully
+  independent chain -- only its anchor point is externally driven.**
+  Built once at Boot (`resetBgRope()`) and rebuilt again at the startup
+  animation's own `'pausing'->'growing'` transition (same race-avoidance
+  reasoning as `introTargetLengthPx`'s own capture -- locks the length in
+  against the real settings-loaded `cfg.ropeLength`, not a pre-load
+  default). Every frame in `update()`, AFTER `mainRope`'s own
+  `integrateChain()` call has produced this frame's final anchor
+  position: `bgRope.points[0].x/y = mainRope.points[0].x/y`, then
+  `integrateChain(bgRope.points, bgRope.segLen, dt, gravityAccel, 0)` --
+  `pinnedIndex=0` excludes that point from gravity/integration entirely
+  (the same mechanism `mainRope`'s own anchor used back when it was
+  rigidly pinned, before the anchor-physics work made it free-floating),
+  so the rest of the chain solves normally against a fixed anchor each
+  frame while that anchor itself gets externally relocated every frame --
+  net effect: bgRope's start tracks mainRope's start exactly, but its
+  body swings under its own fully independent physics, never mirroring
+  mainRope's own shape. `bgRope` is never touched by any cut/punch/grow
+  code path -- non-interactivity ("it cant get cut and it cant get
+  extended... will not be affected by our click") is achieved simply by
+  never wiring it into any of those functions, not by an explicit guard.
+  Rendered via a `ctx.save()/beginPath()/arc()/clip()/strokeRopeCurve()/
+  restore()` block in `render()`, right after the circle's own fill --
+  the first use of canvas clipping in this project. Gated behind the
+  same `introPhase === 'done' || introPhase === 'growing'` condition
+  `showMainRope` uses (re-stated inline since `showMainRope` isn't
+  computed until later in the function), so it stays hidden during
+  waiting/rising/pausing rather than contradicting "no rope, just the
+  circle." Verified live via monkey-patched `ctx.save/clip/restore/
+  stroke`: exactly 1 `clip()` call wrapping exactly 1 `stroke()` call
+  per `render()` frame, confirming the block executes as written.
+- **Found while verifying the above: a real, previously-undiagnosed bug
+  where `resetSettings()` silently defeated the startup animation's own
+  "grow from nothing" effect on every load where a saved Rope Length
+  existed -- which is the normal case, not an edge case.** `ropeLength`'s
+  `DEV_GROUPS` entry has an `onChange: v => setMainRopeTotalLength(vh(v))`
+  handler (needed for a real slider drag to resize `mainRope` live); but
+  `applyValues()` -- called by `resetSettings()` whenever it loads a saved
+  snapshot -- ALSO fires every loaded slider's `onChange`, the exact same
+  as a real drag would. Since `resetSettings()` runs async and unawaited
+  at Boot (see the startup animation's own Gotcha above), it typically
+  resolves DURING `'waiting'`, snapping `mainRope` from its intentionally
+  minimal single-segment start straight to the full saved length via
+  `setMainRopeTotalLength()` -- with `introPhase` completely untouched by
+  that call, so the animation kept running its own timer/dot-rise/pause
+  sequence against an already-full rope that was simply hidden by
+  `showMainRope`'s gate, then "grew" from a length that was already at
+  (or past) its own target the instant `'growing'` began, finishing
+  instantly. This had been happening since the startup animation's very
+  first round and passed every earlier direct-code-path test in this
+  file's own history, because those tests checked PHASE TIMING and
+  final-state pixel colors, never mainRope's actual point count/
+  totalLength DURING `'waiting'` against what a truly minimal rope
+  should measure (confirmed only this round, by computing the expected
+  minimal length --`vh(TARGET_SEG_LEN_VH)`, ~28px at this project's
+  typical viewport -- and noticing every prior test's own logged
+  `totalLength` during `'waiting'` was actually ~190-250px, matching a
+  FULL rope all along). Fixed with a minimal, targeted guard --
+  `onChange: v => { if (mainRope && introPhase === 'done')
+  setMainRopeTotalLength(vh(v)); }` -- skipping the resize while the
+  animation is actively managing `mainRope`'s own length; the animation
+  already reads `cfg.ropeLength` itself, fresh, at the exact moment it
+  needs to (`'pausing'->'growing'`), so nothing is lost. Verified live: a
+  full cycle after the fix showed `mainRope.totalLength` genuinely start
+  at ~28px and grow smoothly to the configured ~252px over a duration
+  matching the new Startup Extension Speed slider almost exactly (1863ms
+  measured vs. ~1867ms computed from rate × distance).

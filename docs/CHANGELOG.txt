@@ -3000,6 +3000,86 @@ Verified:
   guard was needed) -- a double-click attempted mid-sequence was a
   verified no-op.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  02:43 AM - 02:56 AM EDT
+
+A follow-up request that arrived mid-turn while confirming the previous
+double-click feature: "and why cant i set the startup rise speed slower
+than 5? let me do really slow. *D*Slider for the speed at which the
+startup animation rope extends. give me a checkbox to pick the option to
+instead of setting the speed the entire extension, i can set a starting
+speed, and that speed tweens into the default extension speed as the rope
+extends."
+
+Added:
+- A permanent, non-interactive "background" rope, per explicit request:
+  its own anchor is forced to mainRope's real (post-integration) anchor
+  position every frame, but it swings under its own fully independent
+  physics (same cfg values -- gravity/damping/constraint iterations --
+  as mainRope, "the same physical properties"), and it can never be cut
+  or extended, drawn clipped to exactly the circle's own circular shape
+  (canvas `ctx.clip()`, a first for this project) so the circle genuinely
+  acts as a clipping mask rather than a plain graphic. New `bgRope`
+  module state + `resetBgRope()` (built once at Boot, and again at the
+  startup animation's own 'pausing'->'growing' transition so its fixed
+  length locks in against the real settings-loaded Rope Length rather
+  than a possible pre-load default, same race-avoidance pattern the
+  animation's own target-length capture already uses). Hidden during
+  waiting/rising/pausing, same gate as mainRope itself, so it doesn't
+  contradict "no rope, just the circle."
+- Startup Rise Speed's slider minimum lowered from 5 to 0.5 %vh/s (step
+  also finer, 5->0.5) so a genuinely slow climb is reachable by dragging,
+  not just by typing past the old floor.
+- A dedicated "Startup Extension Speed" slider, decoupling the startup
+  animation's own 'growing' phase from the manual hold-to-grow rate
+  (previously silently reused `cfg.ropeGrowthRate`) -- `growRope()` now
+  takes an optional rate override, defaulting to `cfg.ropeGrowthRate` so
+  every pre-existing caller is unaffected.
+- "Startup Extension Speed Tween Enabled" checkbox + "Startup Extension
+  Starting Speed" slider: when on, the extension rate linearly tweens
+  from the starting speed up to the default extension speed as progress
+  goes 0%->100% of the extension's own span (new `currentIntroExtendRate()`
+  helper), instead of extending at one flat rate throughout.
+
+Fixed:
+- A real, previously-undiagnosed bug found while investigating why the
+  background rope's clip looked wrong in early testing: the Rope Length
+  slider's `onChange` (`setMainRopeTotalLength()`) fired unconditionally
+  whenever `resetSettings()` applied a saved value -- including mid-
+  startup-animation -- silently snapping mainRope to full length during
+  'waiting', long before the animation's own 'growing' phase ever ran.
+  This meant the "grow from nothing" effect had likely never actually
+  been visible on a real deployment where a saved Rope Length loads
+  successfully (the normal case) since the very first startup-animation
+  round, even though every direct code-path test back then passed.
+  Fixed by skipping that onChange resize while `introPhase !== 'done'`
+  -- the animation already reads `cfg.ropeLength` itself, fresh, at the
+  exact moment it needs to, so nothing is lost.
+
+Verified:
+- node --check clean after every edit.
+- Live, via a temporary debug hook (removed before commit, grep -c
+  confirmed 0 references remain): after the onChange fix, a full
+  waiting->rising->pausing->growing->done cycle showed mainRope
+  genuinely starting at 1 segment (~28px) and growing to the configured
+  full length (~252px) over a duration matching Startup Extension
+  Speed's own value almost exactly (1863ms observed vs. ~1867ms
+  computed from rate*distance) -- confirming both the bug fix and the
+  new dedicated rate. bgRope's own anchor point matched mainRope's exactly
+  at every sampled frame across a full cycle. Monkey-patched
+  ctx.save/clip/restore/stroke confirmed exactly 1 clip() wrapping
+  exactly 1 stroke() per render() frame -- the clip path executes
+  as written. Toggled the tween checkbox live via real DOM events and
+  set distinct start (3) / default (30) speeds, then ran a full detach-
+  and-regrow cycle: the sampled rate rose smoothly and monotonically
+  from ~3 at the start of 'growing' to exactly 30 at 'done', confirming
+  the linear tween. One earlier isolated "Cannot read properties of
+  undefined (reading 'x')" console error appeared once, immediately
+  after a run of failed/retried navigations to the same URL (a likely
+  stale-tab-reload race in this session's own browser tooling, not the
+  app) -- did not recur across 4 subsequent clean full-cycle runs with
+  an error listener attached, so not treated as a real bug.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

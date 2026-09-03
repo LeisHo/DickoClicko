@@ -689,6 +689,28 @@ assuming it never shipped.
   double-click dispatched twice in a row, each producing a full fallen
   piece and a full replay, with interaction correctly blocked for the
   whole sequence both times.
+- Added a permanent, non-interactive "background" rope, per explicit
+  follow-up request: same physics as mainRope, its anchor forced to
+  follow mainRope's own anchor every frame, but drawn clipped to exactly
+  the circle's shape (a first use of canvas `ctx.clip()` in this
+  project) so it only peeks through where the circle "hole" is. Also
+  added, per the same follow-up: Startup Rise Speed's slider floor
+  lowered (5 -> 0.5 %vh/s) so a genuinely slow climb is reachable; a
+  dedicated Startup Extension Speed slider decoupling the animation's
+  growth pacing from the manual hold-to-grow rate; and a Startup
+  Extension Speed Tween checkbox + Starting Speed slider that linearly
+  ramps the extension rate up as the rope grows, instead of one flat
+  rate throughout. While building the background rope, found and fixed a
+  real, previously-undiagnosed bug: the Rope Length slider's `onChange`
+  fired unconditionally whenever saved settings loaded, silently
+  snapping mainRope to full length DURING the startup animation's own
+  'waiting' phase -- meaning the "grow from nothing" effect had likely
+  never actually been visible on a real deployment since the animation
+  first shipped, despite passing every earlier direct-code-path test.
+  Fixed by skipping that resize while the animation is active; verified
+  live that a full cycle now genuinely starts at 1 segment and grows to
+  the configured length over a duration matching the new Extension Speed
+  slider almost exactly.
 
 ## What's next
 
