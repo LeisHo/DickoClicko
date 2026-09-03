@@ -711,6 +711,23 @@ assuming it never shipped.
   live that a full cycle now genuinely starts at 1 segment and grows to
   the configured length over a duration matching the new Extension Speed
   slider almost exactly.
+- Incorporated user-edited/new endcap SVGs into `ENDCAP_DESIGNS` and the
+  Endcap Design dropdown, per explicit request ("i added new svgs and
+  edited some. incorporate"). Diffed every `data/Rope/End_Form*.svg`
+  against the embedded path data programmatically (not by eyeballing
+  timestamps) to find the real scope: `form1-01` and `form4` had genuinely
+  changed path data; `form6`/`form7`/`form8`/`form9` were new designs (24
+  total now); everything else was untouched. Re-checked `form1-01`'s edit
+  against the earlier-reported neck-seam issue (see CODE_SUMMARY's
+  Gotchas) — **still not fixed**: the shape's fill at the exact anchor
+  line (y=80.26) is still only ~4 units wide (41.6-45.8) out of the
+  expected 54.49, the same as before the edit; flagged back to the user
+  rather than assumed fixed. `form4`'s edit and all 4 new designs DO fill
+  the full expected width at that line, verified directly the same way.
+  All 6 confirmed rendering with 0 errors via `update()`/`render()`
+  (worked around 2 unrelated, real bugs in the still-in-progress Startup
+  Animation feature to get a valid rope state to test against — see Open
+  Questions below, not fixed, not mine to fix).
 
 ## What's next
 
@@ -727,6 +744,21 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
+- **The Startup Animation feature currently breaks the app on every frame
+  with `introEnabled: true` (the live default).** Found incidentally
+  while testing endcap SVGs, on a completely fresh page load with no
+  test interference: `loop()` logs "loop() error (frame skipped):
+  Cannot read properties of undefined (reading 'x')" every single frame,
+  from `integrateChain()` failing on `mainRope.points[0]` (empty
+  `points` array right after boot) and, once that's worked around,
+  the same failure on `bgRope.points[0]`. Confirmed NOT a test artifact
+  -- reproduced on a truly untouched reload before any debug hook was
+  attached. This means the rope currently never renders or updates at
+  all with the live default settings. Not investigated further or fixed
+  -- this is the Startup Animation feature from the "Recently completed"
+  entry above, which is still apparently under active development by a
+  concurrent session; flagging clearly rather than silently working
+  around it in the shipped code or silently leaving it undiscovered.
 - Tier 1 (Vercel/GitHub API Save) is confirmed working end-to-end: 3 real
   "Update dev-panel-settings.json via Save Settings" commits landed on the
   remote from the user's own live deployment (visible in git history as

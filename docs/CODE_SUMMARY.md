@@ -1942,3 +1942,80 @@ GOTCHAS
   at ~28px and grow smoothly to the configured ~252px over a duration
   matching the new Startup Extension Speed slider almost exactly (1863ms
   measured vs. ~1867ms computed from rate × distance).
+- **Incorporating edited/new endcap SVGs: diff programmatically, don't
+  trust file mtimes.** Per "i added new svgs and edited some. incorporate"
+  -- several `data/Rope/End_Form*.svg` files had recent mtimes (from
+  01:30-01:39 AND separately 03:23-03:46, two different editing sessions
+  by the look of it), but a Python script comparing each file's own
+  `<path d="...">` against what's actually embedded in `ENDCAP_DESIGNS`
+  found only 2 of those recently-touched files (`form1-01`, `form4`) had
+  genuinely different path data -- the rest (`form1-02`, `form1-04`,
+  `form1-15`, `form2-16`, `form5`) were re-saved with byte-identical path
+  content (likely other attributes changed -- style, anchor-line
+  position -- that don't affect the embedded geometry). Trusting mtimes
+  alone would have either updated designs that didn't need it (harmless
+  but wasted verification effort) or, worse, given false confidence that
+  "everything with a recent mtime is handled" while missing a design
+  whose file changed without a correspondingly recent mtime (e.g. a
+  batch-touch or sync operation). The diff script is the reliable check;
+  mtimes are a hint at best.
+- **`form1-01`'s SVG edit did NOT fix the neck-seam bug diagnosed 2
+  rounds ago** (see that Gotcha above for the original measurement
+  technique and root cause). Re-measured the NEW path's fill at y=80.26
+  (the shared `ENDCAP_ALIGNMENT.topY` reference line every endcap is
+  pinned to) using the identical `ctx.isPointInPath()` sweep: still only
+  41.6-45.8 filled (~4 units), against the expected full 41.6-96 span --
+  nearly unchanged from the pre-edit measurement. The specific edit that
+  landed (the path's closing segment changed from `h-4.31` to `h-50.19Z`)
+  altered how the path closes near its start point, not the actual shape
+  of its top edge, which remains a narrow peak rather than a flat line at
+  the pin line. `form4`'s edit (genuinely different `d`, same underlying
+  design concept) and all 4 new designs (`form6`/`form7`/`form8`/`form9`)
+  DO fill the full expected span at that exact line, confirmed the same
+  way -- they're correctly built like the project's other already-good
+  designs. `ENDCAP_BOTTOM_Y` needed no code change for the 4 new designs
+  -- it's computed dynamically by iterating `ENDCAP_DESIGNS` at module
+  load, so new keys are picked up automatically.
+- **Verifying against this project's newest concurrent feature (Startup
+  Animation) required working around 2 real, live bugs in it, neither of
+  which is this session's own work to fix.** A completely fresh page
+  reload with the live `introEnabled: true` default has `mainRope.points`
+  empty (`length === 0`) immediately after boot -- calling
+  `resetMainRope()` directly doesn't fix it either (returns with
+  `segLen: 0`, `totalLength: 0`, all still consistent with the object
+  literal it builds, just built from inputs that must themselves be
+  wrong/uninitialized at that point in the intro's own state machine, not
+  investigated further since it's out of scope). Any `update()` call in
+  this state throws at `integrateChain()`'s `boundaryConstraint` block
+  (`points[boundaryConstraint.index]` is `undefined`). Once `mainRope`
+  is manually populated (mutated in place via a `getMainRope: () =>
+  mainRope` getter exposed on the debug hook -- NOT a captured object
+  reference, which would hit the exact same stale-reference trap
+  documented in an earlier Gotcha above, since `resetMainRope()`/the
+  intro logic reassigns the module-level `mainRope` variable rather than
+  mutating it), the SAME class of crash recurs one level down:
+  `bgRope.points[0]` is ALSO empty, crashing the line that copies
+  `mainRope`'s anchor position onto it (`update()`, right after the main
+  `integrateChain()` call). Manually populating both (via `getMainRope`/
+  a new `getBgRope: () => bgRope` getter) was enough to get a clean,
+  crash-free environment to actually test the endcap changes in.
+  **Confirmed this is a REAL bug, not a test artifact**: reproduced
+  identically via `read_console_messages` on a totally untouched fresh
+  reload, with no debug hook attached at all -- `loop()`'s own error
+  handler logs "loop() error (frame skipped): Cannot read properties of
+  undefined (reading 'x')" on every single animation frame, meaning the
+  rope currently never renders or updates at all with the app's own live
+  default settings. Notably, the Startup Animation feature's own most
+  recent changelog entry (immediately preceding this one) mentions seeing
+  this exact error message ONCE during its own testing and dismissing it
+  as "a likely stale-tab-reload race in this session's own browser
+  tooling, not the app," not recurring across 4 subsequent clean runs
+  for that session -- worth flagging that this session's own reproduction
+  was 100% consistent across every fresh reload attempted, with no
+  navigation race involved, suggesting that earlier dismissal may not
+  hold up, or something changed since it was written. Not investigated
+  further or fixed here -- it's squarely the Startup Animation feature's
+  own still-in-progress code, not this task's scope (incorporating
+  endcap SVGs); flagged in PROJECT_PROGRESS's Open Questions instead of
+  silently working around it in the shipped code or silently leaving it
+  undiscovered.

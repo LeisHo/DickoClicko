@@ -3080,6 +3080,82 @@ Verified:
   app) -- did not recur across 4 subsequent clean full-cycle runs with
   an error listener attached, so not treated as a real bug.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  04:00 AM EDT
+
+Incorporated user-edited/new endcap SVGs ("i added new svgs and edited
+some. incorporate").
+
+Diffed every data/Rope/End_Form*.svg's own <path d="..."> against what's
+currently embedded in ENDCAP_DESIGNS programmatically (a small Python
+script, not by eyeballing file mtimes) to establish the real scope before
+touching anything:
+- Changed: form1-01, form4 (path data genuinely differs from what's embedded).
+- New: form6, form7, form8, form9 (not in ENDCAP_DESIGNS at all yet).
+- Unchanged: all other 17 designs (form1-02 through form3-02, form5) --
+  despite several having recent file mtimes, their actual <path d> content
+  is byte-identical to what's already embedded, so nothing to update there.
+
+Updated form1-01's and form4's `d`/Path2D entries in ENDCAP_DESIGNS to the
+new path data; added form6-9 as new entries (ENDCAP_BOTTOM_Y needed no
+change -- it's already computed dynamically by iterating ENDCAP_DESIGNS at
+startup, so the 4 new designs picked up correct values automatically);
+added all 4 to the Endcap Design dropdown's options list, 24 designs total
+now.
+
+Re-checked form1-01's edit against the neck-seam issue reported and
+diagnosed 2 rounds ago (see CODE_SUMMARY's Gotchas): **still not fixed**.
+Sampled the new path's own fill at the exact anchor line (y=80.26, same
+isPointInPath technique as the original diagnosis): still only 41.6-45.8
+filled (a ~4-unit sliver), not the expected full 41.6-96 span -- nearly
+identical to the pre-edit measurement. The edit that landed (a new
+closing segment, `h-50.19Z` replacing the old `h-4.31`) changed how the
+path closes, not the shape of its top edge, which is still a narrow peak
+at the pin line rather than a flat line spanning the full neck width.
+Flagged directly to the user rather than assumed fixed. form4's edit and
+all 4 new designs (form6/7/8/9) DO fill the full expected span at that
+exact line -- verified the same way, confirming they're correctly
+constructed like the project's other already-good designs (form1-02/03/04
+originals, form5).
+
+Verified all 6 touched designs (form1-01, form4, form6-9) render via a
+real update()+render() pass with 0 thrown errors, and visually via
+screenshots showing a clean, seamless rope-to-endcap join for form4 and
+form8 (representative samples).
+
+Found and worked around, but did NOT fix (not this session's own work,
+not asked for): 2 real bugs in the still-in-progress Startup Animation
+feature that blocked even getting a valid rope state to test against.
+mainRope.points is empty immediately after boot with the live
+introEnabled:true default, and resetMainRope() (called directly) also
+produces 0 points/segLen=0 -- integrateChain() then throws
+"Cannot read properties of undefined (reading 'x')" trying to read
+points[0] for the anchor's boundaryConstraint. Once mainRope was manually
+populated in place (mutating the real module-level object via a getter,
+avoiding this session's own well-documented "captured stale reference"
+trap), the SAME class of error recurred one level down: bgRope.points[0]
+is ALSO empty, crashing the line that syncs bgRope's anchor to mainRope's.
+Manually populated both to get a clean test environment. Confirmed this
+is NOT a test artifact: reproduced identically on a completely fresh,
+untouched page reload with zero debug-hook interference, as a real
+"loop() error (frame skipped)" on every single animation frame -- meaning
+the app currently never renders or updates at all with its own live
+default settings. Worth noting: the Startup Animation feature's own
+immediately-preceding changelog entry mentions seeing this SAME error
+message once and dismissing it as "a likely stale-tab-reload race...not
+the app," not recurring across 4 subsequent runs for that session -- this
+session's own reproduction was 100% consistent across every fresh reload
+tried, suggesting that earlier dismissal may have been premature, or
+something changed since. Not investigated further or fixed -- flagged in
+PROJECT_PROGRESS's Open Questions instead, since it's clearly someone
+else's still-active feature, not this task's scope.
+
+node --check clean throughout. Excluded data/processed/dev-panel-
+settings.json from this commit -- it had independently moved with a large
+set of unrelated live-Save changes (new gradient/intro-related cfg keys)
+from the SAME concurrent Startup Animation work, mid-session; not this
+session's own change to make or commit.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
