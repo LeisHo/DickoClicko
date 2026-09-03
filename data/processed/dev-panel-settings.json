@@ -56,9 +56,9 @@
     "floorHeight": 6,
     "introEnabled": true,
     "introWaitDuration": 2,
-    "introRiseSpeed": 5,
+    "introRiseSpeed": 26.5,
     "introRiseClearOffset": 0,
-    "introPauseDuration": 1,
+    "introPauseDuration": 0.2,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2
