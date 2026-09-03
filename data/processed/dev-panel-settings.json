@@ -11,12 +11,18 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.4,
-    "ropeLength": 13.846153846153845,
+    "ropeLength": 13.961538461538451,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": false,
-    "ropeGradientColors": ["#a5815f", "#3d2817"],
+    "ropeGradientColors": [
+      "#a5815f",
+      "#3d2817"
+    ],
     "bgRopeGradientEnabled": false,
-    "bgRopeGradientColors": ["#a5815f", "#3d2817"],
+    "bgRopeGradientColors": [
+      "#a5815f",
+      "#3d2817"
+    ],
     "ropeEndCurveArc": 1,
     "ropeTopCurveArc": 0.8,
     "clickIntensity": 1.1,
@@ -52,7 +58,7 @@
     "introWaitDuration": 2,
     "introRiseSpeed": 5,
     "introRiseClearOffset": 0,
-    "introPauseDuration": 2,
+    "introPauseDuration": 1,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2
