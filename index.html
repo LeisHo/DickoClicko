@@ -255,8 +255,8 @@ const DEV_GROUPS = [
       ] },
     { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1.45 },
     { key:'tipSegmentShapeEnabled', label:'Tip Segment Shape', type:'checkbox', def:false },
-    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:6.4 },
-    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:5,   max:120.19262130177428, step:1, def:13.846153846153845,
+    { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:10 },
+    { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:3,   max:120.19262130177428, step:1, def:3.4615384615384612,
       // Skipped while the startup animation is actively managing mainRope's
       // own length (introPhase !== 'done') -- otherwise resetSettings()
       // loading a saved Rope Length (applyValues() calls onChange the same
@@ -291,14 +291,14 @@ const DEV_GROUPS = [
   { title:'ROPE ANIMATION', controls:[
     { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0 },
     { key:'ropeAnimSpeed',   label:'Rope Animation Speed', type:'slider', unit:'x', min:0.1, max:3, step:0.1, def:1.2 },
-    { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:4.1 },
-    { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.8, max:0.999, step:0.001, def:0.999 },
+    { key:'gravityStrength', label:'Gravity Strength',     type:'slider', unit:'x', min:0,   max:5, step:0.1, def:4.6 },
+    { key:'damping',            label:'Damping',              type:'slider', unit:'x', min:0.8, max:0.999, step:0.001, def:0.984 },
     { key:'constraintIterations', label:'Constraint Iterations', type:'slider', unit:'x', min:1, max:20, step:1, def:1 },
   ]},
   { title:'ROPE GROWTH', controls:[
-    { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:15 },
+    { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:12 },
     { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
-    { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:7.5 },
+    { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:10 },
   ]},
   { title:'ROPE CUT', controls:[
     { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.5 },
@@ -322,8 +322,8 @@ const DEV_GROUPS = [
   { title:'END EMERGE', controls:[
     { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:true },
     { key:'endcapStartingScale', label:'Endcap Starting Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.1 },
-    { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:1.85 },
-    { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.02, max:1.5, step:0.01, def:0.54 },
+    { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:0 },
+    { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.01, max:1.5, step:0.01, def:0.01 },
     { key:'endEmergeEasingStrength', label:'End Emerge Easing Strength', type:'slider', unit:'x', min:1, max:6, step:0.1, def:6 },
     { key:'endEmergeTweening', label:'End Emerge Tweening', type:'dropdown', def:'easeInOut',
       options:[
@@ -341,10 +341,10 @@ const DEV_GROUPS = [
   ]},
   { title:'STARTUP ANIMATION', controls:[
     { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
-    { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:2 },
+    { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:1.4 },
     { key:'introRiseSpeed',      label:'Startup Rise Speed',        type:'slider', unit:'%vh/s', min:0.5, max:300, step:0.5, def:5 },
-    { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:0 },
-    { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:2 },
+    { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
+    { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:0.4 },
     { key:'introExtendSpeed',    label:'Startup Extension Speed',   type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:15 },
     { key:'introExtendSpeedTweenEnabled', label:'Startup Extension Speed Tween Enabled', type:'checkbox', def:false },
     { key:'introExtendStartSpeed', label:'Startup Extension Starting Speed', type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:2 },
@@ -352,10 +352,10 @@ const DEV_GROUPS = [
     // sequence (reuses this ENTIRE state machine, see
     // detachEntireRopeAndRestartIntro()) -- these 4 controls are specific
     // to THAT trigger, never the original boot-time run.
-    { key:'detachPauseDuration', label:'Detach Pause Duration', type:'slider', unit:'s', min:0, max:5, step:0.1, def:2 },
-    { key:'detachTipStartScale', label:'Detach Endcap Start Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.3 },
-    { key:'detachTipGrowDuration', label:'Detach Endcap Grow Duration', type:'slider', unit:'s', min:0.1, max:5, step:0.1, def:1 },
-    { key:'detachThicknessMultiplier', label:'Detach Thickness Multiplier', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1 },
+    { key:'detachPauseDuration', label:'Detach Pause Duration', type:'slider', unit:'s', min:0, max:5, step:0.1, def:5 },
+    { key:'detachTipStartScale', label:'Detach Endcap Start Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.1 },
+    { key:'detachTipGrowDuration', label:'Detach Endcap Grow Duration', type:'slider', unit:'s', min:0.1, max:5, step:0.1, def:2.8 },
+    { key:'detachThicknessMultiplier', label:'Detach Thickness Multiplier', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1.1 },
   ]},
 ];
 

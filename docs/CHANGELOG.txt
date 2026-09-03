@@ -3464,6 +3464,64 @@ the round). Updated docs/CHANGELOG.txt (this entry), docs/PROJECT_PROGRESS.md,
 docs/CODE_SUMMARY.md. Left data/Rope/End_Form1-01.svg (actively being
 re-edited by the other concurrent session) untouched/unstaged.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  06:05 AM - 06:10 AM EDT
+
+"Set defaults" (a full settings dump baked into DEV_GROUPS' own hardcoded
+values), plus investigated a direct report: "when i click Save and
+refresh my settings dont stay."
+
+Set defaults: updated 15 DEV_GROUPS defaults (ropeThickness, ropeLength,
+gravityStrength, damping, ropeGrowthRate, intensityCeiling,
+endEmergeDelay, endEmergeSpeed, introWaitDuration, introRiseClearOffset,
+introPauseDuration, detachPauseDuration, detachTipStartScale,
+detachTipGrowDuration, detachThicknessMultiplier) to match; widened 2
+slider ranges whose new default fell outside the old min (Rope Length's
+min 5->3 for a 3.46 default; End Emerge Speed's min 0.02->0.01 for a
+0.01 default). The git-tracked settings file needed no separate write --
+5 more live-deployment auto-saves landed on origin while this task was
+in progress, and the LAST one turned out byte-identical to the dump
+being baked in (confirmed via a full JSON diff before writing anything),
+meaning the deployment had already saved this exact state; `git reset
+--mixed origin/master` brought the branch pointer current without
+touching the (already-correct) working-tree file.
+
+Investigated the Save-persistence report: read through the full
+save/load pipeline (`saveSettings()`, `writeSettingsViaApi()`,
+`readSettingsViaApi()`, `resetSettings()`) end to end looking for a real
+bug. Nearly chased a false lead: the Read tool's own display of
+`readSettingsViaApi()`'s fetch path rendered it with backslashes
+(`'\data\processed\...'`, which would be a broken path if real) --
+directly verified against the ACTUAL file bytes via `cat -A` before
+concluding anything, and confirmed the real file correctly uses forward
+slashes (`/data/processed/dev-panel-settings.json`) throughout; the
+backslashes were purely a rendering artifact of this session's own
+Read-tool output, not real file content (matching a pattern of stray
+`\` characters noticed but dismissed as harmless in COMMENT text
+several times earlier this session -- this is the first time the same
+artifact briefly looked like it might be a REAL bug, since it landed
+inside a string literal instead of a comment; confirming against raw
+bytes rather than trusting the tool's rendering is what caught it before
+any unnecessary "fix"). Found no actual bug in the save/read code
+itself. The 5 auto-save commits that landed on origin during this exact
+investigation are themselves strong evidence the Save mechanism DOES
+work end-to-end (a real commit landed each time). Most likely
+explanation, not confirmed (no access to the live Vercel deployment's
+own build/deploy dashboard from this environment): Vercel needs to
+rebuild and redeploy after each GitHub commit before the new file
+content is actually served to a fresh page load -- refreshing
+immediately after seeing "Saved to repo!" could catch the PREVIOUS
+deployment, before the new one finishes propagating, reading as
+"my settings don't stay" even though the save itself succeeded and the
+setting genuinely will be there once the new deploy is live. Reported
+this to the user as a hypothesis, not a confirmed fix, along with what
+was actually verified vs. what remains unconfirmed. No code change made
+for this item -- nothing to fix was actually found.
+
+node --check clean. Updated docs/CHANGELOG.txt (this entry),
+docs/PROJECT_PROGRESS.md. Left data/Rope/End_Form1-01.svg (a different
+concurrent session's own active edit) untouched.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

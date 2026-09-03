@@ -840,8 +840,22 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
   independently-motivated resilience (see "Recently completed" above) so
   a real one-off bad frame, whatever its cause, no longer permanently
   freezes the app.
-- Tier 1 (Vercel/GitHub API Save) is confirmed working end-to-end: 3 real
-  "Update dev-panel-settings.json via Save Settings" commits landed on the
-  remote from the user's own live deployment (visible in git history as
-  `fd36dfa`/`cb754f8`/`e741774`) — no further diagnosis needed unless a
-  new failure is reported.
+- Tier 1 (Vercel/GitHub API Save) itself is confirmed working end-to-end
+  — many real "Update dev-panel-settings.json via Save Settings" commits
+  have landed on the remote from the live deployment throughout this
+  project's history (most recently 5 more during the exact session where
+  a new report came in: "when i click Save and refresh my settings dont
+  stay"). Read the full save/load pipeline end to end looking for a real
+  bug and found none — the fetch path in `readSettingsViaApi()` is
+  correct (`/data/processed/dev-panel-settings.json`, verified against
+  raw file bytes via `cat -A`, not just the Read tool's own display,
+  which briefly rendered it with misleading backslashes). **Not yet
+  confirmed, no access to the live Vercel deployment's own dashboard
+  from this environment:** the most likely explanation is a real
+  build/deploy propagation delay -- Vercel needs to rebuild after each
+  GitHub commit before the new file content is actually served, so
+  refreshing immediately after "Saved to repo!" could catch the
+  PREVIOUS deployment. If the user confirms waiting ~30-60s before
+  refreshing resolves it, this closes as expected Vercel behavior, not
+  a bug; if it does NOT resolve it even after waiting, that's a real
+  signal something else is wrong and needs a fresh look.
