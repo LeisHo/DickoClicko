@@ -2811,6 +2811,64 @@ Verified:
   before every write that depended on current state, rather than trusting
   an earlier read, per this project's standing multi-session discipline.
 
+--------------------------------------------------------------------------------
+2026-09-03  -  01:39 AM - 01:49 AM EDT
+
+Incorporated 7 user-added/edited endcap SVGs from data/Rope/ into
+ENDCAP_DESIGNS -- "I added more end svgs and edited some of the old ones.
+incorporate all that then push":
+- Inventoried the folder against the currently-registered ENDCAP_DESIGNS
+  keys rather than assuming from the request's own wording: found 5
+  files with no matching registered key (End_Form1-01.svg,
+  End_Form1-15.svg, End_Form2-16.svg, plus 2 new standalone designs
+  without the usual dash-number suffix, End_Form4.svg and
+  End_Form5.svg), and 2 files at ALREADY-registered filenames whose
+  content had changed (End_Form1-02.svg, End_Form1-04.svg).
+- Confirmed via direct content comparison, not assumption, that the
+  "already registered" edits weren't simple in-place tweaks:
+  End_Form1-01.svg's current content is byte-identical to what key
+  form1-02 used to hold, and End_Form1-04.svg's current content is
+  byte-identical to what form1-05 used to hold -- the user has been
+  reshuffling which numbered slot holds which shape, not editing shapes
+  in place. Resolved by treating each file's CURRENT on-disk content as
+  authoritative for its filename-derived key (End_Form<N>-<M>.svg ->
+  form<N>-<M>) unconditionally, rather than trying to infer or preserve
+  any renumbering intent -- "incorporate what's there" doesn't require
+  understanding why it moved, and guessing at the reshuffling logic
+  would only risk getting it wrong.
+- Updated ENDCAP_DESIGNS (d string + matching Path2D for all 7) and the
+  Endcap Design dropdown's options list (19 designs total afterward, up
+  from 14, alphanumerically ordered within each Form family).
+  ENDCAP_BOTTOM_Y needed no manual update -- it iterates ENDCAP_DESIGNS
+  by key automatically, already established from an earlier round.
+- All 7 new/changed files use viewBox "0 0 129.7 183.44" and, where they
+  include an ANCHOR_LINES reference group at all (Form4 does; several
+  others don't need one since their own path starts exactly at the
+  shared alignment line's own coordinates, same established pattern as
+  End3 from an earlier round), match ENDCAP_ALIGNMENT's own line exactly
+  (x1=41.57, x2=96.06, y=80.26) -- confirmed consistent with the shared-
+  alignment convention this project's endcap system already depends on.
+
+Verified:
+- node --check clean.
+- Live: cycled the Endcap Design dropdown through all 7 new/changed keys
+  via a real DOM `change` event (not setting cfg directly) -- confirmed
+  no thrown errors and the correct value landing in cfg.endcapDesign each
+  time.
+- Live: called render() directly for each of 9 checked keys (all 7
+  new/changed plus 2 known-good originals as a baseline) with Tip Segment
+  Shape disabled to isolate the endcap specifically, then sampled an
+  80x70 pixel region around the tip for rope-colored fill -- every key
+  produced a similar-magnitude, non-zero, non-degenerate fill count
+  (2614-2624 pixels across all 9), catching any silently-broken SVG path
+  syntax that node --check cannot validate, rather than trusting the
+  syntax check alone.
+- Did not visually confirm each new shape's silhouette looks correct
+  (this session's screenshot compositor has been unreliable after direct
+  ctx-level draws in earlier rounds) -- verification was geometric/
+  presence-based (non-empty, plausible-magnitude fill), not a rendered
+  visual comparison against the source SVGs.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

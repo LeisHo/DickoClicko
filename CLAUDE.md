@@ -394,3 +394,15 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   should show as a visible cutout, making the shape invisible against its
   own backdrop. Don't add a new stroke call for mainRope/a piece without
   routing it through this helper first when Tip Segment Shape might be on.
+- `ENDCAP_DESIGNS` keys track their SOURCE FILENAME (`data/Rope/
+  End_Form<N>-<M>.svg` → key `form<N>-<M>`), not a fixed "this shape always
+  lives at this key" assumption — the user has re-numbered/replaced
+  designs at existing keys before (e.g. form1-02's content became what
+  form1-05 used to be, and a NEW form1-02 shape took its place) without
+  changing the SVG's own file naming convention. When asked to
+  "incorporate" new/edited SVGs, sync each file's CURRENT content to its
+  filename-derived key directly — don't try to infer or preserve any
+  renumbering intent, just make the code match what's on disk. `Path2D`
+  objects and the dropdown's `options` list both need updating together;
+  `ENDCAP_BOTTOM_Y` needs no manual update, it iterates `ENDCAP_DESIGNS`
+  automatically.

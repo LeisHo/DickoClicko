@@ -651,6 +651,15 @@ assuming it never shipped.
   `circleCutDistance` to different values in the interim), resolved
   correctly via the same per-field O/G/P comparison this project's
   `CLAUDE.md` already specifies.
+- Incorporated 7 endcap SVGs the user added/edited directly in
+  `data/Rope/` (2 brand-new numbered variants, 2 new standalone designs
+  with their own naming convention, and 3 edits at already-registered
+  filenames — confirmed some of those "edits" were actually the user
+  reshuffling which shape lives at which numbered slot, e.g. form1-01's
+  new content matches what form1-02 used to hold). Dropdown now has 19
+  designs (up from 14). Verified via a real dropdown `change` event for
+  each new/changed key plus a direct pixel-fill check after each render,
+  not just `node --check` (which can't catch broken SVG path syntax).
 
 ## What's next
 

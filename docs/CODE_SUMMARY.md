@@ -1765,3 +1765,34 @@ GOTCHAS
   differing field in this merge resolved via the `P!=O -> P wins` case (no
   field required the 3-way judgment call) -- confirmed by inspecting the
   script's own per-field log before writing the result.
+- Incorporated 7 endcap SVGs the user added/edited directly in
+  `data/Rope/`: 2 brand-new numbered variants (`End_Form1-15.svg`,
+  `End_Form2-16.svg`), 2 new standalone designs with their own naming
+  convention (`End_Form4.svg`, `End_Form5.svg` -- no dash-number suffix),
+  and 3 files at ALREADY-REGISTERED filenames whose content had changed
+  (`End_Form1-01.svg`, `End_Form1-02.svg`, `End_Form1-04.svg`). Confirmed
+  via direct content comparison (not assumed from filenames alone) that
+  the "already registered" ones weren't simple no-op edits -- e.g.
+  `End_Form1-01.svg`'s current content is byte-identical to what key
+  `form1-02` used to hold, and `End_Form1-04.svg`'s current content is
+  byte-identical to what key `form1-05` used to hold -- i.e. the user has
+  been reshuffling which numbered slot holds which shape, not just
+  tweaking existing ones in place. Handled by treating each file's
+  CURRENT on-disk content as authoritative for its filename-derived key
+  (`End_Form<N>-<M>.svg` -> `form<N>-<M>`) unconditionally, rather than
+  trying to infer or preserve any renumbering intent -- simpler and can't
+  be wrong, since "incorporate what's there" doesn't require understanding
+  WHY it moved. Added/updated all 7 in `ENDCAP_DESIGNS` (`d` string +
+  matching `Path2D`) and the `Endcap Design` dropdown's `options` list (19
+  designs total afterward, up from 14); `ENDCAP_BOTTOM_Y` needed no manual
+  change since it iterates `ENDCAP_DESIGNS` by key automatically. Verified
+  via 2 passes: `node --check` clean, then live -- cycling the dropdown
+  through all 7 new/changed keys via a real `change` event confirmed no
+  thrown errors and the expected value landing in `cfg.endcapDesign`, and
+  a separate direct `render()` call per key (Tip Segment Shape disabled to
+  isolate the endcap specifically) confirmed each one fills a
+  similar-magnitude, non-zero pixel region around the tip (2614-2624
+  rope-colored pixels in an 80x70 sample box across all 9 checked keys --
+  consistent, no degenerate/empty outliers), catching any silently-broken
+  path data before reporting the sync as complete rather than trusting
+  `node --check` (which can't validate SVG path syntax) alone.
