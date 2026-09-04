@@ -385,8 +385,14 @@ const DEV_GROUPS = [
   { title:'FLICK ANIMATION', controls:[
     { key:'flickX',         label:'Flick X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
     { key:'flickY',         label:'Flick Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:85 },
-    { key:'flickScale',     label:'Flick Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:15 },
+    { key:'flickScale',     label:'Flick Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
     { key:'flickAnimSpeed', label:'Flick Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:1 },
+  ]},
+  { title:'FLICK ANIMATION 2', controls:[
+    { key:'flick2X',         label:'Flick2 X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
+    { key:'flick2Y',         label:'Flick2 Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:60 },
+    { key:'flick2Scale',     label:'Flick2 Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
+    { key:'flick2AnimSpeed', label:'Flick2 Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:1 },
   ]},
 ];
 
@@ -1465,6 +1471,32 @@ function flickFrameIndex(){
   const period = (FLICK_FRAME_COUNT - 1) * 2;
   const t = ((cyclePos % period) + period) % period;
   return Math.round(t <= (FLICK_FRAME_COUNT - 1) ? t : period - t);
+}
+
+// FLICK animation 2 -- a second, independent graphic, placed above the
+// first by default. Its 26 frames are `data/FLICK/FRAMESS/1`'s own frames
+// (natural-numeric order: 1,2,3,4,6,8a,9,9a,10,11,12,13,13a,14 -- 14
+// frames) followed immediately by `data/FLICK/FRAMESS/2`'s frames in
+// REVERSE order (14,9b,9a,9,8a,8,6,5,4,3,2,1 -- 12 frames), pre-copied
+// into data/FLICK/ANI2/FRAMES-01.png..FRAMES-26.png in that exact
+// concatenated order so the loading code here stays as simple as
+// animation 1's (a plain sequential file list, no special-casing the
+// letter-suffixed source filenames at runtime). Unlike animation 1, this
+// one was only ever asked to play forward in a loop (1->26->1, a hard cut
+// back to frame 1, not a ping-pong) -- no "loop back" behavior was
+// requested for this one.
+const FLICK2_FRAME_COUNT = 26;
+const flickFrames2 = []
+for (let i = 1; i <= FLICK2_FRAME_COUNT; i++){
+  const img = new Image();
+  img.src = `data/FLICK/ANI2/FRAMES-${String(i).padStart(2, '0')}.png`;
+  flickFrames2.push(img);
+}
+let flick2AnimTime = 0;
+
+function flick2FrameIndex(){
+  const cyclePos = flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed;
+  return Math.floor(((cyclePos % FLICK2_FRAME_COUNT) + FLICK2_FRAME_COUNT) % FLICK2_FRAME_COUNT);
 }
 
 /* ---------------------------------------------------------------------
@@ -3052,6 +3084,7 @@ function floorY(){ return viewportH() - vh(cfg.floorHeight); }
 
 function update(rawDt){
   flickAnimTime += rawDt;
+  flick2AnimTime += rawDt;
   if (introPhase !== 'done') updateIntro(rawDt);
   const dt = rawDt * cfg.ropeAnimSpeed;
   const gravityAccel = vh(90) * cfg.gravityStrength;
@@ -3956,6 +3989,14 @@ function render(){
     const cx = vw(cfg.flickX);
     const cy = vh(cfg.flickY);
     ctx.drawImage(flickImg, cx - w / 2, cy - h / 2, w, h);
+  }
+  const flick2Img = flickFrames2[flick2FrameIndex()];
+  if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
+    const w2 = vmin(cfg.flick2Scale);
+    const h2 = w2 * (flick2Img.naturalHeight / flick2Img.naturalWidth);
+    const cx2 = vw(cfg.flick2X);
+    const cy2 = vh(cfg.flick2Y);
+    ctx.drawImage(flick2Img, cx2 - w2 / 2, cy2 - h2 / 2, w2, h2);
   }
 }
 

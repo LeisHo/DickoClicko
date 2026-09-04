@@ -4365,6 +4365,50 @@ far past its own "live document, not a log" convention (1000+ lines) --
 flagged as a separate follow-up rather than attempting that cleanup as
 part of this feature.
 
+--------------------------------------------------------------------------------
+2026-09-04  -  07:42 AM EDT
+
+Follow-up round on the FLICK animation: bumped Flick Scale's default 15 ->
+50, and added a second, independent FLICK animation per explicit request
+("make a second animation, placed above the 1st one").
+
+The user separately updated all 17 of animation 1's own source PNGs in
+place (same filenames, new artwork) -- committed as part of this round.
+
+Animation 2's source material was two raw, non-sequentially-named frame
+folders (data/FLICK/FRAMESS/1 and /2 -- filenames like "8a.png"/"9b.png"
+alongside plain numbers, gaps in the numbering) rather than a clean
+FRAMES-NN.png sequence. Per the spec ("frames in sequence in [1], then
+right after that are the frames in [2], but in reverse order"): natural-
+sorted folder 1 (1,2,3,4,6,8a,9,9a,10,11,12,13,13a,14 -- 14 frames, letter
+suffixes ordered right after their base number as sub-steps, the only
+sensible reading of that naming with no other information to disambiguate)
+followed by folder 2 natural-sorted and then REVERSED (14,9b,9a,9,8a,8,6,
+5,4,3,2,1 -- 12 frames) -- 26 frames total, pre-copied into
+data/FLICK/ANI2/FRAMES-01.png..FRAMES-26.png in that exact concatenated
+order so the runtime loading code stays a plain sequential file list,
+identical in shape to animation 1's, rather than special-casing the raw
+source filenames at runtime.
+
+Added flickFrames2/flick2AnimTime/flick2FrameIndex() alongside animation
+1's existing equivalents, and a second "FLICK ANIMATION 2" dev-panel group
+(Flick2 X/Y Pos, Flick2 Scale, Flick2 Anim Speed -- same %vw/%vh/%vmin/x
+units as animation 1), default Y=60%vh vs. animation 1's Y=85%vh so it
+sits above it on screen by default, matching the request. Unlike animation
+1, this one was only asked to loop forward (1->26->1, a hard cut back to
+frame 1) -- no ping-pong/boomerang was requested for it, so
+flick2FrameIndex() is a plain modulo wrap, not animation 1's triangle-wave
+ping-pong.
+
+Verified live via a local static server: both animations render and cycle
+independently, animation 2 visibly positioned above animation 1, all 8
+sliders (4 per animation) move/resize/speed their own graphic without
+affecting the other. Hit the same already-documented python -m
+http.server concurrency limitation during testing (more pronounced now
+with 43 total source images across both animations) -- confirmed via
+direct fetch that the server and files are fine once the initial
+concurrent-load burst settles; not expected on the real Vercel deployment.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
