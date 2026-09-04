@@ -96,7 +96,7 @@
     "introWaitDuration": 0,
     "introRiseSpeed": 5.5,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 0.5,
+    "introRiseClearOffset": 1.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "introPauseDuration": 0.8,
