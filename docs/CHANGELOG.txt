@@ -4191,6 +4191,122 @@ fully removed and grep-confirmed 0 references before commit. Updated
 docs/CODE_SUMMARY.md (1 new Gotcha) and docs/PROJECT_PROGRESS.md
 (2 new Recently Completed bullets).
 
+--------------------------------------------------------------------------------
+2026-09-04  -  05:13 AM EDT
+
+Large follow-up round: found and fixed a foundational bug that resolved
+3 separately-reported symptoms at once, then worked through 6 more items
+from the same message.
+
+Started investigating "double clicking the circle still does nothing but
+double clicking the rope start end seems to do what i want double
+clicking the circle to do." Direct instrumentation (temporary
+console.log calls inside integrateChain()'s boundary-clamp and bracketing
+update()'s own mainRope code) found mainRope.points[0] genuinely frozen
+at (200,-48), 192px from circleAnchor() -- nearly 4x past its own 51px
+anchorBoundaryRadius() -- across 120+ update() calls with zero movement,
+and not just the anchor: the ENTIRE chain was frozen. Traced the exact
+mechanism: integrateChain()'s boundary clamp WAS firing correctly each
+frame (confirmed: bp.y went from -47.47 pre-clamp to a correctly-clamped
+93 immediately after), but by the end of that same update() call,
+mainRope.points[0].y was back to -48 -- with floorY() ALSO logging -48 at
+that exact point. Root cause: floorY() still read raw
+window.innerHeight directly, never routed through the viewportW()/
+viewportH() fallback helpers added 2 rounds ago specifically to guard
+against this exact class of bug. With window.innerHeight reading 0 (a
+real, reproducible condition, not sandbox-only -- see that round's own
+correction), floorY() computed floor = 0 - vh(floorHeight) = -48,
+placing the "floor" far ABOVE where the anchor correctly settles (93) --
+so the floor-collision block (which runs AFTER integrateChain(), later
+in the same update() call) clamped 93 back down to -48 every single
+frame, discarding the anchor's own correct result before the frame ever
+finished.
+
+Comprehensively re-audited for the same bug class rather than patching
+only the one reported call site: found and fixed 6 more raw
+window.innerWidth/innerHeight reads -- floorY() itself; 2 setCfg
+('ropeLength', mainRope.totalLength / window.innerHeight * 100) calls (a
+genuine divide-by-zero risk, not just a wrong value, whenever
+window.innerHeight is 0); the fallen-pieces cleanup filter (would have
+wrongly discarded a piece resting near y=93, since 93 < 0 is false); the
+background and floor fillRect calls in render() (a 0-sized fillRect
+paints nothing); and 3 dev-panel drag/resize viewport-clamp sites (lower
+risk, UI chrome only, fixed for completeness). All now route through
+viewportW()/viewportH().
+
+This single fix resolved 3 independently-reported symptoms with no
+further code changes, each individually re-verified after the fix:
+- Double-click-in-circle: the anchor settling far from the circle meant
+  clicks aimed at the circle's own drawn position never found a nearby
+  rope point. Now settles at exactly anchorBoundaryRadius(); a scripted
+  double-click there correctly produces a 7->2 point reset plus a new
+  fallen piece (the full detach sequence).
+- Click-and-hold-to-grow: growRope() itself was never broken (confirmed
+  by forcing growing=true directly before finding the root cause, which
+  grew the rope normally) -- the real blocker was that the anchor's
+  corrupted position meant a click aimed at the visible circle graphic no
+  longer registered as isOnCircle(), so the hold-to-grow timer never
+  started. Re-verified via a REAL onPointerDown + a genuine 2-second
+  wall-clock wait for the actual setTimeout to fire + onPointerUp:
+  growing correctly became true, length accumulated over the hold
+  (253.69 -> 349.69), and growing correctly reset to false on release.
+- (A 3rd item, the underlying anchor-freeze itself, was the original
+  investigation target.)
+
+Then worked through the rest of the same message:
+
+Removed Circle Cut Distance entirely ("i dont know what it does") --
+cutRopeAt()'s anchor-proximity exclusion is gone; the minimum-remaining-
+length check is unaffected. Added a new "Double Click Distance" slider,
+separate from Click Distance ("give me a double click distance slider...
+so i should have both click and double click distance sliders"):
+hitTestRope()/hitTestPieces()/hitTestAny()/hitTestAnyIgnoringCircle() all
+gained an optional maxDist param (defaulting to Click Distance, so every
+existing call site needed zero changes); only the 2 call sites that
+RESOLVE a completed double-click now pass Double Click Distance
+explicitly. Verified: cutting a point immediately next to the anchor
+(previously always rejected) now succeeds.
+
+Investigated End Emerge Delay/Speed/Easing Strength ("Delay does
+nothing... Easing Strength seems to be doing what Speed should do") --
+all 3 are correct in code; checked the live values directly
+(Delay=0, Speed=0.02, Easing Strength=6, the slider's own max) and
+computed the actual easeInOut(t,6) curve: the visible transition
+compresses into roughly the middle 30% of an ~17.8s total duration, with
+the first ~5.3s and last ~3.6s looking essentially static. This fully
+explains the reported confusion without any code being wrong -- reported
+back with the specific numbers rather than changing defaults that may
+have been deliberately set this extreme.
+
+Re-verified Startup Pause Duration's mechanism directly (a 1.5s test
+value via detachEntireRopeAndRestartIntro()'s own reuse of this state
+machine correctly produced a ~1.5s 'pausing' phase) -- the live
+introPauseDuration is just 0, not broken.
+
+Explained the Detach Pause Duration / Detach Endcap Start Scale / Detach
+Endcap Grow Duration / Detach Thickness Multiplier sliders directly to
+the user (Detach Pause Duration is Startup Pause Duration's own
+counterpart for the double-click-triggered full-rope detach; the Endcap
+Start Scale/Grow Duration pair is a separate, simpler linear ramp for
+the regrown rope's tip, independent of End Emerge; Thickness Multiplier
+compounds on every detach).
+
+Reconfirmed the still-visible endcap/rope seam is the SAME form1-01
+neck-geometry issue diagnosed 3 rounds ago (live endcapDesign is still
+form1-01), not a new bug -- neither of the user's 2 edit attempts so far
+fixed the underlying flat-neck issue.
+
+Deferred, not attempted this round: a dev-panel request to drag a
+setting from one collapsible group into a different group -- flagged as
+a genuinely separate, moderately-sized UI feature rather than folded
+into an already-large bug-fixing round.
+
+node --check clean throughout. Temporary debug hooks and all instrumentation
+(window.__debugTMPdbl, __TMPBCLOG console.log calls) fully removed and
+grep-confirmed 0 references before commit. Updated docs/CODE_SUMMARY.md
+(4 new Gotchas) and docs/PROJECT_PROGRESS.md (6 new Recently Completed
+bullets, 1 new What's Next item).
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

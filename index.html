@@ -324,8 +324,8 @@ const DEV_GROUPS = [
   ]},
   { title:'ROPE CUT', controls:[
     { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.5 },
-    { key:'circleCutDistance', label:'Circle Cut Distance', type:'slider', unit:'%vmin', min:0, max:30, step:0.5, def:3 },
     { key:'clickDistance',  label:'Click Distance',  type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:11.4 },
+    { key:'doubleClickDistance', label:'Double Click Distance', type:'slider', unit:'%vmin', min:0.5, max:15, step:0.1, def:11.4 },
     { key:'doubleClickThreshold', label:'Double Click Threshold', type:'slider', unit:'ms', min:100, max:1000, step:10, def:180 },
     { key:'ropeFallSpeed',   label:'Rope Fall Speed',  type:'slider',   unit:'x',   min:0.1, max:5, step:0.1, def:1 },
     { key:'cutSpeed',        label:'Cut Speed',        type:'slider',   unit:'x',   min:0.2, max:5, step:0.1, def:1.6 },
@@ -793,8 +793,8 @@ function initPanelDrag(){
       // stub margin — otherwise most of the panel (including the resize
       // corners, which sit right at its edges) can be dragged off-screen
       // well before the drag "stops".
-      const maxLeft = Math.max(0, window.innerWidth - r.width);
-      const maxTop = Math.max(0, window.innerHeight - r.height);
+      const maxLeft = Math.max(0, viewportW() - r.width);
+      const maxTop = Math.max(0, viewportH() - r.height);
       panel.style.left = Math.max(0, Math.min(maxLeft, startLeft + (ev.clientX - startX))) + 'px';
       panel.style.top = Math.max(0, Math.min(maxTop, startTop + (ev.clientY - startY))) + 'px';
     }
@@ -816,8 +816,8 @@ function initPanelDrag(){
   function clampToViewport(){
     if (panel.classList.contains('hidden')) return;
     const r = panel.getBoundingClientRect();
-    const maxLeft = Math.max(0, window.innerWidth - r.width);
-    const maxTop = Math.max(0, window.innerHeight - r.height);
+    const maxLeft = Math.max(0, viewportW() - r.width);
+    const maxTop = Math.max(0, viewportH() - r.height);
     const left = Math.max(0, Math.min(maxLeft, r.left));
     const top = Math.max(0, Math.min(maxTop, r.top));
     if (left !== r.left || top !== r.top){
@@ -880,9 +880,9 @@ function initResizeHandles(){
         // visually unresponsive past the cap and 'n' would push the panel's
         // top off-screen while its (uncompensated) height stayed clamped,
         // shrinking the panel from the bottom instead of growing it.
-        const maxH = window.innerHeight * 0.88;
-        if (dir.includes('e')) width = Math.max(minW, Math.min(window.innerWidth - left, startRect.width + dx));
-        if (dir.includes('s')) height = Math.max(minH, Math.min(maxH, window.innerHeight - top, startRect.height + dy));
+        const maxH = viewportH() * 0.88;
+        if (dir.includes('e')) width = Math.max(minW, Math.min(viewportW() - left, startRect.width + dx));
+        if (dir.includes('s')) height = Math.max(minH, Math.min(maxH, viewportH() - top, startRect.height + dy));
         if (dir.includes('w')) { width = Math.max(minW, startRect.width - dx); left = startRect.left + (startRect.width - width); }
         if (dir.includes('n')) {
           // the bottom edge is the fixed point for a pure top-edge resize —
@@ -2481,7 +2481,7 @@ function growRope(dtSeconds, ratePerSecVh){
     mainRope.tipGrowLen -= targetSeg;
     firstCommitThisFrame = false;
   }
-  setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
+  setCfg('ropeLength', mainRope.totalLength / viewportH() * 100);
 }
 
 // power (an absolute vh()-based value, independent of the rope's own
@@ -2565,54 +2565,6 @@ function cutRopeAt(hit, clickX, clickY){
   // new to cut.
   if (mainRope.pendingCut) return;
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
-  // refuse a cut whose TARGET point falls within Circle Cut Distance of the
-  // anchor -- a double-click landing just outside isOnCircle's own margin
-  // can still target a rope point very close to the anchor, which reads as
-  // "double-clicking near the circle cuts the rope short" even though the
-  // press itself was technically off the circle. A dedicated,
-  // independently-tunable distance (not reused from isOnCircle) per
-  // explicit request, since the implicit reuse wasn't generous enough for
-  // real reported clicks.
-  //
-  // Measured from mainRope.points[0] (the anchor's own ACTUAL current
-  // position), not circleAnchor() (the circle graphic's fixed center), and
-  // no longer floored at circleExclusionRadius() (isOnCircle's own
-  // threshold) the way an earlier round of this fix did -- both corrected
-  // together per explicit follow-up feedback ("double click in the circle
-  // still doesn't work") plus a separately reported real bug: with the
-  // anchor now a free-moving physics point (see the anchor-physics work
-  // elsewhere in this file) that can rest anywhere inside the circle,
-  // measuring from the fixed graphic center AND flooring at
-  // circleExclusionRadius() together made this check's effective radius
-  // ALWAYS >= circleExclusionRadius() -- the exact same threshold
-  // isOnCircle() uses to route a press into 'circle' mode in the first
-  // place. That meant, by construction, NO click that ever reached this
-  // function via the circle-mode double-click path (see onPointerUp's
-  // 'circle' branch, and hitTestAnyIgnoringCircle()) could ever pass this
-  // check, no matter how far it actually was from the anchor -- confirmed
-  // directly via a debug-hook test: a double-click correctly routed
-  // through to here was still always rejected, even for a point clearly
-  // not close to the anchor's real position. The old floor's own
-  // reasoning (below) was written back when the anchor was rigidly pinned
-  // to the circle's fixed center, so "close to the anchor" and "close to
-  // the circle's own edge" were the same thing by definition -- no longer
-  // true now that the anchor moves independently, so Circle Cut Distance
-  // (already independently tunable, and set noticeably smaller in the
-  // user's own current settings) is trusted directly, without a hidden
-  // floor silently enlarging it:
-  //
-  // [historical] segLen (~27.7px at default growth) means rope point
-  // index 3 could sit ~83px from a fixed circle-center anchor -- just past
-  // where a smaller Circle Cut Distance would have refused it, but still
-  // only 3 segments into a rope that could be hundreds of px long. A
-  // double-click landing just past the visible circle could resolve to
-  // that point and cut the rope down to almost nothing, regardless of the
-  // rope's actual length -- the original "double click within the
-  // circle's diameter cuts near the minimum length" symptom this whole
-  // exclusion mechanism exists to prevent.
-  const anchorForCut = mainRope.points[0];
-  const cutExclusionR = vmin(cfg.circleCutDistance);
-  if (Math.hypot(hit.x - anchorForCut.x, hit.y - anchorForCut.y) < cutExclusionR) return;
   // refuse the cut entirely if it would leave the remaining (anchor-side)
   // rope shorter than the configured minimum — the rope stays whole rather
   // than being clamped to some other length the user didn't ask for.
@@ -2684,7 +2636,7 @@ function performMainRopeSplit(idx){
   // countdown (a no-op read as "fully emerged" wherever End Emerge is
   // off, per emergeFactor()'s own convention).
   mainRope.tipEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
-  setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
+  setCfg('ropeLength', mainRope.totalLength / viewportH() * 100);
   if (lowerPoints.length >= 2){
     // Toppling (the initial random tilt) happens exactly at the moment of
     // real separation -- this is the same instant the piece starts
@@ -2819,31 +2771,43 @@ function isOnCircle(x, y){
   return Math.hypot(x - anchor.x, y - anchor.y) <= circleExclusionRadius();
 }
 
-function hitTestRope(x, y){
+function hitTestRope(x, y, maxDist){
+  if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
   if (isOnCircle(x, y)) return null; // clicking the circle itself never counts as a rope hit
   const hit = nearestPointOnRope(x, y, mainRope.points);
-  return hit.dist <= vmin(cfg.clickDistance) ? hit : null;
+  return hit.dist <= maxDist ? hit : null;
 }
 
-// Nearest fallen piece within Click Distance, if any -- same proximity gate
-// as hitTestRope, checked against every piece independently since they're
-// unrelated point chains scattered across the floor.
-function hitTestPieces(x, y){
+// Nearest fallen piece within maxDist (defaults to Click Distance), if
+// any -- same proximity gate as hitTestRope, checked against every piece
+// independently since they're unrelated point chains scattered across the
+// floor. maxDist is overridable so double-click-cut resolution can use
+// Double Click Distance instead (see hitTestAny/hitTestAnyIgnoringCircle).
+function hitTestPieces(x, y, maxDist){
+  if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
   let best = null;
   for (let i = 0; i < fallenPieces.length; i++){
     const hit = nearestPointOnRope(x, y, fallenPieces[i].points);
-    if (hit.dist <= vmin(cfg.clickDistance) && (!best || hit.dist < best.dist)) best = { ...hit, pieceIndex: i };
+    if (hit.dist <= maxDist && (!best || hit.dist < best.dist)) best = { ...hit, pieceIndex: i };
   }
   return best;
 }
 
 // Whichever of the main rope or a fallen piece is closest to (x,y), tagged
-// with which one it is -- used only for double-click-to-cut, which the
-// user can aim at either. Punching/hold-charging stay rope-only (unchanged
-// scope) and keep using hitTestRope/nearestPointOnRope directly.
-function hitTestAny(x, y){
-  const ropeHit = hitTestRope(x, y);
-  const pieceHit = hitTestPieces(x, y);
+// with which one it is -- used both for arming a possible double-click (at
+// the default Click Distance, matching the initial tap/hold's own
+// proximity gate) and for RESOLVING a completed double-click, where the
+// caller passes Double Click Distance explicitly instead -- a separate,
+// independently-tunable radius per explicit request ("give me a double
+// click distance slider that says how far from the rope a double click
+// cut sequence is triggered... so i should have both click and double
+// click distance sliders"). Punching/hold-charging stay rope-only
+// (unchanged scope) and keep using hitTestRope/nearestPointOnRope
+// directly, always at Click Distance.
+function hitTestAny(x, y, maxDist){
+  if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
+  const ropeHit = hitTestRope(x, y, maxDist);
+  const pieceHit = hitTestPieces(x, y, maxDist);
   if (ropeHit && (!pieceHit || ropeHit.dist <= pieceHit.dist)) return { ...ropeHit, target: 'rope' };
   if (pieceHit) return { ...pieceHit, target: 'piece' };
   return null;
@@ -2854,17 +2818,16 @@ function hitTestAny(x, y){
 // hitTestRope()'s own isOnCircle() exclusion. That exclusion exists so a
 // SINGLE tap/hold starting on the circle graphic never misfires as a rope
 // punch/charge; used ONLY for double-click-cut resolution (see
-// onPointerUp's 'circle' branch), where the exclusion instead makes the
-// whole circle-covered area permanently uncuttable -- a real reported bug
-// now that the anchor is a free-moving point (see the anchor-physics work
-// above) that routinely rests visually inside the circle graphic. Still
-// safe: cutRopeAt()'s own Circle Cut Distance floor (independently
-// tunable, defaulting to at least circleExclusionRadius()) is the actual
-// gate against cutting too close to the anchor, not this hit test.
-function hitTestAnyIgnoringCircle(x, y){
+// onPointerUp's 'circle' branch, which passes Double Click Distance), where
+// the exclusion instead makes the whole circle-covered area permanently
+// uncuttable -- a real reported bug now that the anchor is a free-moving
+// point (see the anchor-physics work above) that routinely rests visually
+// inside the circle graphic.
+function hitTestAnyIgnoringCircle(x, y, maxDist){
+  if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
   const rawRopeHit = nearestPointOnRope(x, y, mainRope.points);
-  const ropeHit = rawRopeHit.dist <= vmin(cfg.clickDistance) ? rawRopeHit : null;
-  const pieceHit = hitTestPieces(x, y);
+  const ropeHit = rawRopeHit.dist <= maxDist ? rawRopeHit : null;
+  const pieceHit = hitTestPieces(x, y, maxDist);
   if (ropeHit && (!pieceHit || ropeHit.dist <= pieceHit.dist)) return { ...ropeHit, target: 'rope' };
   if (pieceHit) return { ...pieceHit, target: 'piece' };
   return null;
@@ -2942,7 +2905,7 @@ function onPointerUp(e){
     if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
       clearTimeout(pendingClick.timer);
       pendingClick = null;
-      const target = hitTestAnyIgnoringCircle(e.clientX, e.clientY);
+      const target = hitTestAnyIgnoringCircle(e.clientX, e.clientY, vmin(cfg.doubleClickDistance));
       logClick('up:double-click-on-circle', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
       if (target){
         // Double-clicking in the circle now detaches the WHOLE rope (not a
@@ -2969,7 +2932,7 @@ function onPointerUp(e){
     // re-resolve against CURRENT positions at release time -- the rope and
     // any fallen piece may both have moved since the press, and a double
     // click can be aimed at either (cuts the rope, or splits a piece).
-    const target = hitTestAny(e.clientX, e.clientY);
+    const target = hitTestAny(e.clientX, e.clientY, vmin(cfg.doubleClickDistance));
     logClick('up:double-click', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
     if (target){
       if (target.target === 'rope') cutRopeAt(target, e.clientX, e.clientY);
@@ -3039,7 +3002,21 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 /* ---------------------------------------------------------------------
    Update / render loop
 --------------------------------------------------------------------- */
-function floorY(){ return window.innerHeight - vh(cfg.floorHeight); }
+// viewportH() (not raw window.innerHeight -- see that helper's own
+// comment) so this never silently computes a floor near the TOP of the
+// screen instead of the bottom when window.innerHeight reads 0. Real,
+// confirmed bug: with window.innerHeight===0 (this session's own
+// sandbox, and per that same comment, a documented real mobile-browser
+// quirk too), this returned a NEGATIVE floorY (e.g. -48 at floorHeight
+// 6%vh against an 800px viewportH fallback) -- placing the "floor" far
+// above where the anchor/rope actually rest, so EVERY point (including
+// mainRope's own anchor, confined correctly by anchorBoundaryRadius())
+// got clamped straight back up to that bogus line every single frame,
+// reproducing exactly what looked like "the whole rope is frozen" and,
+// downstream, "double-clicking the circle does nothing" (the anchor
+// never actually settling anywhere near the circle to be double-clicked
+// on in the first place).
+function floorY(){ return viewportH() - vh(cfg.floorHeight); }
 
 function update(rawDt){
   if (introPhase !== 'done') updateIntro(rawDt);
@@ -3182,7 +3159,7 @@ function update(rawDt){
     // each other around").
     pieceCollision();
   } else {
-    fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < window.innerHeight * 1.5));
+    fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < viewportH() * 1.5));
   }
 }
 
@@ -3753,12 +3730,12 @@ function renderCutSweep(entity){
 
 function render(){
   ctx.fillStyle = cfg.backgroundColor;
-  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.fillRect(0, 0, viewportW(), viewportH());
 
   if (cfg.floorEnabled){
     const fY = floorY();
     ctx.fillStyle = cfg.floorColor;
-    ctx.fillRect(0, fY, window.innerWidth, vh(cfg.floorThickness));
+    ctx.fillRect(0, fY, viewportW(), vh(cfg.floorThickness));
   }
 
   const anchor = circleAnchor();

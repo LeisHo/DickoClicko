@@ -2700,3 +2700,115 @@ GOTCHAS
     `[165,129,95,255]` (real rope-tan, opaque) with it off, at the
     EXACT SAME pixel coordinate -- a direct, unambiguous confirmation of
     the toggle's actual effect.
+- **`window.innerWidth`/`innerHeight` cleanup, round 2: `floorY()` and 6
+  other call sites still read them raw, silently defeating 2 rounds ago's
+  own `viewportW()`/`viewportH()` fix.** Reported as "double clicking the
+  circle still does nothing but double clicking the rope start end...
+  does what i want" -- investigated via direct instrumentation (a
+  temporary `console.log` inside `integrateChain()`'s own boundary-clamp
+  block, plus 3 more bracketing `update()`'s own mainRope-related code)
+  rather than guessed. Found `mainRope.points[0]` (the anchor) genuinely
+  frozen at `(200, -48)`, 192px from `circleAnchor()` -- nearly 4x past
+  its own `anchorBoundaryRadius()` (51px) -- across 120+ consecutive
+  `update()` calls, with zero movement, and NOT just the anchor: EVERY
+  point in the chain was equally frozen. Traced the exact mechanism:
+  `integrateChain()`'s own boundary clamp WAS firing correctly each
+  frame (confirmed via the instrumented log: `bp.y` went from `-47.47`
+  pre-clamp to a correctly-clamped `93` immediately after, and stayed
+  `93` through `positionGrowingTip()`) -- but by `update()`'s own final
+  log line, `mainRope.points[0].y` was back to `-48`, with `floorY()`
+  ALSO logging `-48` at that exact same point. Root cause:
+  `floorY(){ return window.innerHeight - vh(cfg.floorHeight); }` never
+  routed through the `viewportW()`/`viewportH()` fallback helpers added
+  2 rounds ago specifically for this class of bug -- with
+  `window.innerHeight` reading `0` (confirmed real and reproducible, not
+  sandbox-only, per that round's own correction), `floorY()` computed a
+  deeply NEGATIVE floor position (`0 - vh(6) = -48` at the live
+  `floorHeight`), placing the "floor" far ABOVE where the anchor
+  correctly settles (`93`) -- so the floor-collision block's own
+  `if (p.y > fY){ p.y = fY; ... }` (checked AFTER `integrateChain()`,
+  later in the SAME `update()` call) clamped `93 > -48` back down to
+  `-48` every single frame, discarding the anchor's own correct result
+  before the frame ever finished. Found and fixed 6 more raw call sites
+  the same audit surfaced (a comprehensive re-grep after the obvious one,
+  not just the single reported symptom): 2 `setCfg('ropeLength',
+  mainRope.totalLength / window.innerHeight * 100)` calls (a genuine
+  divide-by-zero risk with `window.innerHeight===0`, not just a wrong
+  value), the fallen-pieces cleanup filter (`p.y < window.innerHeight *
+  1.5` -- would have wrongly discarded any piece resting at a position
+  like `93`, since `93 < 0` is false), `render()`'s own background and
+  floor `fillRect` calls (a `0`-sized background fill paints nothing at
+  all), and 3 dev-panel drag/resize viewport-clamp call sites (lower
+  risk -- UI chrome only -- but the same bug class, fixed for
+  completeness). All now route through `viewportW()`/`viewportH()`.
+  **This single fix resolved 3 independently-reported symptoms without
+  any further code change, each re-verified individually after the fix**:
+  double-click-in-circle (the anchor settling far from the circle meant
+  clicks aimed at the circle's own drawn position never found a nearby
+  rope point to resolve against -- now settles at exactly
+  `anchorBoundaryRadius()` and a scripted double-click there correctly
+  produces a 7->2 point reset plus a new fallen piece); click-and-hold-
+  to-grow (the underlying `growRope()` mechanism was never broken --
+  confirmed by forcing `growing=true` directly BEFORE finding the root
+  cause, which grew the rope normally -- the real blocker was that the
+  anchor's corrupted position meant a click aimed at the visible circle
+  graphic no longer registered as `isOnCircle()`, so the hold-to-grow
+  timer path never even started; re-verified end-to-end via a REAL
+  `onPointerDown` + a genuine 2-second wall-clock wait for the real
+  `setTimeout` to fire + `onPointerUp`, confirming both trigger AND
+  release work correctly through the actual code path, not a forced
+  shortcut).
+- **Circle Cut Distance removed; Click Distance split into Click
+  Distance + Double Click Distance.** Per explicit request ("remove
+  circle cut distance. i dont know what it does" / "give me a double
+  click distance slider... so i should have both click and double click
+  distance sliders"). `cutRopeAt()`'s old anchor-proximity exclusion
+  (see the 2-rounds-ago Gotcha explaining what it did) is gone entirely
+  -- the function's remaining minimum-remaining-length check is
+  unaffected. `hitTestRope()`/`hitTestPieces()`/`hitTestAny()`/
+  `hitTestAnyIgnoringCircle()` all gained an optional `maxDist` param
+  (defaulting to `vmin(cfg.clickDistance)`, so every EXISTING call site
+  needed zero changes) -- the 2 call sites that actually RESOLVE a
+  completed double-click (`onPointerUp`'s 'circle' branch and its
+  rope-mode double-click branch) now pass `vmin(cfg.doubleClickDistance)`
+  explicitly; the tap/hold-ARMING call site (deciding whether an initial
+  press is even close enough to register at all, independent of whether
+  it turns out to be a double-click) is untouched, still implicitly
+  Click Distance. Verified: cutting a point immediately next to the
+  anchor (previously always rejected by the now-removed Circle Cut
+  Distance floor) now succeeds correctly.
+- **End Emerge Delay/Speed/Easing Strength confusion -- all 3 verifiably
+  correct in code; the LIVE combination of extreme values is what
+  produces the confusing visual result, not a bug.** Reported as "Emerge
+  Delay slider does nothing... Easing Strength seems to be affecting the
+  speed... maybe it's Emerge Speed that's doing nothing." Checked the
+  live settings directly rather than assuming: `endEmergeDelay: 0`
+  (trivially "does nothing" at 0 -- there's nothing to delay），
+  `endEmergeSpeed: 0.02` (near the slider's own floor, giving a ~17.8s
+  total post-slide duration: `1/(0.02/0.35) + 0.3`), `endEmergeEasingStrength: 6`
+  (the slider's own MAX). Computed the actual `easeInOut(t, 6)` curve at
+  that strength directly (not assumed from the formula alone): the
+  visible factor stays under 2% until `t≈0.3` and reaches 99.8% by
+  `t≈0.8` -- meaning ~70% of the total ~17.8s duration (the first ~5.3s
+  and last ~3.6s) looks essentially STATIC, with virtually the entire
+  visible transition compressed into the middle ~9s. This directly
+  explains the reported confusion without any code being wrong: Speed
+  changes are hard to perceive because most of the configured duration
+  is already invisible regardless of its value, and Easing Strength
+  LOOKS like it controls timing because a more extreme value compresses
+  the visible motion into an even narrower window of that same
+  duration. Not fixed -- reported back with the specific numbers rather
+  than silently changing defaults that may have been deliberately set
+  this extreme.
+- **Startup Pause Duration's mechanism re-verified working correctly --
+  the live value is just 0.** Reported as "the startup pause duration
+  doesnt seem to work." Rather than assume the report was wrong,
+  verified the ACTUAL mechanism directly: set `detachPauseDuration` to a
+  test value of 1.5s, triggered a real cycle via
+  `detachEntireRopeAndRestartIntro()` (which reuses this exact state
+  machine), and traced `introPhase` frame-by-frame -- `'pausing'` began
+  at t≈0.17s and correctly lasted until t≈1.67s (a real ~1.5s span)
+  before transitioning to `'growing'`, matching the configured value
+  precisely. Confirms the mechanism itself has no bug; the live
+  `introPauseDuration` (the boot-time counterpart checked separately)
+  reading `0` is simply configured that way, not broken.

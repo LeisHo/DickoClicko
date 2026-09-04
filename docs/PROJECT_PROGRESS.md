@@ -1015,10 +1015,91 @@ assuming it never shipped.
   background rope"). Verified both via direct pixel sampling: with the
   clip on, a point 150px past the circle read fully transparent; with it
   off, the identical point read real rope color.
+- **Found and fixed a foundational bug affecting several previously-
+  reported symptoms at once**, while investigating "double clicking the
+  circle still does nothing." Direct instrumentation traced it to
+  `floorY()` (and 6 other call sites) still reading raw
+  `window.innerWidth`/`innerHeight` instead of the `viewportW()`/
+  `viewportH()` helpers added 2 rounds ago specifically to guard against
+  this -- with `window.innerHeight` reading `0` (a real, reproducible
+  condition, not just a sandbox artifact -- see that round's own
+  correction), `floorY()` computed a floor far ABOVE where the rope
+  actually rests, so the floor-collision code clamped `mainRope.points[0]`
+  (and every other point) back up to that bogus line every single frame,
+  discarding the anchor's own correct boundary-clamp result the very
+  same frame it ran. Fixed all 7 remaining raw call sites: `floorY()`,
+  2 `ropeLength`-from-drag calculations (a real divide-by-zero risk),
+  the fallen-pieces cleanup filter, the background/floor `fillRect`
+  calls, and 3 dev-panel drag/resize clamps. Verified directly: the
+  anchor now settles at EXACTLY its own `anchorBoundaryRadius()` (was
+  192px away, nearly 4x too far, completely frozen across 120+ frames
+  before the fix). This same fix resolved 3 separately-reported
+  symptoms without further code changes, each individually verified:
+  double-click-in-circle now correctly triggers the full detach sequence
+  (7->2 points, +1 fallen piece); click-and-hold-to-grow now correctly
+  accumulates length over a real timed hold (confirmed the underlying
+  `growRope()` mechanism was never broken -- only the anchor's own
+  position being corrupted made the circle unclickable in the first
+  place).
+- Removed Circle Cut Distance entirely, per explicit request ("i dont
+  know what it does") -- the "too close to the anchor to cut" exclusion
+  it drove is gone; `cutRopeAt()` now only enforces the existing minimum-
+  remaining-length check. Added a new, separate "Double Click Distance"
+  slider (mirrors Click Distance's own range/default) specifically
+  governing how far a completed double-click's release position can be
+  from the nearest rope/piece point and still resolve to a cut -- the
+  hit-test functions (`hitTestRope`/`hitTestPieces`/`hitTestAny`/
+  `hitTestAnyIgnoringCircle`) now take an optional distance override,
+  passed explicitly only at the 2 call sites that RESOLVE a completed
+  double-click; the tap/hold-arming call site is untouched, still using
+  Click Distance. Verified: cutting a point right next to the anchor
+  (previously blocked) now succeeds.
+- Investigated the End Emerge Delay/Speed/Easing Strength confusion
+  ("Emerge Delay does nothing... Easing Strength seems to be doing what
+  Speed should do"). All 3 settings are individually correct in code
+  (confirmed via direct computation, not just code review) -- the
+  confusion comes from the CURRENT combination of extreme live values
+  (Delay=0, so no wait is trivially "doing nothing"; Speed=0.02, giving
+  an ~18s total duration; Easing Strength=6, the slider's own max) -- at
+  that strength, the easeInOut curve compresses essentially the ENTIRE
+  visible transition into the middle ~30% of that 18s span, with the
+  endcap looking static for the first ~5s and last ~4s. This makes Speed
+  changes hard to perceive (most of the duration is already invisible)
+  and makes Easing Strength LOOK like it's controlling how fast things
+  happen (a more extreme curve compresses the visible motion into an
+  even smaller window). Not a code bug -- reported back to the user with
+  the specific numbers rather than changing anything, since the current
+  extreme values may have been deliberate.
+- Verified Startup Pause Duration's underlying mechanism works correctly
+  (a nonzero test value produced a 'pausing' phase lasting exactly that
+  long before 'growing' began) -- the live `introPauseDuration` is
+  currently 0, which is why no pause is visible; not a bug.
+- Explained the Detach Pause Duration / Detach Endcap Start Scale /
+  Detach Endcap Grow Duration / Detach Thickness Multiplier sliders per
+  direct request -- see this session's own conversation for the
+  explanation (Detach Pause Duration is Startup Pause Duration's own
+  counterpart specifically for the double-click-triggered full-rope
+  detach; the Endcap Start Scale/Grow Duration pair is a separate,
+  simpler linear scale-up ramp for the FRESH regrown rope's own tip,
+  deliberately independent of the End Emerge system; Thickness
+  Multiplier compounds the regrown rope's thickness on every detach).
+- Reconfirmed the endcap/rope seam the user still sees is the SAME
+  `form1-01` neck-geometry issue diagnosed 3 rounds ago, not a new bug --
+  the live `endcapDesign` is still `form1-01`, whose 2 edit attempts so
+  far (one changing only how the path closes, one deleting the shape
+  entirely) haven't fixed the underlying flat-neck issue.
+- **Deferred, not attempted this round**: a dev-panel feature request to
+  drag a setting from one collapsible group into a different group (only
+  within-group reordering exists today). Flagged as a genuinely separate,
+  moderately-sized UI feature rather than folded into an already-large
+  bug-fixing round.
 
 ## What's next
 
-Nothing queued yet. Discussed but not approved: progressive cut-falling
+Queued (deferred from a large bug-fixing round, per explicit request):
+dev-panel support for dragging a setting OUT of its current collapsible
+group and INTO a different group (only within-group reordering exists
+today). Also discussed but not approved: progressive cut-falling
 (the cut-off segment starts sagging/falling from the cut side while still
 attached by a thinning uncut strip, snapping fully free only once the cut
 sweep completes) — assessed as medium difficulty (weaken, not remove, the
