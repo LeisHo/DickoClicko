@@ -82,8 +82,12 @@ additions. Current state of each subsystem:
   until the fresh main rope spawned -- corrected per explicit follow-up:
   the wait belongs to the new rope's own endcap grow-in, not the falling
   piece's physics). bgRope's whole chain (not just its start point)
-  rebuilds when the climb begins so it starts already consistent with
-  gravity's direction -- see CODE_SUMMARY gotchas.
+  rebuilds hanging from the real spawn point both when the climb begins
+  AND at the handoff when mainRope spawns, so it's always already
+  consistent with gravity's direction at both transitions -- no more
+  reaction/jump at either one. bgRope's own climb now starts just out of
+  sight below the circle (Rope Thickness + 1, not a full diameter) --
+  see CODE_SUMMARY gotchas.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a

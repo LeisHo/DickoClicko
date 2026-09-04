@@ -2187,7 +2187,20 @@ function updateIntro(rawDt){
       // resetBgRope's own makeChain() logic, now parameterized) means
       // every point is already consistent with gravity's own direction
       // from frame one -- nothing to invert, nothing to violently correct.
-      resetBgRope(circleAnchor().x, circleAnchor().y + vmin(cfg.circleSize) / 2 + vmin(cfg.circleSize));
+      //
+      // Start position: just barely below the circle's own edge -- Rope
+      // Thickness + 1 (%vmin) -- not a full diameter below. Per explicit
+      // correction ("the background rope should spawn just out of sight
+      // of the circle... spawning very far down [was wrong]. It sould be
+      // spawning the rope thickness+1 under the circle"). This makes the
+      // visible climb correspondingly short when Startup Rise Clear
+      // Offset is at/near its own default (0, disabled) -- an explicit,
+      // deliberate tradeoff against this same function's PRIOR reasoning
+      // (a far-below start was originally chosen specifically to
+      // guarantee a real, visible climb regardless of Offset) -- that
+      // reasoning no longer applies now that the spawn point itself is
+      // meant to already sit just out of sight.
+      resetBgRope(circleAnchor().x, circleAnchor().y + vmin(cfg.circleSize) / 2 + vmin(cfg.ropeThickness + 1));
     }
   } else if (introPhase === 'rising'){
     // bgRope's own rope-start climbs at Startup Rise Speed until it
@@ -2301,12 +2314,25 @@ function updateIntro(rawDt){
       // update()'s own bgRope sync) -- rebuild it HERE, at the moment of
       // that handoff, both for the usual race-avoidance reason (locks its
       // fixed length in against the real settings-loaded Rope Length, not
-      // a possible pre-load default) and so the rebuild's own reset-to-
-      // circleAnchor() happens at a point we immediately correct, rather
-      // than causing a visible snap later mid-pause or mid-growth. Synced
-      // to mainRope's NEW spawn position (set just above), so bgRope
-      // doesn't jump either.
-      resetBgRope();
+      // a possible pre-load default. Built hanging from mainRope's NEW
+      // spawn position directly (not circleAnchor()) -- previously this
+      // called resetBgRope() with no args, which hangs the WHOLE chain
+      // from circleAnchor() and only patched point 0 afterward (the 2
+      // lines below), leaving points 1+ built relative to circleAnchor()
+      // while point 0 sat wherever the climb actually ended (the anchor
+      // BOUNDARY, not circleAnchor() itself -- these differ by
+      // anchorBoundaryRadius(), a real gap whenever Circle Offset moves
+      // the boundary off dead-center). That's the exact same inversion
+      // bug class already fixed for the 'waiting'->'rising' transition
+      // above, just recurring here at the handoff instead -- reported as
+      // "when the main rope spawns, it seems to physically affect the
+      // background rope. it shouldnt." Passing the real spawn coordinates
+      // directly means every point starts consistent with gravity's
+      // direction from frame one, same fix shape as above.
+      resetBgRope(mainRope.points[0].x, mainRope.points[0].y);
+      // Still set explicitly (not left to makeChain()'s own small random
+      // per-point x lean) so point 0 matches mainRope's spawn x exactly,
+      // not off by that lean.
       bgRope.points[0].x = mainRope.points[0].x;
       bgRope.points[0].y = mainRope.points[0].y;
     } else {

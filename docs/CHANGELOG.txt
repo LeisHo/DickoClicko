@@ -4707,6 +4707,57 @@ verification evidence rather than guessing at a code change with nothing
 in the current code to actually explain the symptom.
 
 ================================================================================
+2026-09-04  -  11:23 AM EDT
+
+bgRope spawn moved from a full diameter below the circle to just out of
+sight (Rope Thickness + 1); fixed a second occurrence of the same chain-
+inversion bug, this time at the handoff when mainRope spawns.
+
+User: "the background rope should spawn just out of sight of the circle.
+right now its spawning very far down. It sould be spawning the rope
+thickness+1 under the circle" + "when the main rope spawns, it seems to
+physically affect the background rope. it shouldnt."
+
+Item 1: the 'waiting'->'rising' transition's start position was
+circleAnchor().y + circleSize/2 + circleSize (a full diameter below the
+edge) -- deliberately far, per the 08:08 AM entry's own reasoning (a
+close start would make the climb imperceptible at Startup Rise Clear
+Offset's default of 0). This explicit correction supersedes that
+reasoning -- changed to circleAnchor().y + circleSize/2 +
+vmin(ropeThickness + 1). Verified live: at circleSize 21.5/ropeThickness
+6.1/anchorY 144 (viewport fallback 400x800), the spawn now lands at
+exactly 215.4 = 144 + 43 + vmin(7.1), matching the formula precisely.
+
+Item 2: investigated rather than guessed. Found the SAME inversion bug
+class as the 08:08 AM entry's bgRope-jump fix, recurring at a different
+transition. At the 'rising'->'pausing' handoff, resetBgRope() was called
+with NO args (line previously read `resetBgRope();`), which hangs the
+WHOLE chain from circleAnchor() -- then only point 0 got manually moved
+to the real spawn position (2 lines below). Since the spawn position is
+the anchor BOUNDARY (anchorBoundaryRadius() away from circleAnchor()),
+not circleAnchor() itself, points 1+ were built relative to the wrong
+origin every single time mainRope spawned -- the same "rest of the chain
+built from a different anchor than point 0" flaw already fixed once for
+the climb-start transition, just never caught here. Fixed by passing the
+real spawn coordinates directly: `resetBgRope(mainRope.points[0].x,
+mainRope.points[0].y)`, same fix shape as before. The following 2 lines
+that set bgRope.points[0] explicitly were kept (not redundant) -- they
+correct for makeChain()'s own small per-point random x lean, which
+would otherwise leave point 0's x very slightly off mainRope's own.
+
+Verified both together live via synthetic frame-stepping: confirmed the
+new spawn y (215.4) matches the formula, then traced 6 frames right at
+and after the handoff -- p0/p1/p2/pLast remained monotonically ordered
+(180.9/208.5/236.1/345.6 at handoff) and changed only gently frame to
+frame (sub-2px oscillation, real settling motion, not a jump), matching
+mainRope's own settling almost exactly (mainP0y 180.88 vs bgRope p0y
+180.9). No reaction, no inversion, at either transition.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
