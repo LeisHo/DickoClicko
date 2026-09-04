@@ -5,13 +5,13 @@
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
-    "circleBoundaryOffset": -2,
+    "circleBoundaryOffset": 1,
     "anchorWeight": 0.4,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 7.211538461538458,
+    "ropeLength": 6.961538461538458,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -70,7 +70,7 @@
     "ropeGrowthRate": 12,
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 10,
-    "minRopeLength": 0.5,
+    "minRopeLength": 2.6,
     "clickDistance": 11.4,
     "doubleClickDistance": 11.4,
     "doubleClickThreshold": 180,
@@ -81,7 +81,7 @@
     "cutSweepThickness": 0.2,
     "pieceDecayDelay": 10,
     "pieceDecaySpeed": 0.5,
-    "pieceMinThickness": 1.7,
+    "pieceMinThickness": 1.2,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
     "endEmergeDelay": 2.45,
@@ -94,25 +94,39 @@
     "floorHeight": 6,
     "introEnabled": true,
     "introWaitDuration": 0,
-    "introRiseSpeed": 0.5,
+    "introRiseSpeed": 5.5,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 1,
+    "introRiseClearOffset": 0.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
-    "introPauseDuration": 3.4,
+    "introPauseDuration": 0.8,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2,
-    "detachPauseDuration": 0,
+    "detachPauseDuration": 0.3,
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 3.4,
     "detachThicknessMultiplier": 1.15,
     "flickX": 15,
     "flickY": 85,
     "flickScale": 15,
-    "flickAnimSpeed": 1
+    "flickAnimSpeed": 1,
+    "flick2X": 15,
+    "flick2Y": 60,
+    "flick2Scale": 50,
+    "flick2AnimSpeed": 1
   },
   "order": [
+    {
+      "key": "FLICK ANIMATION 2",
+      "collapsed": true,
+      "settings": [
+        "flick2X",
+        "flick2Y",
+        "flick2Scale",
+        "flick2AnimSpeed"
+      ]
+    },
     {
       "key": "FLICK ANIMATION",
       "collapsed": true,
@@ -125,7 +139,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "introRiseClearOffsetEnabled",
         "bgRopeClipEnabled",
@@ -186,7 +200,7 @@
     },
     {
       "key": "ROPE CUT",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "doubleClickDistance",
         "clickDistance",
@@ -204,7 +218,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "endcapGradientEnabled",
         "endcapGradientColors",
