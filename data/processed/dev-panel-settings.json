@@ -97,7 +97,7 @@
     "introRiseSpeed": 5.5,
     "startupRiseGravity": 0.1,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": -12,
+    "introRiseClearOffset": -1.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "introPauseDuration": 1.6,
@@ -121,7 +121,7 @@
   "order": [
     {
       "key": "FLICK ANIMATION 2",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick2X",
         "flick2Y",
