@@ -891,6 +891,33 @@ assuming it never shipped.
   function backs both of the 2 previous rounds' own fixes -- neither was
   wrong; the radius they were clamping to just didn't match its own
   documented intent.
+- Follow-up: "still not fixed, same issue" with a screenshot matching the
+  earlier one. Root-caused with real numbers from the user's own live
+  settings, not another sign-fix guess: at their ropeThickness=10,
+  endcapHeight=1.45 and endcap design, the endcap graphic itself renders
+  ~92.8px tall, but their ropeLength=4.21%vh produces a total rope length
+  of only ~29.4px inside a ~134.6px circle -- the endcap alone is over 3x
+  the entire rope, and drawEndcap() draws its full natural height
+  unconditionally once emerged, with nothing clipping it to the rope's
+  real length. Confirmed directly (not just calculated): regrowing the
+  same live rope to 25%vh made the endcap sit entirely below the circle
+  exactly as intended, proving the previous round's anchor-boundary fix
+  is genuinely correct -- this is a proportions issue in the current
+  settings (rope too short relative to thickness/endcap height), not a
+  residual code bug. No code change made for this finding.
+- Implemented 3 features per explicit request, all live-verified: (1) an
+  independent Endcap Gradient (endcapGradientEnabled/Colors), separate
+  from the existing Rope Gradient -- applies to mainRope's endcap and
+  every fallen piece's endcap (both ends); (2) fallen pieces now retain
+  gradient coloring (both stroke and endcap) instead of reverting to a
+  solid color the instant they fall; (3) right-click now deletes a
+  gradient stop, alongside the existing double-click. Verified together
+  via a temporary debug hook: a test piece with the rope gradient set to
+  red/blue and the endcap gradient independently set to green/yellow
+  rendered both correctly and independently.
+- Not yet investigated: the dark-flash-during-a-hard-flick report, now
+  with a concrete repro ("long click and hold flick from the bottom") --
+  deferred to a focused follow-up round rather than a rushed guess.
 
 ## What's next
 

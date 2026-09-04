@@ -279,6 +279,16 @@ const DEV_GROUPS = [
     // determine where a gradient color kicks in"). See buildRow()'s
     // 'gradient' case for the actual editor UI.
     { key:'ropeGradientColors',  label:'Rope Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
+    // A separate, independent gradient for the ENDCAP graphic only -- per
+    // explicit request ("leave the current slider for the rope only. and
+    // give me the same slider but the endcaps"). Previously the endcap
+    // reused the ROPE's own gradient (via mainGradientInfo) so the two
+    // were forced to match ("one consistent gradient" was the earlier
+    // explicit request that produced that -- since superseded by this
+    // one asking for independent control instead). Applies to mainRope's
+    // own endcap AND every fallen piece's endcap (see render()).
+    { key:'endcapGradientEnabled', label:'Endcap Gradient Enabled', type:'checkbox', def:false },
+    { key:'endcapGradientColors',  label:'Endcap Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
     { key:'bgRopeGradientEnabled', label:'Background Rope Gradient Enabled', type:'checkbox', def:false },
     { key:'bgRopeGradientColors',  label:'Background Rope Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
@@ -700,14 +710,20 @@ function buildRow(ctrl){
           window.addEventListener('pointermove', move);
           window.addEventListener('pointerup', up);
         });
-        marker.addEventListener('dblclick', e => {
+        // Deleting a stop: both double-click AND right-click do it (per
+        // explicit request -- right-click was added alongside the
+        // original double-click, not in place of it). Never below 2
+        // stops -- a gradient needs at least a start and end.
+        function deleteStop(e){
           e.stopPropagation();
-          // Never below 2 stops -- a gradient needs at least a start and end.
+          e.preventDefault();
           if (cfg[ctrl.key].length > 2){
             cfg[ctrl.key] = cfg[ctrl.key].filter(s => s !== stop);
             renderStops();
           }
-        });
+        }
+        marker.addEventListener('dblclick', deleteStop);
+        marker.addEventListener('contextmenu', deleteStop);
       });
     }
 
@@ -3677,7 +3693,13 @@ function render(){
     // (possibly Detach-Thickness-Multiplier-boosted) thickness.
     const pieceThick = pieceThickness(piece);
     const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
-    strokeRopeCurve(strokePoints, pieceThick, cfg.ropeColor, tipArcMult, cutArcMult);
+    // A fallen piece keeps showing the rope gradient it had while still
+    // attached, recomputed each frame from its OWN current points span --
+    // per explicit request ("i want cut off rope segments to retrain the
+    // gradient"). Previously always cfg.ropeColor (solid), regardless of
+    // Rope Gradient Enabled -- a piece lost its gradient coloring the
+    // instant it fell.
+    strokeRopeCurve(strokePoints, pieceThick, ropeStrokeColor(piece.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor), tipArcMult, cutArcMult);
   });
   // mainRope's points[0] is the anchor -- free to move within the circle
   // now (see integrateChain()'s own boundaryConstraint), but still never a
@@ -3703,14 +3725,18 @@ function render(){
     if (showMainRope) drawTipSegmentShape(mainRope.points, liveThickness, cfg.ropeColor);
   }
   if (hasEndcap){
-    fallenPieces.forEach(piece => drawEndcap(piece.points, pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge), undefined, piece.baseThickness));
+    // Independent endcap gradient (see endcapGradientEnabled/Colors) --
+    // recomputed per piece each frame from its OWN current points span,
+    // same convention as the rope-gradient retention above.
+    const pieceEndcapGradientInfo = piece => cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: piece.points[0] } : null;
+    fallenPieces.forEach(piece => drawEndcap(piece.points, pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge), pieceEndcapGradientInfo(piece), piece.baseThickness));
     // detachScale: 1 for the boot-time rope (detachTipScaleProgress never
     // set) or once its own grow-back has finished; otherwise blends from
     // Detach Endcap Start Scale up to 1 as detachTipScaleProgress rises --
     // see detachEntireRopeAndRestartIntro()/update()'s own tick.
     const detachScale = mainRope.detachTipScaleProgress === undefined ? 1
       : cfg.detachTipStartScale + (1 - cfg.detachTipStartScale) * mainRope.detachTipScaleProgress;
-    const mainGradientInfo = cfg.ropeGradientEnabled ? { stops: cfg.ropeGradientColors, worldTop: mainRope.points[0] } : null;
+    const mainGradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: mainRope.points[0] } : null;
     if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight * detachScale, mainTipFactor, mainGradientInfo);
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
@@ -3728,7 +3754,12 @@ function render(){
       // cutEdgeEmerge (separate from tipEmerge above) governs how far
       // along ITS emergence is.
       fallenPieces.forEach(piece => {
-        drawEndcap([...piece.points].reverse(), pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.cutEdgeEmerge));
+        // worldTop uses the piece's ORIGINAL far end (pre-reversal), not
+        // the reversed array's own [0] -- keeps this end's gradient in
+        // the same world-space orientation as the tip-end endcap above,
+        // rather than flipping independently.
+        const cutGradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: piece.points[piece.points.length - 1] } : null;
+        drawEndcap([...piece.points].reverse(), pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.cutEdgeEmerge), cutGradientInfo);
       });
     }
   }

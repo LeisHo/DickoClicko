@@ -3857,3 +3857,74 @@ APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
 old one in place.
+
+2026-09-03  -  11:41 PM - 11:57 PM EDT
+
+Follow-up: "still not fixed. same issue. can you check my saved setting
+defaults to see if anything is causing it on my end" with a screenshot
+matching the earlier one exactly, plus the full live settings.json pasted
+in. A cluster of further requests arrived interleaved: "cut off rope
+segments... should only get thinner not shorter" (re-confirmation, not a
+new ask), "the color is still incorrect... instead of fixing it, give me
+the same slider but for the endcaps", "i want cut off rope segments to
+retain the gradient", "right click on a slider toggle deletes it" /
+"as in thats what i want", "the dark flash near the rope start is still
+visible... occurs when i do a long click and hold flick from the bottom",
+and "i still see a seam on top of my endcap".
+
+Root-caused the "still not fixed" report with real numbers, not another
+guess: fetched their live settings and computed the actual pixel geometry
+-- at ropeThickness=10, endcapHeight=1.45 and their endcap design, the
+endcap graphic itself renders ~92.8px tall, but their ropeLength=4.21%vh
+produces a total rope length of only ~29.4px inside a ~134.6px circle.
+The endcap alone is over 3x the entire rope's own length, and drawEndcap()
+draws its full natural height unconditionally once emerged -- nothing
+clips it to the rope's actual length. Confirmed directly (not just
+calculated) by regrowing the same live rope to 25%vh via a temporary
+debug hook: the endcap then sat entirely below the circle exactly as
+intended, proving the PREVIOUS round's anchor-boundary sign fix is
+genuinely correct and this is a proportions issue in the current
+settings, not a residual code bug. Also A/B tested endcapHeight 1.0 vs
+1.45 live and found no meaningful difference -- the endcap is already
+oversized relative to the rope even unstretched. No code change for this
+finding; reported the exact numbers instead of another guess.
+
+Implemented 3 concrete, verified features per explicit request:
+(1) A new, independent Endcap Gradient (endcapGradientEnabled/Colors),
+separate from the existing Rope Gradient -- drawEndcap()'s own
+gradientInfo now reads the new config instead of always reusing the
+rope's, for mainRope's endcap AND every fallen piece's endcap (both the
+tip end and the separate cut-end endcap).
+(2) Fallen pieces now retain gradient coloring instead of reverting to
+solid cfg.ropeColor the instant they fall -- their own stroke color is
+now ropeStrokeColor(piece.points, ...), recomputed each frame from the
+piece's own current span, same convention mainRope's stroke already used.
+(3) Right-click (contextmenu) now deletes a gradient stop, alongside the
+existing double-click -- both call the same shared deleteStop().
+Live-verified all 3 together via a temporary debug hook (removed before
+commit): pushed a piece copied from the live rope with the rope gradient
+set to red/blue and the endcap gradient independently set to
+green/yellow -- the piece rendered with a red-to-blue stroke AND a
+SEPARATE green-to-yellow endcap, confirming neither gradient silently
+overrides the other. Right-click delete verified via real dispatched
+DOM events (PointerEvent to add a 3rd stop, MouseEvent 'contextmenu' to
+remove it), not just static analysis.
+
+Re: "seam on top of my endcap" -- same already-diagnosed, already-
+attempted-and-failed form1-01 SVG asset issue from earlier this session;
+did not re-attempt the same blind path-edit a second time. Not yet
+investigated this round: the dark-flash-during-a-hard-flick report --
+now has a much more specific repro ("long click and hold flick from the
+bottom") than the earlier vague description, worth a dedicated pass next
+round rather than a rushed guess at the end of an already-large one.
+
+node --check clean after every edit. Updated docs/CHANGELOG.txt (this
+entry), docs/CODE_SUMMARY.md (3 new Gotchas). Left data/Rope/
+End_Form1-01.svg (a different concurrent session's own active edit)
+untouched.
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.

@@ -2388,3 +2388,71 @@ GOTCHAS
   fixes was wrong, they were both correctly clamping to whatever radius
   this function returned; the radius itself was the part that didn't
   match its own documented intent.
+- **"Still not fixed, same issue" (with the same screenshot showing the
+  rope reaching into the circle) turned out to have NO remaining code
+  bug at all -- it's a pure scale mismatch in the user's own live
+  settings, confirmed by direct measurement, not a further sign error.**
+  Per explicit request ("check my saved setting defaults"), fetched and
+  computed the actual pixel geometry from their live values: at
+  `ropeThickness=10`, `endcapHeight=1.45`, and their chosen endcap
+  design, the endcap graphic itself renders ~92.8px tall -- but their
+  `ropeLength=4.21%vh` produces a TOTAL rope length of only ~29.4px, and
+  their `circleSize=21.5%vmin` circle is only ~134.6px in diameter. The
+  endcap alone is more than 3x the entire rope's own length, and its
+  "excess" reach beyond the rope's actual points (92.8-29.4=63.4px)
+  almost exactly matches the circle's own radius (~67.3px) -- which is
+  exactly why the endcap's own top edge lands right around the circle's
+  center, regardless of where the (now-correctly-positioned, per the
+  previous fix) anchor point actually sits. `drawEndcap()` draws the
+  endcap's full natural (scaled) height unconditionally once fully
+  emerged -- nothing clips it to the rope's own actual length. Confirmed
+  directly, not just calculated: regrowing the SAME rope to 25%vh (via
+  `setMainRopeTotalLength()` through a temporary debug hook) made the
+  endcap sit entirely below the circle, exactly as intended, with the
+  circle showing empty/dark above it -- proving the anchor-radius fix
+  from the previous entry is genuinely correct, and this was a proportion
+  issue in the settings, not a residual bug. Also directly tested
+  `endcapHeight` 1.45 vs 1.0 (a live A/B) and found no meaningful visual
+  difference -- confirms the endcap is already oversized relative to the
+  rope even at its UNSTRETCHED natural size, so the height multiplier
+  alone was never going to be the deciding factor. No code change made
+  for this finding; reported the exact numbers to the user rather than
+  a vague "try increasing X".
+- **Added an independent Endcap Gradient (separate from the existing
+  Rope Gradient), and made fallen pieces retain their gradient coloring
+  instead of reverting to a solid color the instant they fall -- both
+  per explicit request.** New `endcapGradientEnabled`/
+  `endcapGradientColors` dev controls; `drawEndcap()`'s own
+  `gradientInfo` param (already existed, previously always built from
+  `cfg.ropeGradientEnabled`/`ropeGradientColors`) now reads the new
+  endcap-specific config instead, for BOTH mainRope's own endcap and
+  every fallen piece's endcap (including the separate cut-end endcap
+  drawn when `endcapAtCutEnd` is on, using the piece's ORIGINAL
+  pre-reversal far point as `worldTop` so that end's gradient stays in
+  the same world-space orientation as the tip end's, rather than
+  flipping independently). Separately, fallen pieces' own STROKE color
+  (`strokeRopeCurve()`'s color argument) used to be hardcoded to
+  `cfg.ropeColor` regardless of Rope Gradient Enabled -- now calls
+  `ropeStrokeColor(piece.points, cfg.ropeGradientEnabled,
+  cfg.ropeGradientColors, cfg.ropeColor)`, recomputed fresh each frame
+  from the piece's own current points span, same convention mainRope's
+  own stroke already used. Live-verified end to end via a temporary
+  debug hook (removed before commit): pushed a piece copied from the
+  live rope with the ROPE gradient set to red/blue and the ENDCAP
+  gradient independently set to green/yellow -- the rendered piece
+  showed its stroke transitioning red-to-blue and its endcap
+  transitioning green-to-yellow, two genuinely independent gradients on
+  the same fallen piece, confirming both fixes land correctly together
+  rather than one silently overriding the other.
+- **Added right-click (`contextmenu`) as a second way to delete a
+  gradient stop, alongside the existing double-click, per explicit
+  request ("right click on a slider toggle deletes it... thats what i
+  want").** Both handlers now call the same shared `deleteStop()`
+  function (previously inlined only in the `dblclick` listener) --
+  `e.preventDefault()` added so the browser's own native context menu
+  doesn't pop up over the marker. Live-verified via dispatched
+  `PointerEvent`/`MouseEvent`s against the real DOM (not just static
+  analysis): added a 3rd stop by simulating a click on empty bar space
+  (2 -> 3 markers), then dispatched a real `contextmenu` event at the
+  middle marker and confirmed it was removed (3 -> 2 markers), same as
+  the existing double-click path already does.
