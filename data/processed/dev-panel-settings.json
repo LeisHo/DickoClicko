@@ -5,13 +5,13 @@
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
-    "circleBoundaryOffset": -2.5,
+    "circleBoundaryOffset": 2.5,
     "anchorWeight": 0.4,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 6.923076923076923,
+    "ropeLength": 6.961538461538466,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -96,7 +96,7 @@
     "introWaitDuration": 5.5,
     "introRiseSpeed": 20,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 6.5,
+    "introRiseClearOffset": 0.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "introPauseDuration": 0,
@@ -164,7 +164,7 @@
     },
     {
       "key": "ANCHOR PHYSICS",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
