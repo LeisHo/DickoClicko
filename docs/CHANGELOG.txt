@@ -4307,6 +4307,64 @@ grep-confirmed 0 references before commit. Updated docs/CODE_SUMMARY.md
 (4 new Gotchas) and docs/PROJECT_PROGRESS.md (6 new Recently Completed
 bullets, 1 new What's Next item).
 
+--------------------------------------------------------------------------------
+2026-09-04  -  06:25 AM EDT
+
+Added the FLICK animation, per explicit request: "these are frames of a
+looping animation. it will loop from frame 1 to 17 and back and repeat.
+Place this animation as a small graphic in the bottom left of the
+browser," plus X/Y position, scale, and speed sliders.
+
+The 17 source frames (data/FLICK/ANI/FRAMES-01.png through FRAMES-17.png,
+~500-590KB each, ~9MB total) are referenced by relative path rather than
+embedded as base64 data URIs -- the one deliberate exception to this
+project's single-file convention, since inlining ~9MB of images with ~33%
+base64 overhead on top would bloat the HTML substantially for no benefit.
+
+Implemented as a self-contained addition, following the project's own
+existing "direct per-frame cfg read, no onChange needed" pattern used by
+every other tunable: preloaded all 17 frames into an `Image()` array at
+boot; a new flickFrameIndex() computes the current frame via a triangle
+wave over a continuously-advancing flickAnimTime accumulator (frame
+position 0,1,2...16,15,14...0,1... -- a genuine ping-pong/boomerang, not a
+cut-back-to-frame-1 loop, matching "loop from frame 1 to 17 and BACK");
+flickAnimTime itself advances by the real (unscaled) frame dt inside
+update(), independent of the rope's own ropeAnimSpeed-scaled dt. Drawn via
+ctx.drawImage() at the very end of render() (on top of everything else),
+sized as a %vmin width with height derived from each frame's own aspect
+ratio, positioned by %vw/%vh X/Y -- matching every other position/size
+slider's unit convention in this project exactly. New "FLICK ANIMATION"
+dev-panel group: Flick X Pos (def 15 %vw), Flick Y Pos (def 85 %vh,
+together placing it bottom-left by default as asked), Flick Scale (def 15
+%vmin), Flick Anim Speed (def 1x, a multiplier on top of a 12fps baseline
+playback rate).
+
+Verified live via a local static server: all 4 sliders correctly move/
+resize/speed up the graphic (confirmed via direct before/after
+screenshots at default position vs. centered+enlarged+3x-speed), the
+animation visibly cycles through multiple distinct hand-pose frames over
+time (not stuck on one frame), and a fresh page load renders it at the
+correct default bottom-left position/size with no console errors from the
+new code. One environment-specific issue found and diagnosed, not a code
+bug: `python -m http.server`'s single-threaded connection handling
+intermittently fails several (not all, not always the same ones -- 4-9 of
+17 across repeated test loads) of the 17 concurrent large-image requests
+with net::ERR_CONNECTION_RESET. flickFrameIndex()'s existing
+`img.complete && img.naturalWidth > 0` guard already makes this
+self-healing (the animation just has occasional visible gaps locally,
+confirmed by directly inspecting each frame's load state and re-testing
+until enough frames loaded to observe a full cycle) -- not expected to
+occur on the real Vercel deployment, which serves via a CDN rather than a
+local single-threaded server. Documented in docs/CODE_SUMMARY.md's
+Gotchas rather than left as an unexplained flicker.
+
+Updated docs/PROJECT_SUMMARY.md (SCOPE, a new DECISIONS entry, DATA
+SOURCES) and docs/CODE_SUMMARY.md (FILE MAP, a new GOTCHAS entry) to
+match. docs/PROJECT_PROGRESS.md's "Recently completed" section has grown
+far past its own "live document, not a log" convention (1000+ lines) --
+flagged as a separate follow-up rather than attempting that cleanup as
+part of this feature.
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

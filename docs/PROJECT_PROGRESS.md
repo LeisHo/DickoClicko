@@ -1161,3 +1161,12 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
   refreshing resolves it, this closes as expected Vercel behavior, not
   a bug; if it does NOT resolve it even after waiting, that's a real
   signal something else is wrong and needs a fresh look.
+- Added the FLICK animation: a small looping 17-frame graphic
+  (`data/FLICK/ANI/FRAMES-01.png`...`-17.png`, ping-pongs 1->17->1) drawn
+  bottom-left by default, with new X/Y Position, Scale, and Anim Speed
+  dev-panel sliders (new "FLICK ANIMATION" group). Frames are referenced
+  externally (not embedded) since they total ~9MB. See CODE_SUMMARY's
+  Gotchas for a local-dev-server-only loading quirk this surfaced
+  (several frames intermittently fail to load under `python -m
+  http.server`'s single-threaded concurrency -- not expected on the real
+  Vercel deployment).

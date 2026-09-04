@@ -12,7 +12,10 @@ FILE MAP
   `<div id="devPanel">` (built dynamically from a config array, with
   Desktop/Mobile tabs, Copy/Save/Reset, and drag-to-reorder groups/settings
   per the workspace's §12 dev-panel standard) for the dev panel, one inline
-  `<script>` for everything else. No build step, no dependencies.
+  `<script>` for everything else. No build step, no dependencies -- except
+  `data/FLICK/ANI/FRAMES-01.png`...`FRAMES-17.png` (the FLICK animation's
+  17 source frames, referenced by relative path, not embedded -- see
+  Gotchas for why).
 
 --------------------------------------------------------------------------------
 ARCHITECTURE
@@ -2812,3 +2815,29 @@ GOTCHAS
   precisely. Confirms the mechanism itself has no bug; the live
   `introPauseDuration` (the boot-time counterpart checked separately)
   reading `0` is simply configured that way, not broken.
+- **FLICK animation** (`flickFrames`, `flickFrameIndex()`, drawn at the end
+  of `render()`): a small looping 17-frame PNG sequence
+  (`data/FLICK/ANI/FRAMES-01.png`...`FRAMES-17.png`, referenced by relative
+  path, NOT embedded as data URIs -- each frame is ~500-590KB, ~9MB total,
+  far too large to inline into the single HTML file without bloating it
+  ~33% further via base64 overhead; this is the one deliberate exception to
+  "single file, no external assets" for exactly that reason). Ping-pongs
+  1->17->1 (a genuine boomerang via a triangle wave over a continuously-
+  advancing `flickAnimTime` accumulator, not a cut-back-to-1 loop) at a
+  speed set by `cfg.flickAnimSpeed`. Position (`flickX`/`flickY`, %vw/%vh)
+  and size (`flickScale`, %vmin, deriving height from each image's own
+  aspect ratio) follow the same direct-per-frame-cfg-read pattern as every
+  other tunable in this file -- no `onChange` needed. **Local dev-server
+  gotcha**: loading all 17 ~500KB+ frames at once via `python -m
+  http.server` reliably fails several of them with `net::ERR_CONNECTION_RESET`
+  (confirmed: 4-9 of 17 failed across repeated test loads, never all 17,
+  never consistently the same ones) -- this is the SAME pre-existing
+  local-http.server limitation already noted in this project's ETA History
+  for unrelated rapid-reload cases, just triggered here by many large
+  concurrent requests instead of rapid reloads. `flickFrameIndex()`'s
+  frame-select code already guards on `img.complete && img.naturalWidth >
+  0` and simply skips drawing a frame that failed to load, so this is
+  circumstantially self-healing (the animation just has occasional gaps
+  locally) rather than a crash -- and is not expected to occur on the real
+  deployed site, which serves via Vercel's CDN, not a single-threaded local
+  server.

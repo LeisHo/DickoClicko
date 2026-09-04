@@ -382,6 +382,12 @@ const DEV_GROUPS = [
     { key:'detachTipGrowDuration', label:'Detach Endcap Grow Duration', type:'slider', unit:'s', min:0.1, max:5, step:0.1, def:2.8 },
     { key:'detachThicknessMultiplier', label:'Detach Thickness Multiplier', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1.1 },
   ]},
+  { title:'FLICK ANIMATION', controls:[
+    { key:'flickX',         label:'Flick X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
+    { key:'flickY',         label:'Flick Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:85 },
+    { key:'flickScale',     label:'Flick Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:15 },
+    { key:'flickAnimSpeed', label:'Flick Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:1 },
+  ]},
 ];
 
 const cfg = {};
@@ -1434,6 +1440,32 @@ const viewportH = () => window.innerHeight || document.documentElement.clientHei
 const vw = pct => viewportW() * pct / 100;
 const vh = pct => viewportH() * pct / 100;
 const vmin = pct => Math.min(viewportW(), viewportH()) * pct / 100;
+
+/* ---------------------------------------------------------------------
+   FLICK animation -- a small looping frame-sequence graphic, independent
+   of the rope's own physics. Ping-pongs across 17 PNG frames (1->17->1,
+   a boomerang, not a cut-back-to-1 loop) at a speed set by the dev panel.
+--------------------------------------------------------------------- */
+const FLICK_FRAME_COUNT = 17;
+const FLICK_BASE_FPS = 12; // playback rate at Flick Anim Speed = 1x
+const flickFrames = [];
+for (let i = 1; i <= FLICK_FRAME_COUNT; i++){
+  const img = new Image();
+  img.src = `data/FLICK/ANI/FRAMES-${String(i).padStart(2, '0')}.png`;
+  flickFrames.push(img);
+}
+let flickAnimTime = 0;
+
+// Triangle wave over a continuously-advancing time accumulator -- e.g.
+// frame position 0, 1, 2 ... 16, 15, 14 ... 0, 1 ... -- rather than
+// resetting to 0 every cycle, which would show 1->17 then SNAP back to 1
+// instead of animating back down through 17->1.
+function flickFrameIndex(){
+  const cyclePos = flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed;
+  const period = (FLICK_FRAME_COUNT - 1) * 2;
+  const t = ((cyclePos % period) + period) % period;
+  return Math.round(t <= (FLICK_FRAME_COUNT - 1) ? t : period - t);
+}
 
 /* ---------------------------------------------------------------------
    Canvas setup
@@ -3019,6 +3051,7 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 function floorY(){ return viewportH() - vh(cfg.floorHeight); }
 
 function update(rawDt){
+  flickAnimTime += rawDt;
   if (introPhase !== 'done') updateIntro(rawDt);
   const dt = rawDt * cfg.ropeAnimSpeed;
   const gravityAccel = vh(90) * cfg.gravityStrength;
@@ -3911,6 +3944,18 @@ function render(){
     ctx.arc(anchor.x, anchor.y, boundaryR, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
+  }
+
+  // FLICK animation overlay -- drawn last so it's always on top of the
+  // rope/circle. `complete`/`naturalWidth` guard against drawing before
+  // that particular frame image has actually finished loading.
+  const flickImg = flickFrames[flickFrameIndex()];
+  if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
+    const w = vmin(cfg.flickScale);
+    const h = w * (flickImg.naturalHeight / flickImg.naturalWidth);
+    const cx = vw(cfg.flickX);
+    const cy = vh(cfg.flickY);
+    ctx.drawImage(flickImg, cx - w / 2, cy - h / 2, w, h);
   }
 }
 

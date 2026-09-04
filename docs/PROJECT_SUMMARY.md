@@ -1,7 +1,7 @@
 DICKO CLICKO -- PROJECT SUMMARY
 ================================================================================
 
-Status: initial build in progress, as of 2026-09-01. See PROJECT_PROGRESS.md
+Status: initial build in progress, as of 2026-09-04. See PROJECT_PROGRESS.md
 for what's actively being worked on right now, and CHANGELOG.txt for the
 full historical log -- this file stays a mid-altitude snapshot, not a
 duplicate of either.
@@ -23,7 +23,9 @@ panel's own settings.
 SCOPE
 
 In scope: the circle + rope animation, its physics (punch, hold-to-grow,
-cut-and-fall, floor collision/piling), and the dev panel that tunes it.
+cut-and-fall, floor collision/piling), the dev panel that tunes it, and a
+small looping FLICK animation graphic (position/scale/speed tunable) drawn
+independently on top of the rope scene.
 
 Out of scope / dormant: a possible future Three.js-based physics/collision
 upgrade was mentioned by the user as a maybe-later direction, not part of
@@ -59,11 +61,20 @@ DECISIONS
 - Single HTML file, no build step, no dependencies -- matches this
   workspace's convention for small interactive-toy projects (Clicko, Quiz
   Game, Sticko).
+- The FLICK animation's 17 source frames are referenced as external PNG
+  files (`data/FLICK/ANI/`), not embedded as base64 data URIs -- a
+  deliberate, explicitly-justified exception to the single-file convention
+  above, since each frame is ~500-590KB (~9MB total) and inlining would
+  both bloat the HTML file substantially and add ~33% base64 overhead on
+  top. Ping-pongs 1->17->1 (per the user's own description of the loop) via
+  a triangle wave over a time accumulator, not a cut-back-to-1 loop.
 
 --------------------------------------------------------------------------------
 DATA SOURCES
 
-None -- no external data or APIs.
+`data/FLICK/ANI/` -- 17 PNG frames (`FRAMES-01.png`...`FRAMES-17.png`) of a
+looping hand-gesture animation, drawn as the FLICK animation overlay. No
+other external data or APIs.
 
 --------------------------------------------------------------------------------
 KNOWN LIMITATIONS
