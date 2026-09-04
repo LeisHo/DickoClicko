@@ -5,13 +5,13 @@
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
-    "circleBoundaryOffset": -2,
+    "circleBoundaryOffset": -1,
     "anchorWeight": 0.4,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
-    "ropeThickness": 10,
-    "ropeLength": 19.71153846153844,
+    "ropeThickness": 6.1,
+    "ropeLength": 6.961538461538466,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -21,7 +21,7 @@
       },
       {
         "pos": 0,
-        "color": "#ffd2ad"
+        "color": "#f4c8a4"
       }
     ],
     "endcapGradientEnabled": true,
@@ -35,7 +35,7 @@
         "color": "#ffc085"
       },
       {
-        "pos": 0.248921317775832,
+        "pos": 0.2116683843554061,
         "color": "#ffcb9d"
       }
     ],
@@ -43,18 +43,22 @@
     "bgRopeGradientColors": [
       {
         "pos": 0,
-        "color": "#ffd2ad"
+        "color": "#f4d2ad"
       },
       {
         "pos": 1,
         "color": "#b07e4f"
       },
       {
-        "pos": 0.29526188072965825,
-        "color": "#ffc38b"
+        "pos": 0.11646469983555363,
+        "color": "#fbbd83"
+      },
+      {
+        "pos": 0.37421101839381116,
+        "color": "#b78657"
       }
     ],
-    "ropeEndCurveArc": 0.8,
+    "ropeEndCurveArc": 0.7,
     "ropeTopCurveArc": 0.9,
     "clickIntensity": 1.1,
     "holdDistance": 22,
@@ -67,7 +71,7 @@
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 10,
     "minRopeLength": 0.5,
-    "circleCutDistance": 3,
+    "circleCutDistance": 6.5,
     "clickDistance": 11.4,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
@@ -80,20 +84,22 @@
     "pieceMinThickness": 1.7,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
-    "endEmergeDelay": 0,
-    "endEmergeSpeed": 0.02,
-    "endEmergeEasingStrength": 6,
+    "endEmergeDelay": 2.45,
+    "endEmergeSpeed": 0.12,
+    "endEmergeEasingStrength": 27.7,
     "endEmergeTweening": "easeInOut",
     "floorEnabled": true,
     "floorColor": "#ffffff",
     "floorThickness": 10,
     "floorHeight": 6,
     "introEnabled": true,
-    "introWaitDuration": 1.4,
-    "introRiseSpeed": 145.5,
-    "introRiseClearOffset": 3,
+    "introWaitDuration": 5.5,
+    "introRiseSpeed": 20,
+    "introRiseClearOffsetEnabled": true,
+    "introRiseClearOffset": 4.5,
     "debugShowRiseClearOffset": true,
-    "introPauseDuration": 0,
+    "bgRopeClipEnabled": true,
+    "introPauseDuration": 1.1,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2,
@@ -105,8 +111,10 @@
   "order": [
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
+        "introRiseClearOffsetEnabled",
+        "bgRopeClipEnabled",
         "debugShowRiseClearOffset",
         "introExtendSpeed",
         "introExtendSpeedTweenEnabled",
@@ -156,10 +164,28 @@
     },
     {
       "key": "ANCHOR PHYSICS",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
+      ]
+    },
+    {
+      "key": "ROPE CUT",
+      "collapsed": true,
+      "settings": [
+        "circleCutDistance",
+        "clickDistance",
+        "doubleClickThreshold",
+        "ropeFallSpeed",
+        "cutSpeed",
+        "endcapAtCutEnd",
+        "cutSweepColor",
+        "cutSweepThickness",
+        "pieceDecayDelay",
+        "pieceDecaySpeed",
+        "pieceMinThickness",
+        "minRopeLength"
       ]
     },
     {
@@ -168,7 +194,6 @@
       "settings": [
         "endcapGradientEnabled",
         "endcapGradientColors",
-        "tipSegmentShapeEnabled",
         "endcapDesign",
         "endcapHeight",
         "ropeThickness",
@@ -179,7 +204,8 @@
         "bgRopeGradientEnabled",
         "bgRopeGradientColors",
         "ropeEndCurveArc",
-        "ropeTopCurveArc"
+        "ropeTopCurveArc",
+        "tipSegmentShapeEnabled"
       ]
     },
     {
@@ -208,24 +234,6 @@
         "ropeGrowthRate",
         "clickHoldMaxDuration",
         "intensityCeiling"
-      ]
-    },
-    {
-      "key": "ROPE CUT",
-      "collapsed": true,
-      "settings": [
-        "minRopeLength",
-        "circleCutDistance",
-        "clickDistance",
-        "doubleClickThreshold",
-        "ropeFallSpeed",
-        "cutSpeed",
-        "endcapAtCutEnd",
-        "cutSweepColor",
-        "cutSweepThickness",
-        "pieceDecayDelay",
-        "pieceDecaySpeed",
-        "pieceMinThickness"
       ]
     },
     {
