@@ -81,7 +81,7 @@
     "cutSweepThickness": 0.2,
     "pieceDecayDelay": 10,
     "pieceDecaySpeed": 0.5,
-    "pieceMinThickness": 1.7,
+    "pieceMinThickness": 1.2,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
     "endEmergeDelay": 2.45,
