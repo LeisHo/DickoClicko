@@ -367,7 +367,7 @@ const DEV_GROUPS = [
     { key:'introRiseSpeed',      label:'Startup Rise Speed',        type:'slider', unit:'%vh/s', min:0.5, max:300, step:0.5, def:5 },
     { key:'introRiseClearOffsetEnabled', label:'Startup Rise Clear Offset Enabled', type:'checkbox', def:false },
     { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
-    { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Circle', type:'checkbox', def:false },
+    { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Line', type:'checkbox', def:false },
     { key:'bgRopeClipEnabled', label:'Background Rope Clip Enabled', type:'checkbox', def:true },
     { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:0.4 },
     { key:'introExtendSpeed',    label:'Startup Extension Speed',   type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:15 },
@@ -2248,31 +2248,34 @@ function updateIntro(rawDt){
     // wanted; Offset beyond that boundary was never physically
     // achievable without reproducing this exact bug.
     //
-    // rawClearRadius is measured from anchorBoundaryRadius() (the
-    // anchor's OWN, Circle-Offset-adjusted confinement radius), not the
-    // raw drawn circle's circleSize/2 -- per explicit correction ("the
-    // Startup Clear Offset boundary... is in fact an offset of the
-    // Anchor Physics Circle Offset so it will be a smaller circle").
-    // Previously this ignored Circle Offset entirely, always measuring
-    // from the drawn circle's own edge regardless of where the anchor's
-    // real physics boundary actually sat -- a real, if subtle, mismatch
-    // now that Circle Offset can move that boundary well away from the
-    // drawn edge. Since bgRope's own climb (above) is purely vertical,
-    // straight up the anchor's own x, "distance from center" and "y
-    // position" are equivalent for this specific path -- rawClearRadius
-    // is still applied as a y-offset below, but it's now a genuine
-    // circle's radius conceptually (see debugShowRiseClearOffset's own
-    // circle-drawing below, replacing the old straight debug line).
+    // clearY is a straight horizontal line again -- per explicit
+    // correction, back from the circle this was briefly changed to
+    // ("Make it a horizontal line again. But make it an offset from the
+    // bottom point of the Anhor Point - Circle Offset"). Measured from
+    // anchorBoundaryRadius()'s own BOTTOM point (circleAnchor().y +
+    // boundaryR, the Circle-Offset-adjusted confinement boundary's lowest
+    // point, not the raw drawn circle's circleSize/2 or circleAnchor().y
+    // itself) minus the offset -- positive Offset moves the line UP
+    // (toward center, shrinking how far the climb has to travel to
+    // "clear"), same sign convention Circle Offset itself already uses.
+    // Clamped so an extreme Offset can't push the line above the
+    // boundary's own top point -- a straight y-bound now, not a circle
+    // clamp, though the underlying math is unchanged from before this
+    // revert (this path was always purely vertical -- bgRope's climb only
+    // ever moves along the anchor's own x -- so "circle" vs. "line"
+    // framing produced identical numbers here regardless; this revert is
+    // about restoring the conceptual framing and the debug visualization,
+    // see debugShowRiseClearOffset below).
     //
     // Startup Rise Clear Offset Enabled (def false, per explicit
     // request) gates whether the slider's own value is actually applied
-    // -- when off, rawClearRadius collapses to exactly
-    // anchorBoundaryRadius() (offset 0), so the climb simply clears at
-    // the anchor's own real physics boundary with no extra offset.
-    const appliedOffset = cfg.introRiseClearOffsetEnabled ? vmin(cfg.introRiseClearOffset) : 0;
-    const rawClearRadius = anchorBoundaryRadius() - appliedOffset;
-    const rawClearY = circleAnchor().y + rawClearRadius;
+    // -- when off, the line collapses to exactly the boundary's own
+    // bottom point (offset 0), so the climb simply clears at the anchor's
+    // own real physics boundary with no extra offset.
     const boundaryR = anchorBoundaryRadius();
+    const bottomY = circleAnchor().y + boundaryR;
+    const appliedOffset = cfg.introRiseClearOffsetEnabled ? vmin(cfg.introRiseClearOffset) : 0;
+    const rawClearY = bottomY - appliedOffset;
     const clearY = Math.min(circleAnchor().y + boundaryR, Math.max(circleAnchor().y - boundaryR, rawClearY));
     const step = vh(cfg.introRiseSpeed) * rawDt;
     if (bgRope.points[0].y - clearY <= step){
@@ -4098,30 +4101,36 @@ function render(){
   fallenPieces.forEach(piece => { if (piece.cutSweep && piece.cutSweep.progress < 1) renderCutSweep(piece); });
 
   // Debug: Show Rise Clear Offset Line -- draws the RAW (uncapped)
-  // Startup Rise Clear Offset target as a dashed CIRCLE (pink) -- per
-  // explicit correction, it's conceptually a circle offset FROM the
-  // anchor's own boundary, not an arbitrary full-width horizontal line --
-  // plus the anchor's own physics boundary (anchorBoundaryRadius() around
-  // circleAnchor()) as a second dashed circle (cyan), so the two can be
-  // visually compared -- exactly the two quantities updateIntro()'s own
-  // clamp (see its comment) now reconciles. Drawn regardless of
-  // introPhase (not just during waiting/rising/pausing) so it's just as
-  // usable for inspecting Circle Boundary Offset/Circle Size tuning
-  // after the animation has finished.
+  // Startup Rise Clear Offset target as a dashed horizontal LINE (pink),
+  // back from a circle per explicit correction ("Make it a horizontal
+  // line again. But make it an offset from the bottom point of the Anhor
+  // Point - Circle Offset") -- plus a second dashed horizontal line
+  // (cyan) at the Circle Offset boundary's own bottom point
+  // (circleAnchor().y + anchorBoundaryRadius()), the zero-offset
+  // reference the pink line is measured FROM, so the two can be visually
+  // compared -- exactly the two quantities updateIntro()'s own clamp (see
+  // its comment) now reconciles. Drawn regardless of introPhase (not just
+  // during waiting/rising/pausing) so it's just as usable for inspecting
+  // Circle Boundary Offset/Circle Size tuning after the animation has
+  // finished.
   if (cfg.debugShowRiseClearOffset){
     const anchor = circleAnchor();
     const boundaryR = anchorBoundaryRadius();
-    const rawClearRadius = boundaryR - (cfg.introRiseClearOffsetEnabled ? vmin(cfg.introRiseClearOffset) : 0);
+    const bottomY = anchor.y + boundaryR;
+    const rawClearY = bottomY - (cfg.introRiseClearOffsetEnabled ? vmin(cfg.introRiseClearOffset) : 0);
+    const lineHalfWidth = boundaryR * 1.4;
     ctx.save();
     ctx.setLineDash([6, 5]);
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#ff2ec4';
     ctx.beginPath();
-    ctx.arc(anchor.x, anchor.y, Math.max(0, rawClearRadius), 0, Math.PI * 2);
+    ctx.moveTo(anchor.x - lineHalfWidth, rawClearY);
+    ctx.lineTo(anchor.x + lineHalfWidth, rawClearY);
     ctx.stroke();
     ctx.strokeStyle = '#2ee6ff';
     ctx.beginPath();
-    ctx.arc(anchor.x, anchor.y, boundaryR, 0, Math.PI * 2);
+    ctx.moveTo(anchor.x - lineHalfWidth, bottomY);
+    ctx.lineTo(anchor.x + lineHalfWidth, bottomY);
     ctx.stroke();
     ctx.restore();
   }

@@ -86,8 +86,10 @@ additions. Current state of each subsystem:
   AND at the handoff when mainRope spawns, so it's always already
   consistent with gravity's direction at both transitions -- no more
   reaction/jump at either one. bgRope's own climb now starts just out of
-  sight below the circle (Rope Thickness + 1, not a full diameter) --
-  see CODE_SUMMARY gotchas.
+  sight below the circle (Rope Thickness + 1, not a full diameter).
+  Startup Rise Clear Offset is a straight horizontal line again (briefly a
+  circle earlier this session), measured from the Circle Offset
+  boundary's own bottom point -- see CODE_SUMMARY gotchas.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a

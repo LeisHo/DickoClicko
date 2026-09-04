@@ -4758,6 +4758,35 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  11:57 AM EDT
+
+Startup Rise Clear Offset reverted from a circle back to a horizontal
+line -- measured from the bottom point of Circle Offset's own boundary.
+
+User: "ok i chagemd y mind about the Startup Rise Clear Offset. Make ita
+horizontal line again. But make it an offset from the bottom point of
+the Anhor Point - Circle Offset."
+
+Since bgRope's own climb only ever moves vertically (straight up the
+anchor's own x), the underlying clearY math was ALREADY numerically
+identical whether framed as "circle radius" or "horizontal line" -- this
+revert is about restoring the conceptual framing and, more visibly, the
+debug visualization, not a behavior change. Renamed rawClearRadius ->
+rawClearY/bottomY throughout updateIntro()'s 'rising' branch to read as a
+line-offset-from-a-reference-point instead of a radius, kept the same
+safety clamp (now framed as bounding a y-value within the boundary's own
+top/bottom span, not a circle clamp). debugShowRiseClearOffset's own
+visualization changed from 2 dashed circles (ctx.arc) to 2 dashed
+horizontal lines (ctx.moveTo/lineTo) -- pink at the actual applied
+offset, cyan at the zero-offset reference (Circle Offset boundary's own
+bottom point) -- same color convention as before. Checkbox label updated
+Circle -> Line to match.
+
+Verified via node --check (syntax clean) and a live screenshot with the
+debug checkbox enabled: confirms a horizontal dashed line sitting right
+at the circle's own bottom edge, replacing the earlier dashed circle.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
