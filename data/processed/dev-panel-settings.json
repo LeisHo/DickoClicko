@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 13.961538461538476,
+    "ropeLength": 6.923076923076923,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -58,7 +58,7 @@
         "color": "#b78657"
       }
     ],
-    "ropeEndCurveArc": 0,
+    "ropeEndCurveArc": 0.7,
     "ropeTopCurveArc": 0.9,
     "clickIntensity": 1.1,
     "holdDistance": 22,
@@ -84,9 +84,9 @@
     "pieceMinThickness": 1.7,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
-    "endEmergeDelay": 0,
-    "endEmergeSpeed": 0.02,
-    "endEmergeEasingStrength": 12,
+    "endEmergeDelay": 2.45,
+    "endEmergeSpeed": 0.12,
+    "endEmergeEasingStrength": 27.7,
     "endEmergeTweening": "easeInOut",
     "floorEnabled": true,
     "floorColor": "#ffffff",
@@ -98,7 +98,7 @@
     "introRiseClearOffsetEnabled": true,
     "introRiseClearOffset": 3,
     "debugShowRiseClearOffset": true,
-    "bgRopeClipEnabled": false,
+    "bgRopeClipEnabled": true,
     "introPauseDuration": 0,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
@@ -111,7 +111,7 @@
   "order": [
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "introRiseClearOffsetEnabled",
         "bgRopeClipEnabled",
@@ -171,26 +171,6 @@
       ]
     },
     {
-      "key": "ROPE",
-      "collapsed": true,
-      "settings": [
-        "endcapGradientEnabled",
-        "endcapGradientColors",
-        "tipSegmentShapeEnabled",
-        "endcapDesign",
-        "endcapHeight",
-        "ropeThickness",
-        "ropeLength",
-        "ropeColor",
-        "ropeGradientEnabled",
-        "ropeGradientColors",
-        "bgRopeGradientEnabled",
-        "bgRopeGradientColors",
-        "ropeEndCurveArc",
-        "ropeTopCurveArc"
-      ]
-    },
-    {
       "key": "ROPE CUT",
       "collapsed": true,
       "settings": [
@@ -206,6 +186,26 @@
         "pieceDecaySpeed",
         "pieceMinThickness",
         "minRopeLength"
+      ]
+    },
+    {
+      "key": "ROPE",
+      "collapsed": false,
+      "settings": [
+        "endcapGradientEnabled",
+        "endcapGradientColors",
+        "endcapDesign",
+        "endcapHeight",
+        "ropeThickness",
+        "ropeLength",
+        "ropeColor",
+        "ropeGradientEnabled",
+        "ropeGradientColors",
+        "bgRopeGradientEnabled",
+        "bgRopeGradientColors",
+        "ropeEndCurveArc",
+        "ropeTopCurveArc",
+        "tipSegmentShapeEnabled"
       ]
     },
     {
@@ -238,7 +238,7 @@
     },
     {
       "key": "END EMERGE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "endEmergeEnabled",
         "endcapStartingScale",
