@@ -50,11 +50,15 @@
         "color": "#b07e4f"
       },
       {
-        "pos": 0.29526188072965825,
-        "color": "#ffc38b"
+        "pos": 0.11646469983555363,
+        "color": "#fbbd83"
+      },
+      {
+        "pos": 0.37421101839381116,
+        "color": "#b78657"
       }
     ],
-    "ropeEndCurveArc": 0.8,
+    "ropeEndCurveArc": 0,
     "ropeTopCurveArc": 0.9,
     "clickIntensity": 1.1,
     "holdDistance": 22,
@@ -94,7 +98,7 @@
     "introRiseClearOffsetEnabled": true,
     "introRiseClearOffset": 3,
     "debugShowRiseClearOffset": true,
-    "bgRopeClipEnabled": true,
+    "bgRopeClipEnabled": false,
     "introPauseDuration": 0,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
