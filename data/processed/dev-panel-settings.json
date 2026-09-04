@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 8.342630916899301,
+    "ropeLength": 8.493301310190848,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -107,7 +107,7 @@
     "detachPauseDuration": 0.3,
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 3.4,
-    "detachThicknessMultiplier": 1.15,
+    "detachThicknessMultiplier": 1.05,
     "flickX": 15,
     "flickY": 85,
     "flickScale": 15,
