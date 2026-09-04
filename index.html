@@ -365,6 +365,7 @@ const DEV_GROUPS = [
     { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
     { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:1.4 },
     { key:'introRiseSpeed',      label:'Startup Rise Speed',        type:'slider', unit:'%vh/s', min:0.5, max:300, step:0.5, def:5 },
+    { key:'startupRiseGravity',  label:'Startup Rise Gravity',      type:'slider', unit:'x',     min:0,   max:5,   step:0.1, def:1 },
     { key:'introRiseClearOffsetEnabled', label:'Startup Rise Clear Offset Enabled', type:'checkbox', def:false },
     { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
     { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Line', type:'checkbox', def:false },
@@ -3237,7 +3238,22 @@ function update(rawDt){
   }
   if (introPhase !== 'done') updateIntro(rawDt);
   const dt = rawDt * cfg.ropeAnimSpeed;
-  const gravityAccel = vh(90) * cfg.gravityStrength;
+  // Startup Rise Gravity replaces normal Gravity Strength for BOTH
+  // mainRope and bgRope (they share this one gravityAccel below) for as
+  // long as the startup/detach animation sequence is still running --
+  // per explicit request ("provide me a separate startup rise gravity
+  // slider taht will allow me to slow down that fall"), reported after
+  // tracing a real post-spawn settle: the anchor spawns above its actual
+  // resting boundary whenever Startup Rise Clear Offset is positive, and
+  // normal gravity was pulling it back down to that boundary in ~6
+  // frames (~0.1s) -- fast enough to read as a sudden jump rather than a
+  // visible settle. A lower Startup Rise Gravity slows exactly that
+  // moment down, independent of gameplay's own Gravity Strength. Applies
+  // through 'pausing'/'growing' too (not just the instant of the handoff)
+  // so bgRope's own tail -- synced to the same anchor position but still
+  // separately integrating its own chain below -- settles at the same
+  // visible pace rather than falling fast while the anchor falls slow.
+  const gravityAccel = vh(90) * (introPhase !== 'done' ? cfg.startupRiseGravity : cfg.gravityStrength);
 
   // mainRope.points[0] (the anchor end) is no longer rigidly pinned to the
   // circle's center -- per explicit request, it's now a normal physics

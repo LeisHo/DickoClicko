@@ -4787,6 +4787,71 @@ debug checkbox enabled: confirms a horizontal dashed line sitting right
 at the circle's own bottom edge, replacing the earlier dashed circle.
 
 ================================================================================
+2026-09-04  -  12:14 PM EDT
+
+Added Startup Rise Gravity -- a separate, slower gravity for the anchor's
+post-spawn settle. Also investigated (not yet resolved) a FLICK click
+report that persists even with the dev panel hidden.
+
+Following up on the 11:23 AM entry's "the main rope spawns, it seems to
+physically affect the background rope" investigation: user reported "the
+background rope rises until it clears the StartupRiseClearOffset, then
+suddenly it jumps back down to the Anchor Point Circle Offset then the
+Main Rope Spawns." Traced live via synthetic frame-stepping through a
+real handoff at the live settings (Rise Clear Offset 14, boundaryR 37):
+confirmed the anchor spawns ABOVE its real resting boundary whenever Rise
+Clear Offset is positive (per its own "positive shrinks" convention), then
+normal Gravity Strength (4.6 live) pulls it back down to the boundary
+edge in ~6 real frames (~0.1s) -- not a bug, a genuine physics settle,
+just fast enough at this offset magnitude (14 of a 37 boundary) to read
+as a sudden jump. Asked the user how they wanted this handled rather than
+guessing; answer: "provide me a separate startup rise gravity slider taht
+will allow me to slow down that fall."
+
+Added `startupRiseGravity` (def 1x, vs. Gravity Strength's own 4.6x
+default -- deliberately lower so the slower settle is the default, not an
+opt-in). update()'s shared `gravityAccel` (used by BOTH mainRope's and
+bgRope's own integrateChain() calls) now reads
+`introPhase !== 'done' ? cfg.startupRiseGravity : cfg.gravityStrength` --
+applies for the whole startup/detach sequence (not just the instant of
+the handoff) so bgRope's own tail settles at the same visible pace as
+mainRope's anchor, since bgRope's point 0 is locked to mainRope's anchor
+position but the REST of its chain still integrates independently.
+Verified live via the same synthetic frame-stepping: at the new default
+(1x), the settle now takes ~11 frames to fully reach the boundary instead
+of ~6 -- visibly, measurably slower, confirming the slider works.
+
+Separately, investigated (not resolved): "the animations on the left
+bottom dont see to work right. when i simply click either of them, they
+should run through the entire sequence" + clarified via AskUserQuestion
+that this describes DESIRED, not actual, behavior -- "no. whati m
+describing is what i want. its not workig that way." Checked the live
+saved mobile dev-panel geometry (left:-1, width:229, top:0, height:830.7)
+against flickX/Y (15%vw/85%vh) and flick2X/Y (15%vw/60%vh): both
+animations sit almost entirely under the panel's own bounding box on a
+mobile-width viewport -- proposed as a likely explanation, asked the user
+to confirm via AskUserQuestion. Answer: "No, still broken even with panel
+hidden" -- ruling that out. Re-examined the code for other candidates:
+confirmed only one canvas pointerdown listener (no duplicate/conflicting
+handler), confirmed flick1/flick2's own rects don't overlap at current
+live settings (flick2's y-range 390-570 vs flick1's 653-707), confirmed
+resizeCanvas()'s devicePixelRatio handling maps CSS pixels 1:1 with the
+vw()/vh() coordinate space in principle. Could NOT reproduce via a real
+dispatched click in this sandbox -- window.innerWidth/innerHeight read 0
+persistently here (not just at early page life), so the app's own
+viewport fallback (400x800) never matches this sandbox's actual visible
+viewport, making any screenshot/pixel-coordinate-based click test here
+fundamentally unreliable for this specific bug (a mismatch that
+shouldn't exist on the user's real device, where innerWidth/innerHeight
+should read correctly). Reported findings back and asked for more precise
+repro detail (device/browser, exactly what happens on click) rather than
+continuing to guess blindly -- still open.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

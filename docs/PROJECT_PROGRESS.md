@@ -89,7 +89,10 @@ additions. Current state of each subsystem:
   sight below the circle (Rope Thickness + 1, not a full diameter).
   Startup Rise Clear Offset is a straight horizontal line again (briefly a
   circle earlier this session), measured from the Circle Offset
-  boundary's own bottom point -- see CODE_SUMMARY gotchas.
+  boundary's own bottom point. A separate Startup Rise Gravity slider
+  (independent of gameplay's own Gravity Strength) controls how fast the
+  anchor settles from its offset spawn point down to its real resting
+  boundary right after spawning -- see CODE_SUMMARY gotchas.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a
@@ -159,3 +162,18 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
   refreshing resolves it, this closes as expected Vercel behavior, not
   a bug; if it does NOT resolve it even after waiting, that's a real
   signal something else is wrong and needs a fresh look.
+- **FLICK animation clicks reportedly not triggering the real sequence,
+  still open.** Reported as "when i simply click either of them, they
+  should run through the entire sequence" not happening. Dev-panel
+  overlap (the mobile panel geometry sits almost exactly over both
+  animations' positions) was the leading hypothesis but the user
+  confirmed it's NOT the cause (still broken with the panel hidden).
+  Re-checked the code directly -- no duplicate/conflicting event
+  listener, no rect overlap between the two animations at current live
+  settings, DPR/coordinate handling looks correct in principle. Could not
+  reproduce via a real dispatched click in this dev environment, since
+  `window.innerWidth`/`innerHeight` read 0 persistently here (a sandbox-
+  only condition, not expected on the user's real device), which poisons
+  this specific environment's own click-coordinate testing. Needs more
+  precise repro detail from the user (device/browser, exactly what
+  happens on click) to make further progress.
