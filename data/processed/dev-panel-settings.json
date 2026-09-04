@@ -93,7 +93,7 @@
     "floorThickness": 10,
     "floorHeight": 6,
     "introEnabled": true,
-    "introWaitDuration": 5.5,
+    "introWaitDuration": 0,
     "introRiseSpeed": 20,
     "introRiseClearOffsetEnabled": true,
     "introRiseClearOffset": -7,
