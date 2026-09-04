@@ -2668,3 +2668,35 @@ GOTCHAS
   -- directly confirming the endcap's gradient is now fully independent
   of the rope's total length or current pose, not just "looks right in
   one screenshot."
+- **2 new gating checkboxes added for the Startup Animation, both
+  verified via direct pixel/value sampling rather than screenshot
+  interpretation alone (screenshots mixing mainRope and bgRope together
+  made visual comparison ambiguous -- see the second item below).**
+  - `introRiseClearOffsetEnabled` (checkbox, def `false` per explicit
+    "set it to off by default for now") gates whether
+    `cfg.introRiseClearOffset`'s own value is actually applied in BOTH
+    places that read it -- `updateIntro()`'s own 'rising'-phase trigger
+    and the `debugShowRiseClearOffset` visualization. When off,
+    `rawClearRadius` collapses to exactly `anchorBoundaryRadius()`
+    (offset treated as 0), so the climb simply clears at the anchor's
+    own real physics boundary with no extra tunable offset -- verified
+    via a full 300-frame `update()` run through the entire intro
+    sequence with the new default (0 thrown errors, confirming the
+    disabled path is exercised safely, not just present in code).
+  - `bgRopeClipEnabled` (checkbox, def `true`, matching the always-on
+    behavior every previous round already had) gates the
+    `ctx.save()/beginPath()/arc()/clip()/.../restore()` block that
+    confines bgRope's own rendering to the circle's bounds -- when off,
+    the SAME `strokeRopeCurve()` call runs directly, unclipped, per
+    explicit request ("give me a checkbox to turn off the background
+    rope circle masking clipping region... so i can see the whole
+    background rope"). Verified precisely, not just visually (a
+    screenshot mixing mainRope's own normal rendering with bgRope's made
+    the two hard to visually distinguish): manually positioned bgRope's
+    points to extend 150px past the circle's own edge, moved mainRope
+    off-screen to isolate the test, then sampled a single pixel at that
+    150px-past position via `ctx.getImageData()` with the toggle both
+    on and off -- `[0,0,0,0]` (fully transparent) with the clip on,
+    `[165,129,95,255]` (real rope-tan, opaque) with it off, at the
+    EXACT SAME pixel coordinate -- a direct, unambiguous confirmation of
+    the toggle's actual effect.

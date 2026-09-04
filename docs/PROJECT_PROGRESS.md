@@ -997,6 +997,24 @@ assuming it never shipped.
   pixel sampling: a long/straight rope and a short/curled one produced
   IDENTICAL gradient pixel values at the endcap, confirming it's now
   fully independent of total rope length/pose.
+- Explained the Startup Animation's full state machine in plain terms
+  per direct request, before making any changes -- see this session's
+  own conversation for the write-up (waiting -> rising [bgRope's own
+  start point climbs, clipped to peek through the circle] -> handoff
+  [mainRope spawns at that exact point, no jump] -> pausing -> growing
+  -> done).
+- Added 2 new checkboxes per explicit follow-up requests: "Startup Rise
+  Clear Offset Enabled" (default OFF, per explicit request "for now") --
+  when off, the rise-clear boundary collapses to exactly
+  `anchorBoundaryRadius()` with no extra offset applied, in both
+  `updateIntro()`'s own trigger and the debug visualization; and
+  "Background Rope Clip Enabled" (default ON, matching the always-on
+  behavior before this control existed) -- when off, bgRope draws fully
+  unclipped instead of only the sliver that normally peeks through the
+  circle's own bounds, per explicit request ("so i can see the whole
+  background rope"). Verified both via direct pixel sampling: with the
+  clip on, a point 150px past the circle read fully transparent; with it
+  off, the identical point read real rope color.
 
 ## What's next
 

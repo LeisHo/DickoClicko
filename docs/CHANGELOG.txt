@@ -4154,6 +4154,43 @@ window.__debugTMPgrad) fully removed and grep-confirmed 0 references
 before commit. Updated docs/CODE_SUMMARY.md (2 new Gotchas) and
 docs/PROJECT_PROGRESS.md (3 new Recently Completed bullets).
 
+--------------------------------------------------------------------------------
+2026-09-04  -  02:01 AM EDT
+
+Explained the Startup Animation's full state machine in plain terms
+before making any changes, per direct request ("before you do anything,
+can you explain to me in very basic form what our startup animation
+is"). Then added 2 new gating checkboxes per explicit follow-up requests.
+
+Added "Startup Rise Clear Offset Enabled" (checkbox, def false per
+explicit "set it to off by default for now"): gates whether
+cfg.introRiseClearOffset's own value is actually applied, in both
+updateIntro()'s own 'rising'-phase trigger and the
+debugShowRiseClearOffset visualization. When off, rawClearRadius
+collapses to exactly anchorBoundaryRadius() (offset treated as 0), so
+the climb simply clears at the anchor's own real physics boundary with
+no extra offset. Verified via a full 300-frame update() run through the
+entire intro sequence with the new default -- 0 thrown errors.
+
+Added "Background Rope Clip Enabled" (checkbox, def true, matching the
+always-on behavior every previous round already had): gates the
+ctx.clip() block that confines bgRope's own rendering to the circle's
+bounds, per explicit request ("give me a checkbox to turn off the
+background rope circle masking clipping region... so i can see the
+whole background rope"). When off, the same strokeRopeCurve() call runs
+directly, unclipped. Verified precisely rather than by screenshot alone
+(mainRope and bgRope both rendering made visual comparison ambiguous):
+manually positioned bgRope 150px past the circle's edge, moved mainRope
+off-screen to isolate the test, then sampled the same pixel via
+ctx.getImageData() with the toggle on and off -- [0,0,0,0] (transparent)
+with the clip on, [165,129,95,255] (real rope color) with it off, at the
+identical coordinate.
+
+node --check clean throughout. Temporary debug hook (window.__debugTMPchk)
+fully removed and grep-confirmed 0 references before commit. Updated
+docs/CODE_SUMMARY.md (1 new Gotcha) and docs/PROJECT_PROGRESS.md
+(2 new Recently Completed bullets).
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
