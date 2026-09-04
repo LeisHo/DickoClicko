@@ -77,11 +77,13 @@ additions. Current state of each subsystem:
   freshly-spawned main rope at the exact handoff point (no jump), pauses,
   then grows via the same hold-to-grow mechanic used during normal play.
   A double-click-in-circle detach reuses this whole state machine with its
-  own Detach Wait/Pause Duration sliders; the just-detached piece stays
-  held in place (no gravity) until the fresh main rope actually spawns at
-  the handoff, and bgRope's whole chain (not just its start point) rebuilds
-  when the climb begins so it starts already consistent with gravity's
-  direction -- see CODE_SUMMARY gotchas for both.
+  own Detach Wait/Pause Duration sliders; the just-detached piece falls
+  immediately, same as any other cut (an earlier version held it frozen
+  until the fresh main rope spawned -- corrected per explicit follow-up:
+  the wait belongs to the new rope's own endcap grow-in, not the falling
+  piece's physics). bgRope's whole chain (not just its start point)
+  rebuilds when the climb begins so it starts already consistent with
+  gravity's direction -- see CODE_SUMMARY gotchas.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a

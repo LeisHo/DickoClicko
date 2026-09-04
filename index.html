@@ -2266,12 +2266,6 @@ function updateIntro(rawDt){
       bgRope.points[0].y = clearY;
       introPhase = 'pausing';
       introTimer = 0;
-      // Release any piece(s) still held from a detach -- see their own
-      // waitingForSpawn flag set in detachEntireRopeAndRestartIntro().
-      // This IS "the Main rope has been spawned" moment (mainRope.points[0]
-      // gets positioned two lines below), so this is exactly where a held
-      // piece should start actually falling.
-      fallenPieces.forEach(p => { p.waitingForSpawn = false; });
       // mainRope "spawns" exactly where bgRope's climb just ended -- no
       // jump -- then, from this frame on, mainRope's own already-running
       // physics (the same boundaryConstraint every other frame already
@@ -2361,15 +2355,15 @@ function detachEntireRopeAndRestartIntro(){
     // actually had, not the NEW (about to be thicker) one the fresh
     // regrowth will use.
     const piece = { points: fallingPoints, segLen: mainRope.segLen, tipEmerge: mainRope.tipEmerge, age: 0, baseThickness: vmin(cfg.ropeThickness) * ropeThicknessMultiplier };
-    // Held in place (no gravity integration -- see its own check in the
-    // fallenPieces update loop) until the fresh main rope actually spawns
-    // at the 'rising'->'pausing' handoff below. Per explicit request ("the
-    // ropes shouldnt fall until the Main rope has been spawned"): without
-    // this, the old piece was already falling away during the ENTIRE
-    // wait+rise duration, so there was a real stretch where nothing
-    // stayed on screen at the circle at all. Cleared at the handoff, not
-    // here -- see updateIntro()'s 'rising' branch.
-    piece.waitingForSpawn = true;
+    // Falls immediately, same as any other cut -- an earlier version of
+    // this held the piece frozen (no gravity) until the fresh main rope
+    // spawned, based on a misreading of "the ropes shouldnt fall until
+    // the Main rope has been spawned." Corrected per explicit follow-up:
+    // "the wait is only for the endcap. the cut segment should fall
+    // immediatly as it used to" -- the wait belongs to the NEW rope's own
+    // endcap grow-in (Detach Endcap Start Scale/Grow Duration, driven by
+    // mainRope.detachTipScaleProgress below), not to this falling piece's
+    // physics at all.
     // the piece's own free/tip end keeps whatever End Emerge state the
     // rope's tip already had; its NEW cut edge (former anchor, now
     // points[0]) starts its own fresh emerge, same convention
@@ -3303,10 +3297,6 @@ function update(rawDt){
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeFallSpeed;
   fallenPieces.forEach(piece => {
     if (piece.age !== undefined) piece.age += rawDt;
-    // Held stationary (no gravity/physics at all) while waitingForSpawn --
-    // see detachEntireRopeAndRestartIntro() for where this gets set and
-    // updateIntro()'s 'rising'->'pausing' handoff for where it clears.
-    if (piece.waitingForSpawn) return;
     integrateChain(piece.points, piece.segLen, dt, fallGravity, -1);
     // A piece-on-piece cut (cutPieceAt) hasn't actually split `piece` yet
     // -- same pendingCut deferral as mainRope's, checked after this

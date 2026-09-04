@@ -4663,6 +4663,50 @@ immediately unstuck it. Noted here since it cost real time before being
 diagnosed and isn't specific to this feature.
 
 ================================================================================
+2026-09-04  -  09:21 AM EDT
+
+Reverted the "hold falling piece until spawn" behavior for whole-rope
+detach -- correction to the 08:08 AM entry's own fix.
+
+User: "when i cut the whole rope, the cut segment is sitll frozen for he
+wait duration. the wait is only for the endcap. the cut segment should
+fall immediatly as it used to."
+
+The 08:08 AM entry added `piece.waitingForSpawn` specifically because an
+earlier request ("The ropes shouldnt fall until the Main rope has been
+spawned") was read as: the OLD rope's falling piece should stay frozen
+until the fresh main rope spawns. This follow-up corrects that reading --
+the wait was only ever meant to apply to the NEW rope's own endcap
+grow-in (Detach Endcap Start Scale/Grow Duration, already a separate,
+untouched mechanism via mainRope.detachTipScaleProgress), not to the
+falling piece's physics at all. Removed `piece.waitingForSpawn` entirely:
+the flag's own set (detachEntireRopeAndRestartIntro), its clear (the
+'rising'->'pausing' handoff in updateIntro()), and its check (the
+fallenPieces gravity-integration loop in update()) -- a clean 3-site
+revert, no other behavior touched. The just-detached piece now falls
+immediately again, exactly like a regular cut.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+Separately, investigated (not changed): "when i click, it only lods the
+first frame. then the 2nd click loads the 2nd, etc. i want the entire
+seueunce to run on the first and subseuent clicks" -- about the FLICK
+animations. Reproduced the exact scenario live (a single quick down+up
+click, current live Anim Speed 8x for both animations): traced flickIdx
+across 20 real stepped frames after one click and confirmed the FULL
+ping-pong sequence plays correctly in one go (2,3,5,6,8,10,11,13,14,16,
+then back down 14,13,11,10,8,6,5,3,2, then stops) -- no repeated clicking
+needed, matching the intended design from the 08:34 AM entry. Could not
+reproduce the reported per-click single-frame-advance pattern against the
+current code with current live settings. Most likely explanation: a stale
+cache or a Vercel deployment that hadn't yet picked up the 08:34 AM/09:08
+AM commits at the moment it was tested -- reported back with the direct
+verification evidence rather than guessing at a code change with nothing
+in the current code to actually explain the symptom.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
