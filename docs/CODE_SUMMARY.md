@@ -2476,3 +2476,59 @@ GOTCHAS
   (screenshot confirmed), and clicking it again restores the exact same
   height the panel had before collapsing (also screenshot-confirmed, not
   just assumed from the code).
+- **Root-caused "the dark flash near the rope start... occurs when i do
+  a long click and hold flick from the bottom" via direct frame-by-frame
+  physics tracing (a temporary debug hook stepping `update()` manually,
+  removed before commit), not guessing from the code alone.**
+  `applyPunch()`'s displacement (`power = vh(1.0) * intensity`) is an
+  ABSOLUTE value, entirely independent of the rope's own scale. For a
+  short rope (small `segLen`), a strong hold (Click Intensity +
+  Intensity Ceiling, e.g. 1.1+10=11.1 in the live settings) can displace
+  a point several times its own segment's length in one shot -- and
+  since the falloff spreads a real kick across several NEIGHBORING
+  points too (not just the exact hit index), this can fling the tip
+  clean PAST its own neighbor, or even past the anchor itself, into an
+  inverted configuration. Traced exactly what that produces: point 0
+  (the anchor -- excluded from the punch directly via `pinnedIndex`)
+  still got dragged by the ordinary distance constraint through a wild
+  multi-frame swing, its distance from `circleAnchor()` recorded at
+  each of 15 manually-stepped ticks, at one point landing barely 46px
+  from center against a normal resting ~206px-equivalent range --
+  i.e. swinging through the circle's own interior and briefly PAST its
+  center. `tipDirection()` (which `drawEndcap()` rotates the endcap by)
+  genuinely flip-flopped tick to tick during that recovery (e.g.
+  `{-0.336,-0.942}` at tick 0 to `{-0.01,1}` -- effectively 180 degrees
+  -- one tick later), not a smooth rotation -- confirmed visually too:
+  with the endcap gradient set to a stark green/black pair, this chaotic
+  spin is what sweeps the gradient's dark end across the endcap for a
+  few frames, reading as a flash. Fixed by capping `applyPunch()`'s
+  power at `segLen * MAX_PUNCH_SEGMENTS` (4) -- added `segLen` as a new
+  explicit param, threaded through both real call sites
+  (`mainRope.segLen`). Re-ran the identical 15-tick trace after the fix:
+  the anchor's distance from center now stays tightly bounded (63.9-79.8
+  px, vs. swinging from ~46 to ~80 before) and `tipDirection()` changes
+  smoothly and monotonically tick to tick instead of flip-flopping --
+  still a real, visible kick (the rope genuinely swings), just no longer
+  a physically-invalid teleport-and-chaotic-recovery. Confirmed via
+  measured numbers from BOTH before and after the fix, not just a visual
+  "looks better now".
+- **"The panel resizing in mobile is still buggy" -- `.dp-resize` was
+  the one draggable-handle class in the whole panel missing
+  `touch-action:none`.** Every other draggable element already has it
+  (`.dp-drag-handle`, the collapsible-group drag handle, the gradient
+  marker, etc.) -- `.dp-resize` itself never did. Without it, a REAL
+  finger-drag starting on a resize handle can get hijacked by the
+  browser's own native scroll/pan touch-gesture recognition before JS
+  ever sees a clean `pointermove` sequence. This is invisible to both
+  desktop mouse testing (no competing native touch-gesture layer) AND
+  to synthetic `PointerEvent`s dispatched directly in JS (which bypass
+  the browser's own touch-gesture recognition entirely) -- confirmed
+  directly: dispatching synthetic pointerdown/move/up sequences against
+  all 3 handle types (E, S, SE) in a mobile-viewport tab resized the
+  panel exactly as expected every time, including while the panel's own
+  settings list was mid-scroll, with no bug reproducible that way at
+  all. Only a genuine physical touch-drag on an actual mobile device
+  would expose the gap. Fixed by adding `touch-action:none` to the
+  shared `.dp-resize` rule, matching every other handle. Verified the
+  fix landed correctly post-edit via `getComputedStyle()` on a live
+  resize handle in a mobile-viewport tab.

@@ -924,6 +924,21 @@ assuming it never shipped.
   below the title bar. Fixed: collapsing now saves and clears that
   height (auto-sizing to just the title bar); expanding restores it.
   Width untouched. Verified via real clicks + screenshots both ways.
+- Root-caused and fixed the dark-flash report via frame-by-frame physics
+  tracing: applyPunch()'s displacement was an absolute value independent
+  of the rope's own scale, so a strong hold-and-release on a short rope
+  could fling the tip past its own neighbor/anchor into an inverted
+  configuration -- tipDirection() (which rotates the endcap) genuinely
+  flip-flopped ~180 degrees tick to tick during the multi-frame recovery,
+  visibly sweeping the gradient's dark end across the endcap. Fixed by
+  capping the punch's power at segLen * 4. Re-traced after the fix:
+  smooth, bounded motion instead of flip-flopping, still a real kick.
+- Root-caused and fixed "panel resizing in mobile is still buggy":
+  .dp-resize was the one draggable-handle class missing
+  touch-action:none (every other handle already has it) -- invisible to
+  desktop mouse testing and to synthetic PointerEvent tests (both bypass
+  or lack the native touch-gesture layer that was actually hijacking
+  real finger-drags). Fixed by adding the missing CSS property.
 
 ## What's next
 

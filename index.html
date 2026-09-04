@@ -138,7 +138,19 @@
   }
   .dp-click-log .dp-click-log-empty { opacity:.5; }
 
-  .dp-resize { position:absolute; z-index:10; }
+  /* Missing touch-action:none was the one real gap here -- every other
+     draggable handle in this panel (.dp-drag-handle, the group drag
+     handle, the gradient marker, etc.) already has it. Without it, a
+     real finger-drag starting on a resize handle can get hijacked by
+     the browser's own native scroll/pan gesture recognition before JS
+     ever sees a clean pointermove sequence -- desktop mouse drags are
+     unaffected (no native touch-gesture layer to compete with), and
+     synthetic PointerEvents dispatched directly in JS bypass this
+     entirely too, which is why this doesn't show up in code-level
+     testing -- only a REAL touch-drag on an actual mobile viewport
+     exposes it. Reported as "the panel resizing in mobile is still
+     buggy". */
+  .dp-resize { position:absolute; z-index:10; touch-action:none; }
   .dp-resize-n, .dp-resize-s { left:8px; right:8px; height:8px; cursor:ns-resize; }
   .dp-resize-n { top:-4px; } .dp-resize-s { bottom:-4px; }
   .dp-resize-e, .dp-resize-w { top:8px; bottom:8px; width:8px; cursor:ew-resize; }
@@ -2416,11 +2428,31 @@ function growRope(dtSeconds, ratePerSecVh){
   setCfg('ropeLength', mainRope.totalLength / window.innerHeight * 100);
 }
 
-function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex){
+// power (an absolute vh()-based value, independent of the rope's own
+// scale) used to be applied uncapped -- fine for a normal-length rope,
+// but for a SHORT rope (small segLen), Click Intensity + Intensity
+// Ceiling can produce a displacement several times a single segment's
+// own length. Since the falloff spreads a real (if smaller) kick across
+// several NEIGHBORING points too, not just the exact hit point, a
+// large enough power can fling the tip clean PAST its own neighbor (or
+// even the anchor) into an inverted configuration -- confirmed via
+// direct frame-by-frame tracing: point0 (the anchor, otherwise excluded
+// from the punch directly) got dragged by the distance constraint
+// through a wild multi-frame swing past the circle's own center, and
+// tipDirection() (which drawEndcap() rotates by) genuinely flipped
+// and spun tick to tick during that recovery -- reported as "the dark
+// flash near the rope start... occurs when i do a long click and hold
+// flick from the bottom". Capping power at a multiple of the rope's own
+// segLen keeps a strong punch feeling strong (still several segments'
+// worth of kick) while never letting a single application send a point
+// past where its own neighbor structurally allows it to go without an
+// inverted, chaotically-recovering configuration.
+const MAX_PUNCH_SEGMENTS = 4;
+function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex, segLen){
   const dirX = hit.x - clickX, dirY = hit.y - clickY;
   const len = Math.hypot(dirX, dirY) || 1;
   const nx = dirX / len, ny = dirY / len;
-  const power = vh(1.0) * intensity;
+  const power = Math.min(vh(1.0) * intensity, segLen * MAX_PUNCH_SEGMENTS);
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex) continue;
     const falloff = Math.exp(-Math.pow((i - hit.index) / 3, 2));
@@ -2914,7 +2946,7 @@ function onPointerUp(e){
     // -- a hold starts at the same intensity a quick tap would produce and
     // rises from there, reaching Click Intensity + Intensity Ceiling exactly
     // at Click Hold Max Duration.
-    applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, intensity, 0);
+    applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, intensity, 0, mainRope.segLen);
     return;
   }
 
@@ -2936,7 +2968,7 @@ function onPointerUp(e){
     timer: setTimeout(() => {
       if (info.hit.dist <= vmin(cfg.clickDistance)){
         logClick('up:tap-punch', { x: info.x, y: info.y, hitDist: info.hit.dist, intensity: cfg.clickIntensity });
-        applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0);
+        applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0, mainRope.segLen);
       }
       pendingClick = null;
     }, cfg.doubleClickThreshold),
@@ -3873,7 +3905,9 @@ function loop(now){
 // it to the circle's bottom edge the instant 'rising' begins, the same
 // frame bgRope first becomes visible, so this isn't a visible jump.
 resetMainRope(vh(TARGET_SEG_LEN_VH));
+console.log('[TMPDEBUG boot] after resetMainRope:', JSON.stringify({ innerHeight: window.innerHeight, vhTarget: vh(TARGET_SEG_LEN_VH), targetSegLenVh: TARGET_SEG_LEN_VH, pointsLen: mainRope.points.length, segLen: mainRope.segLen }));
 resetBgRope();
+console.log('[TMPDEBUG boot] after resetBgRope:', JSON.stringify({ bgPointsLen: bgRope.points.length }));
 introPhase = 'waiting';
 introTimer = 0;
 if (DEV_MODE){

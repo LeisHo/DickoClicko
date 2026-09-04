@@ -3959,3 +3959,54 @@ APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
 old one in place.
+
+2026-09-04  -  12:04 AM - 12:16 AM EDT
+
+"fix the flash too. investigate it" and "the panel resizing in mobile is
+still buggy" -- 2 separate items, both root-caused via direct evidence
+(frame-by-frame physics tracing; CSS property comparison against known-
+working handles), neither guessed at.
+
+(1) Dark flash: applyPunch()'s displacement (power = vh(1.0) * intensity)
+is an absolute value, independent of the rope's own scale. For a short
+rope, a strong hold-and-release can displace a point several times its
+own segment length in one shot, and since the falloff spreads a real
+kick across neighboring points too, this can fling the tip clean past
+its own neighbor or even the anchor into an inverted configuration.
+Traced this exactly via a temporary debug hook manually stepping
+update() 15 ticks after a simulated flick (removed before commit): the
+anchor -- excluded from the punch directly -- still got dragged by the
+ordinary distance constraint through a wild swing, briefly landing much
+closer to the circle's center than its normal resting distance.
+tipDirection() (which drawEndcap() rotates the endcap by) genuinely
+flip-flopped roughly 180 degrees tick to tick during that recovery, not
+a smooth rotation -- confirmed visually too, with a stark green/black
+endcap gradient showing exactly this chaotic spin sweeping the dark end
+across the endcap for a few frames. Fixed by capping applyPunch()'s
+power at segLen * 4 (a new explicit segLen param, threaded through both
+real call sites). Re-ran the identical trace after the fix: the anchor's
+distance from center now stays tightly bounded and tipDirection() changes
+smoothly instead of flip-flopping -- still a real, visible kick, just no
+longer a physically-invalid teleport-and-chaotic-recovery.
+
+(2) Mobile panel resize: .dp-resize was the one draggable-handle class
+in the whole panel missing touch-action:none (every other handle already
+has it). Without it, a real finger-drag on a resize handle can get
+hijacked by the browser's own native scroll/pan gesture recognition
+before JS ever sees a clean pointermove sequence -- invisible to both
+desktop mouse testing and to synthetic PointerEvents dispatched directly
+in JS (confirmed directly: synthetic drag tests against all 3 handle
+types, including while the settings list was mid-scroll, all resized the
+panel exactly as expected, reproducing nothing). Fixed by adding
+touch-action:none to the shared .dp-resize rule, matching every other
+handle; verified via getComputedStyle() post-edit.
+
+node --check clean (JS portion). Updated docs/CHANGELOG.txt (this entry),
+docs/CODE_SUMMARY.md (2 new Gotchas). Left data/Rope/End_Form1-01.svg (a
+different concurrent session's own active edit) untouched.
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.
