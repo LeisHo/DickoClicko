@@ -94,7 +94,7 @@
     "floorHeight": 6,
     "introEnabled": true,
     "introWaitDuration": 0,
-    "introRiseSpeed": 20,
+    "introRiseSpeed": 2,
     "introRiseClearOffsetEnabled": true,
     "introRiseClearOffset": -7,
     "debugShowRiseClearOffset": true,
