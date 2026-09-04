@@ -5,7 +5,7 @@
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
-    "circleBoundaryOffset": 3,
+    "circleBoundaryOffset": 1,
     "anchorWeight": 0.4,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
@@ -96,7 +96,7 @@
     "introWaitDuration": 0,
     "introRiseSpeed": 5.5,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": -20,
+    "introRiseClearOffset": 2,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "introPauseDuration": 0.8,
@@ -139,7 +139,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "introRiseClearOffsetEnabled",
         "bgRopeClipEnabled",
