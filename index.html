@@ -375,8 +375,9 @@ const DEV_GROUPS = [
     { key:'introExtendStartSpeed', label:'Startup Extension Starting Speed', type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:2 },
     // Detach = the double-click-in-circle full-rope-detach-and-regrow
     // sequence (reuses this ENTIRE state machine, see
-    // detachEntireRopeAndRestartIntro()) -- these 4 controls are specific
+    // detachEntireRopeAndRestartIntro()) -- these 5 controls are specific
     // to THAT trigger, never the original boot-time run.
+    { key:'detachWaitDuration', label:'Detach Wait Duration', type:'slider', unit:'s', min:0, max:10, step:0.1, def:1.4 },
     { key:'detachPauseDuration', label:'Detach Pause Duration', type:'slider', unit:'s', min:0, max:5, step:0.1, def:5 },
     { key:'detachTipStartScale', label:'Detach Endcap Start Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.1 },
     { key:'detachTipGrowDuration', label:'Detach Endcap Grow Duration', type:'slider', unit:'s', min:0.1, max:5, step:0.1, def:2.8 },
@@ -386,13 +387,13 @@ const DEV_GROUPS = [
     { key:'flickX',         label:'Flick X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
     { key:'flickY',         label:'Flick Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:85 },
     { key:'flickScale',     label:'Flick Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
-    { key:'flickAnimSpeed', label:'Flick Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:1 },
+    { key:'flickAnimSpeed', label:'Flick Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:3.2 },
   ]},
   { title:'FLICK ANIMATION 2', controls:[
     { key:'flick2X',         label:'Flick2 X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
     { key:'flick2Y',         label:'Flick2 Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:60 },
     { key:'flick2Scale',     label:'Flick2 Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
-    { key:'flick2AnimSpeed', label:'Flick2 Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:1 },
+    { key:'flick2AnimSpeed', label:'Flick2 Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:3.2 },
   ]},
 ];
 
@@ -1461,16 +1462,32 @@ for (let i = 1; i <= FLICK_FRAME_COUNT; i++){
   flickFrames.push(img);
 }
 let flickAnimTime = 0;
+// Rests on frame 1 until clicked, same click-to-trigger convention as
+// animation 2 (see flick2Playing below) -- per explicit request ("apply
+// the clicking function to animation 1 as well"). Previously always
+// auto-played continuously; update() now only advances flickAnimTime while
+// this is true, and stops it (one full ping-pong period, not a partial
+// one) once the sequence completes -- see update()'s own completion check.
+let flickPlaying = false;
 
 // Triangle wave over a continuously-advancing time accumulator -- e.g.
 // frame position 0, 1, 2 ... 16, 15, 14 ... 0, 1 ... -- rather than
 // resetting to 0 every cycle, which would show 1->17 then SNAP back to 1
 // instead of animating back down through 17->1.
 function flickFrameIndex(){
+  if (!flickPlaying) return 0;
   const cyclePos = flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed;
   const period = (FLICK_FRAME_COUNT - 1) * 2;
   const t = ((cyclePos % period) + period) % period;
   return Math.round(t <= (FLICK_FRAME_COUNT - 1) ? t : period - t);
+}
+
+// The rect drawn in render(), kept in sync there each frame -- same
+// pattern as flick2Rect/isPointInFlick2 below.
+const flickRect = { x: 0, y: 0, w: 0, h: 0 };
+function isPointInFlick(x, y){
+  return x >= flickRect.x && x <= flickRect.x + flickRect.w &&
+         y >= flickRect.y && y <= flickRect.y + flickRect.h;
 }
 
 // FLICK animation 2 -- a second, independent graphic, placed above the
@@ -1607,11 +1624,18 @@ let bgRope = null;
 // silently adjusts its point count internally so its own tip is never
 // actually visible, an implementation detail invisible to the viewer,
 // not a user-facing extension mechanic like setMainRopeTotalLength().
-function resetBgRope(){
+// startX/startY (optional) build the chain hanging from that point instead
+// of circleAnchor() -- used by updateIntro()'s 'rising'-phase transition to
+// rebuild bgRope hanging from its far-below climb-start position, so every
+// point starts already consistent with gravity's own direction (see that
+// call site's own comment for the inversion bug this fixes).
+function resetBgRope(startX, startY){
   const anchor = circleAnchor();
+  const sx = startX !== undefined ? startX : anchor.x;
+  const sy = startY !== undefined ? startY : anchor.y;
   const targetSeg = vh(TARGET_SEG_LEN_VH);
   const pointCount = Math.max(2, Math.round(vh(cfg.ropeLength) / targetSeg) + 1);
-  bgRope = { points: makeChain(pointCount, anchor.x, anchor.y, targetSeg), segLen: targetSeg };
+  bgRope = { points: makeChain(pointCount, sx, sy, targetSeg), segLen: targetSeg };
 }
 
 const BG_ROPE_MIN_POINTS = 3;
@@ -2102,7 +2126,15 @@ function updateIntro(rawDt){
       return;
     }
     introTimer += rawDt;
-    if (introTimer >= cfg.introWaitDuration){
+    // Detach-triggered restarts get their own Detach Wait Duration instead
+    // of reusing Startup Wait Duration -- same split as Detach Pause
+    // Duration below, so tuning boot's own wait doesn't also change how
+    // long a detach-and-regrow cycle pauses before its climb starts.
+    // Reported as "the main rope doesnt spawn UNTIl the wait time is
+    // over": before this, a detach had no independent control over this
+    // delay at all.
+    const waitDuration = introTriggeredByDetach ? cfg.detachWaitDuration : cfg.introWaitDuration;
+    if (introTimer >= waitDuration){
       introPhase = 'rising';
       // bgRope's own rope-start begins its climb one full circle-diameter
       // BELOW the circle's bottom edge -- "as if the circle was a hole in
@@ -2116,8 +2148,25 @@ function updateIntro(rawDt){
       // slow Startup Rise Speed default existing at all. Starting a full
       // diameter below guarantees a real, visible climb regardless of
       // the offset's own value.
-      bgRope.points[0].x = circleAnchor().x;
-      bgRope.points[0].y = circleAnchor().y + vmin(cfg.circleSize) / 2 + vmin(cfg.circleSize);
+      //
+      // The WHOLE chain is rebuilt here (not just point 0 repositioned) --
+      // reported as "the background rope suddenly goes really high
+      // straight up" right as this phase begins. Root cause, confirmed via
+      // direct frame-by-frame tracing: only point 0 used to jump to this
+      // far-below position while points 1+ stayed wherever they'd settled
+      // during 'waiting' (hanging normally downward from the OLD point 0,
+      // which sat at circleAnchor()) -- leaving the rest of the chain
+      // ABOVE the newly-teleported point 0, an inverted configuration
+      // gravity never produces naturally. The constraint solver's
+      // correction for that inversion is what flung the tail upward: 5
+      // consecutive frames after the teleport measured the tip moving
+      // 199->165->147->127->106->84 (y decreasing = climbing), racing
+      // upward well past the circle before eventually settling. Rebuilding
+      // the whole chain to hang FURTHER below this same start point (via
+      // resetBgRope's own makeChain() logic, now parameterized) means
+      // every point is already consistent with gravity's own direction
+      // from frame one -- nothing to invert, nothing to violently correct.
+      resetBgRope(circleAnchor().x, circleAnchor().y + vmin(cfg.circleSize) / 2 + vmin(cfg.circleSize));
     }
   } else if (introPhase === 'rising'){
     // bgRope's own rope-start climbs at Startup Rise Speed until it
@@ -2196,6 +2245,12 @@ function updateIntro(rawDt){
       bgRope.points[0].y = clearY;
       introPhase = 'pausing';
       introTimer = 0;
+      // Release any piece(s) still held from a detach -- see their own
+      // waitingForSpawn flag set in detachEntireRopeAndRestartIntro().
+      // This IS "the Main rope has been spawned" moment (mainRope.points[0]
+      // gets positioned two lines below), so this is exactly where a held
+      // piece should start actually falling.
+      fallenPieces.forEach(p => { p.waitingForSpawn = false; });
       // mainRope "spawns" exactly where bgRope's climb just ended -- no
       // jump -- then, from this frame on, mainRope's own already-running
       // physics (the same boundaryConstraint every other frame already
@@ -2276,6 +2331,17 @@ function updateIntro(rawDt){
 // normal cut already use, just applied to the ENTIRE points array instead
 // of a slice of it, and re-enters 'waiting' instead of leaving introPhase
 // alone.
+window.__debugTMPflick = () => ({
+  flickPlaying, flickAnimTime, flickIdx: flickFrameIndex(),
+  flick2Playing, flick2AnimTime, flick2Idx: flick2FrameIndex(),
+  speed1: cfg.flickAnimSpeed, speed2: cfg.flick2AnimSpeed,
+  rect1: {...flickRect}, rect2: {...flick2Rect},
+});
+window.__debugTMPclickFlick = (which) => {
+  const r = which === 1 ? flickRect : flick2Rect;
+  onPointerDown({ clientX: r.x + r.w/2, clientY: r.y + r.h/2 });
+};
+window.__debugTMPstepF = (n) => { for (let i=0;i<n;i++){ update(FIXED_DT); } render(); return window.__debugTMPflick(); };
 function detachEntireRopeAndRestartIntro(){
   if (mainRope.points.length >= 2){
     const fallingPoints = mainRope.points.map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
@@ -2285,6 +2351,15 @@ function detachEntireRopeAndRestartIntro(){
     // actually had, not the NEW (about to be thicker) one the fresh
     // regrowth will use.
     const piece = { points: fallingPoints, segLen: mainRope.segLen, tipEmerge: mainRope.tipEmerge, age: 0, baseThickness: vmin(cfg.ropeThickness) * ropeThicknessMultiplier };
+    // Held in place (no gravity integration -- see its own check in the
+    // fallenPieces update loop) until the fresh main rope actually spawns
+    // at the 'rising'->'pausing' handoff below. Per explicit request ("the
+    // ropes shouldnt fall until the Main rope has been spawned"): without
+    // this, the old piece was already falling away during the ENTIRE
+    // wait+rise duration, so there was a real stretch where nothing
+    // stayed on screen at the circle at all. Cleared at the handoff, not
+    // here -- see updateIntro()'s 'rising' branch.
+    piece.waitingForSpawn = true;
     // the piece's own free/tip end keeps whatever End Emerge state the
     // rope's tip already had; its NEW cut edge (former anchor, now
     // points[0]) starts its own fresh emerge, same convention
@@ -2896,6 +2971,23 @@ function hitTestAnyIgnoringCircle(x, y, maxDist){
 }
 
 function onPointerDown(e){
+  // FLICK animations 1 and 2: both rest on frame 1 until clicked directly
+  // on their own graphic, per explicit request -- checked first and
+  // return immediately so a click here never also reaches the rope/circle
+  // hit-testing below. Independent of introPhase -- there's no reason a
+  // startup-animation-only gate should also apply to an unrelated overlay
+  // graphic. Checked in on-screen z-order (2 drawn last/on top -- see
+  // render() -- so 2 is checked first) in case their rects ever overlap.
+  if (isPointInFlick2(e.clientX, e.clientY)){
+    flick2Playing = true;
+    flick2AnimTime = 0;
+    return;
+  }
+  if (isPointInFlick(e.clientX, e.clientY)){
+    flickPlaying = true;
+    flickAnimTime = 0;
+    return;
+  }
   // no interaction until the startup animation finishes -- there's either
   // no visible rope yet (waiting/rising/pausing) or it's mid-scripted-
   // growth (growing), neither of which should be interruptible by a
@@ -3081,8 +3173,30 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 function floorY(){ return viewportH() - vh(cfg.floorHeight); }
 
 function update(rawDt){
-  flickAnimTime += rawDt;
-  flick2AnimTime += rawDt;
+  // Both FLICK animations play exactly one sequence per click, then stop
+  // until clicked again -- per explicit request. "One sequence" for
+  // animation 1 is one full ping-pong period (1->17->1, matching its own
+  // triangle-wave design); for animation 2 it's one forward pass (1->21,
+  // matching its own hard-cut-back design, see flick2FrameIndex()). Both
+  // checks recompute cyclePos from the SAME formula their own
+  // *FrameIndex() functions use (rather than precomputing a fixed
+  // duration in seconds) so a live Anim Speed change mid-play still ends
+  // the sequence at the right moment.
+  if (flickPlaying){
+    flickAnimTime += rawDt;
+    const flickPeriod = (FLICK_FRAME_COUNT - 1) * 2;
+    if (flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed >= flickPeriod){
+      flickPlaying = false;
+      flickAnimTime = 0;
+    }
+  }
+  if (flick2Playing){
+    flick2AnimTime += rawDt;
+    if (flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed >= FLICK2_FRAME_COUNT){
+      flick2Playing = false;
+      flick2AnimTime = 0;
+    }
+  }
   if (introPhase !== 'done') updateIntro(rawDt);
   const dt = rawDt * cfg.ropeAnimSpeed;
   const gravityAccel = vh(90) * cfg.gravityStrength;
@@ -3174,6 +3288,10 @@ function update(rawDt){
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeFallSpeed;
   fallenPieces.forEach(piece => {
     if (piece.age !== undefined) piece.age += rawDt;
+    // Held stationary (no gravity/physics at all) while waitingForSpawn --
+    // see detachEntireRopeAndRestartIntro() for where this gets set and
+    // updateIntro()'s 'rising'->'pausing' handoff for where it clears.
+    if (piece.waitingForSpawn) return;
     integrateChain(piece.points, piece.segLen, dt, fallGravity, -1);
     // A piece-on-piece cut (cutPieceAt) hasn't actually split `piece` yet
     // -- same pendingCut deferral as mainRope's, checked after this
@@ -3986,7 +4104,8 @@ function render(){
     const h = w * (flickImg.naturalHeight / flickImg.naturalWidth);
     const cx = vw(cfg.flickX);
     const cy = vh(cfg.flickY);
-    ctx.drawImage(flickImg, cx - w / 2, cy - h / 2, w, h);
+    flickRect.x = cx - w / 2; flickRect.y = cy - h / 2; flickRect.w = w; flickRect.h = h;
+    ctx.drawImage(flickImg, flickRect.x, flickRect.y, w, h);
   }
   const flick2Img = flickFrames2[flick2FrameIndex()];
   if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
@@ -3994,7 +4113,8 @@ function render(){
     const h2 = w2 * (flick2Img.naturalHeight / flick2Img.naturalWidth);
     const cx2 = vw(cfg.flick2X);
     const cy2 = vh(cfg.flick2Y);
-    ctx.drawImage(flick2Img, cx2 - w2 / 2, cy2 - h2 / 2, w2, h2);
+    flick2Rect.x = cx2 - w2 / 2; flick2Rect.y = cy2 - h2 / 2; flick2Rect.w = w2; flick2Rect.h = h2;
+    ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, w2, h2);
   }
 }
 
