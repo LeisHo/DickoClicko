@@ -4554,6 +4554,115 @@ session) and a live reload with a clean console (only the known FLICK-
 image ERR_CONNECTION_RESET local-server noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  08:34 AM EDT
+
+Double-click-in-circle fixed for real this time (was still gated on rope-
+curve proximity); FLICK hold-to-preview + startup-click-load-race fix;
+regular-cut delay investigated (not a bug).
+
+User, urgently, after the earlier fixes: "and the double click in the
+circe stiklll doest work" + "fix it please" -> clarified via
+AskUserQuestion: "this is doble click in the circe but not on the rope"
++ "when you try it in browser, click in the top 1/3 of the circle" +
+"and the backgroun rope is still going crazy when i cut the entire rope"
++ "fix it" + "same fix ocndition as the other one. 30 minutes".
+
+Root cause: onPointerUp's circle-mode double-click resolution called
+hitTestAnyIgnoringCircle(x, y, doubleClickDistance) and only detached if
+THAT found a target (the rope or a piece) within Double Click Distance --
+so a double-click landing in circle-space the rope doesn't currently pass
+near did nothing at all. Confirmed exactly why "top 1/3" reproduces it:
+the anchor now rests low in the circle (per Circle Offset), so the rope
+only occupies the lower portion, leaving the rest of the circle's own
+interior an unresponsive dead zone. This also explains the "background
+rope still going crazy" report: if the double-click never found a target,
+detachEntireRopeAndRestartIntro() never even ran, so the earlier bgRope-
+inversion fix (08:08 AM entry) never got exercised in their actual
+testing -- they were very likely still hitting the OLD pre-fix jump
+behavior on the rare double-clicks that DID land near enough to the rope
+to trigger a detach at all.
+
+Fixed by removing the distance-based check entirely for circle-mode
+double-clicks -- the circle itself IS the target now; any double-click
+starting in isOnCircle()'s zone calls detachEntireRopeAndRestartIntro()
+directly, unconditionally. hitTestAnyIgnoringCircle() became dead code as
+a result and was removed (along with its own doc comment and a stale
+reference in hitTestPieces()'s comment).
+
+Verified via synthetic pointer events + frame-stepping (same methodology
+as the 08:08 AM entry): double-clicked at (200, 110) -- solidly in the
+circle's top third, well above both the anchor (~y183) and the rope
+itself -- confirmed it now triggers the detach (fallenCount 0->1, phase
+'done'->'waiting'). Then re-traced the FULL 'waiting'->'rising' sequence
+end to end to confirm the earlier bgRope-inversion fix still holds with
+zero regression from any of today's other changes: p0/p1/pLast remained
+monotonically ordered and changed smoothly (273->268.6 / 301.7->301.5 /
+329.3->329.2 across 6 frames right after entering 'rising'), no jump, no
+inversion.
+
+Also this round, mid-task: "and it fees like the animations take time to
+load up. whe ni cick it on startup, they don really work" + "and make it
+so that when i click and hold on the animations, the animation only
+starts at release. but while its holding, cycle throug the frames here
+data/FLICK/ANI/3".
+
+Hold-to-preview: added holdingFlick (1, 2, or null) -- onPointerDown now
+sets this instead of immediately starting playback; onPointerUp checks it
+FIRST (before the existing !downInfo early return, since a flick hold
+never sets downInfo) and starts the real click-triggered sequence there
+on release instead; pointercancel clears it without triggering playback.
+While held, flickHoldTime advances in update() and cycles through 4 new
+frames loaded from data/FLICK/ANI/3/FRAMES-01..04.png (flickHoldFrames) --
+a plain modulo cycle, no stop condition, since it's meant to loop for the
+whole hold duration rather than play once. render() swaps in the hold
+frame at the same rect whenever holdingFlick matches that animation.
+Verified via synthetic pointerdown/pointerup: holding shows holdIdx
+advancing (0,0,0,0,1,1 across 6 frames), release cleanly transitions to
+the real sequence (flickPlaying/flick2Playing true, holdingFlick null)
+for both animations.
+
+Startup-click-load-race: flickRect/flick2Rect used to only get set INSIDE
+the img.complete && naturalWidth > 0 guard that also gates the actual
+drawImage() call -- so isPointInFlick/isPointInFlick2 stayed at their
+zero-sized initial {0,0,0,0} until that specific frame image had actually
+finished loading over the network, meaning a click in the first moments
+after page load silently missed regardless of where the graphic visibly
+was. Fixed by computing each rect EVERY frame straight from cfg values
+(vw/vh/vmin), using a fallback 1:1 aspect ratio via that animation's own
+frame-0 image until its real naturalWidth/Height is known --
+complete/naturalWidth still guards the actual DRAW, just no longer the
+hit-test rect. Verified live: both rects are already non-zero and
+populated after just 1 stepped frame, before the images have had any real
+time to load.
+
+Separately: "and right now when i cut the rope, the cut piece stays in
+place for a duration then falls. i think one of the wait time sliders is
+makign it an issue" -> clarified via AskUserQuestion: confirmed this was
+about a REGULAR double-click cut on the rope itself, not the circle
+detach. Investigated rather than guessed: traced cutRopeAt() -> the
+actual split (performMainRopeSplit(), what makes a piece start falling)
+is deliberately deferred by cutThroughDuration() = CUT_SWEEP_BASE_SEC /
+cfg.cutSpeed (0.35 / 1.6 ~= 0.22s at the live default) -- the rope stays
+ONE still-pinned physics chain until the cut-line sweep visual has fully
+crossed it, an already-documented deliberate design (see cutRopeAt()'s
+own comment) that predates this session entirely. No "wait" slider
+actually governs this -- Cut Speed does, inversely. Compounding the
+perceived delay: a freshly-split piece starts each fall from true zero
+velocity (topplePiece()'s own oldx=x/oldy=y), so gravity's first few
+frames of ramp-up are barely visible on top of the real ~0.22s sweep
+pause. Not changed -- reported back with the actual mechanism and numbers
+rather than guessing at a fix.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise). One real debugging snag this round: the Browser pane tab had gone
+background/hidden mid-session, which silently stalled document.readyState
+at 'loading' and left debug hooks permanently undefined despite the
+server correctly serving 200s -- fronting the tab (tabs_select)
+immediately unstuck it. Noted here since it cost real time before being
+diagnosed and isn't specific to this feature.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

@@ -42,9 +42,10 @@ additions. Current state of each subsystem:
   (starting on/near the circle), hold-to-charge-punch (starting on the
   rope; intensity stacks Click Intensity + Intensity Ceiling over Click
   Hold Max Duration), double-click-to-cut (works on the main rope and on
-  already-fallen pieces, splitting one into two). Double-clicking the
-  circle itself detaches the entire rope and replays the startup animation
-  to regrow a fresh one.
+  already-fallen pieces, splitting one into two). Double-clicking ANYWHERE
+  inside the circle (no longer just near where the rope happens to pass)
+  detaches the entire rope and replays the startup animation to regrow a
+  fresh one.
 - **Physics**: fixed 1/60s timestep verlet integration; distance
   constraints (`constraintIterations`, default 10) plus a bending
   constraint (`bendStiffness`) that stops the rope folding into a knot
@@ -97,14 +98,18 @@ additions. Current state of each subsystem:
   does nothing" reports. `loop()` also wraps each frame in try/catch so
   one bad frame can't permanently freeze the app.
 - **FLICK animations**: two small, independent PNG overlays, each with its
-  own X/Y/Scale/Speed dev-panel group. Both are now click-to-trigger: rest
-  on frame 1 until clicked directly on their own graphic, play exactly one
-  sequence, then stop until clicked again. Animation 1 (`data/FLICK/ANI/`,
-  17 frames) plays one full ping-pong (1->17->1); animation 2
-  (`data/FLICK/ANI2/`, 21 frames as of this writing -- another session has
-  been actively revising this frame set, check `FLICK2_FRAME_COUNT` in
-  index.html for the current count -- placed above animation 1 by default)
-  plays one forward pass (1->N). Both Anim Speed defaults are 3.2x.
+  own X/Y/Scale/Speed dev-panel group. Both are hold-to-preview,
+  click-to-trigger: press-and-hold cycles 4 preview frames
+  (`data/FLICK/ANI/3/`) for as long as it's held, release plays exactly
+  one sequence then stops until pressed again. Animation 1
+  (`data/FLICK/ANI/`, 17 frames) plays one full ping-pong (1->17->1);
+  animation 2 (`data/FLICK/ANI2/`, 21 frames as of this writing -- another
+  session has been actively revising this frame set, check
+  `FLICK2_FRAME_COUNT` in index.html for the current count -- placed above
+  animation 1 by default) plays one forward pass (1->N). Both Anim Speed
+  defaults are 3.2x (live values have since moved further via direct
+  tuning). Hit-test rects are computed every frame independent of image
+  load state, so a click works immediately on page load.
 
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.

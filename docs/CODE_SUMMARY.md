@@ -2947,3 +2947,14 @@ GOTCHAS
   value there overrides the DEV_GROUPS default on load and animation 1 had
   an explicit `1` saved; animation 2 had no saved override so its new
   default applies automatically.
+- **Double-click-in-circle now detaches unconditionally.** See CHANGELOG
+  for the full account -- the distance-based rope-curve proximity check
+  was removed from circle-mode double-click resolution, and
+  `hitTestAnyIgnoringCircle()` (now dead code) was removed.
+- **Hold-to-preview on both FLICK animations**, cycling
+  `data/FLICK/ANI/3/` while held, starting the real sequence on release --
+  see CHANGELOG for the full account.
+- **FLICK hit-test rects now computed independent of image load state**,
+  fixing clicks silently failing right after page load -- see CHANGELOG.
+- **Regular rope-cut piece delay investigated, not a bug** -- see
+  CHANGELOG for the `cutThroughDuration()`/Cut Speed mechanism.

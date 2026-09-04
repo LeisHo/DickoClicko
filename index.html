@@ -1514,6 +1514,27 @@ for (let i = 1; i <= FLICK2_FRAME_COUNT; i++){
 let flick2AnimTime = 0;
 let flick2Playing = false;
 
+// Hold-to-preview: press-and-hold on EITHER animation's own graphic cycles
+// through these 4 frames for as long as it's held, and only starts that
+// animation's real click-triggered sequence on release -- per explicit
+// request ("when i click and hold on the animations, the animation only
+// starts at release. but while its holding, cycle throug the frames").
+// holdingFlick is 1, 2, or null -- which animation (if any) is currently
+// being held; shared by both since only one graphic can be held at a time.
+const FLICK_HOLD_FRAME_COUNT = 4;
+const flickHoldFrames = [];
+for (let i = 1; i <= FLICK_HOLD_FRAME_COUNT; i++){
+  const img = new Image();
+  img.src = `data/FLICK/ANI/3/FRAMES-${String(i).padStart(2, '0')}.png`;
+  flickHoldFrames.push(img);
+}
+let holdingFlick = null;
+let flickHoldTime = 0;
+function flickHoldFrameIndex(){
+  const cyclePos = flickHoldTime * FLICK_BASE_FPS;
+  return Math.floor(((cyclePos % FLICK_HOLD_FRAME_COUNT) + FLICK_HOLD_FRAME_COUNT) % FLICK_HOLD_FRAME_COUNT);
+}
+
 function flick2FrameIndex(){
   if (!flick2Playing) return 0;
   const cyclePos = flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed;
@@ -2908,7 +2929,7 @@ function hitTestRope(x, y, maxDist){
 // any -- same proximity gate as hitTestRope, checked against every piece
 // independently since they're unrelated point chains scattered across the
 // floor. maxDist is overridable so double-click-cut resolution can use
-// Double Click Distance instead (see hitTestAny/hitTestAnyIgnoringCircle).
+// Double Click Distance instead (see hitTestAny).
 function hitTestPieces(x, y, maxDist){
   if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
   let best = null;
@@ -2939,26 +2960,6 @@ function hitTestAny(x, y, maxDist){
   return null;
 }
 
-// Same as hitTestAny(), but resolves the rope hit directly via
-// nearestPointOnRope() instead of hitTestRope() -- deliberately skipping
-// hitTestRope()'s own isOnCircle() exclusion. That exclusion exists so a
-// SINGLE tap/hold starting on the circle graphic never misfires as a rope
-// punch/charge; used ONLY for double-click-cut resolution (see
-// onPointerUp's 'circle' branch, which passes Double Click Distance), where
-// the exclusion instead makes the whole circle-covered area permanently
-// uncuttable -- a real reported bug now that the anchor is a free-moving
-// point (see the anchor-physics work above) that routinely rests visually
-// inside the circle graphic.
-function hitTestAnyIgnoringCircle(x, y, maxDist){
-  if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
-  const rawRopeHit = nearestPointOnRope(x, y, mainRope.points);
-  const ropeHit = rawRopeHit.dist <= maxDist ? rawRopeHit : null;
-  const pieceHit = hitTestPieces(x, y, maxDist);
-  if (ropeHit && (!pieceHit || ropeHit.dist <= pieceHit.dist)) return { ...ropeHit, target: 'rope' };
-  if (pieceHit) return { ...pieceHit, target: 'piece' };
-  return null;
-}
-
 function onPointerDown(e){
   // FLICK animations 1 and 2: both rest on frame 1 until clicked directly
   // on their own graphic, per explicit request -- checked first and
@@ -2968,13 +2969,13 @@ function onPointerDown(e){
   // graphic. Checked in on-screen z-order (2 drawn last/on top -- see
   // render() -- so 2 is checked first) in case their rects ever overlap.
   if (isPointInFlick2(e.clientX, e.clientY)){
-    flick2Playing = true;
-    flick2AnimTime = 0;
+    holdingFlick = 2;
+    flickHoldTime = 0;
     return;
   }
   if (isPointInFlick(e.clientX, e.clientY)){
-    flickPlaying = true;
-    flickAnimTime = 0;
+    holdingFlick = 1;
+    flickHoldTime = 0;
     return;
   }
   // no interaction until the startup animation finishes -- there's either
@@ -3024,6 +3025,22 @@ function onPointerDown(e){
 }
 
 function onPointerUp(e){
+  // Release ends a FLICK hold-preview (see onPointerDown) and starts that
+  // animation's real sequence -- checked first, independent of downInfo
+  // (a flick hold never sets it), same reasoning as onPointerDown's own
+  // flick check running before the rope/circle logic below.
+  if (holdingFlick === 2){
+    holdingFlick = null;
+    flick2Playing = true;
+    flick2AnimTime = 0;
+    return;
+  }
+  if (holdingFlick === 1){
+    holdingFlick = null;
+    flickPlaying = true;
+    flickAnimTime = 0;
+    return;
+  }
   if (!downInfo) return;
   clearTimeout(holdTimer);
   const info = downInfo;
@@ -3048,20 +3065,25 @@ function onPointerUp(e){
     if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
       clearTimeout(pendingClick.timer);
       pendingClick = null;
-      const target = hitTestAnyIgnoringCircle(e.clientX, e.clientY, vmin(cfg.doubleClickDistance));
-      logClick('up:double-click-on-circle', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
-      if (target){
-        // Double-clicking in the circle now detaches the WHOLE rope (not a
-        // minimum-length partial cut) and restarts the startup animation to
-        // grow a fresh one in -- per explicit request: "the entire length
-        // of visible rope falls out of the hole... after the same amount of
-        // time as the startup animation, [it] starts a new rope." A double-
-        // click resolving to an already-fallen piece is unaffected (still a
-        // normal partial cutPieceAt) -- this feature is about the live rope
-        // specifically, the same scope as the original report.
-        if (target.target === 'rope') detachEntireRopeAndRestartIntro();
-        else cutPieceAt(target.pieceIndex, target, e.clientX, e.clientY);
-      }
+      // Double-clicking ANYWHERE in the circle detaches the whole rope --
+      // no distance-based hit test against the rope's actual curve. That
+      // used to gate this on hitTestAnyIgnoringCircle() finding a target
+      // within Double Click Distance, which silently did nothing for a
+      // double-click landing in circle-space the rope doesn't currently
+      // pass near (reported: "this is doble click in the circe but not on
+      // the rope" / "click in the top 1/3 of the circle" -- confirmed the
+      // anchor now rests low in the circle per Circle Offset, so the rope
+      // itself only occupies the lower portion, leaving the rest of the
+      // circle's own interior an unresponsive dead zone). The circle
+      // itself is already the target -- there's no rope-curve proximity
+      // to require.
+      logClick('up:double-click-on-circle', { x: e.clientX, y: e.clientY, willDetach: mainRope.points.length >= 2 });
+      // Double-clicking in the circle detaches the WHOLE rope (not a
+      // minimum-length partial cut) and restarts the startup animation to
+      // grow a fresh one in -- per explicit request: "the entire length
+      // of visible rope falls out of the hole... after the same amount of
+      // time as the startup animation, [it] starts a new rope."
+      detachEntireRopeAndRestartIntro();
       return;
     }
     if (pendingClick) clearTimeout(pendingClick.timer);
@@ -3139,7 +3161,7 @@ function onPointerUp(e){
 
 canvas.addEventListener('pointerdown', onPointerDown);
 window.addEventListener('pointerup', onPointerUp);
-window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); });
+window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); holdingFlick = null; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 /* ---------------------------------------------------------------------
@@ -3171,6 +3193,10 @@ function update(rawDt){
   // *FrameIndex() functions use (rather than precomputing a fixed
   // duration in seconds) so a live Anim Speed change mid-play still ends
   // the sequence at the right moment.
+  // Hold-preview: cycles flickHoldFrames continuously for as long as
+  // either graphic is held (see onPointerDown/onPointerUp) -- independent
+  // of flickPlaying/flick2Playing, which only start once released.
+  if (holdingFlick) flickHoldTime += rawDt;
   if (flickPlaying){
     flickAnimTime += rawDt;
     const flickPeriod = (FLICK_FRAME_COUNT - 1) * 2;
@@ -4085,25 +4111,40 @@ function render(){
   }
 
   // FLICK animation overlay -- drawn last so it's always on top of the
-  // rope/circle. `complete`/`naturalWidth` guard against drawing before
-  // that particular frame image has actually finished loading.
-  const flickImg = flickFrames[flickFrameIndex()];
+  // rope/circle. Each rect is computed EVERY frame from cfg values alone
+  // (a fallback 1:1 aspect ratio until that animation's own first frame
+  // image reports its real naturalWidth/naturalHeight) -- previously the
+  // rect was only ever set INSIDE the `complete && naturalWidth > 0`
+  // guard, so isPointInFlick/isPointInFlick2 stayed at their zero-sized
+  // initial {0,0,0,0} until the image had actually finished loading.
+  // Reported as "it fees like the animations take time to load up. whe ni
+  // cick it on startup, they don really work" -- a click in the first
+  // moments after page load (images still loading) hit-tested against
+  // that stale zero-rect and silently missed every time, regardless of
+  // where on screen the graphic visibly was. `complete`/`naturalWidth`
+  // still guards the actual DRAW (nothing to draw until that specific
+  // frame is ready), just no longer the hit-test rect itself.
+  const flickRefImg = flickFrames[0];
+  const flickAspect = (flickRefImg && flickRefImg.naturalWidth > 0) ? (flickRefImg.naturalHeight / flickRefImg.naturalWidth) : 1;
+  const flickW = vmin(cfg.flickScale);
+  const flickH = flickW * flickAspect;
+  flickRect.x = vw(cfg.flickX) - flickW / 2; flickRect.y = vh(cfg.flickY) - flickH / 2;
+  flickRect.w = flickW; flickRect.h = flickH;
+  // holdingFlick 1 swaps in the hold-preview cycle (see onPointerDown) in
+  // place of the normal idle/playing frame, at the same rect.
+  const flickImg = holdingFlick === 1 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames[flickFrameIndex()];
   if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
-    const w = vmin(cfg.flickScale);
-    const h = w * (flickImg.naturalHeight / flickImg.naturalWidth);
-    const cx = vw(cfg.flickX);
-    const cy = vh(cfg.flickY);
-    flickRect.x = cx - w / 2; flickRect.y = cy - h / 2; flickRect.w = w; flickRect.h = h;
-    ctx.drawImage(flickImg, flickRect.x, flickRect.y, w, h);
+    ctx.drawImage(flickImg, flickRect.x, flickRect.y, flickW, flickH);
   }
-  const flick2Img = flickFrames2[flick2FrameIndex()];
+  const flick2RefImg = flickFrames2[0];
+  const flick2Aspect = (flick2RefImg && flick2RefImg.naturalWidth > 0) ? (flick2RefImg.naturalHeight / flick2RefImg.naturalWidth) : 1;
+  const flick2W = vmin(cfg.flick2Scale);
+  const flick2H = flick2W * flick2Aspect;
+  flick2Rect.x = vw(cfg.flick2X) - flick2W / 2; flick2Rect.y = vh(cfg.flick2Y) - flick2H / 2;
+  flick2Rect.w = flick2W; flick2Rect.h = flick2H;
+  const flick2Img = holdingFlick === 2 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames2[flick2FrameIndex()];
   if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
-    const w2 = vmin(cfg.flick2Scale);
-    const h2 = w2 * (flick2Img.naturalHeight / flick2Img.naturalWidth);
-    const cx2 = vw(cfg.flick2X);
-    const cy2 = vh(cfg.flick2Y);
-    flick2Rect.x = cx2 - w2 / 2; flick2Rect.y = cy2 - h2 / 2; flick2Rect.w = w2; flick2Rect.h = h2;
-    ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, w2, h2);
+    ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, flick2W, flick2H);
   }
 }
 
