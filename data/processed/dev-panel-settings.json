@@ -111,11 +111,11 @@
     "flickX": 15,
     "flickY": 85,
     "flickScale": 15,
-    "flickAnimSpeed": 3.9,
+    "flickAnimSpeed": 8,
     "flick2X": 15,
     "flick2Y": 60,
     "flick2Scale": 50,
-    "flick2AnimSpeed": 5.3
+    "flick2AnimSpeed": 8
   },
   "order": [
     {
