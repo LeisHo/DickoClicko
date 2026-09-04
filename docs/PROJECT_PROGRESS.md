@@ -955,6 +955,48 @@ assuming it never shipped.
   `form1-01` render as nothing. Not touched; `ENDCAP_DESIGNS['form1-01']`
   still holds the last real (still seam-affected, per 2 rounds ago's
   diagnosis) path data.
+- Asked to "revert Circle Offset back to how it behaved previously" --
+  investigated first rather than reverting blind: the function's own
+  documented intent ("positive shrinks the interior, negative bulges
+  past the edge") only actually holds with the CURRENT subtraction
+  formula; the original addition formula has that relationship backwards
+  relative to its own comment, and reverting to it would likely reopen a
+  confirmed, screen-recording-verified bug (rope spawning near the top,
+  inside the circle) that the subtraction fix resolved. Surfaced this
+  conflict directly and asked -- the user confirmed keeping the current
+  (subtraction) behavior. No code change made; the real issue turned out
+  to be the next item.
+- Startup Rise Clear Offset's boundary redesigned as a circle, per
+  explicit correction ("it should not be a straight horizontal line...
+  but is in fact an offset of the Anchor Physics Circle Offset so it
+  will be a smaller circle"): both `updateIntro()`'s own 'rising'-phase
+  target and the debug visualization now derive from
+  `anchorBoundaryRadius()` (which already incorporates Circle Offset)
+  instead of the raw drawn circle's `circleSize/2`, and the debug line
+  (`debugShowRiseClearOffset`) now draws an actual dashed circle instead
+  of a full-width horizontal line -- verified visually (a smaller pink
+  circle nested inside the cyan anchor-boundary circle) and via a full
+  300-frame intro-cycle run with 0 thrown errors.
+- Fixed the endcap gradient (`endcapGradientEnabled`) per a real,
+  reported visual bug: "When the rope is in default equilibrium, the
+  endcap is only the color at the 100% of the slider. Then when i flick
+  it, i see more of the other colors." Root-caused: the endcap was
+  sampling the SAME whole-rope, world-space anchor-to-tip gradient the
+  rope's own stroke uses -- since the endcap is a small feature near
+  just the very end of that span, a long/straight rope (equilibrium)
+  mapped almost the entire endcap into one clamped stop color, while
+  flicking/curling shrank the rope's own straight-line anchor-to-tip
+  distance, pulling more of the gradient's range into the endcap's small
+  area. Presented the tradeoff directly (self-contained endcap gradient
+  vs. stabilizing the existing whole-rope one via arc length) rather than
+  picking silently; the user chose self-contained. Now built across the
+  endcap's own local extent (neck -> its own bottom-most point), with
+  stops reversed so the neck still lands on the same color the rope's
+  gradient ends on (no hard seam in the common case) while the far end
+  transitions back toward the rope's starting color. Verified via direct
+  pixel sampling: a long/straight rope and a short/curled one produced
+  IDENTICAL gradient pixel values at the endcap, confirming it's now
+  fully independent of total rope length/pose.
 
 ## What's next
 

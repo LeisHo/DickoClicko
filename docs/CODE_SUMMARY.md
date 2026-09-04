@@ -2575,3 +2575,96 @@ GOTCHAS
   shared `.dp-resize` rule, matching every other handle. Verified the
   fix landed correctly post-edit via `getComputedStyle()` on a live
   resize handle in a mobile-viewport tab.
+- **"Revert Circle Offset" turned out not to need reverting -- the real
+  ask was about a DIFFERENT, similarly-named setting.** Investigated
+  before touching anything: `anchorBoundaryRadius()`'s own doc comment
+  ("positive shrinks the interior, negative bulges past the edge") only
+  actually holds true with the CURRENT subtraction formula
+  (`circleSize/2 - circleBoundaryOffset`) -- the original addition
+  formula (`circleSize/2 + circleBoundaryOffset`) has that relationship
+  backwards relative to its own stated intent (a negative offset ADDED
+  makes the radius SMALLER, the opposite of "bulges past the edge"), and
+  reverting to it would likely reopen a confirmed, screen-recording-
+  verified bug (rope spawning near the top, inside the circle) the
+  subtraction fix resolved. Surfaced this conflict directly via
+  AskUserQuestion rather than guessing either way -- confirmed: keep the
+  current subtraction behavior. No code change here; per the user's own
+  follow-up clarification, the actual complaint was about Startup Rise
+  Clear Offset (next entry), not Circle Offset itself.
+- **Startup Rise Clear Offset redesigned as a circle, linked to Circle
+  Offset, per explicit correction**: "the Startup Clear Offset boundary
+  should not be a straight horizontal line as it is right now, but is in
+  fact an offset of the Anchor Physics Circle Offset so it will be a
+  smaller circle." Previously, both `updateIntro()`'s own 'rising'-phase
+  target (`rawClearY`) and the `debugShowRiseClearOffset` visualization
+  computed their baseline from the raw drawn circle's own
+  `vmin(cfg.circleSize)/2`, entirely ignoring `circleBoundaryOffset` --
+  meaning the "clear" boundary never actually tracked wherever Circle
+  Offset had moved the anchor's REAL physics boundary. Fixed by deriving
+  a `rawClearRadius = anchorBoundaryRadius() - vmin(cfg.introRiseClearOffset)`
+  (i.e. a further offset FROM the anchor's own, already-Circle-Offset-
+  adjusted boundary radius, matching "an offset of the Circle Offset")
+  and using that as the y-offset in both places bgRope's own purely
+  vertical climb (never changes x) reads it. Since bgRope only ever moves
+  along the vertical axis through `circleAnchor()`, "distance from center"
+  and "y position" are mathematically equivalent for this specific path
+  -- the fix's `rawClearRadius` genuinely represents a circle's radius
+  conceptually (as the now-updated debug visualization directly draws:
+  a second dashed circle, replacing the old full-width horizontal line,
+  labeled "Debug: Show Rise Clear Offset Circle" instead of "...Line"),
+  even though the trigger check itself stays a simple y-comparison.
+  Verified: a full 300-frame `update()` run through the entire intro
+  sequence (`waiting`->`growing`->`done`) completed with 0 thrown errors,
+  and a screenshot with the debug toggle on shows a smaller pink dashed
+  circle correctly nested inside the cyan anchor-boundary circle (both
+  concentric around the circle graphic), matching the requested "smaller
+  circle" framing exactly.
+- **Endcap gradient sampled the wrong span -- fixed to be self-contained
+  on the endcap's own geometry instead of the whole rope's world-space
+  extent.** Reported directly: "When the rope is in default equilibrium,
+  the endcap is only the color at the 100% of the slider. Then when i
+  flick it, i see more of the other colors." Root-caused by tracing
+  `drawEndcap()`'s gradient branch against `ropeStrokeColor()` (the rope
+  stroke's own gradient, which the endcap was built to deliberately
+  match, "no visible seam"): both build a `ctx.createLinearGradient`
+  from the WORLD-SPACE straight-line distance between `mainRope.points[0]`
+  (anchor) and the current tip -- correct for the rope's own stroke
+  (which IS that whole span), but the endcap is a small, fixed-size
+  feature living at just the very end of that span. At equilibrium (a
+  long, straight rope), the world anchor-to-tip distance, mapped through
+  the endcap's own local inverse-transform (a SMALL scale factor, so the
+  mapped distance balloons in local units), lands the gradient's "top"
+  stop far outside the endcap's own local shape bounds -- meaning nearly
+  the entire visible endcap sampled from just inside the gradient's
+  clamped LAST-stop color. Flicking/curling the rope shrinks the
+  straight-line anchor-to-tip world distance (a curled path's endpoints
+  are closer together than its unrolled length), pulling the mapped
+  "top" stop back toward the endcap's own local bounds and letting more
+  of the gradient's range become newly visible -- a "color changes when
+  you flick it" symptom that isn't a real physical property of the rope,
+  just an artifact of how the mapping happened to fall relative to the
+  endcap's tiny local footprint. Presented 2 fix directions rather than
+  picking one silently (self-contained endcap gradient vs. stabilizing
+  the existing whole-rope one by measuring along the rope's actual PATH
+  length instead of straight-line distance) -- the user chose
+  self-contained. Rebuilt entirely in the endcap's own LOCAL coordinate
+  space (`ENDCAP_ALIGNMENT.topY` -> `designBottomY`, no inverse-transform
+  mapping needed at all, since both endpoints are already known local
+  constants) with the stops array used REVERSED (`pos' = 1 - pos`): the
+  endcap's neck (`topY`, pos'=0, where it visually joins the rope's own
+  tip) lands on whatever color the ORIGINAL gradient's LAST stop is --
+  matching the rope's own tip color in the common (long-rope) case,
+  where the rope's gradient is already near that same last-stop color
+  right at the tip, so there's still no hard seam -- while the endcap's
+  own far end (pos'=1) transitions back toward the gradient's FIRST
+  stop's color, reading as one continuous, symmetric transition rather
+  than an arbitrary independent one. Verified via direct
+  `ctx.getImageData()` pixel sampling (not visual inspection alone): a
+  synthetic long/straight 8-point rope and a synthetic short/curled
+  2-point rope, both fed through the identical `drawEndcap()` call,
+  produced PIXEL-IDENTICAL gradient values at every sampled point along
+  the endcap (e.g. `[2,0,253]` at the neck, `[215,0,39]` near the far
+  end, matching within 1 unit of anti-aliasing noise across both tests)
+  -- directly confirming the endcap's gradient is now fully independent
+  of the rope's total length or current pose, not just "looks right in
+  one screenshot."

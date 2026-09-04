@@ -4079,6 +4079,81 @@ node --check clean. Updated docs/CODE_SUMMARY.md (1 new Gotcha,
 correcting the earlier "not a code bug" one) and docs/PROJECT_PROGRESS.md
 (Open Questions entry corrected in place; new Recently Completed bullet).
 
+--------------------------------------------------------------------------------
+2026-09-04  -  12:57 AM EDT
+
+3-item follow-up: Circle Offset investigated (no change), Startup Rise
+Clear Offset redesigned as a circle, endcap gradient fixed to be
+self-contained.
+
+"Ok you misundertsood me about the offset circle. Revert the Anchor
+Physics Circle Offset back to how it behaved previously. it was behaving
+correctly." Investigated before reverting anything: anchorBoundaryRadius()'s
+own doc comment ("positive shrinks the interior, negative bulges past the
+edge") only actually holds true with the CURRENT subtraction formula --
+the original addition formula has that relationship backwards relative to
+its own stated intent, and reverting to it would likely reopen a
+confirmed, screen-recording-verified bug (rope spawning near the top,
+inside the circle) the subtraction fix resolved. Surfaced this conflict
+directly via AskUserQuestion rather than guessing -- confirmed: keep the
+current subtraction behavior. No code change.
+
+"What i meant was that the Startup Animation Startup Clear Offset
+boundary should not be a straight horizontal line as it is right now, but
+is in fact an offset of the Anchor Physics Circle Offset so it will be a
+smaller circle." Fixed: both updateIntro()'s own 'rising'-phase target
+and the debugShowRiseClearOffset visualization previously measured from
+the raw drawn circle's own circleSize/2, entirely ignoring
+circleBoundaryOffset. Now derived from anchorBoundaryRadius() minus
+vmin(introRiseClearOffset) -- a further offset FROM the anchor's own,
+already-Circle-Offset-adjusted boundary radius. The debug visualization
+(renamed "Debug: Show Rise Clear Offset Circle") now draws an actual
+dashed circle instead of a full-width horizontal line. Verified via a
+full 300-frame update() run through the entire intro sequence
+(waiting->growing->done, 0 thrown errors) and a screenshot showing a
+smaller pink dashed circle correctly nested inside the cyan
+anchor-boundary circle.
+
+"And the End cap gradient application is weird. WHen the rope is in
+default equilibrium, the endcap is only the color at the 100% of the
+slider. Then when i flcik it, i see more of the other colors." Root-
+caused by tracing drawEndcap()'s gradient branch against
+ropeStrokeColor() (the rope's own stroke gradient, which the endcap was
+built to deliberately match): both built a linear gradient from the
+WORLD-SPACE straight-line distance between mainRope.points[0] (anchor)
+and the tip -- correct for the rope's own full-length stroke, but the
+endcap is a small, fixed-size feature at just the very end of that span.
+At equilibrium (a long, straight rope), that world distance, mapped
+through the endcap's own small-scale local inverse-transform, lands the
+gradient's "top" stop far outside the endcap's own local shape bounds --
+so nearly the whole endcap sampled from inside the gradient's clamped
+LAST-stop color. Flicking/curling shrinks the straight-line anchor-to-tip
+distance (a curled path's endpoints sit closer together than its unrolled
+length), pulling the mapped "top" stop back toward the endcap's own local
+bounds and revealing more of the gradient's range -- a "color changes
+when you flick it" symptom that isn't a real physical property of the
+rope. Presented 2 fix directions (self-contained endcap gradient vs.
+stabilizing the existing whole-rope one via arc length instead of
+straight-line distance) rather than picking one silently; the user chose
+self-contained. Rebuilt entirely in the endcap's own local coordinate
+space (ENDCAP_ALIGNMENT.topY -> designBottomY, no inverse-transform
+mapping needed, since both are already-known local constants), with the
+stops array used REVERSED (pos' = 1-pos): the endcap's neck lands on
+whatever color the original gradient's LAST stop is (matching the rope's
+own tip color in the common long-rope case, so still no hard seam), while
+the endcap's own far end transitions back toward the gradient's FIRST
+stop's color. Verified via direct ctx.getImageData() pixel sampling: a
+synthetic long/straight 8-point rope and a synthetic short/curled
+2-point rope, both fed through the identical drawEndcap() call, produced
+pixel-identical gradient values at every sampled point along the endcap
+-- directly confirming the gradient is now fully independent of the
+rope's total length or current pose.
+
+node --check clean throughout. Temporary debug hooks (window.__debugTMPoffset,
+window.__debugTMPgrad) fully removed and grep-confirmed 0 references
+before commit. Updated docs/CODE_SUMMARY.md (2 new Gotchas) and
+docs/PROJECT_PROGRESS.md (3 new Recently Completed bullets).
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

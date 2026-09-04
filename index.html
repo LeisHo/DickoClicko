@@ -366,7 +366,7 @@ const DEV_GROUPS = [
     { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:1.4 },
     { key:'introRiseSpeed',      label:'Startup Rise Speed',        type:'slider', unit:'%vh/s', min:0.5, max:300, step:0.5, def:5 },
     { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
-    { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Line', type:'checkbox', def:false },
+    { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Circle', type:'checkbox', def:false },
     { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:0.4 },
     { key:'introExtendSpeed',    label:'Startup Extension Speed',   type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:15 },
     { key:'introExtendSpeedTweenEnabled', label:'Startup Extension Speed Tween Enabled', type:'checkbox', def:false },
@@ -2100,7 +2100,24 @@ function updateIntro(rawDt){
     // itself range further from center if a longer visible climb is
     // wanted; Offset beyond that boundary was never physically
     // achievable without reproducing this exact bug.
-    const rawClearY = circleAnchor().y + vmin(cfg.circleSize) / 2 - vmin(cfg.introRiseClearOffset);
+    //
+    // rawClearRadius is measured from anchorBoundaryRadius() (the
+    // anchor's OWN, Circle-Offset-adjusted confinement radius), not the
+    // raw drawn circle's circleSize/2 -- per explicit correction ("the
+    // Startup Clear Offset boundary... is in fact an offset of the
+    // Anchor Physics Circle Offset so it will be a smaller circle").
+    // Previously this ignored Circle Offset entirely, always measuring
+    // from the drawn circle's own edge regardless of where the anchor's
+    // real physics boundary actually sat -- a real, if subtle, mismatch
+    // now that Circle Offset can move that boundary well away from the
+    // drawn edge. Since bgRope's own climb (above) is purely vertical,
+    // straight up the anchor's own x, "distance from center" and "y
+    // position" are equivalent for this specific path -- rawClearRadius
+    // is still applied as a y-offset below, but it's now a genuine
+    // circle's radius conceptually (see debugShowRiseClearOffset's own
+    // circle-drawing below, replacing the old straight debug line).
+    const rawClearRadius = anchorBoundaryRadius() - vmin(cfg.introRiseClearOffset);
+    const rawClearY = circleAnchor().y + rawClearRadius;
     const boundaryR = anchorBoundaryRadius();
     const clearY = Math.min(circleAnchor().y + boundaryR, Math.max(circleAnchor().y - boundaryR, rawClearY));
     const step = vh(cfg.introRiseSpeed) * rawDt;
@@ -3591,11 +3608,33 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   ctx.scale(normalScale, yScale * heightMult);
   ctx.translate(-ENDCAP_ALIGNMENT.topCenterX, -anchorY);
   if (gradientInfo && gradientInfo.stops && gradientInfo.stops.length >= 2){
-    const inv = ctx.getTransform().inverse();
-    const localTop = inv.transformPoint(gradientInfo.worldTop);
-    const localBottom = inv.transformPoint(tip);
-    const grad = ctx.createLinearGradient(localTop.x, localTop.y, localBottom.x, localBottom.y);
-    [...gradientInfo.stops].sort((a, b) => a.pos - b.pos).forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    // Self-contained gradient across the endcap's OWN local extent (its
+    // neck at ENDCAP_ALIGNMENT.topY -> its own bottom-most point,
+    // designBottomY, computed above) -- NOT the whole rope's world-space
+    // anchor-to-tip span, per explicit correction. The endcap is a small
+    // feature near just the very end of that whole-rope span, so mapping
+    // world coordinates through the inverse transform (the old approach)
+    // showed almost nothing but one clamped stop color at equilibrium (a
+    // long/straight rope has a large anchor-to-tip distance, which maps
+    // to local coordinates FAR outside the endcap's own small shape) --
+    // reported directly as "the endcap is only the color at the 100% of
+    // the slider... then when i flick it, i see more of the other
+    // colors" (flicking/curling shrinks the rope's own straight-line
+    // anchor-to-tip distance, pulling more of the gradient's range into
+    // the endcap's small local area) -- a "color changes when you flick
+    // it" symptom that isn't a real physical property of the rope. This
+    // keeps the endcap's own look consistent regardless of total rope
+    // length or current pose. Stops are used REVERSED (pos' = 1-pos), so
+    // the endcap's NECK (where it visually joins the rope's own tip)
+    // lands on the same color the rope's whole gradient ends on -- still
+    // no hard seam in the common (long-rope) case, where the rope's own
+    // gradient is already near that same last-stop color right at the
+    // tip -- and the endcap's own far end transitions back toward the
+    // rope's STARTING color, reading as one continuous, symmetric
+    // transition rather than an arbitrary independent one.
+    const grad = ctx.createLinearGradient(ENDCAP_ALIGNMENT.topCenterX, ENDCAP_ALIGNMENT.topY, ENDCAP_ALIGNMENT.topCenterX, designBottomY);
+    const reversedStops = gradientInfo.stops.map(s => ({ pos: 1 - s.pos, color: s.color })).sort((a, b) => a.pos - b.pos);
+    reversedStops.forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
     ctx.fillStyle = grad;
   } else {
     ctx.fillStyle = color;
@@ -3849,24 +3888,26 @@ function render(){
   fallenPieces.forEach(piece => { if (piece.cutSweep && piece.cutSweep.progress < 1) renderCutSweep(piece); });
 
   // Debug: Show Rise Clear Offset Line -- draws the RAW (uncapped)
-  // Startup Rise Clear Offset target as a dashed line, plus the anchor's
-  // own physics boundary (anchorBoundaryRadius() around circleAnchor())
-  // as a dashed circle, so the two can be visually compared -- exactly
-  // the two quantities updateIntro()'s own clamp (see its comment) now
-  // reconciles. Drawn regardless of introPhase (not just during
-  // waiting/rising/pausing) so it's just as usable for inspecting Circle
-  // Boundary Offset/Circle Size tuning after the animation has finished.
+  // Startup Rise Clear Offset target as a dashed CIRCLE (pink) -- per
+  // explicit correction, it's conceptually a circle offset FROM the
+  // anchor's own boundary, not an arbitrary full-width horizontal line --
+  // plus the anchor's own physics boundary (anchorBoundaryRadius() around
+  // circleAnchor()) as a second dashed circle (cyan), so the two can be
+  // visually compared -- exactly the two quantities updateIntro()'s own
+  // clamp (see its comment) now reconciles. Drawn regardless of
+  // introPhase (not just during waiting/rising/pausing) so it's just as
+  // usable for inspecting Circle Boundary Offset/Circle Size tuning
+  // after the animation has finished.
   if (cfg.debugShowRiseClearOffset){
     const anchor = circleAnchor();
-    const rawClearY = anchor.y + vmin(cfg.circleSize) / 2 - vmin(cfg.introRiseClearOffset);
     const boundaryR = anchorBoundaryRadius();
+    const rawClearRadius = boundaryR - vmin(cfg.introRiseClearOffset);
     ctx.save();
     ctx.setLineDash([6, 5]);
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#ff2ec4';
     ctx.beginPath();
-    ctx.moveTo(0, rawClearY);
-    ctx.lineTo(window.innerWidth, rawClearY);
+    ctx.arc(anchor.x, anchor.y, Math.max(0, rawClearRadius), 0, Math.PI * 2);
     ctx.stroke();
     ctx.strokeStyle = '#2ee6ff';
     ctx.beginPath();
