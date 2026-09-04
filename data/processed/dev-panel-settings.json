@@ -99,7 +99,7 @@
     "introRiseClearOffset": 4.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
-    "introPauseDuration": 3.8,
+    "introPauseDuration": 1.1,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2,
