@@ -1361,7 +1361,27 @@ function initDevPanelChrome(){
   });
   document.getElementById('dpCollapseBtn').addEventListener('click', () => {
     const panel = document.getElementById('devPanel');
+    const collapsing = !panel.classList.contains('dp-collapsed');
     panel.classList.toggle('dp-collapsed');
+    // The CSS rule (#devPanel.dp-collapsed .dp-body/.dp-resize) only
+    // hides the BODY and resize handles -- it never touched the panel's
+    // own explicit inline height (set by dragging a resize handle, or by
+    // a saved-settings reload via applyPanelGeometry()). Left alone, that
+    // explicit height persisted across collapse, leaving the panel's own
+    // outer box at its full pre-collapse size with a big empty gap below
+    // the title bar -- reported as "collapse button simply collapses the
+    // setting options but not the panel". Saving/clearing/restoring the
+    // explicit height here (not touching width, which should stay as-is)
+    // is what actually shrinks the panel itself down to just its title
+    // bar while collapsed, and restores the user's own resized height
+    // when expanded again.
+    if (collapsing){
+      panel.dataset.preCollapseHeight = panel.style.height;
+      panel.style.height = '';
+    } else {
+      panel.style.height = panel.dataset.preCollapseHeight || '';
+      delete panel.dataset.preCollapseHeight;
+    }
     document.getElementById('dpCollapseBtn').textContent = panel.classList.contains('dp-collapsed') ? '+' : '–';
   });
   window.addEventListener('keydown', e => {

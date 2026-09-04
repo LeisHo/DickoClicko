@@ -3928,3 +3928,34 @@ APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
 old one in place.
+
+2026-09-04  -  12:00 AM - 12:03 AM EDT
+
+"Dev panel collapse button simply collapse the setting options but not
+the panel."
+
+Root-caused directly: the #devPanel.dp-collapsed CSS rule only ever
+hides .dp-body/.dp-resize (the settings list and resize handles) -- it
+never touched #devPanel's own explicit inline height, set either by
+dragging a resize handle or restored from saved settings via
+applyPanelGeometry(). That explicit height persisted across the
+collapse toggle, so the panel's own outer box never actually shrank,
+leaving a big empty gap below the title bar exactly as reported.
+
+Fixed in the collapse button's click handler: collapsing now saves the
+panel's current style.height to a dataset attribute and clears it (so
+the box auto-sizes to just the title bar); expanding restores the saved
+value. Width is untouched in both directions -- only height collapses.
+Live-verified via real clicks and screenshots (not just code reading):
+collapsing now visibly shrinks the panel to just its title bar, and
+expanding restores the exact same height it had before.
+
+node --check clean. Updated docs/CHANGELOG.txt (this entry),
+docs/CODE_SUMMARY.md (1 new Gotcha). Left data/Rope/End_Form1-01.svg (a
+different concurrent session's own active edit) untouched.
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.

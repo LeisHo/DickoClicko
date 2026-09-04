@@ -2456,3 +2456,23 @@ GOTCHAS
   (2 -> 3 markers), then dispatched a real `contextmenu` event at the
   middle marker and confirmed it was removed (3 -> 2 markers), same as
   the existing double-click path already does.
+- **The dev panel's own Collapse button only ever hid the BODY -- the
+  panel's OUTER box kept its full pre-collapse height, leaving a big
+  empty gap below the title bar instead of actually shrinking.** The
+  `#devPanel.dp-collapsed` CSS rule (`.dp-body, .dp-resize {
+  display:none; }`) only ever hides those two CHILDREN; it never touched
+  `#devPanel`'s own explicit inline `height` (set by dragging a resize
+  handle, or restored from saved settings via `applyPanelGeometry()`).
+  That explicit height persisted across the collapse toggle regardless,
+  so the panel's own bounding box never actually shrank -- reported as
+  "the collapse button simply collapses the setting options but not the
+  panel". Fixed in the collapse button's own click handler: on
+  collapsing, the panel's current `style.height` is saved to a
+  `dataset.preCollapseHeight` attribute and then cleared (so the panel's
+  box auto-sizes down to just its visible title bar); on expanding
+  again, that saved value is restored. Width is deliberately left
+  untouched in both directions -- only height collapses. Live-verified:
+  clicking Collapse now visibly shrinks the panel to just its title bar
+  (screenshot confirmed), and clicking it again restores the exact same
+  height the panel had before collapsing (also screenshot-confirmed, not
+  just assumed from the code).

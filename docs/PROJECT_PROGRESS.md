@@ -918,6 +918,12 @@ assuming it never shipped.
 - Not yet investigated: the dark-flash-during-a-hard-flick report, now
   with a concrete repro ("long click and hold flick from the bottom") --
   deferred to a focused follow-up round rather than a rushed guess.
+- Dev panel Collapse button only hid the settings body, not the panel's
+  own outer box -- its explicit inline height (from a resize drag or
+  restored settings) persisted across collapse, leaving an empty gap
+  below the title bar. Fixed: collapsing now saves and clears that
+  height (auto-sizing to just the title bar); expanding restores it.
+  Width untouched. Verified via real clicks + screenshots both ways.
 
 ## What's next
 
