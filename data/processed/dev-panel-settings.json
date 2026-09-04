@@ -10,8 +10,8 @@
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
-    "ropeThickness": 10,
-    "ropeLength": 19.71153846153847,
+    "ropeThickness": 6.1,
+    "ropeLength": 13.846153846153847,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -71,7 +71,7 @@
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 10,
     "minRopeLength": 0.5,
-    "circleCutDistance": 3,
+    "circleCutDistance": 6.5,
     "clickDistance": 11.4,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
@@ -86,7 +86,7 @@
     "endcapStartingScale": 0.1,
     "endEmergeDelay": 0,
     "endEmergeSpeed": 0.02,
-    "endEmergeEasingStrength": 6,
+    "endEmergeEasingStrength": 12,
     "endEmergeTweening": "easeInOut",
     "floorEnabled": true,
     "floorColor": "#ffffff",
@@ -95,7 +95,7 @@
     "introEnabled": true,
     "introWaitDuration": 1.4,
     "introRiseSpeed": 145.5,
-    "introRiseClearOffsetEnabled": true,
+    "introRiseClearOffsetEnabled": false,
     "introRiseClearOffset": 3,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": false,
@@ -111,7 +111,7 @@
   "order": [
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "introRiseClearOffsetEnabled",
         "bgRopeClipEnabled",
@@ -172,7 +172,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "endcapGradientEnabled",
         "endcapGradientColors",
@@ -188,6 +188,24 @@
         "bgRopeGradientColors",
         "ropeEndCurveArc",
         "ropeTopCurveArc"
+      ]
+    },
+    {
+      "key": "ROPE CUT",
+      "collapsed": true,
+      "settings": [
+        "circleCutDistance",
+        "clickDistance",
+        "doubleClickThreshold",
+        "ropeFallSpeed",
+        "cutSpeed",
+        "endcapAtCutEnd",
+        "cutSweepColor",
+        "cutSweepThickness",
+        "pieceDecayDelay",
+        "pieceDecaySpeed",
+        "pieceMinThickness",
+        "minRopeLength"
       ]
     },
     {
@@ -219,26 +237,8 @@
       ]
     },
     {
-      "key": "ROPE CUT",
-      "collapsed": true,
-      "settings": [
-        "minRopeLength",
-        "circleCutDistance",
-        "clickDistance",
-        "doubleClickThreshold",
-        "ropeFallSpeed",
-        "cutSpeed",
-        "endcapAtCutEnd",
-        "cutSweepColor",
-        "cutSweepThickness",
-        "pieceDecayDelay",
-        "pieceDecaySpeed",
-        "pieceMinThickness"
-      ]
-    },
-    {
       "key": "END EMERGE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "endEmergeEnabled",
         "endcapStartingScale",
