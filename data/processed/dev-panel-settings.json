@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 20.961538461538485,
+    "ropeLength": 6.9230769230769225,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -85,8 +85,8 @@
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
     "endEmergeDelay": 2.45,
-    "endEmergeSpeed": 0.12,
-    "endEmergeEasingStrength": 27.7,
+    "endEmergeSpeed": 0.08,
+    "endEmergeEasingStrength": 1,
     "endEmergeTweening": "easeInOut",
     "floorEnabled": true,
     "floorColor": "#ffffff",
@@ -103,7 +103,7 @@
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2,
-    "detachWaitDuration": 1.4,
+    "detachWaitDuration": 0.5,
     "detachPauseDuration": 0.3,
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 3.4,
@@ -140,7 +140,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "detachWaitDuration",
         "introRiseClearOffsetEnabled",
@@ -268,7 +268,7 @@
     },
     {
       "key": "END EMERGE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "endEmergeEnabled",
         "endcapStartingScale",
