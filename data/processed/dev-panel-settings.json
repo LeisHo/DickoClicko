@@ -21,7 +21,7 @@
       },
       {
         "pos": 0,
-        "color": "#ffd2ad"
+        "color": "#f4c8a4"
       }
     ],
     "endcapGradientEnabled": true,
@@ -35,7 +35,7 @@
         "color": "#ffc085"
       },
       {
-        "pos": 0.248921317775832,
+        "pos": 0.2116683843554061,
         "color": "#ffcb9d"
       }
     ],
@@ -43,7 +43,7 @@
     "bgRopeGradientColors": [
       {
         "pos": 0,
-        "color": "#ffd2ad"
+        "color": "#f4d2ad"
       },
       {
         "pos": 1,
