@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 8.544062631571766,
+    "ropeLength": 7.993367976347152,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -64,7 +64,7 @@
     "holdDistance": 22,
     "bendStiffness": 0.02,
     "ropeAnimSpeed": 1.2,
-    "gravityStrength": 3.9,
+    "gravityStrength": 1.7,
     "damping": 0.973,
     "constraintIterations": 12,
     "ropeGrowthRate": 12,
@@ -96,7 +96,7 @@
     "introWaitDuration": 2.1,
     "introRiseSpeed": 5.5,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 4,
+    "introRiseClearOffset": 3.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": false,
     "introPauseDuration": 0.4,
@@ -240,7 +240,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
