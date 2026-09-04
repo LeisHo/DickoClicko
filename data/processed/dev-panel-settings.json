@@ -11,32 +11,51 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 10,
-    "ropeLength": 4.21153846153846,
+    "ropeLength": 19.71153846153844,
     "ropeColor": "#a5815f",
-    "ropeGradientEnabled": false,
+    "ropeGradientEnabled": true,
     "ropeGradientColors": [
       {
+        "pos": 0.6887326935684968,
+        "color": "#ffc085"
+      },
+      {
         "pos": 0,
-        "color": "#a5815f"
+        "color": "#ffd2ad"
+      }
+    ],
+    "endcapGradientEnabled": true,
+    "endcapGradientColors": [
+      {
+        "pos": 0,
+        "color": "#ffa366"
       },
       {
         "pos": 1,
-        "color": "#3d2817"
+        "color": "#ffc085"
+      },
+      {
+        "pos": 0.248921317775832,
+        "color": "#ffcb9d"
       }
     ],
-    "bgRopeGradientEnabled": false,
+    "bgRopeGradientEnabled": true,
     "bgRopeGradientColors": [
       {
         "pos": 0,
-        "color": "#a5815f"
+        "color": "#ffd2ad"
       },
       {
         "pos": 1,
-        "color": "#3d2817"
+        "color": "#b07e4f"
+      },
+      {
+        "pos": 0.29526188072965825,
+        "color": "#ffc38b"
       }
     ],
-    "ropeEndCurveArc": 1,
-    "ropeTopCurveArc": 0.8,
+    "ropeEndCurveArc": 0.8,
+    "ropeTopCurveArc": 0.9,
     "clickIntensity": 1.1,
     "holdDistance": 22,
     "bendStiffness": 0,
@@ -86,7 +105,7 @@
   "order": [
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "debugShowRiseClearOffset",
         "introExtendSpeed",
@@ -145,8 +164,10 @@
     },
     {
       "key": "ROPE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
+        "endcapGradientEnabled",
+        "endcapGradientColors",
         "tipSegmentShapeEnabled",
         "endcapDesign",
         "endcapHeight",
@@ -171,7 +192,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "bendStiffness",
         "ropeAnimSpeed",
@@ -191,7 +212,7 @@
     },
     {
       "key": "ROPE CUT",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "minRopeLength",
         "circleCutDistance",
@@ -209,7 +230,7 @@
     },
     {
       "key": "END EMERGE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "endEmergeEnabled",
         "endcapStartingScale",
@@ -221,7 +242,7 @@
     },
     {
       "key": "FLOOR",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "floorEnabled",
         "floorColor",
@@ -232,10 +253,10 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 1211.59375,
-      "top": 4.5625,
-      "width": 550.375,
-      "height": 583.640625,
+      "left": 1017.625,
+      "top": 14.137499809265137,
+      "width": 518.375,
+      "height": 570.0375366210938,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
