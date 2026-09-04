@@ -4005,6 +4005,80 @@ node --check clean (JS portion). Updated docs/CHANGELOG.txt (this entry),
 docs/CODE_SUMMARY.md (2 new Gotchas). Left data/Rope/End_Form1-01.svg (a
 different concurrent session's own active edit) untouched.
 
+--------------------------------------------------------------------------------
+2026-09-04  -  12:24 AM EDT
+
+Fixed a real bug reported directly from a real phone on the live Vercel
+deployment: "I just texted it on mobile on vercel. And the start button
+appears then disappears after a second so I can't start game."
+
+CORRECTION to an earlier entry in this file, which concluded the
+"mainRope.points/bgRope.points empty at boot, every update() frame
+throwing" crash was a sandbox-only artifact of how this dev tool opens a
+fresh preview tab, and that "a real browser/deployment load always has a
+valid viewport by the time scripts run." That assumption was never
+actually tested against a real device -- only against this same sandbox
+tool's own preview_start vs. navigate'd tabs. The user's real-phone
+report, reaching this session with no knowledge of that earlier
+conclusion, is independent corroborating evidence that the underlying
+condition (window.innerWidth/innerHeight reading 0 or otherwise
+unreliable very early in page life) is a real, well-documented category
+of mobile Safari/Chrome viewport-timing quirk, not exclusive to this
+sandbox.
+
+Fixed at the actual root: added viewportW()/viewportH() helpers (falling
+back through window.innerWidth/innerHeight -> document.documentElement.
+clientWidth/clientHeight -> a hardcoded sane default, in that order) and
+routed vw()/vh()/vmin() AND resizeCanvas() (which had the same raw
+window.inner* exposure, previously unprotected) through them. The
+fallback only ever engages when the real value is falsy, so this changes
+nothing about normal operation on a device where the viewport reads
+correctly -- purely additive robustness. Moved the whole viewport-helper
+block to before the Canvas-setup section, since resizeCanvas() runs
+synchronously at boot and needs it too.
+
+Root-caused with real instrumentation, not assumed: a temporary
+console.log right after the boot-time resetMainRope() call confirmed
+window.innerHeight === 0 at that exact line on a real page load, which
+made vh(TARGET_SEG_LEN_VH) evaluate to 0, making resetMainRope()'s
+totalLen/targetSeg divide 0/0 = NaN, and Math.max(2, NaN) returns NaN
+(not 2 -- Math.max does not clamp NaN operands back to the other
+argument), so makeChain(NaN, ...)'s for-loop (i < NaN is always false)
+produced a genuinely empty array. Removed the temporary instrumentation
+before committing.
+
+Verified via a fresh reload in this same sandbox (which itself still
+reads window.innerWidth/innerHeight as 0, confirming the underlying
+zero-read condition is real and reproducible, not something a resize
+event self-corrects the way the earlier entry assumed): mainRope.points/
+bgRope.points now correctly hold 2 points immediately after boot
+(previously 0), and a full 300-frame update() run through the entire
+intro sequence (waiting -> growing -> done) completed with 0 thrown
+errors and a correctly-rendered circle+rope on screen -- vs. reliably
+crashing every single frame before the fix, confirmed via
+read_console_messages on a completely untouched reload both before and
+after.
+
+Also handled a deferred request from 2 turns ago ("i just trimmed the
+top of form1-1. dont do anything yet, but the next time i prompt you.
+put that in there too"): the form1-01.svg the user actually saved this
+time has NO shape at all -- only the shared ANCHOR_LINES reference line,
+no <path> or any other drawable element. Flagged directly rather than
+incorporated (would render as nothing); ENDCAP_DESIGNS['form1-01'] left
+at its last real (still seam-affected, per 2 rounds ago's diagnosis)
+path data.
+
+A separate request this same turn ("set the mobile click and animation
+and behavior settings to be the same as desktop") was investigated first
+(confirmed: no per-device value split exists for any gameplay setting --
+only panelGeometry, the dev panel's own chrome, is split per device) and
+then explicitly withdrawn by the user in favor of the mobile bug report
+above -- no change made for that request.
+
+node --check clean. Updated docs/CODE_SUMMARY.md (1 new Gotcha,
+correcting the earlier "not a code bug" one) and docs/PROJECT_PROGRESS.md
+(Open Questions entry corrected in place; new Recently Completed bullet).
+
 ================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a

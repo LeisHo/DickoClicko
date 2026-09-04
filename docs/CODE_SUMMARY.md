@@ -2038,6 +2038,49 @@ GOTCHAS
   viewport by the time scripts run). No production code fix was needed
   for the root cause itself; see the next entry for the (independently
   motivated) `loop()` resilience change made anyway.
+- **CORRECTION to the "RESOLVED, not a code bug" entry above: it was real,
+  and it happened on a real phone.** That entry's own conclusion --
+  "not reachable from a real browser/deployment load" -- turned out to be
+  an unverified assumption, not something actually tested against a real
+  device. The user directly reported the real-world symptom from an
+  actual phone on the live Vercel deployment: "I just texted it on mobile
+  on vercel. And the start button [the circle] appears then disappears
+  after a second so I can't start game" -- reported independently, with
+  no visibility into (or reference to) the earlier "sandbox-only"
+  conclusion, which strengthens rather than undermines it as corroborating
+  evidence. `window.innerWidth`/`innerHeight` reading `0` or being
+  otherwise unreliable very early in page life -- before layout settles,
+  especially with a mobile browser's dynamic address-bar-driven viewport
+  height -- is a real, widely-documented category of mobile Safari/Chrome
+  quirk, independent of and unrelated to this specific dev sandbox's own
+  tab-opening behavior; the earlier entry's reasoning (confirmed via
+  `preview_start` vs. `navigate`'d tabs) only ever tested THIS sandbox
+  tool's own quirk, never an actual mobile device, so it couldn't have
+  ruled out the real-device case at all despite the confident phrasing.
+  Fixed at the actual root this time: `viewportW()`/`viewportH()` (new
+  helpers, declared right before "Canvas setup" so `resizeCanvas()` --
+  which runs synchronously and immediately at boot -- can use them too)
+  wrap `window.innerWidth`/`innerHeight` with a fallback chain --
+  `window.inner* || document.documentElement.client* || <hardcoded
+  default (400/800)>` -- and `vw()`/`vh()`/`vmin()`/`resizeCanvas()` all
+  route through them instead of reading `window.inner*` directly. Since
+  the fallback only ever engages when the real value is falsy (`0` or
+  otherwise unavailable), this changes NOTHING about normal operation on
+  any device where the viewport reads correctly -- purely additive
+  robustness, not a behavior change for the common case. Verified via a
+  fresh reload in this SAME sandbox (which, per the entry above, ALSO
+  reads `window.innerWidth/innerHeight` as `0` -- confirming the
+  underlying zero-read condition is real, reproducible, and NOT
+  self-resolving via a resize event the way the earlier entry assumed,
+  whatever exactly triggers it in a given environment): `mainRope.points`/
+  `bgRope.points` now correctly hold 2 points immediately (previously 0),
+  and a full 300-frame `update()` run through the entire intro sequence
+  (`waiting` -> `growing` -> `done`) completed with 0 thrown errors and a
+  correctly-rendered circle+rope on screen, vs. reliably crashing every
+  single frame before this fix. The earlier round's `loop()` try/catch
+  (see the next entry) remains a valid, independent resilience
+  improvement -- it just isn't what actually stops this specific NaN-math
+  root cause from recurring every frame, which is what this fix does.
 - **5-item startup-animation follow-up round** (background rope becomes
   the climbing visual with a geometric clear-boundary trigger; gradient
   coloring for both ropes via a new "gradient" dev-panel control type;

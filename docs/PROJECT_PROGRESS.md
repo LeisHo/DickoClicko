@@ -939,6 +939,22 @@ assuming it never shipped.
   desktop mouse testing and to synthetic PointerEvent tests (both bypass
   or lack the native touch-gesture layer that was actually hijacking
   real finger-drags). Fixed by adding the missing CSS property.
+- Fixed a real bug reported directly from a real mobile device on the
+  live Vercel deployment ("the start button appears then disappears
+  after a second so I can't start game") -- see the corrected Open
+  Questions entry above for the full root cause (`window.innerWidth`/
+  `innerHeight` reading 0 very early in page life, silently propagating
+  into NaN math and an empty `mainRope.points`) and fix
+  (`vh()`/`vw()`/`vmin()`/`resizeCanvas()` now fall back safely instead
+  of ever multiplying by zero).
+- Asked to incorporate a further-trimmed `form1-01.svg`, per a deferred
+  instruction from 2 turns ago -- the file the user actually saved this
+  time has NO shape at all, only the shared `ANCHOR_LINES` reference
+  line (no `<path>`, `<polygon>`, or any other drawable element).
+  Flagged directly rather than incorporated -- doing so would make
+  `form1-01` render as nothing. Not touched; `ENDCAP_DESIGNS['form1-01']`
+  still holds the last real (still seam-affected, per 2 rounds ago's
+  diagnosis) path data.
 
 ## What's next
 
@@ -955,32 +971,36 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
-- **RESOLVED (not a code bug):** an earlier entry here reported the app
-  breaking on every frame with `mainRope.points`/`bgRope.points` empty
-  right after boot ("Cannot read properties of undefined (reading 'x')"),
-  reproduced by a concurrent session on what looked like a completely
-  fresh, untouched page load. Root-caused during this round's own testing:
-  `window.innerWidth`/`innerHeight` can read `0` immediately after certain
-  ways of opening a fresh tab in this specific Claude Code Browser-pane
-  sandbox (confirmed directly: a tab opened via a bare `preview_start` with
-  no prior `navigate` on that tab reported `innerW:0, innerH:0` right after
-  load) -- the SAME already-documented quirk this project's own history
-  has hit before (HANDO's and BUTTSONS3D's own entries: "window.innerWidth/
-  innerHeight read 0 on the very first script tick"). With those at 0,
-  every `vh()`/`vw()`/`vmin()` call returns 0, `TARGET_SEG_LEN_VH`-derived
-  `segLen` becomes 0, and `Math.round(totalLen/0)` (or `0/0`) feeds `NaN`/
-  `Infinity` into `makeChain()`'s point count -- producing exactly the
-  empty/degenerate `points` array both sessions independently hit. This is
-  a sandbox-only artifact of how a fresh preview tab gets opened, not
-  something a real browser/deployment load can produce (a real page load
-  always has a valid viewport by the time scripts run) -- confirmed by
-  reproducing it on a freshly `preview_start`-opened tab and NOT
-  reproducing it after switching to an already-`navigate`'d tab with a
-  real viewport size, across many subsequent runs. No code fix was needed
-  for the underlying cause; a `loop()` try/catch was added anyway as
-  independently-motivated resilience (see "Recently completed" above) so
-  a real one-off bad frame, whatever its cause, no longer permanently
-  freezes the app.
+- **CORRECTED (was marked "not a code bug" -- turned out to be real, on
+  a real device).** An earlier entry here concluded the `window.innerWidth`/
+  `innerHeight`-read-0-at-boot crash (`mainRope.points`/`bgRope.points`
+  empty, every frame throwing "Cannot read properties of undefined
+  (reading 'x')") was a sandbox-only artifact of how this Claude Code
+  Browser pane opens a fresh `preview_start` tab, and that "a real
+  browser/deployment load always has a valid viewport by the time
+  scripts run." That assumption didn't hold: the user directly reported
+  the real-world symptom of this exact failure mode from an actual phone
+  on the live Vercel deployment ("I just texted it on mobile on vercel.
+  And the start button [the circle] appears then disappears after a
+  second so I can't start game") -- independent of, and unknown to, the
+  session that wrote the "sandbox-only" conclusion. `window.innerWidth`/
+  `innerHeight` reading 0 or unreliable very early in page life (before
+  layout/the address bar settles) is a real, widely-documented quirk on
+  mobile Safari/Chrome, not exclusive to this dev sandbox. Fixed at the
+  root: `vh()`/`vw()`/`vmin()` (and `resizeCanvas()`, which had the same
+  raw-`window.inner*` exposure) now fall back through
+  `document.documentElement.client{Width,Height}` and finally a
+  hardcoded sane default, so they can never again silently multiply by
+  zero -- verified directly: a fresh reload in this SAME sandbox (which
+  still reads `window.innerWidth/innerHeight` as 0, confirming the
+  underlying condition is real and reproducible, whatever exactly
+  triggers it) now completes a full boot + intro cycle (`waiting` ->
+  `growing` -> `done`) with 0 thrown errors, vs. reliably crashing every
+  frame before the fix. The earlier session's own added `loop()`
+  try/catch (see "Recently completed") is complementary, not a
+  replacement -- it stops a genuinely one-off bad frame from permanently
+  freezing the app, but doesn't stop the specific NaN-math root cause
+  from recurring every single frame the way it was actually observed to.
 - Tier 1 (Vercel/GitHub API Save) itself is confirmed working end-to-end
   — many real "Update dev-panel-settings.json via Save Settings" commits
   have landed on the remote from the live deployment throughout this

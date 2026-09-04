@@ -1404,6 +1404,35 @@ function initDevPanelChrome(){
   });
 }
 
+// window.innerWidth/innerHeight can genuinely read 0 for a brief moment
+// on some mobile browsers, right at the point this script's own top-level
+// boot code runs (before the viewport has settled/laid out) -- confirmed
+// directly via a temporary boot-time console.log, not assumed: a real
+// page load showed window.innerHeight === 0 at the exact line
+// resetMainRope() is first called. That 0 silently propagated into
+// vh()-derived NaN math (targetSeg became 0, so totalLen/targetSeg was
+// 0/0 = NaN), which Math.max(2, NaN) does NOT clamp back to 2 (Math.max
+// with a NaN operand returns NaN, not the other operand) -- so
+// mainRope.points ended up permanently empty from frame one, and every
+// subsequent update() threw trying to read points[0] for the anchor's
+// boundaryConstraint. Reported directly as "the start button [the
+// circle] appears then disappears after a second" on a real mobile
+// Vercel visit -- exactly what a graphic drawn successfully ONCE (before
+// the very first update() throws and every later frame silently no-ops)
+// would look like. Falls back to `document.documentElement.clientHeight`/
+// `clientWidth` (usually already valid even when window.innerHeight
+// isn't yet) and finally a hardcoded sane default, so vh()/vw()/vmin()
+// can never silently multiply by zero again, however early they're
+// called from. Declared here, ABOVE Canvas setup below, since
+// resizeCanvas() (called immediately, synchronously, at boot) needs
+// these too -- a 0x0 canvas wouldn't throw, but would mean nothing
+// paints at all until a later real resize event corrects it.
+const viewportW = () => window.innerWidth || document.documentElement.clientWidth || 400;
+const viewportH = () => window.innerHeight || document.documentElement.clientHeight || 800;
+const vw = pct => viewportW() * pct / 100;
+const vh = pct => viewportH() * pct / 100;
+const vmin = pct => Math.min(viewportW(), viewportH()) * pct / 100;
+
 /* ---------------------------------------------------------------------
    Canvas setup
 --------------------------------------------------------------------- */
@@ -1411,18 +1440,19 @@ const canvas = document.getElementById('scene');
 const ctx = canvas.getContext('2d');
 function resizeCanvas(){
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = window.innerWidth * dpr;
-  canvas.height = window.innerHeight * dpr;
-  canvas.style.width = window.innerWidth + 'px';
-  canvas.style.height = window.innerHeight + 'px';
+  // viewportW()/viewportH() (declared above, before this whole section --
+  // see their own comment) rather than raw window.innerWidth/innerHeight
+  // directly -- this runs immediately/synchronously at boot, just as
+  // exposed to the same momentary 0-viewport read on mobile as
+  // resetMainRope() was.
+  canvas.width = viewportW() * dpr;
+  canvas.height = viewportH() * dpr;
+  canvas.style.width = viewportW() + 'px';
+  canvas.style.height = viewportH() + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
-
-const vw = pct => window.innerWidth * pct / 100;
-const vh = pct => window.innerHeight * pct / 100;
-const vmin = pct => Math.min(window.innerWidth, window.innerHeight) * pct / 100;
 
 /* ---------------------------------------------------------------------
    Rope physics — verlet point chain.
@@ -3905,9 +3935,7 @@ function loop(now){
 // it to the circle's bottom edge the instant 'rising' begins, the same
 // frame bgRope first becomes visible, so this isn't a visible jump.
 resetMainRope(vh(TARGET_SEG_LEN_VH));
-console.log('[TMPDEBUG boot] after resetMainRope:', JSON.stringify({ innerHeight: window.innerHeight, vhTarget: vh(TARGET_SEG_LEN_VH), targetSegLenVh: TARGET_SEG_LEN_VH, pointsLen: mainRope.points.length, segLen: mainRope.segLen }));
 resetBgRope();
-console.log('[TMPDEBUG boot] after resetBgRope:', JSON.stringify({ bgPointsLen: bgRope.points.length }));
 introPhase = 'waiting';
 introTimer = 0;
 if (DEV_MODE){
