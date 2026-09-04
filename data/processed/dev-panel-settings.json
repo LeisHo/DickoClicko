@@ -5,13 +5,13 @@
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
-    "circleBoundaryOffset": 1,
+    "circleBoundaryOffset": 1.5,
     "anchorWeight": 0.4,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 6.961538461538458,
+    "ropeLength": 20.961538461538485,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -111,11 +111,11 @@
     "flickX": 15,
     "flickY": 85,
     "flickScale": 15,
-    "flickAnimSpeed": 8,
+    "flickAnimSpeed": 5.3,
     "flick2X": 15,
     "flick2Y": 60,
     "flick2Scale": 50,
-    "flick2AnimSpeed": 8
+    "flick2AnimSpeed": 5.7
   },
   "order": [
     {
@@ -194,7 +194,7 @@
     },
     {
       "key": "ANCHOR PHYSICS",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
