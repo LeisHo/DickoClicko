@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 7.211538461538458,
+    "ropeLength": 3.961538461538461,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -94,7 +94,7 @@
     "floorHeight": 6,
     "introEnabled": true,
     "introWaitDuration": 0,
-    "introRiseSpeed": 0.5,
+    "introRiseSpeed": 5.5,
     "introRiseClearOffsetEnabled": true,
     "introRiseClearOffset": 1,
     "debugShowRiseClearOffset": true,
@@ -110,9 +110,23 @@
     "flickX": 15,
     "flickY": 85,
     "flickScale": 15,
-    "flickAnimSpeed": 1
+    "flickAnimSpeed": 1,
+    "flick2X": 15,
+    "flick2Y": 60,
+    "flick2Scale": 50,
+    "flick2AnimSpeed": 1
   },
   "order": [
+    {
+      "key": "FLICK ANIMATION 2",
+      "collapsed": true,
+      "settings": [
+        "flick2X",
+        "flick2Y",
+        "flick2Scale",
+        "flick2AnimSpeed"
+      ]
+    },
     {
       "key": "FLICK ANIMATION",
       "collapsed": true,
