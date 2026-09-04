@@ -53,7 +53,10 @@ additions. Current state of each subsystem:
   confined inside the circle by its own boundary collision (tunable via
   Circle Offset / ANCHOR PHYSICS group). The growing tip is positioned
   directly each frame (never fed into the constraint solver) to avoid a
-  documented long-hold tangling instability.
+  documented long-hold tangling instability. Circle Offset is now
+  hard-clamped so the anchor's confinement radius can never exceed the
+  circle's own edge -- the circle is the master boundary, with Startup
+  Rise Clear Offset nested inside it in turn (see CODE_SUMMARY gotchas).
 - **Endcaps**: 24 swappable SVG designs (Form1/Form2/Form3 families)
   sharing one alignment reference so size/anchor stay consistent across
   designs; Endcap Height, an independent Endcap Gradient, and "End Emerge"

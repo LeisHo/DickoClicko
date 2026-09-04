@@ -2841,3 +2841,31 @@ GOTCHAS
   locally) rather than a crash -- and is not expected to occur on the real
   deployed site, which serves via Vercel's CDN, not a single-threaded local
   server.
+- **Circle Offset now hard-clamped to never exceed the circle's own edge --
+  the circle is the master boundary.** `anchorBoundaryRadius()` previously
+  (2026-09-04 morning session) deliberately let a negative Circle Offset
+  push the anchor's confinement radius PAST `vmin(circleSize)/2` -- that was
+  itself a confirmed fix for an earlier bug (near-zero-length rope emerging
+  from deep inside the circle, diagnosed from the user's own screen
+  recording) and the user had explicitly chosen to keep that behavior when
+  asked. Later the same day, the user separately described the INTENDED
+  hierarchy unprompted -- "Anchor Physics - Circle Offset... is an interior
+  offset. it is never bigger than the circle itself" -- which directly
+  contradicted the earlier confirmed choice. Surfaced the conflict via
+  AskUserQuestion rather than silently picking one; the user resolved it
+  explicitly: "the main circle is the master boundary. everyting else
+  within that never breaks that rule." `anchorBoundaryRadius()` now computes
+  `Math.max(2, Math.min(circleRadius, circleRadius - vmin(circleBoundaryOffset)))`
+  -- the added `Math.min(circleRadius, ...)` ceiling is the only change.
+  Verified live: at the default `circleBoundaryOffset: -2`, the boundary
+  now lands exactly ON the circle's edge (43 === 43 at circleSize 21.5)
+  instead of bulging past it (previously 47 vs. 43). Startup Rise Clear
+  Offset was already correctly nested under `anchorBoundaryRadius()` (see
+  its own clamp in `updateIntro()`'s 'rising' phase) and needed no change --
+  it now transitively also never exceeds the circle, satisfying the full
+  3-level hierarchy (Circle > Circle Offset > Rise Clear Offset) the user
+  described. Trade-off worth knowing: a strongly negative Circle Offset can
+  once again produce the original "rope starts well inside the circle
+  during early growth" look this was previously tuned to avoid -- accepted
+  explicitly by the user as the correct trade-off given the new master-
+  boundary rule.

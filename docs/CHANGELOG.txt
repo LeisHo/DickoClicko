@@ -4410,6 +4410,62 @@ direct fetch that the server and files are fine once the initial
 concurrent-load burst settles; not expected on the real Vercel deployment.
 
 ================================================================================
+2026-09-04  -  07:43 AM EDT
+
+Circle Offset made a hard-clamped interior offset of the circle itself --
+resolves a same-day conflict between two of the user's own confirmed
+decisions.
+
+User described the intended hierarchy unprompted: "Anchor Physics - Circle
+Offset... is an interior offset. it is never bigger than the circle
+itself[.] Startup Rise Clear Offset... is an interior offset. it is never
+bigger than Anchor Physics - Circle Offset." Checked both claims against
+the live code before changing anything. Startup Rise Clear Offset already
+matched exactly -- updateIntro()'s 'rising' phase clamps clearY to
+[anchor.y - boundaryR, anchor.y + boundaryR] around anchorBoundaryRadius(),
+so it structurally cannot exceed its parent. Circle Offset did NOT match:
+anchorBoundaryRadius() = circleSize/2 - vmin(circleBoundaryOffset) had no
+ceiling, and at the live default (circleBoundaryOffset -2) computed 47 vs.
+the circle's own 43 -- bulging visibly past the drawn edge.
+
+That bulge was not an oversight -- it was a deliberate, evidence-based fix
+from earlier the same morning (see the 06:25 AM entry): a near-zero-length
+rope had been emerging from deep inside the circle instead of at its edge,
+confirmed via the user's own screen recording, and when asked whether to
+revert that fix or keep it, the user chose to keep it. The new "never
+bigger than the circle" statement directly contradicted that kept
+decision. Rather than silently pick a side, surfaced the conflict via
+AskUserQuestion with both options and their tradeoffs spelled out. User's
+answer: "Clamp to circle, but the rope start of the background and man
+rope cannot ever go outside the circle. the main circle is the master
+boundary. everyting else within that never breaks that rule."
+
+Implemented exactly that: anchorBoundaryRadius() now returns
+Math.max(2, Math.min(circleRadius, circleRadius - vmin(circleBoundaryOffset)))
+-- only the Math.min(circleRadius, ...) ceiling is new. Verified live via a
+temporary debug hook (window.__debugTMPoffset2, removed before commit,
+grep-confirmed 0 references): at the default offset -2, boundRadius now
+reads exactly 43, equal to circleRadius, not 47. Since Rise Clear Offset
+was already nested under anchorBoundaryRadius(), it now transitively also
+never exceeds the circle -- the full 3-level hierarchy (Circle > Circle
+Offset > Rise Clear Offset) holds. Traded off explicitly, at the user's
+own direction: a strongly negative Circle Offset can once again reproduce
+the original "rope starts well inside the circle during early growth"
+look from before the 06:25 AM fix, since bulging past the edge is no
+longer possible under the master-boundary rule.
+
+Verified via node --check (syntax clean) and a live reload showing the
+Rise Clear Offset debug circle (already enabled in the saved dev-panel
+settings) sitting exactly on the drawn circle's edge rather than outside
+it.
+
+Also explained, verbally, what the 4 Detach-prefixed sliders
+(detachPauseDuration, detachTipStartScale, detachTipGrowDuration,
+detachThicknessMultiplier) control -- no code changes, see the 06:25 AM
+entry's own Detach-related additions for the underlying mechanism
+(detachEntireRopeAndRestartIntro()).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

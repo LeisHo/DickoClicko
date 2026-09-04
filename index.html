@@ -1474,18 +1474,20 @@ function flickFrameIndex(){
 }
 
 // FLICK animation 2 -- a second, independent graphic, placed above the
-// first by default. Its 26 frames are `data/FLICK/FRAMESS/1`'s own frames
-// (natural-numeric order: 1,2,3,4,6,8a,9,9a,10,11,12,13,13a,14 -- 14
-// frames) followed immediately by `data/FLICK/FRAMESS/2`'s frames in
-// REVERSE order (14,9b,9a,9,8a,8,6,5,4,3,2,1 -- 12 frames), pre-copied
-// into data/FLICK/ANI2/FRAMES-01.png..FRAMES-26.png in that exact
-// concatenated order so the loading code here stays as simple as
-// animation 1's (a plain sequential file list, no special-casing the
-// letter-suffixed source filenames at runtime). Unlike animation 1, this
-// one was only ever asked to play forward in a loop (1->26->1, a hard cut
-// back to frame 1, not a ping-pong) -- no "loop back" behavior was
-// requested for this one.
-const FLICK2_FRAME_COUNT = 26;
+// first by default. Its 21 frames are `data/FLICK/ANI/1`'s own frames
+// (natural-numeric order: 01,02,03,04,07,10,11,13,14,16 -- 10 frames)
+// followed immediately by `data/FLICK/ANI/2`'s frames in REVERSE order
+// (16,13,12,11,10,09,06,04,03,02,01 -- 11 frames), pre-copied into
+// data/FLICK/ANI2/FRAMES-01.png..FRAMES-21.png in that exact concatenated
+// order so the loading code here stays as simple as animation 1's (a
+// plain sequential file list). Rests on frame 1 (not auto-playing) until
+// clicked, per explicit request -- flick2Playing gates whether
+// flick2AnimTime advances at all (see update() and the pointerdown
+// hit-test below); once started it loops forward (1->21->1, a hard cut
+// back to frame 1, not a ping-pong -- no "loop back" behavior was
+// requested for this one) for as long as it keeps being clicked to
+// restart, same as animation 1's own always-on loop otherwise.
+const FLICK2_FRAME_COUNT = 21;
 const flickFrames2 = []
 for (let i = 1; i <= FLICK2_FRAME_COUNT; i++){
   const img = new Image();
@@ -1493,10 +1495,21 @@ for (let i = 1; i <= FLICK2_FRAME_COUNT; i++){
   flickFrames2.push(img);
 }
 let flick2AnimTime = 0;
+let flick2Playing = false;
 
 function flick2FrameIndex(){
+  if (!flick2Playing) return 0;
   const cyclePos = flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed;
   return Math.floor(((cyclePos % FLICK2_FRAME_COUNT) + FLICK2_FRAME_COUNT) % FLICK2_FRAME_COUNT);
+}
+
+// The rect drawn in render() below, kept in sync there each frame so this
+// hit-test always matches what's actually on screen regardless of the
+// live Flick2 X/Y/Scale slider values.
+const flick2Rect = { x: 0, y: 0, w: 0, h: 0 };
+function isPointInFlick2(x, y){
+  return x >= flick2Rect.x && x <= flick2Rect.x + flick2Rect.w &&
+         y >= flick2Rect.y && y <= flick2Rect.y + flick2Rect.h;
 }
 
 /* ---------------------------------------------------------------------
@@ -1933,43 +1946,28 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
 // reflection formula needed.
 // Circle Offset (cfg.circleBoundaryOffset) lets the anchor's own confinement
 // radius differ from the circle GRAPHIC's own radius (vmin(circleSize)/2) --
-// positive shrinks the playable interior, negative lets the anchor bulge
-// past the drawn circle's own edge.
+// positive shrinks the playable interior. Negative USED to let the anchor
+// bulge past the drawn circle's own edge (see the removed comment this
+// replaced, kept in CODE_SUMMARY's gotchas for the full history); per
+// explicit correction ("the main circle is the master boundary. everything
+// else within that never breaks that rule") the circle itself is now a hard
+// ceiling -- Circle Offset can only shrink the confinement radius INTERIOR
+// to the circle, never push it past the circle's own edge, regardless of
+// sign.
 function anchorBoundaryRadius(){
-  // SUBTRACTS circleBoundaryOffset -- fixed from an earlier version that
-  // added it, which had the sign backwards relative to this function's
-  // own comment above ("positive shrinks the playable interior, negative
-  // lets the anchor bulge past the drawn circle's own edge"): adding a
-  // negative offset SHRINKS the radius, the opposite of "bulge past the
-  // edge". At the live default (circleBoundaryOffset -2), the old
-  // formula produced an 8.75%vmin boundary against a 10.75%vmin circle
-  // radius -- confining the anchor to a circle noticeably SMALLER than
-  // the drawn one, never reaching its edge. Harmless once the rope has
-  // enough length to hang down and out past the (unconstrained) anchor
-  // regardless, but during the brief early-growth window -- while total
-  // length is still shorter than the gap between the anchor's confined
-  // position and the circle's actual edge -- the whole tiny rope+endcap
-  // sat entirely INSIDE the circle's interior, looking like it emerges
-  // from somewhere near the top rather than hanging below it. Reported
-  // as "the back rope i coming from the top or something", confirmed by
-  // directly reviewing the user's own screen recording (frame ~0.95s
-  // into a fresh startup: a small endcap-shaped blob sitting near the
-  // TOP of the circle, well inside it, not at/past the bottom edge).
-  // Subtracting instead means the current negative offset now correctly
-  // bulges the boundary slightly PAST the circle's own edge, so even a
-  // near-zero-length rope starts at/outside the edge instead of deep
-  // inside it.
-  //
-  // Floored at a small positive minimum, not 0 -- a large enough
-  // POSITIVE Circle Offset relative to a small Circle Size would
-  // otherwise go negative, which is meaningless for a circle's own
-  // radius and broke the boundary math (confirmed directly: an offset
-  // large enough to exceed circleSize/2 drove the radius negative, at
-  // which point `dist > R` is always true regardless of the anchor's
-  // real position, and `center + normal*R` with a negative R places the
-  // clamp point on the OPPOSITE side of the circle from whichever
-  // direction the anchor was actually heading).
-  return Math.max(2, vmin(cfg.circleSize) / 2 - vmin(cfg.circleBoundaryOffset));
+  const circleRadius = vmin(cfg.circleSize) / 2;
+  // Floored at a small positive minimum, not 0 -- a large enough POSITIVE
+  // Circle Offset relative to a small Circle Size would otherwise go
+  // negative, which is meaningless for a circle's own radius and broke the
+  // boundary math (confirmed directly: an offset large enough to exceed
+  // circleSize/2 drove the radius negative, at which point `dist > R` is
+  // always true regardless of the anchor's real position, and
+  // `center + normal*R` with a negative R places the clamp point on the
+  // OPPOSITE side of the circle from whichever direction the anchor was
+  // actually heading). Ceiled at circleRadius -- the circle is the master
+  // boundary; a negative offset (or offset 0) now lands exactly ON the
+  // circle's own edge instead of bulging past it.
+  return Math.max(2, Math.min(circleRadius, circleRadius - vmin(cfg.circleBoundaryOffset)));
 }
 
 // A fallen piece's own rendered thickness at its CURRENT age -- holds at
