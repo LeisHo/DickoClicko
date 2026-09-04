@@ -62,11 +62,11 @@
     "ropeTopCurveArc": 0.9,
     "clickIntensity": 1.1,
     "holdDistance": 22,
-    "bendStiffness": 0,
+    "bendStiffness": 0.02,
     "ropeAnimSpeed": 1.2,
-    "gravityStrength": 4.6,
-    "damping": 0.984,
-    "constraintIterations": 1,
+    "gravityStrength": 3.9,
+    "damping": 0.973,
+    "constraintIterations": 12,
     "ropeGrowthRate": 12,
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 10,
@@ -111,16 +111,16 @@
     "flickX": 15,
     "flickY": 85,
     "flickScale": 15,
-    "flickAnimSpeed": 5.3,
+    "flickAnimSpeed": 4.6,
     "flick2X": 15,
     "flick2Y": 60,
     "flick2Scale": 50,
-    "flick2AnimSpeed": 5.7
+    "flick2AnimSpeed": 4.6
   },
   "order": [
     {
       "key": "FLICK ANIMATION 2",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick2X",
         "flick2Y",
@@ -130,7 +130,7 @@
     },
     {
       "key": "FLICK ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flickX",
         "flickY",
@@ -194,7 +194,7 @@
     },
     {
       "key": "ANCHOR PHYSICS",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
@@ -220,7 +220,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "endcapGradientEnabled",
         "endcapGradientColors",
@@ -239,22 +239,22 @@
       ]
     },
     {
+      "key": "ROPE ANIMATION",
+      "collapsed": false,
+      "settings": [
+        "ropeAnimSpeed",
+        "gravityStrength",
+        "damping",
+        "constraintIterations",
+        "bendStiffness"
+      ]
+    },
+    {
       "key": "CLICK",
       "collapsed": true,
       "settings": [
         "clickIntensity",
         "holdDistance"
-      ]
-    },
-    {
-      "key": "ROPE ANIMATION",
-      "collapsed": true,
-      "settings": [
-        "bendStiffness",
-        "ropeAnimSpeed",
-        "gravityStrength",
-        "damping",
-        "constraintIterations"
       ]
     },
     {
