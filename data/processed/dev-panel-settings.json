@@ -5,13 +5,13 @@
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
-    "circleBoundaryOffset": -1,
+    "circleBoundaryOffset": -2,
     "anchorWeight": 0.4,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 6.961538461538466,
+    "ropeLength": 7.211538461538458,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -71,8 +71,8 @@
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 10,
     "minRopeLength": 0.5,
-    "circleCutDistance": 6.5,
     "clickDistance": 11.4,
+    "doubleClickDistance": 11.4,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.6,
@@ -93,22 +93,36 @@
     "floorThickness": 10,
     "floorHeight": 6,
     "introEnabled": true,
-    "introWaitDuration": 5.5,
-    "introRiseSpeed": 20,
+    "introWaitDuration": 0,
+    "introRiseSpeed": 0.5,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 4.5,
+    "introRiseClearOffset": 1,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
-    "introPauseDuration": 1.1,
+    "introPauseDuration": 3.4,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": false,
     "introExtendStartSpeed": 2,
     "detachPauseDuration": 0,
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 3.4,
-    "detachThicknessMultiplier": 1.15
+    "detachThicknessMultiplier": 1.15,
+    "flickX": 15,
+    "flickY": 85,
+    "flickScale": 15,
+    "flickAnimSpeed": 1
   },
   "order": [
+    {
+      "key": "FLICK ANIMATION",
+      "collapsed": true,
+      "settings": [
+        "flickX",
+        "flickY",
+        "flickScale",
+        "flickAnimSpeed"
+      ]
+    },
     {
       "key": "STARTUP ANIMATION",
       "collapsed": false,
@@ -174,7 +188,7 @@
       "key": "ROPE CUT",
       "collapsed": true,
       "settings": [
-        "circleCutDistance",
+        "doubleClickDistance",
         "clickDistance",
         "doubleClickThreshold",
         "ropeFallSpeed",
@@ -261,10 +275,10 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 1017.625,
-      "top": 14.137499809265137,
+      "left": 1363.625,
+      "top": 29.125,
       "width": 518.375,
-      "height": 570.0375366210938,
+      "height": 570.03125,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
