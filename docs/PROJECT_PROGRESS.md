@@ -75,6 +75,12 @@ additions. Current state of each subsystem:
   (clipped to the circle's shape) climbs on load, hands off to a
   freshly-spawned main rope at the exact handoff point (no jump), pauses,
   then grows via the same hold-to-grow mechanic used during normal play.
+  A double-click-in-circle detach reuses this whole state machine with its
+  own Detach Wait/Pause Duration sliders; the just-detached piece stays
+  held in place (no gravity) until the fresh main rope actually spawns at
+  the handoff, and bgRope's whole chain (not just its start point) rebuilds
+  when the climb begins so it starts already consistent with gravity's
+  direction -- see CODE_SUMMARY gotchas for both.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a
@@ -90,11 +96,15 @@ additions. Current state of each subsystem:
   behind several previously-confusing "circle disappears" / "double-click
   does nothing" reports. `loop()` also wraps each frame in try/catch so
   one bad frame can't permanently freeze the app.
-- **FLICK animations**: two small, independent looping PNG overlays, each
-  with its own X/Y/Scale/Speed dev-panel group. Animation 1
-  (`data/FLICK/ANI/`, 17 frames) ping-pongs 1->17->1; animation 2
-  (`data/FLICK/ANI2/`, 26 frames, placed above animation 1 by default)
-  loops forward only.
+- **FLICK animations**: two small, independent PNG overlays, each with its
+  own X/Y/Scale/Speed dev-panel group. Both are now click-to-trigger: rest
+  on frame 1 until clicked directly on their own graphic, play exactly one
+  sequence, then stop until clicked again. Animation 1 (`data/FLICK/ANI/`,
+  17 frames) plays one full ping-pong (1->17->1); animation 2
+  (`data/FLICK/ANI2/`, 21 frames as of this writing -- another session has
+  been actively revising this frame set, check `FLICK2_FRAME_COUNT` in
+  index.html for the current count -- placed above animation 1 by default)
+  plays one forward pass (1->N). Both Anim Speed defaults are 3.2x.
 
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.

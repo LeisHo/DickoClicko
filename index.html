@@ -2331,17 +2331,6 @@ function updateIntro(rawDt){
 // normal cut already use, just applied to the ENTIRE points array instead
 // of a slice of it, and re-enters 'waiting' instead of leaving introPhase
 // alone.
-window.__debugTMPflick = () => ({
-  flickPlaying, flickAnimTime, flickIdx: flickFrameIndex(),
-  flick2Playing, flick2AnimTime, flick2Idx: flick2FrameIndex(),
-  speed1: cfg.flickAnimSpeed, speed2: cfg.flick2AnimSpeed,
-  rect1: {...flickRect}, rect2: {...flick2Rect},
-});
-window.__debugTMPclickFlick = (which) => {
-  const r = which === 1 ? flickRect : flick2Rect;
-  onPointerDown({ clientX: r.x + r.w/2, clientY: r.y + r.h/2 });
-};
-window.__debugTMPstepF = (n) => { for (let i=0;i<n;i++){ update(FIXED_DT); } render(); return window.__debugTMPflick(); };
 function detachEntireRopeAndRestartIntro(){
   if (mainRope.points.length >= 2){
     const fallingPoints = mainRope.points.map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));

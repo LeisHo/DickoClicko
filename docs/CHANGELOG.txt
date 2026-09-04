@@ -4466,6 +4466,94 @@ entry's own Detach-related additions for the underlying mechanism
 (detachEntireRopeAndRestartIntro()).
 
 ================================================================================
+2026-09-04  -  08:08 AM EDT
+
+Detach sequence: 3 related fixes (piece falls too early, bgRope jumps up,
+no independent wait duration), plus both FLICK animations converted to
+click-to-trigger, play-once-then-stop.
+
+User: "i think i se waht the issue is. The ropes shouldnt fall until the
+Main rope has been spawned" + "when i double click to cut off the entire
+rope, the background rope suddenly goes really high straight up", then
+mid-turn: "oh i also see another issue. the main rope doesnt spawn UNTIl
+the wait time is over."
+
+Fix 1 -- held fallen piece: the piece created by
+detachEntireRopeAndRestartIntro() was falling under real gravity from the
+instant it was created, well before the fresh main rope actually spawned
+(which can take the entire wait+rise duration). Added
+`piece.waitingForSpawn = true` at creation, checked at the top of the
+fallenPieces gravity loop in update() (`if (piece.waitingForSpawn)
+return;` -- skips integrateChain entirely, piece stays frozen), cleared at
+the exact 'rising'->'pausing' handoff in updateIntro() -- the same frame
+mainRope.points[0] gets positioned, i.e. literally the moment the main
+rope spawns.
+
+Fix 2 -- bgRope jump: root-caused via direct frame-by-frame tracing
+(temporary debug hooks driving update() with a fixed synthetic dt in a
+tight loop + render(), since requestAnimationFrame never ticks in this
+sandbox). Confirmed: when 'rising' begins, only bgRope.points[0] used to
+teleport to the far-below climb-start position; points 1+ stayed wherever
+they'd settled during 'waiting' (hanging normally downward from the OLD
+point 0 at circleAnchor()) -- leaving the rest of the chain ABOVE the
+newly-teleported point 0, an inversion gravity never produces on its own.
+Traced the tail point across 5 frames right after the teleport:
+199->165->147->127->106->84 (y decreasing = climbing/flinging upward),
+confirming the constraint solver's correction for that inversion was
+exactly the reported jump. Fixed by rebuilding bgRope's WHOLE chain at
+this transition (resetBgRope() gained optional (startX, startY) params,
+defaulting to circleAnchor() for its 3 other unchanged call sites) so
+every point starts already consistent with gravity's direction. Verified
+live: p0/p1/pLast now increase monotonically (272.7/305.9/333.5) and
+change smoothly frame to frame with no inversion or whip.
+
+Fix 3 -- Detach Wait Duration: Detach had no independent control over its
+own pre-climb delay, silently reusing Startup Wait Duration unlike Pause
+Duration (which already had a Detach-specific counterpart). Added
+`detachWaitDuration` (def 1.4s) and branched on introTriggeredByDetach in
+the 'waiting' phase, mirroring the existing pauseDuration branch.
+
+All 3 verified together via a full synthetic detach cycle: piece held at
+constant y=187 through 'waiting' and the entire 'rising' climb (935
+stepped frames), bgRope chain stable throughout, piece released (y
+changing, 187->189.6) at the exact frame mainRope spawned.
+
+Separately, mid-turn: "i also see another issue" about FLICK animation 2
+("when triggered it does 1 seueunce. then stops until clicked again" --
+describing INTENDED behavior it didn't yet have) + "apply the clicking
+function to animatio n1 as well" + "set animation speed of both to 3.2".
+Animation 2 already had a click-trigger (flick2Playing/isPointInFlick2/
+flick2Rect) but never actually stopped -- flick2FrameIndex() modulo-
+wrapped forever once started, looping indefinitely instead of playing one
+pass. Animation 1 had no click-gate at all, autoplaying its ping-pong
+continuously from boot. Added the same Playing/isPointInFlick*/Rect
+pattern to animation 1 (mirroring animation 2's existing shape), and for
+BOTH: stop advancing AnimTime once one full sequence's cyclePos is
+reached, checked in update() (kept out of the *FrameIndex() getters so
+those stay pure reads), recomputed from the same cyclePos formula each
+FrameIndex() already uses so a live speed change mid-play still ends the
+sequence correctly. "One sequence" = one full ping-pong period for
+animation 1 (1->17->1), one forward pass for animation 2 (1->N, N = the
+live FLICK2_FRAME_COUNT -- noted 21 in the code as of this entry, though
+another session's own CHANGELOG entries earlier today describe actively
+revising this frame set; deferred to whatever that constant reads at any
+given time rather than hardcoding a count here). Verified via synthetic
+frame-stepping: animation 1 auto-stopped after 39 frames at 3.2x speed
+(playing/time/index all reset); animation 2 (image fails to load in this
+local sandbox -- the same already-documented ERR_CONNECTION_RESET
+limitation, not a real bug) exercised directly via its state variables,
+stopped after 31 frames at 3.2x speed. Set both Anim Speed defaults to
+3.2x in DEV_GROUPS, and also updated the live saved override for
+animation 1 in data/processed/dev-panel-settings.json (was explicitly `1`
+there, which would otherwise have kept overriding the new default on
+load); animation 2 had no saved override so its new default applies
+automatically.
+
+Verified via node --check (syntax clean, 4 separate passes across this
+session) and a live reload with a clean console (only the known FLICK-
+image ERR_CONNECTION_RESET local-server noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
