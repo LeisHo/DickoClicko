@@ -396,6 +396,10 @@ const DEV_GROUPS = [
     { key:'flick2Scale',     label:'Flick2 Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
     { key:'flick2AnimSpeed', label:'Flick2 Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:3.2 },
   ]},
+  { title:'FLICK HOLD', controls:[
+    { key:'flickHoldMaxSpeed',    label:'Flick Hold Max Speed',    type:'slider', unit:'x', min:1,   max:20,  step:0.5, def:6 },
+    { key:'flickHoldMaxDuration', label:'Flick Hold Max Duration', type:'slider', unit:'s', min:0.1, max:5,   step:0.1, def:1.5 },
+  ]},
 ];
 
 const cfg = {};
@@ -1531,9 +1535,20 @@ for (let i = 1; i <= FLICK_HOLD_FRAME_COUNT; i++){
 }
 let holdingFlick = null;
 let flickHoldTime = 0;
+// The hold-cycle speeds up the longer the hold lasts -- per explicit
+// request ("the longer I hold, the faster the frames alternate... that
+// maximum speed will be hit at the maximum hold duration"). flickHoldTime
+// alone (elapsed real hold duration) still drives the ramp's own
+// progress, but the actual frame-cycle POSITION now needs its own
+// separate accumulator (flickHoldCyclePos) advanced each frame at
+// whatever the CURRENT ramped rate is (see update()'s own tick) --
+// unlike the constant-rate case, cyclePos is no longer a pure function of
+// flickHoldTime alone (it's the accumulated integral of a rate that
+// itself changes over time), so it can't be recomputed fresh here the
+// way flickFrameIndex()/flick2FrameIndex() do.
+let flickHoldCyclePos = 0;
 function flickHoldFrameIndex(){
-  const cyclePos = flickHoldTime * FLICK_BASE_FPS;
-  return Math.floor(((cyclePos % FLICK_HOLD_FRAME_COUNT) + FLICK_HOLD_FRAME_COUNT) % FLICK_HOLD_FRAME_COUNT);
+  return Math.floor(((flickHoldCyclePos % FLICK_HOLD_FRAME_COUNT) + FLICK_HOLD_FRAME_COUNT) % FLICK_HOLD_FRAME_COUNT);
 }
 
 function flick2FrameIndex(){
@@ -3036,11 +3051,11 @@ function onPointerDown(e){
   // on its own; a new press only starts holding once that animation is
   // idle again.
   if (isPointInFlick2(e.clientX, e.clientY)){
-    if (!flick2Playing){ holdingFlick = 2; flickHoldTime = 0; }
+    if (!flick2Playing){ holdingFlick = 2; flickHoldTime = 0; flickHoldCyclePos = 0; }
     return;
   }
   if (isPointInFlick(e.clientX, e.clientY)){
-    if (!flickPlaying){ holdingFlick = 1; flickHoldTime = 0; }
+    if (!flickPlaying){ holdingFlick = 1; flickHoldTime = 0; flickHoldCyclePos = 0; }
     return;
   }
   // no interaction until the startup animation finishes -- there's either
@@ -3260,8 +3275,23 @@ function update(rawDt){
   // the sequence at the right moment.
   // Hold-preview: cycles flickHoldFrames continuously for as long as
   // either graphic is held (see onPointerDown/onPointerUp) -- independent
-  // of flickPlaying/flick2Playing, which only start once released.
-  if (holdingFlick) flickHoldTime += rawDt;
+  // of flickPlaying/flick2Playing, which only start once released. Cycle
+  // RATE ramps linearly from 1x up to Flick Hold Max Speed as elapsed
+  // hold time goes from 0 to Flick Hold Max Duration (then holds flat at
+  // Max Speed past that point) -- per explicit request ("the longer I
+  // hold, the faster the frames alternate... that maximum speed will be
+  // hit at the maximum hold duration"). flickHoldCyclePos accumulates the
+  // ACTUAL cycle position at this varying rate each frame (can't just
+  // multiply elapsed time by a single rate the way the constant-rate
+  // flickAnimTime/flick2AnimTime do, since the rate itself keeps
+  // changing) -- flickHoldTime itself still only tracks elapsed real hold
+  // duration, purely to drive rampProgress below.
+  if (holdingFlick){
+    flickHoldTime += rawDt;
+    const rampProgress = cfg.flickHoldMaxDuration > 0 ? Math.min(1, flickHoldTime / cfg.flickHoldMaxDuration) : 1;
+    const holdRate = 1 + (cfg.flickHoldMaxSpeed - 1) * rampProgress;
+    flickHoldCyclePos += rawDt * FLICK_BASE_FPS * holdRate;
+  }
   if (flickPlaying){
     flickAnimTime += rawDt;
     const flickPeriod = (FLICK_FRAME_COUNT - 1) * 2;

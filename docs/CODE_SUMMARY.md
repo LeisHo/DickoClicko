@@ -2974,3 +2974,23 @@ GOTCHAS
   (0.067->0.133->0.2->0.267->...) with the sequence completing and
   auto-stopping normally once uninterrupted, and a fresh click afterward
   correctly starting a new one.
+- **FLICK hold-preview cycle speed now ramps with hold duration.** Per
+  explicit request ("the longer I hold, the faster the frames alternate
+  ... maximum speed will be hit at the maximum hold duration"). Added
+  `flickHoldMaxSpeed` (def 6x) and `flickHoldMaxDuration` (def 1.5s) in a
+  new shared "FLICK HOLD" group. Since the cycle RATE itself now varies
+  continuously over the hold instead of being constant, `flickHoldTime *
+  FLICK_BASE_FPS` (a plain multiply, valid only for a constant rate) could
+  no longer directly produce the cycle position -- added a separate
+  accumulator, `flickHoldCyclePos`, advanced each frame in update() by
+  `rawDt * FLICK_BASE_FPS * holdRate` where `holdRate = 1 +
+  (flickHoldMaxSpeed - 1) * min(1, flickHoldTime / flickHoldMaxDuration)`
+  (linear ramp from 1x to Max Speed, then flat). `flickHoldFrameIndex()`
+  now reads `flickHoldCyclePos` directly instead of recomputing it.
+  `flickHoldCyclePos` resets to 0 alongside `flickHoldTime` at the start
+  of every new hold (onPointerDown). Verified live via synthetic
+  frame-stepping: sampled cyclePos delta over a fixed 9-frame window at 3
+  points in a held press -- near the start (~2.7 cyclePos units), near Max
+  Duration (~11.7 units, ~4.3x faster, consistent with ramping from ~1.3x
+  toward 6x), and well past Max Duration (~12 units, matching a flat 6x
+  plateau, confirming it stops accelerating once Max Duration is reached).

@@ -126,7 +126,10 @@ additions. Current state of each subsystem:
   load state, so a click works immediately on page load. A press while
   that animation is already playing is ignored (not re-armed into
   holding) so repeated impatient clicking can't interrupt/restart an
-  in-progress sequence -- see CODE_SUMMARY gotchas.
+  in-progress sequence. The hold-preview cycle itself now speeds up the
+  longer it's held, ramping linearly from 1x up to Flick Hold Max Speed
+  as elapsed hold time approaches Flick Hold Max Duration, then holding
+  flat at max past that point -- see CODE_SUMMARY gotchas.
 
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.

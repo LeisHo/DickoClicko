@@ -4953,6 +4953,46 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  08:41 PM EDT
+
+FLICK hold-preview cycle speed now ramps up the longer it's held.
+
+User: "for the hold animation sequence of a couple frames, what I want
+you to do is the longer I hold, the faster the frames alternate. And give
+me a slider to set the maximum speed at during the hold... that maximum
+speed will be hit at the maximum hold duration."
+
+Added a new shared "FLICK HOLD" dev-panel group with 2 sliders:
+`flickHoldMaxSpeed` (def 6x) and `flickHoldMaxDuration` (def 1.5s) --
+shared between both animations since they use the same hold-preview
+frames/mechanic. The cycle rate now ramps linearly from 1x up to Flick
+Hold Max Speed as elapsed hold time goes from 0 to Flick Hold Max
+Duration, then holds flat at Max Speed for any hold longer than that.
+
+Since the rate is no longer constant, `flickHoldFrameIndex()` could no
+longer just multiply elapsed hold time by a fixed rate to get the cycle
+position (that only works when the rate never changes) -- added a
+separate accumulator, `flickHoldCyclePos`, that advances each frame by
+`rawDt * FLICK_BASE_FPS * holdRate` (holdRate computed fresh each frame
+from the current ramp progress), effectively integrating the
+continuously-changing rate over time. `flickHoldFrameIndex()` now just
+reads this accumulator directly. Both `flickHoldTime` and
+`flickHoldCyclePos` reset to 0 at the start of every new hold.
+
+Verified live via synthetic frame-stepping: sampled the cyclePos delta
+over a fixed 9-frame window at 3 points during one continuous hold --
+near the very start of the hold (delta 2.722, consistent with a rate just
+above 1x), near Flick Hold Max Duration (delta 11.689, ~4.3x faster,
+consistent with approaching the 6x max), and well past Max Duration
+(delta 12.0, matching a flat plateau at 6x rather than continuing to
+accelerate). Confirms both the ramp itself and its cutoff at Max Duration
+work as specified.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
