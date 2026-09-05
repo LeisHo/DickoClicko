@@ -4187,11 +4187,20 @@ function render(){
   // it as an earlier version of this comment incorrectly assumed.
   // The startup animation keeps mainRope itself structurally valid (and
   // physically integrating, so its anchor settles naturally) throughout
-  // 'waiting'/'rising'/'pausing' -- it just isn't DRAWN yet, per the
-  // "no rope, just the circle" / "the dot climbs, not a rope" spec. Once
-  // 'growing' starts (or immediately, when the animation is off/done),
-  // mainRope draws exactly as it always has, no different code path.
-  const showMainRope = introPhase === 'done' || introPhase === 'growing';
+  // 'waiting'/'rising'/'pausing' -- it just wasn't DRAWN until 'growing'
+  // started, per the original "no rope, just the circle" / "the dot
+  // climbs, not a rope" spec. Now shown starting at 'pausing' too (the
+  // moment mainRope actually spawns/positions at the clearance line) --
+  // per explicit correction after a detach: "you see the new main rope
+  // spawn after the background rope starts falling" -- confirmed via
+  // direct tracing that mainRope stayed invisible through the ENTIRE
+  // rising climb AND pause, only appearing once 'growing' began, by which
+  // point the just-detached piece (falling immediately, per the earlier
+  // revert) had already fallen ~350px away. 'rising' alone is NOT
+  // included -- mainRope only actually spawns/positions itself at the
+  // clearance-line handoff (start of 'pausing'), so showing it any
+  // earlier would show it sitting somewhere not yet meaningful.
+  const showMainRope = introPhase !== 'waiting' && introPhase !== 'rising';
   const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, liveThickness);
   const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
   if (showMainRope) strokeRopeCurve(mainStrokePoints, liveThickness, ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor), mainEffectiveArcMult, cfg.ropeTopCurveArc);

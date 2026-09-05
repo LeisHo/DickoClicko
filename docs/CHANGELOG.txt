@@ -5082,6 +5082,50 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  09:50 PM EDT
+
+mainRope now becomes visible at 'pausing', not just 'growing' -- closes a
+real gap on detach where the piece had already fallen far away before the
+new rope appeared. Correction to the 09:31 PM entry's own conclusion.
+
+User: "no doesnt look right. i saved a screen cap. it shows me testing
+twice - i double click in the circle to trigger an emerge. you see the
+new main rope spawn after the background rope starts falling."
+
+The 09:31 PM entry tested only the BOOT sequence and confirmed mainRope's
+own POSITION is set at the clearance line, not equilibrium -- correct,
+but incomplete: it never tested the DETACH path the user was actually
+describing. Traced that path directly this time: after a double-click
+detach, the just-detached piece falls immediately (per the earlier
+revert -- this part working exactly as intended), but mainRope stayed
+completely invisible through BOTH 'rising' AND 'pausing', only appearing
+once 'growing' started -- by which point the piece had already fallen
+from ~180 to ~535 in the same coordinate space. Root cause: `showMainRope
+= introPhase === 'done' || introPhase === 'growing'`, an original,
+deliberate spec ("the dot climbs, not a rope") shared by both the boot
+and detach paths.
+
+Surfaced the conflict (this is deliberate existing behavior, not a bug)
+via AskUserQuestion rather than silently changing it -- asked whether the
+fix should apply to both boot and detach, or detach only. Answer: both.
+
+Changed `showMainRope` to `introPhase !== 'waiting' && introPhase !==
+'rising'` -- true starting at 'pausing', the exact moment mainRope
+spawns/positions at the clearance line. 'rising' stays excluded
+deliberately: mainRope doesn't actually spawn until the clearance-line
+handoff, so showing it any earlier would show it sitting somewhere not
+yet meaningful (mid-hidden-integration, not yet positioned for real).
+
+Verified live via the same detach trace as the investigation: showMainRope
+now flips true at step 67 (start of 'pausing', mainY already at the
+clearance line, ~169.6) instead of step 98 ('growing' start) -- 31 frames
+(~0.5s) earlier, right when the rope actually spawns, closing the gap.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

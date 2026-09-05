@@ -3025,3 +3025,32 @@ GOTCHAS
   animTime froze at exactly 0.05 for 27+ consecutive frames while idx sat
   at 3, then resumed advancing normally the instant the frame "loaded",
   reaching idx 12 within 10 more frames with no skips.
+- **mainRope now becomes visible at 'pausing', not just 'growing' --
+  closes a real gap on detach where the piece had already fallen far
+  away before the new rope appeared.** `showMainRope` was `introPhase ===
+  'done' || introPhase === 'growing'`, per an original, deliberate spec
+  ("the dot climbs, not a rope" -- nothing but the circle + climbing
+  bgRope visible until growth starts). This is shared code for both the
+  first boot AND every detach-triggered restart. Investigated (initially
+  believed correct, per the earlier "spawn tied to clearance line, not
+  equilibrium" gotcha) after the user provided a screen recording
+  showing a real problem specifically on detach: "you see the new main
+  rope spawn after the background rope starts falling." Traced live:
+  after a double-click detach, the just-detached piece falls immediately
+  (per the earlier revert) while mainRope stays fully invisible through
+  BOTH 'rising' AND 'pausing' -- by the time 'growing' finally made it
+  visible, the piece had already fallen from ~180 to ~535 (well off the
+  visible circle area). mainRope's own POSITION was already correctly
+  set at the clearance line (start of 'pausing', confirmed in the earlier
+  gotcha) -- the remaining gap was purely about when it becomes visible,
+  a separate concern. Confirmed via AskUserQuestion that the fix should
+  apply to both boot and detach (not detach-only) -- changed
+  `showMainRope` to `introPhase !== 'waiting' && introPhase !== 'rising'`
+  (i.e., true starting at 'pausing'). 'rising' is deliberately still
+  excluded -- mainRope only actually spawns/positions at the clearance-
+  line handoff, so showing it any earlier would show it sitting
+  somewhere not yet meaningful. Verified live via the same detach trace:
+  showMainRope now flips true at step 67 (start of 'pausing', mainY
+  already at the clearance line ~169.6) instead of step 98 ('growing'
+  start) -- 31 frames (~0.5s) earlier, right when the rope actually
+  spawns.

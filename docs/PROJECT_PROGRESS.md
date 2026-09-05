@@ -95,7 +95,11 @@ additions. Current state of each subsystem:
   boundary right after spawning -- stays in effect until the anchor
   actually reaches that boundary (not just until the startup sequence
   finishes), so there's no abrupt gravity-switch jolt even at extreme
-  slider values -- see CODE_SUMMARY gotchas.
+  slider values. mainRope itself now becomes visible starting at
+  'pausing' (the moment it actually spawns/positions at the clearance
+  line) instead of waiting for 'growing' too -- on a detach, this closes
+  a real gap where the just-detached piece had already fallen far away
+  before anything new appeared -- see CODE_SUMMARY gotchas.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a
