@@ -3327,9 +3327,31 @@ function update(rawDt){
   // (retried every subsequent frame) instead of the clock racing past it
   // -- every frame is guaranteed to actually display before the sequence
   // can complete, regardless of how long images take to arrive.
+  // isFrameBlocking(): true only while an image is genuinely STILL
+  // LOADING (complete === false). A FAILED load (a real, recurring
+  // condition for these exact FLICK images -- see the ERR_CONNECTION_RESET
+  // gotcha already documented for this project) settles into complete
+  // === true / naturalWidth === 0, a permanent end-state indistinguishable
+  // from "loaded successfully" by the `complete` flag alone. The pause
+  // fix above (see its own comment) originally checked `complete &&
+  // naturalWidth > 0` to decide whether to advance -- which correctly
+  // paused on a slow-but-eventually-successful load, but ALSO permanently
+  // froze the sequence forever on a genuinely FAILED one, since that
+  // condition can never become true. Confirmed directly: a deliberately
+  // 404'd image settles at {complete:true, naturalWidth:0} and stays
+  // there. Reported as "same animation issue" recurring after the
+  // original fix shipped -- this is that regression. Now only blocks
+  // advancement while complete is false (genuinely still in flight);
+  // once complete is true, advance regardless of naturalWidth --
+  // matching the ORIGINAL graceful-degradation behavior for a failed
+  // frame (render() already skips drawing it either way) while still
+  // fixing the original bug (a merely slow frame no longer gets skipped
+  // over by the clock racing ahead of it).
+  function isFrameBlocking(img){
+    return !!img && !img.complete;
+  }
   if (flickPlaying){
-    const currentImg = flickFrames[flickFrameIndex()];
-    if (currentImg && currentImg.complete && currentImg.naturalWidth > 0){
+    if (!isFrameBlocking(flickFrames[flickFrameIndex()])){
       flickAnimTime += rawDt;
       const flickPeriod = (FLICK_FRAME_COUNT - 1) * 2;
       if (flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed >= flickPeriod){
@@ -3339,8 +3361,7 @@ function update(rawDt){
     }
   }
   if (flick2Playing){
-    const current2Img = flickFrames2[flick2FrameIndex()];
-    if (current2Img && current2Img.complete && current2Img.naturalWidth > 0){
+    if (!isFrameBlocking(flickFrames2[flick2FrameIndex()])){
       flick2AnimTime += rawDt;
       if (flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed >= FLICK2_FRAME_COUNT){
         flick2Playing = false;
