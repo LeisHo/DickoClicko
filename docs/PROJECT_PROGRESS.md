@@ -123,7 +123,10 @@ additions. Current state of each subsystem:
   animation 1 by default) plays one forward pass (1->N). Both Anim Speed
   defaults are 3.2x (live values have since moved further via direct
   tuning). Hit-test rects are computed every frame independent of image
-  load state, so a click works immediately on page load.
+  load state, so a click works immediately on page load. A press while
+  that animation is already playing is ignored (not re-armed into
+  holding) so repeated impatient clicking can't interrupt/restart an
+  in-progress sequence -- see CODE_SUMMARY gotchas.
 
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.
@@ -165,18 +168,3 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
   refreshing resolves it, this closes as expected Vercel behavior, not
   a bug; if it does NOT resolve it even after waiting, that's a real
   signal something else is wrong and needs a fresh look.
-- **FLICK animation clicks reportedly not triggering the real sequence,
-  still open.** Reported as "when i simply click either of them, they
-  should run through the entire sequence" not happening. Dev-panel
-  overlap (the mobile panel geometry sits almost exactly over both
-  animations' positions) was the leading hypothesis but the user
-  confirmed it's NOT the cause (still broken with the panel hidden).
-  Re-checked the code directly -- no duplicate/conflicting event
-  listener, no rect overlap between the two animations at current live
-  settings, DPR/coordinate handling looks correct in principle. Could not
-  reproduce via a real dispatched click in this dev environment, since
-  `window.innerWidth`/`innerHeight` read 0 persistently here (a sandbox-
-  only condition, not expected on the user's real device), which poisons
-  this specific environment's own click-coordinate testing. Needs more
-  precise repro detail from the user (device/browser, exactly what
-  happens on click) to make further progress.

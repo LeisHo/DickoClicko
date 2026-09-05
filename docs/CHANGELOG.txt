@@ -4902,6 +4902,57 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  08:25 PM EDT
+
+FLICK animation click bug finally root-caused and fixed -- resolves the
+still-open item from the 12:14 PM entry.
+
+User gave a precise repro: "It seems to run through a couple of frames,
+and then click, it runs more frames, and the next click, more frames.
+And then maybe on the sixth or seventh click, does it run through the
+entire sequence." This pinpointed a specific, testable mechanism the
+earlier device/environment-based hypotheses (dev-panel overlap, DPR
+scaling) never addressed: onPointerDown's flick checks unconditionally
+re-entered holding mode on EVERY press, with no regard for whether that
+animation was already mid-sequence. Since onPointerUp's release handler
+always resets flickAnimTime/flick2AnimTime to 0, any press landing while
+a sequence was still playing would silently restart it from scratch --
+so repeated impatient clicking could never let a sequence complete,
+capping visible progress at whatever gap happened to separate the last
+two clicks, with completion only occurring on whichever attempt happened
+to leave a big enough gap to finish uninterrupted. Exactly matches "a
+couple of frames... more frames... sixth or seventh click."
+
+Confirmed via direct simulation before fixing anything: 7 simulated
+clicks spaced a fixed 4 frames apart showed flickAnimTime pinned to
+EXACTLY the same value (0.067s, idx 4) every single time -- proving the
+reset-on-every-click theory outright rather than assuming it.
+
+Fixed by guarding both flick checks in onPointerDown: `if
+(!flickPlaying){ holdingFlick = 1; ... }` / same for flick2 -- a press
+while that animation is already playing is now simply ignored, letting
+the in-progress sequence finish on its own; a new press only starts
+holding once that animation is idle again.
+
+Verified via the same simulation methodology post-fix: the identical
+7-click test now shows flickAnimTime strictly increasing each click
+(0.067, 0.133, 0.2, 0.267, 0.333, 0.4, 0.467 -- monotonic, no resets),
+the sequence completing and auto-stopping normally (flickPlaying false,
+flickAnimTime/idx back to 0) once left uninterrupted, and a fresh click
+afterward correctly starting a brand new sequence rather than being
+permanently blocked.
+
+This closes the "FLICK animation clicks reportedly not triggering the
+real sequence" open item from the 12:14 PM entry -- the dev-panel-overlap
+and DPR hypotheses investigated there were both real dead ends, but the
+user's more precise repro this time made the actual mechanism directly
+testable rather than requiring further guessing.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

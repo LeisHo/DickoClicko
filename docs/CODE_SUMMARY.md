@@ -2958,3 +2958,19 @@ GOTCHAS
   fixing clicks silently failing right after page load -- see CHANGELOG.
 - **Regular rope-cut piece delay investigated, not a bug** -- see
   CHANGELOG for the `cutThroughDuration()`/Cut Speed mechanism.
+- **FLICK animations: repeated clicks no longer interrupt an in-progress
+  sequence.** `onPointerDown`'s flick checks now only enter holding mode
+  when that animation ISN'T already playing (`if (!flickPlaying){...}` /
+  `if (!flick2Playing){...}`) -- previously every press unconditionally
+  re-entered holding regardless of whether a sequence was mid-flight, and
+  its own release always reset `flickAnimTime`/`flick2AnimTime` to 0,
+  capping progress at whatever gap happened to exist before the NEXT
+  click. Reported as "run through a couple of frames, and then click, it
+  runs more frames... sixth or seventh click, does it run through the
+  entire sequence" -- confirmed via direct simulation of repeated clicks
+  a fixed few frames apart: `flickAnimTime` reset to exactly the same
+  value every click before the fix (permanently capped, never
+  progressing further), then strictly increased click over click after it
+  (0.067->0.133->0.2->0.267->...) with the sequence completing and
+  auto-stopping normally once uninterrupted, and a fresh click afterward
+  correctly starting a new one.

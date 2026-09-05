@@ -3018,14 +3018,29 @@ function onPointerDown(e){
   // startup-animation-only gate should also apply to an unrelated overlay
   // graphic. Checked in on-screen z-order (2 drawn last/on top -- see
   // render() -- so 2 is checked first) in case their rects ever overlap.
+  // A press while that animation is ALREADY playing is ignored (not
+  // reset into holding) -- previously every press unconditionally
+  // re-entered holding mode, which on release restarted flickAnimTime at
+  // 0 regardless of how far the current sequence had already gotten.
+  // Reported as "it seems to run through a couple of frames, and then
+  // click, it runs more frames, and the next click, more frames...
+  // sixth or seventh click, does it run through the entire sequence" --
+  // confirmed via direct simulation of repeated quick clicks a few
+  // frames apart: flickAnimTime reset to exactly 0 every single click,
+  // capping progress at whatever the gap to the NEXT click happened to
+  // allow (a few frames' worth each time) rather than ever reaching the
+  // full sequence, unless one particular gap happened to be long enough
+  // to finish uninterrupted -- exactly the "random click count before it
+  // finally completes" pattern reported. Now a press during an
+  // already-in-progress sequence simply does nothing, letting it finish
+  // on its own; a new press only starts holding once that animation is
+  // idle again.
   if (isPointInFlick2(e.clientX, e.clientY)){
-    holdingFlick = 2;
-    flickHoldTime = 0;
+    if (!flick2Playing){ holdingFlick = 2; flickHoldTime = 0; }
     return;
   }
   if (isPointInFlick(e.clientX, e.clientY)){
-    holdingFlick = 1;
-    flickHoldTime = 0;
+    if (!flickPlaying){ holdingFlick = 1; flickHoldTime = 0; }
     return;
   }
   // no interaction until the startup animation finishes -- there's either
