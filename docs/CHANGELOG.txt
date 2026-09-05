@@ -4993,6 +4993,67 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  08:57 PM EDT
+
+FLICK sequences now pause on an unloaded frame instead of racing past it
+-- fixes the real (different) bug behind the animation still looking
+broken after the previous click-interruption fix.
+
+User gave a precise repro that explicitly ruled out the prior fix's own
+scenario: "I wasn't talking about interrupting an ongoing animation...
+I click the animation once, and the animation only seems to show like
+two, three frames. Then it goes back to waiting position. I click it
+again, then it runs maybe four, five frames... I click it again... six,
+seven... I have to keep doing this until it reaches the max number of
+frames. Then from that point on, the animation will run in full... it
+seems to happen more on a hard refresh... it doesn't seem time-based...
+I did a hard refresh and waited half a minute, still same issue."
+
+That last detail (waiting didn't help) pointed away from a naive
+"images still loading" theory and toward something odder -- checked
+render()'s own draw guard again: `if (img.complete && naturalWidth > 0)`
+silently skips drawing a frame whose image isn't ready, with NO fallback.
+Checked update()'s flickPlaying/flick2Playing blocks: flickAnimTime
+advanced on real elapsed time ALONE, with no awareness of whether the
+frame it currently mapped to had actually drawn. This means a sequence's
+own internal clock runs to completion and cleanly returns to idle
+regardless of how many of its frames ever visually appeared -- so on a
+hard refresh (which bypasses the browser cache for ALL ~40+ FLICK images
+across both animations simultaneously, and 17-21 frames at ~500KB+ each
+is 10+MB per animation), only however many images happened to finish
+downloading within that ~0.3s real-time window would draw, then the
+sequence would complete "on schedule" and settle back to idle looking
+truncated. Each LATER click, more images have finished downloading in
+the background (independent of whether any click happened), so more
+frames draw -- explaining the progressive 2-3, 4-5, 6-7 pattern exactly.
+The "waiting 30s didn't help" detail now also makes sense: 10+MB of
+images per animation can genuinely exceed 30s depending on real
+connection speed and how many of the ~40+ total images are competing for
+bandwidth/connections at once -- not a contradiction of a loading-related
+cause, just evidence the wait wasn't long enough for THIS specific
+payload size.
+
+Fixed by checking the CURRENT (not-yet-advanced) frame's own load state
+before advancing flickAnimTime/flick2AnimTime in update() -- an unloaded
+frame now simply holds the sequence there (re-checked every subsequent
+frame) instead of the clock advancing past it, so every frame is
+guaranteed to actually display before the sequence can complete.
+
+Verified via a deterministic simulation (since this sandbox's own
+ERR_CONNECTION_RESET flakiness isn't reliably reproducible on demand):
+replaced frame index 3 with a fresh `new Image()` that never gets a src
+(so `.complete` stays false forever), clicked, and stepped 30 frames --
+confirmed flickAnimTime froze at exactly 0.05 and idx stayed pinned at 3
+for 27+ consecutive frames (would have continued indefinitely). Then gave
+that same Image a real 1x1 PNG data-URI src (simulating it finishing
+download) and stepped 10 more frames -- confirmed animTime immediately
+resumed advancing normally, reaching idx 12 with no skipped frames.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

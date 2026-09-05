@@ -129,7 +129,12 @@ additions. Current state of each subsystem:
   in-progress sequence. The hold-preview cycle itself now speeds up the
   longer it's held, ramping linearly from 1x up to Flick Hold Max Speed
   as elapsed hold time approaches Flick Hold Max Duration, then holding
-  flat at max past that point -- see CODE_SUMMARY gotchas.
+  flat at max past that point. A playing sequence now pauses on whichever
+  frame isn't loaded yet instead of racing past it on a real-time clock
+  -- fixes a real bug where a hard refresh (bypassing the browser cache
+  for all ~40+ frame images) made a sequence look truncated, showing
+  progressively more frames on each later click as more images finished
+  downloading in the background -- see CODE_SUMMARY gotchas.
 
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.

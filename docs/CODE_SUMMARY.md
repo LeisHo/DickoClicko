@@ -2994,3 +2994,34 @@ GOTCHAS
   Duration (~11.7 units, ~4.3x faster, consistent with ramping from ~1.3x
   toward 6x), and well past Max Duration (~12 units, matching a flat 6x
   plateau, confirming it stops accelerating once Max Duration is reached).
+- **FLICK sequences now pause on an unloaded frame instead of racing past
+  it -- fixes truncated playback on a hard refresh.** Reported very
+  precisely: "I click the animation once, and the animation only seems to
+  show like two, three frames. Then it goes back to waiting position. I
+  click it again, then it runs maybe four, five frames... I have to keep
+  doing this until it reaches the max number of frames" -- explicitly
+  NOT a hold-interruption repeat of the prior bug (each attempt was
+  waited out to completion before the next click) and explicitly not
+  fixed by waiting 30s after a hard refresh before the first click.
+  Root cause: render()'s own draw guard (`img.complete && naturalWidth >
+  0`) already silently skips drawing any frame whose image hasn't
+  finished loading -- but flickAnimTime/flick2AnimTime advanced on real
+  elapsed time ALONE in update(), completely independent of whether the
+  frame it mapped to actually drew that frame. So a sequence still
+  reached its own real-time completion threshold and cleanly returned to
+  idle "on schedule" even when most of its higher-index frames (still
+  downloading -- a hard refresh bypasses the browser cache for ALL ~40+
+  FLICK images across both animations at once, and 17-21 frames at
+  ~500KB+ each is 10+MB per animation, easily exceeding a 30s real-world
+  load window depending on connection) never actually drew at all.
+  Fixed by checking the CURRENT (not-yet-advanced) frame's own load state
+  before advancing flickAnimTime/flick2AnimTime each frame -- an unloaded
+  frame simply holds the sequence there (re-checked every subsequent
+  frame) instead of the clock racing past it, guaranteeing every frame
+  actually displays before the sequence can complete, regardless of how
+  long images take to arrive. Verified live via a deterministic
+  simulation (swapping frame index 3 for a never-loading `new Image()`,
+  then later giving it a real 1x1 data-URI src to simulate it finishing):
+  animTime froze at exactly 0.05 for 27+ consecutive frames while idx sat
+  at 3, then resumed advancing normally the instant the frame "loaded",
+  reaching idx 12 within 10 more frames with no skips.

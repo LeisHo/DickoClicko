@@ -3292,19 +3292,48 @@ function update(rawDt){
     const holdRate = 1 + (cfg.flickHoldMaxSpeed - 1) * rampProgress;
     flickHoldCyclePos += rawDt * FLICK_BASE_FPS * holdRate;
   }
+  // Pauses on whichever frame the sequence is CURRENTLY showing if that
+  // specific image hasn't finished loading yet, rather than letting the
+  // clock advance regardless. Reported as "the animation only seems to
+  // show like two, three frames. Then it goes back to waiting position...
+  // I click it again, then it runs maybe four, five frames... eventually
+  // it runs in full" -- root cause: render()'s own draw guard
+  // (`img.complete && naturalWidth > 0`) already silently skips drawing
+  // any frame whose image isn't ready, but flickAnimTime/flick2AnimTime
+  // used to advance on real elapsed time ALONE, completely independent of
+  // whether the frame it mapped to actually drew -- so the sequence
+  // still reached its own completion threshold and cleanly returned to
+  // idle "on schedule" even though most of its higher-index frames (still
+  // downloading, especially right after a hard refresh where the browser
+  // cache is bypassed for all ~40+ FLICK images across both animations)
+  // never visibly drew at all. Confirmed NOT a simple "wait longer"
+  // fix -- 17-21 frames at ~500KB+ each is 10+MB per animation, which can
+  // easily exceed a 30s real-world load window depending on connection,
+  // matching the user's own report that waiting didn't help. Checking the
+  // CURRENT (not-yet-advanced) frame's own load state before advancing
+  // means a slow-loading frame simply holds the sequence there
+  // (retried every subsequent frame) instead of the clock racing past it
+  // -- every frame is guaranteed to actually display before the sequence
+  // can complete, regardless of how long images take to arrive.
   if (flickPlaying){
-    flickAnimTime += rawDt;
-    const flickPeriod = (FLICK_FRAME_COUNT - 1) * 2;
-    if (flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed >= flickPeriod){
-      flickPlaying = false;
-      flickAnimTime = 0;
+    const currentImg = flickFrames[flickFrameIndex()];
+    if (currentImg && currentImg.complete && currentImg.naturalWidth > 0){
+      flickAnimTime += rawDt;
+      const flickPeriod = (FLICK_FRAME_COUNT - 1) * 2;
+      if (flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed >= flickPeriod){
+        flickPlaying = false;
+        flickAnimTime = 0;
+      }
     }
   }
   if (flick2Playing){
-    flick2AnimTime += rawDt;
-    if (flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed >= FLICK2_FRAME_COUNT){
-      flick2Playing = false;
-      flick2AnimTime = 0;
+    const current2Img = flickFrames2[flick2FrameIndex()];
+    if (current2Img && current2Img.complete && current2Img.naturalWidth > 0){
+      flick2AnimTime += rawDt;
+      if (flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed >= FLICK2_FRAME_COUNT){
+        flick2Playing = false;
+        flick2AnimTime = 0;
+      }
     }
   }
   if (introPhase !== 'done') updateIntro(rawDt);
