@@ -5126,6 +5126,53 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-05  -  07:16 PM EDT
+
+Fixed a real regression in the 08:57 PM (09-04) "pause on unloaded frame"
+fix -- it could freeze a sequence PERMANENTLY on a genuinely FAILED
+frame, not just pause it on a slow one.
+
+User (next day): "same animation issue." Clarified via AskUserQuestion:
+truncated playback again specifically (not the click-interrupt or
+hold-preview issues also fixed recently).
+
+Re-verified the original fix's code was still intact and unchanged (no
+regression from later commits) before investigating further. That fix's
+own check was `img.complete && img.naturalWidth > 0` -- true only once a
+frame has actually finished loading successfully. Directly tested what a
+FAILED image load (a deliberately 404'd test image) actually settles
+into: `{complete: true, naturalWidth: 0}` -- a PERMANENT end-state,
+indistinguishable from "still loading" by that check alone, since it can
+never become true. This project already has an established, recurring
+ERR_CONNECTION_RESET failure mode for these exact FLICK images (documented
+gotcha, observed repeatedly throughout this whole session's own local
+testing) -- meaning a genuinely FAILED frame (not just a slow one) would
+now freeze the sequence forever instead of the ORIGINAL pre-fix code's
+graceful degradation (skip drawing that one frame, keep the clock
+running). This is almost certainly why "same animation issue" recurred --
+a different, worse failure mode with a similar surface symptom
+(sequence doesn't complete normally).
+
+Fixed by checking ONLY `!img.complete` to decide whether to block
+advancement -- once the browser has resolved the request AT ALL (success
+OR failure), the sequence advances past that frame regardless of
+naturalWidth, restoring the original skip-on-failure behavior while
+keeping the original fix's real benefit (a merely slow frame still
+correctly pauses the clock instead of getting skipped over early).
+
+Verified live via 2 separate real network conditions, not just code
+reading: (1) faked frame 5 as a still-in-flight 404 request -- confirmed
+the sequence paused at exactly that frame (animTime frozen) for as long
+as the request stayed pending; (2) waited for that same real request to
+actually resolve (still a 404 response) -- confirmed the sequence
+immediately resumed past it and completed normally (flickPlaying false,
+back to idle) rather than staying frozen forever.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

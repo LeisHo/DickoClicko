@@ -3054,3 +3054,27 @@ GOTCHAS
   already at the clearance line ~169.6) instead of step 98 ('growing'
   start) -- 31 frames (~0.5s) earlier, right when the rope actually
   spawns.
+- **Correction to the "pause on unloaded frame" fix -- it could freeze a
+  sequence PERMANENTLY on a genuinely FAILED frame, not just pause it.**
+  That fix's own check was `img.complete && img.naturalWidth > 0`, true
+  only once a frame has ACTUALLY loaded. Confirmed directly (a
+  deliberately 404'd test image): a FAILED load also settles `complete`
+  to `true`, but `naturalWidth` stays `0` forever -- a permanent
+  end-state indistinguishable from "still loading" by that check alone.
+  Since this project already has an established, recurring
+  ERR_CONNECTION_RESET failure mode for these exact FLICK images (see
+  the FLICK animation gotcha above), a genuinely failed frame -- not just
+  a slow one -- would now freeze the sequence forever instead of the
+  ORIGINAL code's graceful degradation (skip drawing that one frame,
+  keep going). Reported back as "same animation issue" recurring after
+  the original fix shipped. Fixed by checking ONLY `!img.complete`
+  (genuinely still in flight) to decide whether to block advancement --
+  once the browser has resolved the request AT ALL (success or failure),
+  the sequence advances regardless of naturalWidth, restoring the
+  original skip-on-failure behavior while still fixing the original bug
+  (a merely slow frame no longer gets skipped over early). Verified live
+  via 2 separate real network conditions: (1) a still-in-flight fake-404
+  request correctly paused the sequence at that exact frame for as long
+  as the request was pending; (2) once that same request actually
+  resolved (still a 404), the sequence immediately resumed and completed
+  normally rather than staying frozen.
