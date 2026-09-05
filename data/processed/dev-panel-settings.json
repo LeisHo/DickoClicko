@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 9.459848261474853,
+    "ropeLength": 9.513324917748546,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -96,8 +96,8 @@
     "introWaitDuration": 0.5,
     "introRiseSpeed": 5.5,
     "startupRiseGravity": 0.1,
-    "introRiseClearOffsetEnabled": false,
-    "introRiseClearOffset": -1.5,
+    "introRiseClearOffsetEnabled": true,
+    "introRiseClearOffset": 3.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "introPauseDuration": 0.5,
@@ -116,9 +116,19 @@
     "flick2X": 15,
     "flick2Y": 60,
     "flick2Scale": 50,
-    "flick2AnimSpeed": 4.6
+    "flick2AnimSpeed": 4.6,
+    "flickHoldMaxSpeed": 6,
+    "flickHoldMaxDuration": 1.5
   },
   "order": [
+    {
+      "key": "FLICK HOLD",
+      "collapsed": true,
+      "settings": [
+        "flickHoldMaxSpeed",
+        "flickHoldMaxDuration"
+      ]
+    },
     {
       "key": "FLICK ANIMATION 2",
       "collapsed": true,
@@ -292,11 +302,11 @@
     }
   ],
   "panelGeometry": {
-    "mobile": {
-      "left": 0,
-      "top": 0,
-      "width": 229,
-      "height": 761.6607055664062,
+    "desktop": {
+      "left": 1162.0250244140625,
+      "top": 29.125,
+      "width": 719.9625244140625,
+      "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -309,11 +319,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "desktop": {
-      "left": 1363.625,
-      "top": 29.125,
-      "width": 518.375,
-      "height": 570.03125,
+    "mobile": {
+      "left": 0,
+      "top": 0,
+      "width": 229,
+      "height": 761.6607055664062,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
