@@ -103,7 +103,10 @@ additions. Current state of each subsystem:
   `GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET` env vars configured on the
   deployment) -> File System Access API (local git-tracked file write) ->
   session-only local fallback when neither is reachable. A visible
-  click/hold/double-click diagnostic log lives inside the panel itself.
+  click/hold/double-click diagnostic log lives inside the panel itself --
+  now also logs FLICK animation presses/releases (down:flick[2],
+  up:flick[2]-play, and an -ignored-playing variant when a press is
+  ignored because that animation is already playing).
 - **Mobile/robustness**: `vh()`/`vw()`/`vmin()`/`resizeCanvas()` fall back
   safely instead of multiplying by zero when `window.innerWidth`/
   `innerHeight` read 0 (a real early-page-life quirk on mobile

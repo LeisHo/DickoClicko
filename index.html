@@ -3051,11 +3051,21 @@ function onPointerDown(e){
   // on its own; a new press only starts holding once that animation is
   // idle again.
   if (isPointInFlick2(e.clientX, e.clientY)){
-    if (!flick2Playing){ holdingFlick = 2; flickHoldTime = 0; flickHoldCyclePos = 0; }
+    if (!flick2Playing){
+      holdingFlick = 2; flickHoldTime = 0; flickHoldCyclePos = 0;
+      logClick('down:flick2', { x: e.clientX, y: e.clientY });
+    } else {
+      logClick('down:flick2-ignored-playing', { x: e.clientX, y: e.clientY });
+    }
     return;
   }
   if (isPointInFlick(e.clientX, e.clientY)){
-    if (!flickPlaying){ holdingFlick = 1; flickHoldTime = 0; flickHoldCyclePos = 0; }
+    if (!flickPlaying){
+      holdingFlick = 1; flickHoldTime = 0; flickHoldCyclePos = 0;
+      logClick('down:flick', { x: e.clientX, y: e.clientY });
+    } else {
+      logClick('down:flick-ignored-playing', { x: e.clientX, y: e.clientY });
+    }
     return;
   }
   // no interaction until the startup animation finishes -- there's either
@@ -3113,12 +3123,14 @@ function onPointerUp(e){
     holdingFlick = null;
     flick2Playing = true;
     flick2AnimTime = 0;
+    logClick('up:flick2-play', { x: e.clientX, y: e.clientY, heldMs: Math.round(flickHoldTime * 1000) });
     return;
   }
   if (holdingFlick === 1){
     holdingFlick = null;
     flickPlaying = true;
     flickAnimTime = 0;
+    logClick('up:flick-play', { x: e.clientX, y: e.clientY, heldMs: Math.round(flickHoldTime * 1000) });
     return;
   }
   if (!downInfo) return;

@@ -5054,6 +5054,34 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  09:22 PM EDT
+
+FLICK animation presses/releases now appear in the dev panel's own click
+log, per explicit request ("include clicks on animations in the click
+log").
+
+Added logClick() calls at the same 2 sites already touched by the
+click-interruption fix from earlier today: onPointerDown (down:flick /
+down:flick2 when a hold actually starts, down:flick-ignored-playing /
+down:flick2-ignored-playing when a press is ignored because that
+animation is already playing -- useful for directly confirming that fix
+is working from the log alone) and onPointerUp (up:flick-play /
+up:flick2-play, including heldMs so a real press-and-hold's duration is
+visible same as the rope's own hold-to-charge-punch log entries).
+
+Verified live: dispatched a real PointerEvent pointerdown/pointerup pair
+at the flick graphic's own rect (after a single manual render() tick to
+populate it, since this sandbox's rAF doesn't tick on its own) and
+confirmed both `[click] down:flick {x:60, y:680}` and `[click]
+up:flick-play {x:60, y:680, heldMs:0}` appeared in the console (the same
+console.log() line logClick() already always emits, mirroring the
+on-screen log).
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
