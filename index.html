@@ -2112,6 +2112,23 @@ let introGrowStartLengthPx = 0;
 // definition (the only way to re-enter 'waiting' after boot is another
 // detach), so staying true is correct, not stale.
 let introTriggeredByDetach = false;
+// Gates Startup Rise Gravity vs. Gravity Strength -- per explicit
+// correction ("i want the gravity to stay, the startup gravity, until
+// they reach the equilibrium point. Then it becomes real gravity"),
+// replacing the earlier introPhase!=='done' gate (which switched gravity
+// the instant the whole startup SEQUENCE finished, regardless of whether
+// the anchor had actually settled yet -- an abrupt, un-asked-for jolt at
+// extreme Startup Rise Gravity values, see update()'s own gravityAccel
+// comment for the full mechanism). false means "still waiting to settle"
+// (use Startup Rise Gravity); becomes true the instant mainRope's anchor
+// is first found resting exactly on its own physics boundary (see
+// update()'s own check) and stays true until the anchor gets manually
+// repositioned again -- reset to false at every point that happens: here
+// at module scope (the very first, boot-time spawn), in
+// detachEntireRopeAndRestartIntro() (a fresh detach-triggered spawn), and
+// at updateIntro()'s own 'rising'->'pausing' handoff (the anchor jumping
+// from wherever it was hidden-integrating to the real climb-derived spot).
+let introGravitySettled = false;
 // Compounds by cfg.detachThicknessMultiplier on every full-rope detach --
 // "every subsequent time the rope is fully cut, it increases in
 // thickness by [the multiplier]", per explicit request. Applied only to
@@ -2299,6 +2316,12 @@ function updateIntro(rawDt){
       mainRope.points[0].y = bgRope.points[0].y;
       mainRope.points[0].oldx = mainRope.points[0].x;
       mainRope.points[0].oldy = mainRope.points[0].y;
+      // The anchor just got teleported to a new spot (the climb-derived
+      // spawn point) -- whatever equilibrium it may have reached while
+      // hidden no longer applies to this new position, so re-arm Startup
+      // Rise Gravity until it settles here too (see introGravitySettled's
+      // own comment).
+      introGravitySettled = false;
       // See makeChain()'s own comment for the real fix to "it stays this
       // way for 5-10 seconds then it settles to the position i expect" --
       // a nudge attempted HERE, at the handoff, was tried first and
@@ -2431,6 +2454,9 @@ function detachEntireRopeAndRestartIntro(){
   // behavior) for the very first boot-time rope, which never sets this.
   mainRope.detachTipScaleProgress = 0;
   introTriggeredByDetach = true;
+  // A fresh mainRope (resetMainRope() above) means a fresh anchor that
+  // hasn't settled anywhere yet -- re-arm Startup Rise Gravity.
+  introGravitySettled = false;
   ropeThicknessMultiplier *= cfg.detachThicknessMultiplier;
   introPhase = 'waiting';
   introTimer = 0;
@@ -3239,21 +3265,34 @@ function update(rawDt){
   if (introPhase !== 'done') updateIntro(rawDt);
   const dt = rawDt * cfg.ropeAnimSpeed;
   // Startup Rise Gravity replaces normal Gravity Strength for BOTH
-  // mainRope and bgRope (they share this one gravityAccel below) for as
-  // long as the startup/detach animation sequence is still running --
-  // per explicit request ("provide me a separate startup rise gravity
-  // slider taht will allow me to slow down that fall"), reported after
-  // tracing a real post-spawn settle: the anchor spawns above its actual
-  // resting boundary whenever Startup Rise Clear Offset is positive, and
-  // normal gravity was pulling it back down to that boundary in ~6
-  // frames (~0.1s) -- fast enough to read as a sudden jump rather than a
-  // visible settle. A lower Startup Rise Gravity slows exactly that
-  // moment down, independent of gameplay's own Gravity Strength. Applies
-  // through 'pausing'/'growing' too (not just the instant of the handoff)
-  // so bgRope's own tail -- synced to the same anchor position but still
-  // separately integrating its own chain below -- settles at the same
-  // visible pace rather than falling fast while the anchor falls slow.
-  const gravityAccel = vh(90) * (introPhase !== 'done' ? cfg.startupRiseGravity : cfg.gravityStrength);
+  // mainRope and bgRope (they share this one gravityAccel below) until
+  // the anchor actually REACHES equilibrium -- per explicit correction
+  // ("i want the gravity to stay, the startup gravity, until they reach
+  // the equilibrium point. Then it becomes real gravity"), replacing an
+  // earlier introPhase!=='done' gate that switched gravity back to full
+  // strength the instant the whole startup SEQUENCE finished, regardless
+  // of whether the anchor had actually settled -- confirmed to produce a
+  // real, abrupt discontinuity at extreme Startup Rise Gravity values
+  // (tracing a live example: anchor sitting still at ~148 while
+  // introPhase was 'growing', then snapping hard toward true equilibrium
+  // the instant 'growing' completed and gravity jumped from 0.01 to
+  // 1.7 -- 170x -- in one frame). integrateChain()'s own
+  // boundaryConstraint clamps a point to EXACTLY boundaryConstraint.radius
+  // the instant it's found beyond it (see that function), so "distance
+  // from center equals the boundary radius" is a precise, immediate,
+  // reliable signal the anchor has reached and is now resting against its
+  // boundary -- checked using last frame's already-integrated position,
+  // before this frame's own integrateChain() call below. introGravitySettled
+  // itself (see its own comment) is reset to false at every point the
+  // anchor gets manually repositioned (boot, a fresh detach, and the
+  // 'rising'->'pausing' handoff), so a newly-teleported anchor re-arms
+  // Startup Rise Gravity until IT settles too, independent of intro phase.
+  if (!introGravitySettled){
+    const a = mainRope.points[0];
+    const dist = Math.hypot(a.x - circleAnchor().x, a.y - circleAnchor().y);
+    if (Math.abs(dist - anchorBoundaryRadius()) < 0.1) introGravitySettled = true;
+  }
+  const gravityAccel = vh(90) * (introGravitySettled ? cfg.gravityStrength : cfg.startupRiseGravity);
 
   // mainRope.points[0] (the anchor end) is no longer rigidly pinned to the
   // circle's center -- per explicit request, it's now a normal physics

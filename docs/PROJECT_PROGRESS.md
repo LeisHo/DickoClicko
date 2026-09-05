@@ -92,7 +92,10 @@ additions. Current state of each subsystem:
   boundary's own bottom point. A separate Startup Rise Gravity slider
   (independent of gameplay's own Gravity Strength) controls how fast the
   anchor settles from its offset spawn point down to its real resting
-  boundary right after spawning -- see CODE_SUMMARY gotchas.
+  boundary right after spawning -- stays in effect until the anchor
+  actually reaches that boundary (not just until the startup sequence
+  finishes), so there's no abrupt gravity-switch jolt even at extreme
+  slider values -- see CODE_SUMMARY gotchas.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a

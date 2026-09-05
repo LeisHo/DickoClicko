@@ -4852,6 +4852,56 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-04  -  08:14 PM EDT
+
+Startup Rise Gravity now stays in effect until the anchor actually reaches
+equilibrium, instead of switching back to normal gravity the instant the
+startup sequence finishes.
+
+Following the prior entry's explanation of the 0.01-gravity "jump to the
+top then sudden fall" test: user's direction was "what I want is for the
+gravity to stay, the startup gravity, until they reach the equilibrium
+point. Then it becomes real gravity" -- replacing the introPhase!=='done'
+gate entirely with a condition-based one.
+
+Added `introGravitySettled` (starts false). Checked once per frame in
+update(), BEFORE that frame's own integrateChain() call: computes
+mainRope.points[0]'s distance from circleAnchor() and compares to
+anchorBoundaryRadius() -- integrateChain()'s own boundaryConstraint
+clamps a point to EXACTLY that radius the instant it's found beyond it,
+so "distance equals the boundary radius" (within a 0.1 epsilon) is a
+precise, immediate, reliable signal the anchor has actually reached and
+is resting against its boundary, not just an approximation. Once true,
+gravityAccel uses cfg.gravityStrength; until then, cfg.startupRiseGravity.
+
+Reset to false at every point the anchor gets manually repositioned (a
+fresh teleport means whatever equilibrium applied before no longer does):
+module-scope declaration (the first, boot-time spawn), inside
+detachEntireRopeAndRestartIntro() (a fresh detach-triggered spawn), and at
+updateIntro()'s own 'rising'->'pausing' handoff (the anchor jumping from
+wherever it was hidden-integrating to the real climb-derived spawn point)
+-- this last one is the critical addition; without it, an anchor that
+happened to settle during 'waiting'/'rising' (before the handoff even
+happens) would already read as settled and get normal gravity applied to
+its NEW post-handoff position, defeating the whole point.
+
+Verified live via the exact same 0.01-gravity scenario already traced in
+the prior entry: introPhase reached 'done' at step 314 with settled still
+false and the anchor only at y=152.66 (well short of the 181 boundary) --
+gravity correctly stayed at 0.01 past that phase transition, with zero
+jump. The anchor continued its slow, smooth, monotonic creep (sampled
+every 2 frames from step 600-658: 176.7, 176.87, 177.04 ... 180.93,
+180.96, 180.99, 181 -- consistent ~0.17/2-frame increments throughout,
+no acceleration spike) until settled flipped true at step 650, exactly
+when the anchor reached the boundary -- and no visible change in motion
+at that exact switch, since by definition the anchor was already at its
+resting position when gravity switched back.
+
+Verified via node --check (syntax clean) and a live reload with a clean
+console (only the known FLICK-image ERR_CONNECTION_RESET local-server
+noise, no JS exceptions).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
