@@ -3137,3 +3137,40 @@ GOTCHAS
   FLICK artwork update needs to touch `ANI2/`'s mapped frames
   explicitly -- there is no code path that keeps them in sync
   automatically.**
+- **`integrateChain()`'s `boundaryConstraint` is a hard, instant position
+  clamp with zero regard for gravity strength -- any point placed beyond
+  its radius gets snapped straight back to exactly that radius on the
+  very next physics tick, regardless of how slow gravity is configured.**
+  This caused 2 real, reported startup/detach bugs at once. (1)
+  `updateIntro()`'s 'rising' phase used to clamp bgRope's climb target
+  (and therefore mainRope's spawn point) to `anchorBoundaryRadius()` --
+  the anchor's own small confinement radius -- instead of the circle's
+  full drawn radius, so raising Startup Rise Clear Offset past that
+  small radius had no visible effect ("the main rope is still spawning
+  at its own offset boundary instead of spawning at the startup clear
+  offset"). Fixed by reclamping to `vmin(cfg.circleSize) / 2` (the
+  circle's own edge) instead. (2) Once a spawn point sat beyond
+  `anchorBoundaryRadius()`, the boundaryConstraint's hard clamp snapped
+  it back on the very next tick -- and since that clamp never touches
+  oldx/oldy, the FOLLOWING frame's verlet step reads the clamp's own
+  position correction as genuine velocity, producing a fast "shoot back
+  down" no matter how low Startup Rise Gravity was set ("even though the
+  startup gravity is low, it still seems to shoot right back down to the
+  default offset") -- the CONSTRAINT, not gravity, was doing all the
+  pulling-back. Fixed by passing `radius: Infinity` to the
+  boundaryConstraint object while `!introGravitySettled`, letting an
+  out-of-bounds spawn point free-fall under Startup Rise Gravity alone
+  until it naturally arrives back inside the real boundary (weightMult/
+  Anchor Weight is preserved regardless, since it's a separate field on
+  the same constraint object, independent of radius). The settled-check
+  itself had to change from an exact-equality comparison
+  (`Math.abs(dist - radius) < 0.1`, which only worked because the OLD
+  hard clamp always forced dist to exactly equal radius) to `dist <=
+  radius`, since the point now genuinely crosses that threshold via
+  gravity instead of being pinned to it. Verified live (not just via
+  code reading): raised Circle Offset to separate the anchor's small
+  confinement radius from the circle's full edge, set Clear Offset well
+  beyond the old clamp, and confirmed via screenshots that bgRope's
+  climb now visibly passes the old boundary reference line, and
+  mainRope's post-handoff settle drifts down gradually across several
+  seconds instead of snapping in one frame.

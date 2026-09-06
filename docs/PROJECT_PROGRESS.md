@@ -89,13 +89,24 @@ additions. Current state of each subsystem:
   sight below the circle (Rope Thickness + 1, not a full diameter).
   Startup Rise Clear Offset is a straight horizontal line again (briefly a
   circle earlier this session), measured from the Circle Offset
-  boundary's own bottom point. A separate Startup Rise Gravity slider
-  (independent of gameplay's own Gravity Strength) controls how fast the
-  anchor settles from its offset spawn point down to its real resting
-  boundary right after spawning -- stays in effect until the anchor
-  actually reaches that boundary (not just until the startup sequence
-  finishes), so there's no abrupt gravity-switch jolt even at extreme
-  slider values. mainRope itself now becomes visible starting at
+  boundary's own bottom point, and is now clamped to the circle's own
+  drawn radius rather than the much smaller anchor confinement radius --
+  a large Offset used to have no visible effect because the climb (and
+  therefore mainRope's spawn point) was clamped to stop at the anchor's
+  own tiny boundary regardless of the slider. A separate Startup Rise
+  Gravity slider (independent of gameplay's own Gravity Strength)
+  controls how fast the anchor settles from its offset spawn point down
+  to its real resting boundary right after spawning -- stays in effect
+  until the anchor actually reaches that boundary (not just until the
+  startup sequence finishes), so there's no abrupt gravity-switch jolt
+  even at extreme slider values. The anchor's own boundaryConstraint (a
+  hard, instant position clamp) is now disabled entirely while unsettled,
+  so a spawn point placed beyond the normal boundary free-falls under
+  Startup Rise Gravity alone instead of being snapped straight back on
+  the very next physics tick -- that snap was happening regardless of
+  how low Startup Rise Gravity was set (the constraint, not gravity, was
+  doing the pulling-back), which read as "it still seems to shoot right
+  back down." mainRope itself now becomes visible starting at
   'pausing' (the moment it actually spawns/positions at the clearance
   line) instead of waiting for 'growing' too -- on a detach, this closes
   a real gap where the just-detached piece had already fallen far away

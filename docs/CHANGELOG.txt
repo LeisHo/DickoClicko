@@ -5296,6 +5296,62 @@ pipeline on all 3 affected files, verified via no-cache fetch.
 Committed + pushed.
 
 ================================================================================
+2026-09-06  -  12:06 AM EDT
+
+Fixed 2 real bugs in the startup/detach intro sequence, both reported
+together: "when I raise the delay offset boundary a bit higher... the
+main rope is still spawning at its own offset boundary instead of
+spawning at the startup clear offset" and "even though the startup
+gravity is low, it still seems to shoot right back down to the default
+offset."
+
+Traced both to the SAME root mechanism: `integrateChain()`'s
+`boundaryConstraint` is a hard, instant position clamp (confirmed by
+re-reading its own code and comment) -- it snaps a point back to
+EXACTLY `boundaryConstraint.radius` the instant it's found beyond that
+radius, without touching oldx/oldy, every single frame, completely
+independent of gravity strength.
+
+Bug 1: `updateIntro()`'s 'rising' phase clamped the bgRope climb target
+(and therefore mainRope's spawn point, set equal to it at handoff) to
+`anchorBoundaryRadius()` -- the anchor's own small confinement radius,
+NOT the circle's full drawn radius -- a leftover from an EARLIER fix
+(this same session's history) that clamped the climb specifically to
+avoid bug 2 below. This meant Startup Rise Clear Offset could never
+actually push the spawn point past the tiny anchor boundary, no matter
+how high the slider went. Fixed by reclamping to the circle's own drawn
+radius (`vmin(cfg.circleSize) / 2`) instead.
+
+Bug 2: with bug 1's clamp now removed, a spawn point placed beyond
+`anchorBoundaryRadius()` would immediately get hard-snapped back to it
+by the boundaryConstraint on the very next physics tick -- and since
+that clamp doesn't touch oldx/oldy, the FOLLOWING frame's verlet
+integration reads the clamp's own position correction as a real,
+large velocity, producing a fast "shoot back down" regardless of how
+low Startup Rise Gravity was set (the constraint, not gravity, was
+doing 100% of the pulling-back). Fixed by passing `radius: Infinity`
+to the boundaryConstraint while `!introGravitySettled`, letting an
+out-of-bounds spawn point free-fall under Startup Rise Gravity alone
+(weightMult/Anchor Weight is preserved either way, since it's a
+separate field on the same object). The settled-check itself changed
+from an exact-equality comparison (`Math.abs(dist - radius) < 0.1`,
+which relied on the OLD hard clamp always producing exactly-radius) to
+`dist <= radius`, since the point now naturally crosses the threshold
+via gravity rather than being snapped to it.
+
+Verified live, not just by code reading: raised Circle Offset to 8 (from
+its live value of 1.5) to separate the anchor's own small confinement
+radius from the circle's full drawn radius, set Startup Rise Clear
+Offset to 30 (well beyond the old clamp), Startup Rise Gravity stayed
+at its already-low 0.1, and triggered a detach. Confirmed via
+screenshots: bgRope's climb now visibly passes the OLD boundary
+reference line (the "Debug: Show Rise Clear Offset Line" cyan marker)
+and continues up near the circle's own edge -- previously it would have
+stopped exactly at that cyan line. After the handoff, mainRope's tip
+position drifted down gradually across 3 consecutive screenshots taken
+~2s apart, rather than snapping in a single frame.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
