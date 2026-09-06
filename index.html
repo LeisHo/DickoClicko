@@ -365,11 +365,21 @@ const DEV_GROUPS = [
     { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
     { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:1.4 },
     { key:'introRiseSpeed',      label:'Startup Rise Speed',        type:'slider', unit:'%vh/s', min:0.5, max:300, step:0.5, def:5 },
-    { key:'startupRiseGravity',  label:'Startup Rise Gravity',      type:'slider', unit:'x',     min:0,   max:5,   step:0.1, def:1 },
+    { key:'startupRiseGravity',  label:'Startup Rise Gravity',      type:'slider', unit:'x',     min:0,   max:5,   step:0.01, def:1 },
     { key:'introRiseClearOffsetEnabled', label:'Startup Rise Clear Offset Enabled', type:'checkbox', def:false },
     { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
     { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Line', type:'checkbox', def:false },
     { key:'bgRopeClipEnabled', label:'Background Rope Clip Enabled', type:'checkbox', def:true },
+    // Per explicit request: bgRope's own climbing start (points[0], the
+    // "peek" visible above the circle while rising) gets the same endcap
+    // graphic mainRope's own tip uses, visible only while there's nothing
+    // else there yet to cap it -- 'rising' only. Not shown during
+    // 'waiting' (bgRope itself isn't drawn at all then, per its own
+    // introPhase gate below) or from 'pausing' onward (mainRope has
+    // spawned by then and owns the endcap-at-the-spawn-point role itself,
+    // per explicit request: "this background rope endcap will disappear
+    // when the front rope is spawn").
+    { key:'bgRopeStartEndcapEnabled', label:'Background Rope Start Endcap', type:'checkbox', def:false },
     { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:0.4 },
     { key:'introExtendSpeed',    label:'Startup Extension Speed',   type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:15 },
     { key:'introExtendSpeedTweenEnabled', label:'Startup Extension Speed Tween Enabled', type:'checkbox', def:false },
@@ -603,6 +613,26 @@ function makeReorderable(container, itemClass, handleClass){
 
 function setCfg(key, value){
   cfg[key] = value;
+  const num = numEls[key];
+  if (num && num.type !== 'checkbox' && document.activeElement !== num.numInput) {
+    if (num.slider) num.slider.value = Math.max(parseFloat(num.slider.min), Math.min(parseFloat(num.slider.max), value));
+    if (num.numInput) num.numInput.value = round(value, 3);
+  }
+}
+
+// Same as setCfg()'s own slider/numInput sync, but deliberately does NOT
+// touch cfg[key] itself -- used where a control's on-screen number should
+// reflect the rope's current live state without redefining what that
+// control's own value actually MEANS going forward. See
+// performMainRopeSplit()'s own use of this for why: a cut used to call
+// setCfg('ropeLength', ...) directly, which kept the slider's display
+// honest but ALSO silently overwrote the persisted default itself --
+// meaning a later FULL detach (which regrows to vh(cfg.ropeLength) as
+// "the default length") regrew to whatever a PRIOR cut had shrunk it to,
+// not the rope's real original configured length. Reported directly:
+// "when I cut the rope in full, the length it extends back to after
+// should be the default length. not the length the cut rope was."
+function syncControlDisplay(key, value){
   const num = numEls[key];
   if (num && num.type !== 'checkbox' && document.activeElement !== num.numInput) {
     if (num.slider) num.slider.value = Math.max(parseFloat(num.slider.min), Math.min(parseFloat(num.slider.max), value));
@@ -2888,7 +2918,10 @@ function performMainRopeSplit(idx){
   // countdown (a no-op read as "fully emerged" wherever End Emerge is
   // off, per emergeFactor()'s own convention).
   mainRope.tipEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
-  setCfg('ropeLength', mainRope.totalLength / viewportH() * 100);
+  // Display-only -- see syncControlDisplay()'s own comment. cfg.ropeLength
+  // itself stays at the real configured default so a later full detach
+  // regrows to that, not to whatever this cut just shortened the rope to.
+  syncControlDisplay('ropeLength', mainRope.totalLength / viewportH() * 100);
   if (lowerPoints.length >= 2){
     // Toppling (the initial random tilt) happens exactly at the moment of
     // real separation -- this is the same instant the piece starts
@@ -4209,6 +4242,25 @@ function render(){
   // turning it off draws bgRope fully, unclipped, for inspecting/tuning
   // its own real shape and position rather than only the sliver that
   // normally peeks through the circle's own bounds.
+  // Background Rope Start Endcap: bgRope's own climbing start (points[0])
+  // gets mainRope's same endcap design while it's the only thing visible
+  // -- 'rising' only, gone the instant mainRope spawns at 'pausing' (see
+  // this control's own DEV_GROUPS comment). drawEndcap() always anchors to
+  // points[points.length-1] and derives direction from the segment before
+  // it, so a 2-point slice of bgRope's OWN start, reversed (points[1] then
+  // points[0]), puts point 0 in that "tip" slot with the correct climb
+  // direction -- same reversal trick already used for a piece's own cut
+  // edge below. factor:1 (no End Emerge slide-in -- this cap has always
+  // been "there", it's a substitute for one, not a fresh cut appearing).
+  // Drawn inside the SAME clip scope as bgRope's own stroke just below (not
+  // after it) so it obeys Background Rope Clip Enabled identically -- the
+  // climbing tip shouldn't show its cap outside the circle any more than
+  // it shows rope there.
+  const drawBgRopeStartEndcap = () => {
+    if (cfg.bgRopeStartEndcapEnabled && introPhase === 'rising' && bgRope.points.length >= 2){
+      drawEndcap([bgRope.points[1], bgRope.points[0]], liveThickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, 1, null);
+    }
+  };
   if (introPhase !== 'waiting'){
     if (cfg.bgRopeClipEnabled){
       ctx.save();
@@ -4216,9 +4268,11 @@ function render(){
       ctx.arc(anchor.x, anchor.y, vmin(cfg.circleSize) / 2, 0, Math.PI * 2);
       ctx.clip();
       strokeRopeCurve(bgRope.points, liveThickness, ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor), cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+      drawBgRopeStartEndcap();
       ctx.restore();
     } else {
       strokeRopeCurve(bgRope.points, liveThickness, ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor), cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+      drawBgRopeStartEndcap();
     }
   }
   // an SVG endcap replaces the plain round cap entirely (drawn separately,
