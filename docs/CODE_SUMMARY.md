@@ -3987,3 +3987,28 @@ GOTCHAS
     environment's Browser pane has no raw press-and-hold-for-N-ms
     primitive, only discrete click actions, so a genuine multi-second
     hold couldn't be scripted precisely. No console errors throughout.
+- **Regression from the collision expansion above, caught immediately:
+  cutting mainRope produced a visible "jolt" on both mainRope and bgRope,
+  and freshly-cut pieces floated/bounced instead of falling cleanly.**
+  Root cause: performMainRopeSplit() copies a new piece's points directly
+  from mainRope's own (now-shortened) tip, so the two chains start out
+  EXACTLY coincident at the cut boundary -- the new mainRope-vs-piece
+  collision pass had no age gate, engaged on the very first frame, and
+  the tiny real distance topplePiece() introduces a frame or two later
+  (against this pair's large, endcap-inflated minSep) produced a violent
+  one-frame correction on both chains. Fixed with MAIN_COLLISION_GRACE_AGE
+  (0.3s): pieceCollision()'s mainRope-vs-piece loop now skips any piece
+  younger than that, letting it fall via gravity/floor/piece-vs-piece
+  collision alone during its initial fall, exactly as before mainRope-vs-
+  piece existed -- piece-vs-piece itself and everything else from the
+  prior commit are untouched. Verified live: repeated cuts and a full
+  detach produced no sudden jump (the shortened stub swings and decays
+  like a normal low-damping pendulum, cfg.damping=0.986 by design -- a
+  large slow swing after losing trailing mass is expected, not the bug),
+  and the fallen piece rested in place with no floating/bouncing across
+  several consecutive frames, no console errors. Also confirmed live: this
+  environment's Browser-pane rAF throttling is tied to the pane's own
+  hidden/visible state (not just tab focus) -- progress was near-zero
+  while the pane was hidden and resumed normally once fronted via
+  tabs_select, a technique worth reusing for future animation-timing
+  verification in this project.

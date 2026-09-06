@@ -6206,6 +6206,48 @@ so a genuine multi-second hold couldn't be scripted precisely. No
 console errors throughout.
 
 ================================================================================
+2026-09-06  -  03:25 PM EDT
+
+Regression, reported directly right after the collision-detection commit
+shipped: "something regressd. When I cut the rope or fully cut the rope,
+the background ANd main rope jolt as if having been flicked. Furthermore,
+when cut segments collide on the floor, the top one kind of floates or
+bounes slowly on an offset boundary. instead of resting on the already
+previously fallen rope segments."
+
+Root cause: performMainRopeSplit() copies the new fallen piece's points
+directly from mainRope's own (now-shortened) tip -- the two chains start
+out EXACTLY coincident at the cut boundary. The just-added mainRope-vs-
+piece collision pass had no age gate at all, so it engaged on that very
+first frame; topplePiece()'s own tilt/velocity nudges the piece a tiny
+amount away within a frame or two, and that tiny real distance against
+this pair's combined (thickness + endcap-inflated) minSep produced a
+huge one-frame correction -- exactly "jolted" on the main rope/bgRope
+(which mirrors mainRope's anchor), and exactly "floats/bounces" on the
+piece as the same fight kept re-engaging every frame while it was still
+falling clear of mainRope's own tip.
+
+Fixed with MAIN_COLLISION_GRACE_AGE (0.3s, a judgment call -- long enough
+for a piece to fall clear of mainRope's own tip under normal gravity, no
+measured "correct" value exists): pieceCollision()'s mainRope-vs-piece
+loop now skips any piece younger than that, letting it settle via
+gravity/floor/piece-vs-piece collision alone during its initial fall,
+exactly as it did before mainRope-vs-piece existed. Piece-vs-piece
+collision itself (and everything else from the prior commit -- endcap
+collision, the proportional decay-overlap fix) is untouched.
+
+Verified live: reloaded fresh, grew mainRope to its default length (had
+to front the Browser pane tab -- confirmed this environment's rAF
+throttling is tied to the pane's own hidden/visible state, not just tab
+focus, since progress was near-zero while hidden and resumed normally
+once fronted), then cut it repeatedly and fully detached it. No sudden
+jump on either cut: the shortened stub swings and decays like a normal
+low-damping pendulum (cfg.damping=0.986, by design -- a large, slow-
+decaying swing after losing trailing mass is expected physics, not the
+bug), and the fallen piece sits in place with no floating/bouncing across
+several consecutive frames. No console errors throughout.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

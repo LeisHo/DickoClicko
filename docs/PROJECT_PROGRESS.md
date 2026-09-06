@@ -129,7 +129,13 @@ additions. Current state of each subsystem:
   still-attached rope's tip. mainRope itself now also collides with any
   piece pile on the floor (previously only the floor plane itself), using
   the same shared collision helpers as piece-vs-piece so an extended-long
-  rope piles up on top of a pile rather than clipping through it.
+  rope piles up on top of a pile rather than clipping through it. A
+  freshly-cut piece starts coincident with mainRope's own tip, so
+  mainRope-vs-piece collision skips any piece younger than 0.3s
+  (MAIN_COLLISION_GRACE_AGE) -- without this, cutting produced a visible
+  jolt on mainRope/bgRope and a freshly-cut piece floated/bounced instead
+  of falling cleanly (a regression caught and fixed immediately after the
+  collision expansion above shipped).
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
