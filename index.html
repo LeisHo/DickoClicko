@@ -3456,29 +3456,42 @@ function update(rawDt){
   // Gravity alone, same as any other unconstrained point, rather than
   // being rigidly pinned to the boundary from frame one.
   //
-  // "Unsettled" was originally a stateful flag (introGravitySettled),
-  // reset to false at every reposition and flipped true the instant
-  // dist-from-center dropped to <= anchorBoundaryRadius(). That broke
-  // down for exactly the case Startup Rise Clear Offset is FOR: a large
-  // enough Offset can place the spawn point on the far side of center
-  // from the boundary's real resting spot -- e.g. 2.25%vmin above center
-  // when the boundary sits 9.25%vmin below it -- which is already
-  // "inside" the radius by that measure despite having barely begun
-  // falling, so the flag flipped settled (-> full Gravity Strength, hard
-  // clamp back on) on literally the FIRST frame after spawn. Startup Rise
-  // Gravity never got a chance to visibly apply at all. Reported
-  // directly: "the startup rise gravity slider doesnt seem to do
-  // anything." Recomputed fresh every frame instead of a persisted flag
-  // -- unsettled while genuinely mid-startup (introPhase === 'pausing',
-  // the window between spawn and 'growing' -- Startup/Detach Pause
-  // Duration's own real purpose) OR while the anchor is still actually
-  // outside the boundary (covers 'growing' too, so a Pause Duration
-  // shorter than the real fall doesn't cut the slow-gravity window short
-  // and reproduce the original jolt) -- but NEVER during 'done' regardless
-  // of a transient excursion (a hard punch flinging the anchor briefly
-  // past its boundary), so ordinary gameplay physics are untouched.
-  const anchorDistFromCenter = Math.hypot(mainRope.points[0].x - circleAnchor().x, mainRope.points[0].y - circleAnchor().y);
-  const introUnsettled = introPhase !== 'done' && (introPhase === 'pausing' || anchorDistFromCenter > anchorBoundaryRadius());
+  // "Unsettled" went through 2 wrong definitions before this one. First,
+  // a stateful flag flipped true the instant dist-FROM-CENTER dropped to
+  // <= anchorBoundaryRadius() -- broke down whenever Clear Offset placed
+  // the spawn point on the far side of center from the boundary's real
+  // resting spot (e.g. 2.25%vmin above center when the boundary sits
+  // 9.25%vmin below it), which already counts as "inside" that measure
+  // despite having barely begun falling -- so it flipped settled on the
+  // very first frame, and Startup Rise Gravity never got a chance to
+  // apply ("the startup rise gravity slider doesnt seem to do
+  // anything"). Recomputing that SAME from-center check fresh every
+  // frame (instead of once, as a persisted flag) fixed that exact
+  // symptom but didn't fix the underlying flaw -- once introPhase left
+  // 'pausing' (Pause Duration is 0.5s by default), the from-center check
+  // was STILL satisfied instantly for this same spawn geometry, so full
+  // Gravity Strength (1.7, ~170x the slider's 0.01) took back over after
+  // only 0.5s regardless -- the anchor's own real fall (still ~11.5%vmin
+  // to go) then happened almost entirely under NORMAL gravity, reading
+  // as "even at 0.01 it falls at a relatively normal speed" once
+  // measured against a real elapsed-time comparison rather than eyeballed.
+  //
+  // Fixed by measuring distance from the anchor's actual REST point (the
+  // boundary's own bottom point, circleAnchor().y + anchorBoundaryRadius()
+  // -- the same "hanging straight down" spot gravity always pulls it
+  // toward, already used elsewhere in this file as bottomY) instead of
+  // distance from center. This is what "up until it falls and hits the
+  // circle offset default position, then switches" (verbatim) actually
+  // describes -- a real arrival at a real target, not an incidental
+  // radius-from-center measurement that can be satisfied without any
+  // falling happening at all. EPSILON (2%vmin) is a judgment call, not a
+  // measured value -- picked as "close enough that re-enabling the
+  // boundary clamp at that point produces at most an imperceptible
+  // correction," not derived from any specific measurement.
+  const restPoint = { x: circleAnchor().x, y: circleAnchor().y + anchorBoundaryRadius() };
+  const anchorDistFromRest = Math.hypot(mainRope.points[0].x - restPoint.x, mainRope.points[0].y - restPoint.y);
+  const REST_EPSILON = vmin(2);
+  const introUnsettled = introPhase !== 'done' && (introPhase === 'pausing' || anchorDistFromRest > REST_EPSILON);
   const gravityAccel = vh(90) * (introUnsettled ? cfg.startupRiseGravity : cfg.gravityStrength);
 
   // mainRope.points[0] (the anchor end) is no longer rigidly pinned to the
@@ -3495,14 +3508,23 @@ function update(rawDt){
   // Rope Growth Rate -- independently tunable, per explicit request.
   if (growing) growRope(rawDt, introPhase === 'growing' ? currentIntroExtendRate() : undefined);
   const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
-  // radius is Infinity while introUnsettled (see that computation's own
-  // comment above) -- lets a spawn point placed beyond the real boundary
-  // free-fall under Startup Rise Gravity instead of being hard-clamped
-  // back on the spot. weightMult still applies either way (a separate
-  // object field the distance constraint reads regardless of radius), so
-  // Anchor Weight isn't lost during the unsettled window.
+  // radius is the circle's own drawn edge (not Infinity) while
+  // introUnsettled -- lets a spawn point placed beyond the tight
+  // anchorBoundaryRadius() free-fall under Startup Rise Gravity instead
+  // of being hard-clamped back to that tight radius on the spot, but
+  // still never lets it visibly leave the circle graphic entirely.
+  // Genuinely unbounded (Infinity) was tried first and reported directly:
+  // "it sometimes falls through beyond the circle bottom" -- gravity
+  // plus the chain's own momentum, with nothing at all limiting the fall,
+  // could carry the anchor visibly outside the circle before the
+  // distance-from-rest check (see introUnsettled's own comment) caught up
+  // and re-armed the tight clamp. weightMult still applies regardless of
+  // which radius is active (a separate object field the distance
+  // constraint reads independent of radius), so Anchor Weight isn't lost
+  // during the unsettled window.
+  const circleR = vmin(cfg.circleSize) / 2;
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
-    { index: 0, center: circleAnchor(), radius: introUnsettled ? Infinity : anchorBoundaryRadius(), weightMult: cfg.anchorWeight });
+    { index: 0, center: circleAnchor(), radius: introUnsettled ? circleR : anchorBoundaryRadius(), weightMult: cfg.anchorWeight });
   if (hasPartialTip) positionGrowingTip();
 
   // Background "peeking" rope (see render()'s own comment on the clip):
