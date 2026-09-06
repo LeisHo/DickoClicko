@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.190724401694485,
+    "ropeLength": 15.012192605788242,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -175,9 +175,21 @@
     "flick2Scale": 60,
     "flick2AnimSpeed": 0.2,
     "flickHoldMaxSpeed": 2.5,
-    "flickHoldMaxDuration": 3.3
+    "flickHoldMaxDuration": 3.3,
+    "ropeAttractionIntensity": 1,
+    "ropeAttractionSpeed": 10,
+    "ropeAttractionMaxReach": 13
   },
   "order": [
+    {
+      "key": "RIGHT CLICK",
+      "collapsed": false,
+      "settings": [
+        "ropeAttractionIntensity",
+        "ropeAttractionSpeed",
+        "ropeAttractionMaxReach"
+      ]
+    },
     {
       "key": "DEV PANEL",
       "collapsed": true,
@@ -374,9 +386,9 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 908.0375366210938,
+      "left": 1286.4375,
       "top": 17.912500381469727,
-      "width": 627.9500122070312,
+      "width": 249.5500030517578,
       "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
