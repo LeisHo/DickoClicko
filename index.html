@@ -2075,7 +2075,7 @@ function nearestPointOnRope(px, py, points){
   return best;
 }
 
-function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastSegment, boundaryConstraint){
+function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastSegment, boundaryConstraint, tipTarget){
   // skipLastSegment also excludes the growing-tip POINT itself (not just its
   // segment's distance/bend constraints, handled further below) from this
   // basic Verlet step -- positionGrowingTip() places it directly every
@@ -2245,6 +2245,31 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
         bp.x = boundaryConstraint.center.x + (bdx / bdist) * boundaryConstraint.radius;
         bp.y = boundaryConstraint.center.y + (bdy / bdist) * boundaryConstraint.radius;
       }
+    }
+    // tipTarget ({x,y}, e.g. mainRope's own Rope Attraction pin): pins the
+    // TIP to a moving target the exact same way boundaryConstraint already
+    // pins the ANCHOR to the circle -- position-only, applied every
+    // iteration alongside distance/bend so the solver negotiates a
+    // consistent shape, never touching oldx/oldy so next frame's implied
+    // velocity naturally reflects however far it actually got dragged.
+    // This replaces an earlier design that nudged the tip (or a weighted
+    // span of trailing points) directly in update() BEFORE this solve ran
+    // -- moving a single point ahead of an otherwise-unconstrained
+    // neighbor let the chain fold into a sharp hook, and widening the
+    // nudge to multiple points fixed the fold but let too much of the
+    // rope's own shape get overridden by the reach ("I dont need the
+    // ENTIRE rope to participate in the reaching"). Pinning the tip as a
+    // genuine 2nd fixed endpoint (mirroring the anchor's own proven,
+    // already-stable pin) lets the EXISTING distance/bend relaxation --
+    // the same math that already smoothly connects the anchor to a
+    // swinging rope with zero folding -- bend the WHOLE chain between the
+    // 2 pins naturally, with no separate nudging logic needed at all. The
+    // endcap's own rotation is then just tipDirection() again, unchanged
+    // from before Rope Attraction existed, and is automatically "flush"
+    // by construction since it reads the real last-segment tangent.
+    if (tipTarget){
+      const tp = points[points.length - 1];
+      tp.x = tipTarget.x; tp.y = tipTarget.y;
     }
   }
 }
@@ -2506,8 +2531,31 @@ function pieceCollision(dt){
   // inflated radius has room to make contact naturally) without ever
   // firing while mainRope is nowhere near the pile at all.
   if (fallenPieces.length > 0){
+    // pileTopY only ever looks at pieces already PAST their own
+    // MAIN_COLLISION_GRACE_AGE -- reported directly, even after both the
+    // age-gate and the proximity-gate below shipped: "I think it started
+    // occuring after i told you to provide the endcap with collision
+    // detection. Make it so that the endcap doesnt collide with its own
+    // rope." Root cause: a piece freshly split off mainRope starts with
+    // its own points essentially COINCIDENT with mainRope's own tip, so
+    // it was always the CLOSEST possible point to mainRope, meaning it
+    // ALWAYS dominated this min() the instant it was created -- the
+    // proximity gate below (tipY >= pileTopY - 10%vh) was therefore
+    // ALWAYS true for a frame or two right after every single cut,
+    // regardless of whether any genuine floor pile was anywhere nearby,
+    // opening the whole mainRope-vs-piece pass against every OTHER piece
+    // in fallenPieces too. The age-gate inside the loop below correctly
+    // skipped the fresh piece ITSELF, but never stopped it from falsely
+    // triggering this gate check against everything else. Excluding
+    // not-yet-eligible pieces from the gate's own pileTopY computation
+    // closes that loophole -- the gate can now only ever open because of
+    // a piece old enough to actually be collided with in the first
+    // place.
     let pileTopY = Infinity;
-    fallenPieces.forEach(piece => piece.points.forEach(p => { if (p.y < pileTopY) pileTopY = p.y; }));
+    fallenPieces.forEach(piece => {
+      if (piece.age < MAIN_COLLISION_GRACE_AGE) return;
+      piece.points.forEach(p => { if (p.y < pileTopY) pileTopY = p.y; });
+    });
     const tipY = mainRope.points[mainRope.points.length - 1].y;
     if (tipY >= pileTopY - vh(10)){
       const mainThick = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
@@ -3503,12 +3551,6 @@ let downInfo = null;   // {mode:'circle'} or {mode:'rope', x,y,hit,startTime,cha
 let ropeAttractionActive = false;
 let mouseX = 0, mouseY = 0;
 window.addEventListener('pointermove', e => { mouseX = e.clientX; mouseY = e.clientY; });
-// How much of mainRope's own chain (measured from the tip backward)
-// shares in the attraction pull, weighted 0 at its own start up to 1 at
-// the tip -- see update()'s own ropeAttractionActive block for why a
-// single-point nudge folded the rope instead of curving it smoothly.
-// 0.4 (the last 40% of points) is a judgment call, not a measured value.
-const ROPE_ATTRACTION_INFLUENCE_FRAC = 0.4;
 let holdTimer = null;
 let pendingClick = null; // {hit,timer}
 
@@ -4073,72 +4115,79 @@ function update(rawDt){
   // off Startup Extension Speed (or its tween) instead of the manual
   // Rope Growth Rate -- independently tunable, per explicit request.
   if (growing) growRope(rawDt, introPhase === 'growing' ? currentIntroExtendRate() : undefined);
-  // Rope Attraction: nudge the last portion of mainRope's own chain toward
-  // the mouse each frame, THEN let integrateChain()'s own constraint solve
-  // (just below) resolve it -- deliberately NOT excluded from that solve
-  // the way a growing tip is (see hasPartialTip/skipLastSegment below):
-  // the whole point is that the distance constraint's own segment-length
-  // limit is what naturally caps how far the tip can actually reach, so a
-  // mouse target farther than the rope's real total length just pulls the
-  // chain as far toward it as the rope's own length allows -- per explicit
-  // request ("If the rope length or wahtever isnt enough for the endcap to
-  // fully look at the mouse, it will rotate as much as it can").
+  // Rope Attraction: eases mainRope.attractionPin{X,Y} -- a single moving
+  // point, persisted on mainRope so it carries over frame to frame rather
+  // than being recomputed from scratch -- toward the mouse each frame,
+  // clamped to Max Reach Distance from the ANCHOR. This pin is then
+  // handed to integrateChain() (below) as its new tipTarget param, which
+  // pins the chain's own TIP to it exactly the way mainRope's anchor is
+  // already pinned to the circle boundary -- see that function's own
+  // comment for why this (not a manual per-point nudge) is the right
+  // mechanism: 2 earlier designs both moved point(s) directly in THIS
+  // function before the solve ran, and both had real, reported problems
+  // (a single nudged tip raced ahead of its own neighbors and folded into
+  // a hook; nudging a weighted span of trailing points fixed the fold but
+  // dragged more of the rope's own shape than wanted, per explicit
+  // correction: "I dont need the ENTIRE rope to participate in the
+  // reaching"). Pinning the tip as a genuine 2nd fixed endpoint sidesteps
+  // both: the existing distance/bend relaxation (already proven stable
+  // for the anchor's own pin against ordinary swinging) bends the whole
+  // chain between the 2 pins on its own, so a short rope simply can't
+  // reach as far and a long rope bows between the 2 fixed points instead
+  // of folding -- matching the exact requested behavior: "the endcap
+  // moves towards the mouse... if there is not enough rope...the endcap
+  // will rotate as much as possible while retaining the flush joinery."
+  // The endcap's own rotation needs no separate override at all anymore
+  // -- tipDirection() (unchanged, reused as before Rope Attraction ever
+  // existed) reads the real last-segment tangent, which is automatically
+  // flush by construction since the segment's own far end IS the pin.
   //
-  // Distributed across ROPE_ATTRACTION_INFLUENCE_FRAC of the chain (not
-  // just the single tip point) -- an earlier version nudged only the tip,
-  // which raced ahead of its own neighbors every frame; the bend/distance
-  // constraints then had to visibly "catch up" over several frames,
-  // producing a sharp fold/hook right near the tip instead of a smooth
-  // curve toward the mouse (reported directly via a screenshot: the rope
-  // hangs normally, then hooks sharply upward right at the free end
-  // instead of continuing toward the mouse). Nudging a whole trailing
-  // section at once, weighted from 0 at its own start up to 1 at the tip,
-  // lets the WHOLE tail bend together -- no single point ever gets far
-  // enough ahead of its neighbors to fold back. This also makes the
-  // endcap's own "look at the mouse" rotation land much closer to the
-  // rope body's own real last-segment direction on its own (see
-  // attractionFacing in render() for the small explicit top-up that
-  // guarantees exact alignment even so).
+  // The target distance is ALSO capped by the rope's own real rest
+  // length (segLen * segment count), not just Max Reach Distance --
+  // caught via direct simulation before shipping: with only 1 (this
+  // project's own default) constraint-solve iteration per frame, a pin
+  // held far beyond the chain's actual reach stretched the WHOLE rope to
+  // match it (simulated: a 500px target on a 90px-rest-length chain
+  // stretched the rendered chain to ~500px total, a ~5.5x overstretch)
+  // rather than being held back by the solver the way the anchor's own
+  // soft boundary-clamp naturally is -- the solver is simply too weak at
+  // 1 iteration to resist an aggressively pinned, actively-moving
+  // endpoint. Capping the target itself keeps the worst-case single-
+  // segment stretch to roughly 1.2x in the same simulation (a taut-but-
+  // plausible rope, not a runaway one) regardless of how many iterations
+  // the user's own Constraint Iterations slider is set to.
   if (ropeAttractionActive){
-    const points = mainRope.points;
-    const n = points.length;
-    const anchor = points[0];
-    // Max Reach Distance clamps the ATTRACTION TARGET itself (measured
-    // from the rope's own anchor point) rather than any point's per-frame
-    // movement -- an independent, tunable ceiling on top of whatever the
-    // rope's real physical length already allows, so it can be dialed
-    // BELOW the rope's full length (a shorter "leash") without fighting
-    // the constraint solver's own, separate length limit.
-    const maxReach = vmin(cfg.ropeAttractionMaxReach);
+    const anchor = mainRope.points[0];
+    const maxReach = Math.min(vmin(cfg.ropeAttractionMaxReach), mainRope.segLen * (mainRope.points.length - 1));
     let tx = mouseX - anchor.x, ty = mouseY - anchor.y;
     const tdist = Math.hypot(tx, ty) || 1e-6;
     if (tdist > maxReach){ tx *= maxReach / tdist; ty *= maxReach / tdist; }
-    const targetX = anchor.x + tx, targetY = anchor.y + ty;
+    const desiredX = anchor.x + tx, desiredY = anchor.y + ty;
+    // Seed the pin to the real (unsmoothed) target on the very first
+    // active frame -- otherwise it would ease in from wherever a PRIOR
+    // attraction session last left it (or from 0,0), a stale starting
+    // point with no relation to this new reach.
+    if (mainRope.attractionPinX === null || mainRope.attractionPinX === undefined){
+      mainRope.attractionPinX = desiredX;
+      mainRope.attractionPinY = desiredY;
+    }
     // Frame-rate-independent ease (not a flat per-frame fraction) so Rope
     // Attraction Intensity means the same thing regardless of the actual
     // frame rate this environment happens to render at.
     const ease = 1 - Math.pow(1 - cfg.ropeAttractionIntensity, dt * 60);
+    let moveX = (desiredX - mainRope.attractionPinX) * ease;
+    let moveY = (desiredY - mainRope.attractionPinY) * ease;
+    const moveDist = Math.hypot(moveX, moveY);
     const maxMove = vmin(cfg.ropeAttractionSpeed) * dt;
-    const influenceStart = Math.max(0, Math.floor(n * (1 - ROPE_ATTRACTION_INFLUENCE_FRAC)));
-    // span is 0 whenever influenceStart lands on the tip itself (a short
-    // rope, e.g. right after a fresh cut down near Minimum Rope Length,
-    // where n*(1-FRAC) rounds up to n-1) -- the loop below then has only
-    // the tip in range, which must get full weight (1), not the 0/0 the
-    // plain division would give it. A short rope should still reach
-    // toward the mouse, just capped harder by its own real length.
-    const span = n - 1 - influenceStart;
-    for (let i = influenceStart; i < n; i++){
-      const weight = span > 0 ? (i - influenceStart) / span : 1;
-      const p = points[i];
-      let dx = targetX - p.x, dy = targetY - p.y;
-      const ddist = Math.hypot(dx, dy);
-      if (ddist <= 0.0001) continue;
-      let moveX = dx * ease * weight, moveY = dy * ease * weight;
-      const moveDist = Math.hypot(moveX, moveY);
-      const cap = maxMove * weight;
-      if (moveDist > cap){ const s = cap / moveDist; moveX *= s; moveY *= s; }
-      p.x += moveX; p.y += moveY;
-    }
+    if (moveDist > maxMove){ const s = maxMove / moveDist; moveX *= s; moveY *= s; }
+    mainRope.attractionPinX += moveX;
+    mainRope.attractionPinY += moveY;
+  } else {
+    // Cleared (not just left stale) the moment attraction ends, so the
+    // NEXT press always re-seeds fresh per the comment above rather than
+    // resuming from wherever this session happened to leave off.
+    mainRope.attractionPinX = null;
+    mainRope.attractionPinY = null;
   }
   // Forced false while Rope Attraction is active -- reported directly:
   // "after i extend the rope, the attraction no longer works. it only
@@ -4175,7 +4224,8 @@ function update(rawDt){
   // during the unsettled window.
   const circleR = vmin(cfg.circleSize) / 2;
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
-    { index: 0, center: circleAnchor(), radius: introUnsettled ? circleR : anchorBoundaryRadius(), weightMult: cfg.anchorWeight });
+    { index: 0, center: circleAnchor(), radius: introUnsettled ? circleR : anchorBoundaryRadius(), weightMult: cfg.anchorWeight },
+    ropeAttractionActive ? { x: mainRope.attractionPinX, y: mainRope.attractionPinY } : null);
   // The exact frame introUnsettled flips true->false, the boundary radius
   // shrinks from circleR down to the much tighter anchorBoundaryRadius()
   // in the SAME integrateChain() call above -- if the anchor was still
@@ -4483,7 +4533,7 @@ function strokeRopeCurve(points, thicknessPx, color){
 // UNDER a still-emerging endcap's own semi-transparent/partial edges in
 // the meantime. No change to WHEN an arc is drawn (still gated by the
 // exact same *ArcMult logic) -- only where in the draw order it lands.
-function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult, endFacingOverride){
+function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
   if (startArcMult === undefined) startArcMult = 0;
   // Set explicitly (not inherited from ctx state) -- drawEndcap() may have
   // run in between this call and the strokeRopeCurve() call that drew the
@@ -4503,11 +4553,7 @@ function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult, e
   const n = points.length;
   const tip = points[n - 1];
   if (endArcMult > 0){
-    // endFacingOverride: see drawEndcap()'s own identical param -- same
-    // "point at the mouse regardless of physical reach" reasoning,
-    // applied here so the plain round-cap arc (shown whenever Endcap
-    // Design is None) also faces the mouse during Rope Attraction.
-    const dir = endFacingOverride || tipDirection(points);
+    const dir = tipDirection(points);
     drawEndArc(tip.x, tip.y, dir.x, dir.y, thicknessPx, endArcMult, arcGradientStops);
   }
   // startArcMult mirrors endArcMult at points[0] instead of points[n-1] --
@@ -4760,7 +4806,7 @@ function tipDirection(points){
 // the same world position the rope's own stroke gradient already
 // occupies, regardless of the endcap's current rotation/scale/slide
 // position.
-function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, gradientInfo, heightThicknessPx, facingOverride){
+function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, gradientInfo, heightThicknessPx){
   const design = ENDCAP_DESIGNS[designKey];
   if (!design) return;
   if (factor === undefined) factor = 1;
@@ -4776,17 +4822,7 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   // decay progresses (Y stays pinned to whatever thickness the piece had
   // when it fell).
   if (heightThicknessPx === undefined) heightThicknessPx = thicknessPx;
-  // facingOverride (mainRope's own tip only, during Rope Attraction): the
-  // endcap should always be doing its best to point at the mouse even
-  // when the rope's real length can't physically reach it, per explicit
-  // request -- tipDirection() alone can't guarantee that, since it reads
-  // the chain's own actual last-segment tangent, which is subject to
-  // gravity/damping/bend and may lag or settle short of the true mouse
-  // angle even at max reach. When provided, this replaces that tangent
-  // outright for rotation purposes only -- it doesn't move any physics
-  // point, so the rope body's own real, physically-limited shape is
-  // completely unaffected; only the decorative cap's own facing changes.
-  const dir = facingOverride || tipDirection(points);
+  const dir = tipDirection(points);
   const tip = points[points.length - 1];
   // rotates local "down" (0,1) to (dir.x,dir.y); derived from the standard
   // rotation matrix (x cosθ - y sinθ, x sinθ + y cosθ) solved for
@@ -5194,19 +5230,6 @@ function render(){
   // 'pausing''s own start rather than its end, is why 'pausing' used to
   // be included here -- it no longer is, now that the spawn moved).
   const showMainRope = introPhase === 'growing' || introPhase === 'done';
-  // Rope Attraction: the tip's own decorative facing (endcap and/or plain
-  // arc, whichever is showing) always points straight at the REAL mouse
-  // position while attracting, regardless of Max Reach Distance or how
-  // far the rope's own physical length can actually stretch -- see
-  // drawEndcap()'s own facingOverride param for why tipDirection() alone
-  // can't guarantee this. null (not computed) whenever attraction isn't
-  // active, so every other draw path is completely unaffected.
-  const attractionFacing = ropeAttractionActive ? (() => {
-    const tip = mainRope.points[mainRope.points.length - 1];
-    const fx = mouseX - tip.x, fy = mouseY - tip.y;
-    const flen = Math.hypot(fx, fy) || 1;
-    return { x: fx / flen, y: fy / flen };
-  })() : null;
   const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, liveThickness);
   const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
   const mainRopeColor = ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
@@ -5239,7 +5262,7 @@ function render(){
     // convention).
     const mainEndcapHeight = mainRope.bootEndcapScale !== null ? mainRope.bootEndcapScale : cfg.endcapHeight * detachScale;
     const mainGradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: mainRope.points[0] } : null;
-    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo, undefined, attractionFacing);
+    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo);
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
     // points array before reusing drawEndcap() puts that cut point at
@@ -5269,7 +5292,7 @@ function render(){
   // every endcap above -- not gated on hasEndcap, since Endcap Design
   // 'none' still needs these to draw exactly as before. See
   // drawRopeEndArcs()'s own comment for why the layering moved.
-  if (showMainRope) drawRopeEndArcs(mainStrokePoints, liveThickness, mainRopeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc, attractionFacing);
+  if (showMainRope) drawRopeEndArcs(mainStrokePoints, liveThickness, mainRopeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc);
   fallenPieces.forEach(piece => {
     const pieceThick = pieceThickness(piece);
     const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
