@@ -4087,3 +4087,42 @@ GOTCHAS
   tasks in this session -- verified by tracing both mechanisms (source
   order for the first, the override's data flow for the second) rather
   than a live repro.
+- **Cut-jolt fixed at its real root cause (2 prior collision-focused
+  rounds never touched it); Rope Attraction's single-tip nudge redesigned
+  to fix a visible fold/hook, reported via screenshot.** "the big jump
+  after a cut is still occurring" plus "it is now disjointed from the
+  main rope end... i added a new screen cap to show the disjoint" (the
+  screenshot showed the rope hooking sharply upward at its own free end
+  instead of curving toward the mouse), with direct pushback ruling out
+  "it's just the reach limit": "if it is a matter of attraction max
+  distance it still shouldnt decide to make a sharp turn upwards."
+  Cut jolt: `performMainRopeSplit()`/`performPieceSplit()` only ever
+  truncated the points array -- every remaining point's `oldx`/`oldy`
+  stayed exactly as it was a moment before, still encoding velocity
+  shaped by carrying the now-removed trailing mass. The next verlet step
+  read that stale, no-longer-balanced velocity and kept moving the
+  shortened chain along it with nothing left to counteract it -- a real
+  recoil this project's own low damping (0.986) then let ring out
+  visibly. Never a collision bug, which is why 2 rounds of collision
+  tuning never fixed it. Fixed by zeroing `oldx`/`oldy` for the remaining
+  chain at the exact moment of each split; the falling piece's own
+  pre-cut velocity is untouched.
+  Attraction hook: the single-tip nudge let the tip race ahead of its
+  own neighbors every frame, with the bend/distance constraints visibly
+  "catching up" over several frames -- exactly the fold shown.
+  Redesigned `update()`'s own `ropeAttractionActive` block to distribute
+  the pull across the last `ROPE_ATTRACTION_INFLUENCE_FRAC` (0.4) of
+  `mainRope.points`, weighted 0 at that range's own start up to 1 at the
+  tip, so the whole tail bends together. This also resolves the
+  endcap-disjoint complaint as a side effect: the rope's own real
+  last-segment direction now lands close to the mouse on its own, so the
+  explicit `attractionFacing` override (previous round) no longer
+  visibly fights it. Caught a real edge case before shipping via a
+  Node-simulated sanity check (not just code review): the weight
+  formula's `span` could be exactly 0 for a short rope where
+  `influenceStart` lands on the tip itself, giving 0/0 (effectively zero
+  pull) exactly when a short rope should still reach as hard as it can --
+  fixed with an explicit `span > 0` check, verified across chain lengths
+  2-20 in Node. Verification limitation: same as every task this
+  session -- Browser pane still reported hidden independent of
+  tab-fronting.

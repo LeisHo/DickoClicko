@@ -6407,6 +6407,74 @@ specifically, with every other call site (bgRope, fallen pieces, cut
 edges) left passing no override at all and therefore unaffected.
 
 ================================================================================
+2026-09-06  -  04:45 PM EDT
+
+Direct follow-up after 2 rounds of collision-focused cut-jolt fixes: "1.
+the big jump after a cut is still occurring. 2. The endcap pointing looks
+good, BUT. it is now disjointed from the main rope end. The main rope end
+should always be aligned to the endcap. I added a new screen cap to show
+the disjoint" -- the screenshot showed the rope hanging normally from the
+circle, then hooking sharply upward right at its own free end instead of
+continuing smoothly toward the mouse (bottom-left), with red/green
+annotation lines marking the wrong-vs-wanted path. Immediate follow-up
+pushback confirmed it wasn't just a reach-limit artifact: "if it is a
+matter of attraction max distance it still shouldnt decide to make a
+sharp turn upwards."
+
+Root-caused BOTH from first principles, since neither symptom pointed at
+collision code at all:
+
+Cut jolt -- never a collision bug in the first place. Both split
+functions (performMainRopeSplit, performPieceSplit) only ever truncated
+the points array; every remaining point's oldx/oldy was left exactly as
+it was a moment before, still encoding velocity shaped by carrying the
+NOW-REMOVED trailing mass/tension. An interior point is pulled by both
+neighbors; the instant it becomes the new free tip, the pull from
+everything that used to hang below it vanishes, but its existing
+velocity doesn't -- the next verlet step (vx = (x-oldx)*damping) kept
+moving the shortened chain along that stale, no-longer-balanced
+velocity with nothing left to counteract it, a real recoil ("as if
+having been flicked") that this project's own deliberately low damping
+(0.986) then let ring out visibly rather than settle quickly. This
+explains why 2 rounds of collision tuning never touched it -- the actual
+mechanism was never collision at all. Fixed by zeroing oldx/oldy for the
+remaining chain at the exact moment of each split; the falling piece
+keeps its own full pre-cut velocity, untouched.
+
+Rope Attraction hook -- the single-tip-nudge design let the tip race
+ahead of its own neighbors every frame, and the bend/distance
+constraints then visibly "caught up" over several frames, producing
+exactly the fold the screenshot showed. Redesigned to distribute the
+pull across the last 40% of the chain (new ROPE_ATTRACTION_INFLUENCE_FRAC,
+a judgment call), weighted 0 at its own start up to 1 at the tip, so the
+whole tail bends together -- no single point ever gets far enough ahead
+to fold back, regardless of how close to Max Reach Distance the target
+is. This also resolves the endcap-disjoint complaint as a side effect:
+the rope's own real last-segment direction now lands much closer to the
+mouse on its own (the whole tail is pulled that way together, not one
+isolated point), so the still-present explicit facing override (added
+last round) now agrees with the rope body instead of visibly fighting
+it.
+
+Caught and fixed a real edge case before shipping, via a Node-simulated
+sanity check rather than waiting to hit it live: the weight formula's
+`span` could be exactly 0 for a short rope (e.g. right after a fresh cut
+down near Minimum Rope Length, where influenceStart lands on the tip
+itself) -- the plain division would have given the tip 0/0 weight
+(effectively no pull at all) exactly when a short rope should still
+reach as far as it physically can. Fixed with an explicit span>0 check
+giving full weight (1) in that case; verified the corrected formula
+across chain lengths 2 through 20 in Node before considering it safe.
+
+Verified: syntax check passed; the edge-case fix was verified via direct
+Node simulation of the weight formula (not just code review) across
+n=2..20. Live re-verification was not possible -- this environment's
+Browser pane is still reported hidden independent of tab-fronting, the
+same limitation every task this session has hit. Both mechanisms were
+otherwise verified by tracing the exact code path against the reported
+symptoms.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

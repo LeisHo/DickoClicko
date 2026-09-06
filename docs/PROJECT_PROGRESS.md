@@ -142,7 +142,13 @@ additions. Current state of each subsystem:
   included) is now capped to a fixed px/s rate (COLLISION_MAX_PUSH_PER_S)
   so any overlap resolves gradually, and mainRope-vs-piece only engages
   when the tip is actually within 10%vh of the current pile's own
-  topmost point, never during ordinary post-cut hanging/swinging.
+  topmost point, never during ordinary post-cut hanging/swinging. The
+  cutting jolt persisted even after both of those fixes because it was
+  never a collision bug: a cut's own remaining chain kept its pre-cut
+  velocity (oldx/oldy), shaped by carrying the now-removed trailing mass
+  -- a real recoil, visible mainly because of this project's own
+  deliberately low damping. Both split functions now zero the remaining
+  chain's implied velocity at the moment of the split.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
@@ -267,21 +273,27 @@ additions. Current state of each subsystem:
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.
 
-- **Rope Attraction**: right-click-and-hold nudges mainRope's own tip
+- **Rope Attraction**: right-click-and-hold nudges the last 40% of
+  mainRope's own chain (weighted 0 at that range's start up to 1 at the
+  tip, not just the single tip point -- an earlier single-point version
+  let the tip race ahead of its neighbors and fold into a sharp hook)
   toward the mouse each frame, then lets the existing distance-constraint
   solver cap how far it can actually reach based on the rope's real
   length -- a mouse target beyond that just pulls the rope as far as it
-  physically can go. The tip's own decorative facing (endcap or plain
-  arc, whichever is showing) always points straight at the real mouse
-  position while attracting, via an explicit override -- not left to
-  `tipDirection()`'s own physics-derived tangent, which could lag or
-  settle short of the true angle. Correctly stays active through an
-  in-progress hold-to-grow (forces the tip out of the partial-tip-growth
-  mechanism for the duration, reverting the instant attraction ends).
-  New RIGHT CLICK dev-panel group (Intensity, Speed, Max Reach Distance).
-  Verified by code review, not a live gesture test -- this environment's
-  Browser pane reported itself hidden independent of tab-fronting for
-  every task this session touched it (see CODE_SUMMARY gotchas).
+  physically can go, curving smoothly rather than kinking. The tip's own
+  decorative facing (endcap or plain arc, whichever is showing) always
+  points straight at the real mouse position while attracting, via an
+  explicit override that now agrees with the rope body's own real
+  last-segment direction (which also curves toward the mouse) instead of
+  visibly fighting it. Correctly stays active through an in-progress
+  hold-to-grow (forces the tip out of the partial-tip-growth mechanism
+  for the duration, reverting the instant attraction ends). New RIGHT
+  CLICK dev-panel group (Intensity, Speed, Max Reach Distance). Verified
+  by code review (plus a Node-simulated check of the per-point weight
+  formula across chain lengths), not a live gesture test -- this
+  environment's Browser pane reported itself hidden independent of
+  tab-fronting for every task this session touched it (see CODE_SUMMARY
+  gotchas).
 
 ## What's next
 
