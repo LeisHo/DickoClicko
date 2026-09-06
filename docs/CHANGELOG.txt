@@ -5977,6 +5977,20 @@ seam itself is gone isn't possible with this project's current tooling
 the endcap fix.
 
 ================================================================================
+2026-09-06  -  11:12 AM EDT
+
+Immediate follow-up: "i stilll see a small seam. its better than
+before but its stilll visible" -- confirms the overlap FIX mechanism
+from the entry above is correct (the seam visibly shrank), just needed
+more magnitude. Raised `ARC_SEAM_OVERLAP_PX` from 1.5px to 4px (no
+measured "correct" value exists for a sub-pixel AA artifact, same as
+the original judgment call). Verified live: isolated the arc (Endcap
+Design: None) and confirmed it still renders as one smooth, cohesive
+bump with no visible regression and no console errors -- same tooling
+limitation as before means this can't be confirmed at true sub-pixel
+resolution; the user's own next look is the real test.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
