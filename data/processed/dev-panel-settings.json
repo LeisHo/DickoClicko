@@ -11,13 +11,13 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 26.661538461538477,
+    "ropeLength": 39.46153846153847,
     "ropeDefaultLength": 15,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
       {
-        "pos": 0.4688669295842345,
+        "pos": 0.4794371271030566,
         "color": "#ffc28a"
       },
       {
@@ -206,7 +206,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "bgRopeEndcapPauseHeight",
         "mainEndcapGrowSpeed",
