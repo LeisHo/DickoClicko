@@ -522,6 +522,11 @@ const DEV_GROUPS = [
     { key:'flickHoldMaxSpeed',    label:'Flick Hold Max Speed',    type:'slider', unit:'x', min:1,   max:20,  step:0.5, def:6 },
     { key:'flickHoldMaxDuration', label:'Flick Hold Max Duration', type:'slider', unit:'s', min:0.1, max:5,   step:0.1, def:1.5 },
   ]},
+  { title:'RIGHT CLICK', controls:[
+    { key:'ropeAttractionIntensity', label:'Rope Attraction Intensity', type:'slider', unit:'x', min:0, max:1, step:0.02, def:0.1 },
+    { key:'ropeAttractionSpeed',     label:'Rope Attraction Speed',     type:'slider', unit:'%vmin/s', min:5, max:200, step:5, def:60 },
+    { key:'ropeAttractionMaxReach',  label:'Max Reach Distance',        type:'slider', unit:'%vmin', min:5, max:100, step:1, def:40 },
+  ]},
 ];
 
 const cfg = {};
@@ -3415,6 +3420,19 @@ function performPieceSplit(piece, idx){
    the spec requires a double click to never trigger a single click.
 --------------------------------------------------------------------- */
 let downInfo = null;   // {mode:'circle'} or {mode:'rope', x,y,hit,startTime,charging}
+// Rope Attraction: right-click-and-hold reaches mainRope's own tip toward
+// the mouse. Kept entirely separate from downInfo/holdTimer (the left-click
+// state machine above) rather than a 3rd downInfo.mode -- it's a genuinely
+// independent gesture (a different mouse button) with no hold-threshold/
+// double-click-arming logic of its own to share, so folding it into that
+// state machine would only add unrelated fields to every left-click path.
+// mouseX/mouseY track continuously (not just while attracting) since the
+// cost of one extra pointermove listener is trivial and it means the very
+// first attraction-active frame already has a real, current mouse position
+// instead of stale/undefined coordinates from before the right-click.
+let ropeAttractionActive = false;
+let mouseX = 0, mouseY = 0;
+window.addEventListener('pointermove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 let holdTimer = null;
 let pendingClick = null; // {hit,timer}
 
@@ -3500,6 +3518,20 @@ function hitTestAny(x, y, maxDist){
 }
 
 function onPointerDown(e){
+  // Rope Attraction (right-click-and-hold): checked first and unconditionally
+  // returns, same reasoning as the FLICK check just below -- a different
+  // mouse button is an entirely separate gesture that should never also
+  // fall through into the left-click rope/circle logic. Gated on
+  // introPhase === 'done' since there's no mainRope tip to reach for
+  // otherwise (mirrors the circle-hold-to-grow branch's own gating further
+  // down, for the same reason).
+  if (e.button === 2){
+    if (introPhase === 'done'){
+      ropeAttractionActive = true;
+      logClick('down:rope-attraction', { x: e.clientX, y: e.clientY });
+    }
+    return;
+  }
   // FLICK animations 1 and 2: both rest on frame 1 until clicked directly
   // on their own graphic, per explicit request -- checked first and
   // return immediately so a click here never also reaches the rope/circle
@@ -3621,6 +3653,15 @@ function onPointerDown(e){
 }
 
 function onPointerUp(e){
+  // Ends a Rope Attraction hold -- independent of downInfo (see
+  // onPointerDown's own rope-attraction branch), so checked first the same
+  // way the FLICK release just below is. e.button === 2 on a pointerup
+  // reports which button was JUST released, same convention as pointerdown.
+  if (e.button === 2){
+    if (ropeAttractionActive) logClick('up:rope-attraction', { x: e.clientX, y: e.clientY });
+    ropeAttractionActive = false;
+    return;
+  }
   // Release ends a FLICK hold-preview (see onPointerDown) and starts that
   // animation's real sequence -- checked first, independent of downInfo
   // (a flick hold never sets it), same reasoning as onPointerDown's own
@@ -3759,7 +3800,7 @@ function onPointerUp(e){
 
 canvas.addEventListener('pointerdown', onPointerDown);
 window.addEventListener('pointerup', onPointerUp);
-window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); holdingFlick = null; });
+window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); holdingFlick = null; ropeAttractionActive = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 /* ---------------------------------------------------------------------
@@ -3956,6 +3997,47 @@ function update(rawDt){
   // off Startup Extension Speed (or its tween) instead of the manual
   // Rope Growth Rate -- independently tunable, per explicit request.
   if (growing) growRope(rawDt, introPhase === 'growing' ? currentIntroExtendRate() : undefined);
+  // Rope Attraction: nudge mainRope's own tip toward the mouse each frame
+  // while right-click-held, THEN let integrateChain()'s own constraint
+  // solve (just below) resolve it -- deliberately NOT excluded from that
+  // solve the way a growing tip is (see hasPartialTip/skipLastSegment
+  // below): the whole point is that the distance constraint's own
+  // segment-length limit is what naturally caps how far the tip can
+  // actually reach, so a mouse target farther than the rope's real total
+  // length just pulls the chain as far toward it as the rope's own length
+  // allows -- per explicit request ("If the rope length or wahtever isnt
+  // enough for the endcap to fully look at the mouse, it will rotate as
+  // much as it can"). The endcap's own "look at the mouse" rotation is a
+  // free consequence of this: drawEndcap() already orients off
+  // tipDirection(), which reads straight from wherever the tip physics
+  // point actually ends up -- no separate rotation logic needed.
+  if (ropeAttractionActive){
+    const tip = mainRope.points[mainRope.points.length - 1];
+    const anchor = mainRope.points[0];
+    // Max Reach Distance clamps the ATTRACTION TARGET itself (measured
+    // from the rope's own anchor point) rather than the tip's per-frame
+    // movement -- an independent, tunable ceiling on top of whatever the
+    // rope's real physical length already allows, so it can be dialed
+    // BELOW the rope's full length (a shorter "leash") without fighting
+    // the constraint solver's own, separate length limit.
+    const maxReach = vmin(cfg.ropeAttractionMaxReach);
+    let tx = mouseX - anchor.x, ty = mouseY - anchor.y;
+    const tdist = Math.hypot(tx, ty) || 1e-6;
+    if (tdist > maxReach){ tx *= maxReach / tdist; ty *= maxReach / tdist; }
+    let dx = (anchor.x + tx) - tip.x, dy = (anchor.y + ty) - tip.y;
+    const ddist = Math.hypot(dx, dy);
+    if (ddist > 0.0001){
+      // Frame-rate-independent ease (not a flat per-frame fraction) so
+      // Rope Attraction Intensity means the same thing regardless of the
+      // actual frame rate this environment happens to render at.
+      const ease = 1 - Math.pow(1 - cfg.ropeAttractionIntensity, dt * 60);
+      let moveX = dx * ease, moveY = dy * ease;
+      const moveDist = Math.hypot(moveX, moveY);
+      const maxMove = vmin(cfg.ropeAttractionSpeed) * dt;
+      if (moveDist > maxMove){ const s = maxMove / moveDist; moveX *= s; moveY *= s; }
+      tip.x += moveX; tip.y += moveY;
+    }
+  }
   const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
   // radius is the circle's own drawn edge (not Infinity) while
   // introUnsettled -- lets a spawn point placed beyond the tight
