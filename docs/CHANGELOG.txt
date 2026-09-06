@@ -5283,6 +5283,19 @@ confirmed the server was genuinely serving the new byte sizes.
 Committed + pushed.
 
 ================================================================================
+2026-09-05  -  11:48 PM EDT
+
+One more frame update ("I UPDATED ONE MORE PNG IN THE FOLDERS"). git
+status showed only `ANI/FRAMES-10.png` as tracked-modified; md5sum
+confirmed the same new file was also copied into `ANI/1/FRAMES-10.png`
+and `ANI/2/FRAMES-10.png`. FRAMES-10 is notable vs. prior updates in
+this series: it maps into TWO ANI2 positions at once (frame 6, from
+ANI/1's natural-order list; frame 15, from ANI/2's reverse-order list)
+rather than just one. Copied into both, re-ran the resize+WebP
+pipeline on all 3 affected files, verified via no-cache fetch.
+Committed + pushed.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
