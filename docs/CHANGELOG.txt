@@ -5846,6 +5846,27 @@ existing minimum-length check, second attempt further down the growing
 rope succeeded.
 
 ================================================================================
+2026-09-06  -  08:51 AM EDT
+
+"i updated the animation frames. please updae those then push" -- the
+user had edited FRAMES-02/03/04.png in data/FLICK/ANI/ (and their
+identical duplicates in data/FLICK/ANI/3/, the hold-preview set). Caught
+before pushing: the live game only ever loads the separately resized/
+compressed .webp copies of these frames (per the earlier
+22.6MB->2.1MB WebP conversion round), and those .webp files still had
+their old, pre-edit timestamps -- pushing the PNG edits alone would have
+been invisible in the actual running game. Flagged this to the user via
+AskUserQuestion rather than guessing; confirmed they wanted the WebP
+regenerated too. No cwebp/ImageMagick/sharp available in this
+environment, so regenerated via a Playwright-driven headless Chromium
+page (canvas drawImage + toDataURL('image/webp', 0.9)) instead --
+resized to the same 1400px-wide convention as the existing frame set
+(confirmed matches FRAMES-01.webp's own 1400x1257 exactly), quality
+picked empirically against that same reference frame's known-good byte
+size. Verified each output's dimensions load correctly and spot-checked
+one frame visually before committing.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

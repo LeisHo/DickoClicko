@@ -203,7 +203,11 @@ additions. Current state of each subsystem:
   frames: some took ~19s to resolve). Resized to 1400px wide and
   re-encoded as WebP -- 22.6MB -> 2.1MB total (90.7% smaller),
   measured zero failed/slow loads afterward. Old PNGs are still on disk,
-  unreferenced, not yet deleted -- see CODE_SUMMARY gotchas.
+  unreferenced by the game itself, not yet deleted -- kept as the actual
+  source-of-truth for hand-drawn edits (the user edits these, not the
+  WebP directly), so any future frame edit needs its WebP regenerated to
+  match (resize to 1400px wide, re-encode) before it'll show up live --
+  see CODE_SUMMARY gotchas.
 
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.

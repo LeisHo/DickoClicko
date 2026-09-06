@@ -3670,3 +3670,27 @@ GOTCHAS
   fell while the remainder kept growing) -- a first attempt too close to
   the anchor was correctly refused by the existing minimum-length check,
   confirming that guard still applies unchanged.
+- **Editing a FLICK animation frame means editing the .png, but the game
+  only ever loads the .webp -- the 2 can silently drift apart.** The
+  earlier WebP-conversion round left the original PNGs on disk
+  unreferenced by any `img.src` (confirmed: the only `.png` in the whole
+  file is inside a comment), but the user's own edits keep landing on
+  those PNGs (they're the actual editable source -- resizing/hand-editing
+  a 1400px lossy WebP directly isn't practical). Caught this BEFORE
+  pushing a user's "update the frames" request: the 5 edited PNGs
+  (`FRAMES-02/03/04.png` in `data/FLICK/ANI/`, duplicated in
+  `data/FLICK/ANI/3/`) had fresh timestamps while their `.webp`
+  counterparts were untouched -- pushing the PNGs alone would have been
+  invisible in the live game. No `cwebp`/ImageMagick/`sharp` available in
+  this environment, so regenerated via a headless Playwright/Chromium
+  page instead: draw the PNG onto a canvas sized to 1400px wide (same
+  proportional scale the original conversion used, confirmed by checking
+  an untouched reference frame's own real decoded dimensions --
+  1400x1257), then `canvas.toDataURL('image/webp', 0.9)`, decoded and
+  written to the matching `.webp` path. Quality 0.9 was picked
+  empirically (tested a spread of values against one known-good existing
+  frame's real byte size, picked the closest reasonable match) since
+  there's no way to recover the original conversion tool's exact
+  settings. Whoever edits these frames next needs to regenerate the
+  `.webp` the same way -- there's no build step or watcher that does
+  this automatically.
