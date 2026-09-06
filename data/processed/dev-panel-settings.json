@@ -11,7 +11,7 @@
     "endcapHeight": 1.4,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 20.061375851007913,
+    "ropeLength": 15.012192605788249,
     "ropeDefaultLength": 15,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
@@ -63,8 +63,8 @@
         "color": "#b78657"
       }
     ],
-    "ropeEndCurveArc": 0.7,
-    "ropeTopCurveArc": 0.9,
+    "ropeEndCurveArc": 1,
+    "ropeTopCurveArc": 1.1,
     "clickIntensity": 1.1,
     "holdDistance": 22,
     "bendStiffness": 0.02,
@@ -337,9 +337,9 @@
   "panelGeometry": {
     "mobile": {
       "left": 182,
-      "top": 77.5952377319336,
+      "top": 262.9761962890625,
       "width": 229,
-      "height": 624.5,
+      "height": 374.7857360839844,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
