@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 10.549096236217737,
+    "ropeLength": 11.87409117269218,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -100,7 +100,20 @@
     "introRiseClearOffset": 11.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
-    "introPauseDuration": 0.5,
+    "bgRopeStartEndcapEnabled": true,
+    "bgRopeEndcapHeight": 1,
+    "bgRopeEndcapGradientEnabled": false,
+    "bgRopeEndcapGradientColors": [
+      {
+        "pos": 0,
+        "color": "#a5815f"
+      },
+      {
+        "pos": 1,
+        "color": "#3d2817"
+      }
+    ],
+    "introPauseDuration": 2.9,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": true,
     "introExtendStartSpeed": 2,
@@ -153,6 +166,10 @@
       "key": "STARTUP ANIMATION",
       "collapsed": false,
       "settings": [
+        "bgRopeStartEndcapEnabled",
+        "bgRopeEndcapHeight",
+        "bgRopeEndcapGradientEnabled",
+        "bgRopeEndcapGradientColors",
         "startupRiseGravity",
         "detachWaitDuration",
         "introRiseClearOffsetEnabled",
@@ -302,11 +319,11 @@
     }
   ],
   "panelGeometry": {
-    "mobile": {
-      "left": 182,
-      "top": 262.0535888671875,
-      "width": 229,
-      "height": 407.3690490722656,
+    "desktop": {
+      "left": 908.0375366210938,
+      "top": 17.912500381469727,
+      "width": 627.9500122070312,
+      "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -319,11 +336,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "desktop": {
-      "left": 908.0375366210938,
-      "top": 17.912500381469727,
-      "width": 627.9500122070312,
-      "height": 570.0250244140625,
+    "mobile": {
+      "left": 182,
+      "top": 262.0535888671875,
+      "width": 229,
+      "height": 407.3690490722656,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
