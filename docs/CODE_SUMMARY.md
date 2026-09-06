@@ -4012,3 +4012,28 @@ GOTCHAS
   while the pane was hidden and resumed normally once fronted via
   tabs_select, a technique worth reusing for future animation-timing
   verification in this project.
+- **Rope Attraction: right-click-and-hold reaches mainRope's own tip
+  toward the mouse.** New RIGHT CLICK dev-panel group (Intensity, Speed,
+  Max Reach Distance). onPointerDown/onPointerUp gained an `e.button===2`
+  branch each, checked first (same pattern as the FLICK checks), setting/
+  clearing a standalone `ropeAttractionActive` flag kept deliberately
+  separate from downInfo's own left-click state machine -- a different
+  mouse button with no hold-threshold/double-click logic to share.
+  update() nudges the tip toward a mouse-derived target (clamped to Max
+  Reach Distance from the anchor) each frame, using a frame-rate-
+  independent ease (`1 - (1-intensity)^(dt*60)`) capped by a max px/frame
+  speed, THEN lets it flow into the same integrateChain() call every other
+  point already goes through -- deliberately NOT excluded via
+  skipLastSegment the way a growing tip is, since the constraint solver's
+  own segment-length limit is exactly what should cap how far the tip can
+  reach (per explicit request: if the rope's real length can't fully reach
+  the mouse, it should extend as far as it physically can, not further).
+  The endcap's own "look at the mouse" rotation needed zero new code:
+  drawEndcap() already orients off `tipDirection()`, reading straight from
+  the tip's own (now-moved) position. Verification limitation: this
+  environment's Browser pane reported itself hidden independent of
+  tab-fronting for this task, so the live reach/rotation behavior was
+  verified by code review (tracing the nudge against integrateChain()'s
+  logic) rather than a live gesture test -- syntax, dev-panel rendering,
+  and pre-spawn no-op behavior (right-click before introPhase==='done')
+  were confirmed live.

@@ -6248,6 +6248,56 @@ bug), and the fallen piece sits in place with no floating/bouncing across
 several consecutive frames. No console errors throughout.
 
 ================================================================================
+2026-09-06  -  04:05 PM EDT
+
+New feature, requested mid-turn during the collision-detection round and
+deferred until now: "when the user right clicks and holds, the main rope
+end will get attracted to where the mouse is. IE, the endcap will rotate
+to 'look' at the mouse, and will gradually reach towards the mouse. *DC*
+Right Click* - *D*Rope Attraction Intensity* - *D*Rope Attraction Speed*
+- *D*Max Reach Distance*", with a follow-up clarifying the physics: "the
+reaching function should alway still retain the physicality of the rope.
+So as the endcap rotates to look at the mouse, the rope behind it should
+act accordingly. If the rope length or wahtever isnt enough for the
+endcap to fully look at the mouse, it will rotate as much as it can."
+
+New RIGHT CLICK dev-panel group (Rope Attraction Intensity 0-1 def 0.1,
+Rope Attraction Speed 5-200%vmin/s def 60, Max Reach Distance 5-100%vmin
+def 40). Right-click-and-hold nudges mainRope's own tip toward the mouse
+each frame, then lets integrateChain()'s own existing distance-constraint
+solve resolve it afterward -- deliberately NOT excluded from that solve
+the way a growing tip is (see hasPartialTip/skipLastSegment), since the
+whole point is that the constraint solver's own segment-length limit is
+what naturally caps how far the tip can reach: a mouse target farther
+than the rope's real total length just pulls the chain as far toward it
+as the rope's own length physically allows, exactly matching the
+clarified request. Max Reach Distance is a separate, independently-
+tunable ceiling clamping the attraction TARGET itself (measured from the
+rope's own anchor) rather than the tip's per-frame movement -- lets the
+"leash" be dialed shorter than the rope's own full length without
+fighting the constraint solver's own, separate limit. The endcap's own
+"look at the mouse" rotation needed no new code at all: drawEndcap()
+already orients off tipDirection(), which reads straight from wherever
+the tip physics point actually ends up, so it's a free consequence of
+moving that point.
+
+Verification limitation, disclosed honestly rather than glossed over:
+this environment's Browser pane reported itself hidden (via its own
+tabs_context check) independent of tab-fronting, and confirmed no visual
+animation progress at all across 2 separate tabs and repeated fronting
+attempts over several minutes -- a harder version of this session's
+already-documented rAF-throttling issue, since fronting a tab (which
+worked earlier in this same session for the regression fix) had no effect
+here. Verified what was actually reachable: syntax check passes; the new
+sliders render correctly in the dev panel; a right-click before mainRope
+exists (introPhase !== 'done') correctly no-ops with no console errors
+and no unwanted state change. The reach mechanic itself reuses this
+codebase's own proven, already-tested distance-constraint solver rather
+than new physics, and was verified by direct code review (tracing the
+exact nudge-then-constrain interaction against integrateChain()'s own
+logic) rather than a live gesture test.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

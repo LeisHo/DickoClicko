@@ -260,6 +260,17 @@ additions. Current state of each subsystem:
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.
 
+- **Rope Attraction**: right-click-and-hold nudges mainRope's own tip
+  toward the mouse each frame, then lets the existing distance-constraint
+  solver cap how far it can actually reach based on the rope's real
+  length -- a mouse target beyond that just pulls the rope as far as it
+  physically can go. The endcap's own "look at the mouse" rotation is a
+  free consequence of `drawEndcap()`'s existing `tipDirection()`-based
+  orientation. New RIGHT CLICK dev-panel group (Intensity, Speed, Max
+  Reach Distance). Verified by code review, not a live gesture test --
+  this environment's Browser pane reported itself hidden independent of
+  tab-fronting for this task (see CODE_SUMMARY gotchas).
+
 ## What's next
 
 Queued (deferred from a large bug-fixing round, per explicit request):
