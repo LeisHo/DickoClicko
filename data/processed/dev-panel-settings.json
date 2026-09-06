@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 17.718076072908985,
+    "ropeLength": 17.821533952685016,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -113,7 +113,7 @@
         "color": "#ffc085"
       }
     ],
-    "bgRopeEndcapPauseHeight": 2.1,
+    "bgRopeEndcapPauseHeight": 0.6,
     "mainEndcapGrowSpeed": 3,
     "introPauseDuration": 1.5,
     "introExtendSpeed": 15,
