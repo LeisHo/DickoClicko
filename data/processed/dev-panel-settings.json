@@ -103,7 +103,7 @@
     "introRiseSpeed": 5.5,
     "startupRiseGravity": 0.18,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 0.5,
+    "introRiseClearOffset": 2.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "bgRopeStartEndcapEnabled": true,
@@ -135,7 +135,7 @@
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
     "flickX": 23,
-    "flickY": 79,
+    "flickY": 80,
     "flickScale": 57,
     "flickAnimSpeed": 4.6,
     "flick2X": 31,
@@ -181,7 +181,7 @@
     },
     {
       "key": "FLICK ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flickX",
         "flickY",
@@ -191,7 +191,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "bgRopeEndcapPauseHeight",
         "mainEndcapGrowSpeed",
