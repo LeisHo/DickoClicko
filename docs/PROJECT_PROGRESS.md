@@ -118,7 +118,7 @@ additions. Current state of each subsystem:
   behind several previously-confusing "circle disappears" / "double-click
   does nothing" reports. `loop()` also wraps each frame in try/catch so
   one bad frame can't permanently freeze the app.
-- **FLICK animations**: two small, independent PNG overlays, each with its
+- **FLICK animations**: two small, independent WebP overlays, each with its
   own X/Y/Scale/Speed dev-panel group. Both are hold-to-preview,
   click-to-trigger: press-and-hold cycles 4 preview frames
   (`data/FLICK/ANI/3/`) for as long as it's held, release plays exactly
@@ -136,12 +136,19 @@ additions. Current state of each subsystem:
   in-progress sequence. The hold-preview cycle itself now speeds up the
   longer it's held, ramping linearly from 1x up to Flick Hold Max Speed
   as elapsed hold time approaches Flick Hold Max Duration, then holding
-  flat at max past that point. A playing sequence now pauses on whichever
-  frame isn't loaded yet instead of racing past it on a real-time clock
-  -- fixes a real bug where a hard refresh (bypassing the browser cache
-  for all ~40+ frame images) made a sequence look truncated, showing
-  progressively more frames on each later click as more images finished
-  downloading in the background -- see CODE_SUMMARY gotchas.
+  flat at max past that point. A playing sequence pauses on whichever
+  frame isn't loaded yet instead of racing past it on a real-time clock.
+  All 42 frames across the 3 folders were originally 6870x6166px PNGs
+  (up to 760KB each) despite rendering at only 50% vmin on screen --
+  fine on the local dev server's cache but on the deployed Vercel site
+  the ~40 concurrent oversized requests fired on every page load
+  genuinely competed for the visitor's real bandwidth, so some frames
+  arrived late or not at all, which is what "truncated playback" on the
+  live site actually was (confirmed via a live probe against real
+  frames: some took ~19s to resolve). Resized to 1400px wide and
+  re-encoded as WebP -- 22.6MB -> 2.1MB total (90.7% smaller),
+  measured zero failed/slow loads afterward. Old PNGs are still on disk,
+  unreferenced, not yet deleted -- see CODE_SUMMARY gotchas.
 
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.

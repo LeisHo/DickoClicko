@@ -3078,3 +3078,41 @@ GOTCHAS
   as the request was pending; (2) once that same request actually
   resolved (still a 404), the sequence immediately resumed and completed
   normally rather than staying frozen.
+- **The real cause of FLICK "truncated playback" recurring a third time
+  was oversized source images, not a code bug -- confirmed once the user
+  clarified it happens on the deployed Vercel site, not localhost,
+  which ruled out the local-http.server-concurrency explanation above.**
+  MEASURED: `data/FLICK/ANI/FRAMES-01.png` was 6870x6166px, 760,849
+  bytes -- typical across all 42 frames in `ANI/`/`ANI2/`/`ANI/3/`
+  (22.62MB total, confirmed via `du`), despite the graphic rendering at
+  only 50% vmin on screen (max slider value 60%), roughly 10-30x
+  smaller than the source resolution. All 42 fire as `new Image()`
+  requests essentially at once on page load. Live-probed 6 real frame
+  URLs (cache-busted, injected into the page's main world since
+  page-scope `let`/`const` bindings aren't visible to this browser
+  tool's own isolated-world `javascript_tool` eval -- DOM-inserted
+  `<script>` tags always run in the main world regardless of which
+  world injected them, which is how the probe got real numbers at all):
+  2 of 6 resolved in 32-48ms; the other 4 took 18,959-18,975ms and
+  resolved as `error` (naturalWidth 0), not `load`. This is genuine
+  bandwidth contention (firing ~23MB of oversized images at once
+  competes for the visitor's real connection), not a Vercel server
+  defect -- `isFrameBlocking()`'s pause-until-loaded logic is correct in
+  principle, a ~19s real stall is just indistinguishable from "broken"
+  to a user who tries FLICK shortly after page load.
+- **Fix: resized all 42 FLICK frames to 1400px wide and re-encoded as
+  WebP, cutting total size 90.7% (22.62MB -> 2.11MB), MEASURED via a
+  batch Pillow script** (`Image.resize(..., Image.LANCZOS)` +
+  `.save(path, 'WEBP', quality=90, method=6)`). 1400px was a judgment
+  call sized to comfortably cover the 60%-vmin max slider value with
+  headroom for high-DPI screens, not a measured minimum -- no attempt
+  was made to find the actual minimum safe resolution. `index.html`'s 3
+  frame-loading loops (`flickFrames`, `flickFrames2`, `flickHoldFrames`)
+  now reference `.webp` instead of `.png`; old PNGs are still on disk,
+  unreferenced, not deleted (this project's standing "nothing gets
+  deleted by default" convention -- flagged to the user as a separate
+  repo-size cleanup decision rather than doing it unasked). Verified
+  live: reloaded the page, confirmed all 42 webp requests returned a
+  clean 200 OK with none failing or stalling on the same server that had
+  just produced the 19-second stalls above, and both FLICK graphics
+  still render correctly at their normal on-screen size.

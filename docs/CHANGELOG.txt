@@ -5173,6 +5173,59 @@ console (only the known FLICK-image ERR_CONNECTION_RESET local-server
 noise, no JS exceptions).
 
 ================================================================================
+2026-09-05  -  09:33 PM EDT
+
+Found and fixed the REAL cause of "same animation issue" recurring a
+THIRD time -- user confirmed it happens on the deployed Vercel site, not
+just localhost, which ruled out the local-http.server-concurrency
+explanation entirely and meant this was a genuinely new, real bug.
+
+Directly measured one FLICK frame (`data/FLICK/ANI/FRAMES-01.png`):
+6870x6166px, 760,849 bytes. Confirmed via `du`/`ls` that this size is
+typical across all 42 frames in `ANI/`, `ANI2/`, and `ANI/3/` --
+22.62MB total. All 42 are fired as `new Image()` requests essentially
+at once on every page load, but the graphic itself renders at only
+50% vmin on screen (max slider value 60%) -- a few hundred pixels on
+any real device, roughly 10-30x smaller than the source resolution.
+
+Live-tested against the actual running page (not just reasoning about
+it): injected a real probe that requested 6 real frame URLs with
+cache-busting params and timed resolution. 2 of 6 resolved in 32-48ms;
+the other 4 took 18,959-18,975ms and resolved as `error`
+(naturalWidth: 0), not `load`. This reproduces the "truncated/frozen"
+symptom directly -- `isFrameBlocking()`'s pause-until-loaded logic is
+correct in principle, but a ~19s real stall is indistinguishable from
+"broken" to a user clicking FLICK shortly after page load, which is
+exactly when they're most likely to try it. On Vercel this isn't a
+single-threaded-server issue (that only applied to the local dev
+server) -- it's genuine bandwidth contention from firing ~23MB of
+oversized images at once.
+
+Presented the finding and 3 candidate fixes to the user (downscale +
+re-encode the source images; add a load-timeout fallback to
+`isFrameBlocking()`; lazy-load frames instead of firing all 42 upfront)
+with a recommendation before touching anything, since resizing/
+re-encoding 42 shipped assets is more than a trivial change. User asked
+whether they or Claude should do the resizing -- did it directly via
+Pillow (already available in this environment): resized every frame to
+1400px wide (a judgment call sized to comfortably cover the 60%-vmin
+max slider value with headroom for high-DPI screens, not a measured
+minimum) and re-encoded as WebP (quality 90). MEASURED: 22.62MB ->
+2.11MB total, a 90.7% reduction. Updated all 3 frame-loading loops in
+index.html (`data/FLICK/ANI/`, `data/FLICK/ANI2/`, `data/FLICK/ANI/3/`)
+to reference `.webp` instead of `.png`. Old PNGs left on disk,
+unreferenced -- not deleted, per this project's standing "nothing gets
+deleted by default" convention; flagged to the user as a separate
+future cleanup decision (repo size) rather than doing it unasked.
+
+Verified live: reloaded the page and confirmed all 42 webp requests
+returned a clean 200 OK with none failing or stalling (vs. several
+`[FAILED: net::ERR_CONNECTION_RESET]` and multi-second stalls on the
+old PNGs moments earlier on the same server) -- both FLICK graphics
+still render correctly at their normal on-screen size with no visible
+quality loss.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
