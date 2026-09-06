@@ -105,12 +105,16 @@
     "bgRopeEndcapGradientEnabled": true,
     "bgRopeEndcapGradientColors": [
       {
-        "pos": 0.007294648657733975,
-        "color": "#ffc085"
+        "pos": 0.010818047830674688,
+        "color": "#ffa66a"
       },
       {
         "pos": 1,
-        "color": "#ffc085"
+        "color": "#f4c8a4"
+      },
+      {
+        "pos": 0.18875225983637445,
+        "color": "#f4c8a4"
       }
     ],
     "bgRopeEndcapPauseHeight": 0.6,
