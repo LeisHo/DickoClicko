@@ -76,7 +76,11 @@ additions. Current state of each subsystem:
   A still-emerging (small-scale) endcap now correctly renders BEHIND the
   rope's own plain round-cap end arc rather than in front of it -- a
   draw-order fix (`drawRopeEndArcs()` now runs after `drawEndcap()`), not
-  a change to when either one shows.
+  a change to when either one shows. The hidden/mid-emerge endcap now
+  also starts at a configurable WIDTH (Endcap Starting Scale (Width),
+  0.6-1, def 1) rather than always full width -- previously only the
+  height axis (Endcap Starting Scale) shrank at the start of emergence.
+  Applies to both a boot/End-Emerge spawn and a detach-triggered spawn.
 - **Rope styling**: optional Tip Segment Shape (a vase-like forked
   decorative shape near the endcap), Rope Top/End Curve Arc (half-ellipse,
   0 = flat to 1 = full semicircle), and a draggable-stop rope gradient
@@ -85,9 +89,14 @@ additions. Current state of each subsystem:
   own independent gradient too (Rope End Arc Gradient), separate from
   both the rope-body gradient and Endcap Gradient -- a local gradient
   across just the arc's own small bump, not the whole rope's span. That
-  arc also now overlaps 1.5px into the rope's own stroke end (same fix
-  as the endcap/rope seam) rather than meeting it at an exact boundary,
-  closing the same class of canvas anti-aliasing seam.
+  arc also now overlaps into the rope's own stroke end (same fix as the
+  endcap/rope seam) rather than meeting it at an exact boundary, closing
+  the same class of canvas anti-aliasing seam -- the overlap amount is
+  now a live dev-panel slider (Rope End Arc Seam Overlap, 0-5px, def 3)
+  rather than a hardcoded constant. Fallen pieces have their own
+  independent gradient too (Piece Gradient), separate from Rope
+  Gradient -- previously a piece always matched whatever gradient the
+  still-attached rope had.
 - **Floor**: collision + piling; fallen pieces collide with each other
   (not with the still-attached main rope) and decay in thickness over
   their own lifetime down to a configurable floor. `pieceCollision()`'s

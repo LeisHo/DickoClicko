@@ -3816,3 +3816,46 @@ GOTCHAS
   const anymore). Same placement as before -- right after `ctx.rotate`,
   before the gradient/ellipse -- unchanged reasoning. Verified live: the
   slider appears with default value 3, no console errors.
+- **Piece Gradient -- a 4th independent gradient split, for fallen
+  pieces only.** Every fallen piece previously reused mainRope's OWN
+  `ropeGradientEnabled`/`ropeGradientColors` (a piece couldn't look
+  different from the still-attached rope it fell off of), per explicit
+  request ("give me a gradient slider that is for the cut segments of
+  rope"). Same split-gradient pattern as Endcap Gradient/Background Rope
+  Gradient/Rope End Arc Gradient's own earlier splits. New
+  `pieceGradientEnabled`/`pieceGradientColors` controls; the 2 piece-
+  color call sites in `render()` (the body-stroke `ropeStrokeColor()`
+  call, and the end-arcs pass's own fallback-color `ropeStrokeColor()`
+  call) both switched from the rope's own keys to the new piece-specific
+  ones. Verified live: with Rope Gradient off and Piece Gradient on, cut
+  a piece and confirmed it showed a clear independent gradient while the
+  still-attached remaining rope stayed solid.
+- **Endcap Starting Scale (Width) -- the hidden/mid-slide endcap's own
+  WIDTH never actually shrank, only its height did.** `drawEndcap()`'s
+  `normalScale` (thicknessPx / ENDCAP_ALIGNMENT.width) was used
+  UNCONDITIONALLY as the X scale in `ctx.scale(normalScale, yScale *
+  heightMult)`, regardless of `factor` -- only Y (`yScale`, driven by
+  `Endcap Starting Scale`/`cfg.endcapStartingScale`) ever blended from a
+  smaller starting value up to full size. Per explicit request ("while
+  we currently have the hidden endcaps at 100% width from the beginning,
+  only scaling in height, provide me a slider for the Endcap Starting
+  Scale for Width. Set Max to 1 and min to .6"), added
+  `endcapStartingScaleWidth` (0.6-1, step 0.02, def 1 -- preserves the
+  exact current always-full-width look until deliberately tuned down)
+  and mirrored the existing Y blend along X: `startXScale = normalScale
+  * cfg.endcapStartingScaleWidth`, `xScale = startXScale + (normalScale
+  - startXScale) * scaleFactor` (reusing the SAME `scaleFactor` the Y
+  blend already computes), then `ctx.scale(xScale, yScale * heightMult)`
+  instead of the old `ctx.scale(normalScale, ...)`. Applies to
+  detach-triggered spawns with no separate wiring: a detach's own
+  endcap grow-in (`detachScale`/`mainEndcapHeight` in `render()`) only
+  ever modulates the HEIGHT parameter (`heightMult`) passed into this
+  SAME shared `drawEndcap()` function boot/End Emerge already calls --
+  the new width blend, driven by `factor`/`scaleFactor` internal to the
+  function itself, applies uniformly to whichever spawn path is calling
+  it, by construction, not by any special-casing. Verified live: froze
+  End Emerge mid-slide (End Emerge Delay=0, Speed=0, holding progress at
+  the tiny post-slide scale indefinitely) with the new slider at its
+  minimum (0.6) and confirmed the endcap renders visibly narrower than
+  the rope body beneath it at that frozen state -- previously it would
+  have matched the rope's own full width even mid-slide.

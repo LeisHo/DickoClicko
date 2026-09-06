@@ -6010,6 +6010,51 @@ directly instead of a hardcoded local constant. Verified live: slider
 appears in the ROPE group with default value 3, no console errors.
 
 ================================================================================
+2026-09-06  -  12:12 PM EDT
+
+2 new controls, per explicit request: "give me a gradient slider that
+is for the cut segments of rope. Furthermore, while we currently have
+the hidden endcaps at 100% width from the beginning, only scaling in
+height, provide me a slider for the Endcap Starting Scale for Width.
+Set Max to 1 and min to .6. This slider also applies to detach
+endcaps."
+
+Piece Gradient: same split-gradient pattern as Endcap Gradient/Rope End
+Arc Gradient's own earlier splits from Rope Gradient this session. Every
+fallen piece previously reused mainRope's own Rope Gradient setting (a
+piece couldn't look different from the rope it fell off of); new
+`Piece Gradient Enabled`/`Colors` controls, recomputed per piece each
+frame from its own current points span, same as Rope Gradient's own
+per-piece retention already worked. Both of the piece-color call sites
+in `render()` (the body stroke, and the end-arc fallback color) switched
+from `cfg.ropeGradientEnabled`/`ropeGradientColors` to the new
+`pieceGradientEnabled`/`pieceGradientColors`.
+
+Endcap Starting Scale (Width): the hidden/mid-slide endcap's own WIDTH
+was always `normalScale` (full width) regardless of emerge progress --
+only the HEIGHT axis (`Endcap Starting Scale`) ever shrank at the start.
+New `Endcap Starting Scale (Width)` slider (0.6-1, step 0.02, def 1 --
+preserves the exact current always-full-width look until deliberately
+tuned down) blends X the same slide->scale way Y already does inside
+`drawEndcap()`. Applies to detach-triggered spawns automatically, with
+no separate wiring needed -- a detach's own endcap grow-in
+(`detachScale`/`mainEndcapHeight`) only ever modulates the HEIGHT
+parameter passed into the SAME shared `drawEndcap()` call boot/End
+Emerge already uses, so the new width blend (driven by the same
+`factor`/`scaleFactor` internal to that one function) applies uniformly
+to both spawn paths by construction.
+
+Verified live: with Rope Gradient off and Piece Gradient on, cut a piece
+and confirmed it showed a clear independent gradient while the
+still-attached remaining rope stayed solid; froze End Emerge mid-slide
+(End Emerge Delay=0, Speed=0) with Endcap Starting Scale (Width) at 0.6
+and confirmed the endcap visibly renders narrower than the rope body
+beneath it at that frozen state. No new console errors (2 stale
+`ERR_CONNECTION_RESET` entries were leftover noise from an earlier
+failed navigation attempt in the same browser session, unrelated to this
+change).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
