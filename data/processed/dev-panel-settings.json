@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 10.376126609465194,
+    "ropeLength": 10.549096236217737,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -302,11 +302,11 @@
     }
   ],
   "panelGeometry": {
-    "desktop": {
-      "left": 908.0375366210938,
-      "top": 17.912500381469727,
-      "width": 627.9500122070312,
-      "height": 570.0250244140625,
+    "mobile": {
+      "left": 182,
+      "top": 345.3690490722656,
+      "width": 229,
+      "height": 238.1904754638672,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -319,11 +319,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "mobile": {
-      "left": 0,
-      "top": 0,
-      "width": 229,
-      "height": 761.6607055664062,
+    "desktop": {
+      "left": 908.0375366210938,
+      "top": 17.912500381469727,
+      "width": 627.9500122070312,
+      "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
