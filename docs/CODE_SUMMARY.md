@@ -3493,3 +3493,53 @@ GOTCHAS
   the cap visibly shrinks from full climb height down to a small but
   clearly still-visible size (never disappearing), then mainRope's cap
   picks up at that same small size and grows back up.
+- **`resetSettings()` -- the function that fetches and applies the real
+  saved/tuned config -- was nested entirely inside `if (DEV_MODE){...}`
+  at the boot sequence's own end, so it only ever ran when the dev panel
+  was ALSO being built.** Every ordinary visitor to the deployed site
+  (no `?dev=1`, not localhost/`file:`) silently ran on whatever
+  hardcoded `def:` values happened to be baked into `DEV_GROUPS` at
+  deploy time, regardless of how much tuning the saved settings held --
+  while a `?dev=1` visitor on the EXACT SAME deployment saw the real
+  config. Reported directly: "how come when I open in mobile [deployed
+  URL] vs [deployed URL]?dev=1, the settings are different?" DEV_MODE is
+  meant to gate only the dev PANEL UI (§12b), never whether the
+  functional settings actually load. Fixed by moving the
+  `resetSettings();` call to run unconditionally, immediately after the
+  `if (DEV_MODE)` block (which still only builds the panel UI itself)
+  rather than inside it.
+
+  That move surfaced 3 more spots that silently assumed the dev panel
+  already existed, which would otherwise throw the very first time a
+  real visitor's own settings-load actually ran the same code path a
+  `?dev=1` session always had DOM for: `applyValues()`'s 'slider' branch
+  unconditionally dereferenced `numEls[key].slider` (always `undefined`
+  without a built panel -- `TypeError`); its 'gradient' branch guarded
+  the crash already (`if (el && el.setStops...)`) but as a side effect
+  NEVER wrote `cfg[key]` at all when `el` was missing -- gradient
+  settings would have silently failed to apply for a real visitor even
+  with the DEV_MODE gate alone removed, a second bug hiding behind the
+  first; `applyPanelStyleValues()`'s 'slider'/'color' branches had the
+  same unconditional-dereference problem against `panelStyleNumEls`
+  (harmless in practice, since panel-appearance values only affect a UI
+  a real visitor never sees, but still a live crash risk left
+  unfixed). All four now write the real functional value
+  (`cfg[key]`/`panelStyle[key]`) unconditionally first, then touch
+  dev-panel DOM only inside `if (el)` -- the same pattern the
+  'color'/'checkbox'/'dropdown' branches already used correctly via a
+  fresh `document.querySelector(...)` + `if (input)` each time, rather
+  than a cached `numEls` reference.
+
+  **Verified against the ACTUAL live Vercel deployment, not just
+  localhost** -- DEV_MODE is unconditionally true on `localhost`/`file:`
+  regardless of `?dev=1`, so this exact bug is structurally
+  unreproducible there; the real check has to be against a real
+  non-localhost hostname. Loaded the plain deployed URL (no `?dev=1`)
+  and confirmed via `read_network_requests` that
+  `data/processed/dev-panel-settings.json` now fetches (200 OK) with no
+  console errors; visual proof it actually APPLIED (not just fetched):
+  Debug: Show Rise Clear Offset Line's pink/cyan lines rendered even
+  with no dev panel on screen -- that control's own code default is
+  `def:false`, so the lines showing at all means the real saved `true`
+  genuinely loaded and applied. Reloaded the same URL with `?dev=1` and
+  confirmed identical visual state, the dev panel just added on top.

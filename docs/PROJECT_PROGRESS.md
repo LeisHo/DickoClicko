@@ -141,7 +141,12 @@ additions. Current state of each subsystem:
   Safari/Chrome, confirmed on a live device) -- this was the root cause
   behind several previously-confusing "circle disappears" / "double-click
   does nothing" reports. `loop()` also wraps each frame in try/catch so
-  one bad frame can't permanently freeze the app.
+  one bad frame can't permanently freeze the app. Saved/tuned settings
+  (`resetSettings()`) now load for every visitor, not just a `?dev=1`
+  one -- previously nested entirely inside the DEV_MODE gate, so a real
+  visitor silently ran on hardcoded code defaults while `?dev=1` on the
+  exact same deployment showed the real tuned config -- see CODE_SUMMARY
+  gotchas.
 - **FLICK animations**: two small, independent WebP overlays, each with its
   own X/Y/Scale/Speed dev-panel group. Both are hold-to-preview,
   click-to-trigger: press-and-hold cycles 3 preview frames (as of this

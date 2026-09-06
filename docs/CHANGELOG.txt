@@ -5656,6 +5656,49 @@ size (not vanishing), then mainRope's cap picks up at that same small
 size and grows back up. Console clean apart from known noise.
 
 ================================================================================
+2026-09-06  -  04:38 AM EDT
+
+"how come when I open in mobile [deployed URL] vs [deployed
+URL]?dev=1, the settings are different?" -- a real, significant bug,
+not a misunderstanding. `resetSettings()` (fetches and applies the
+saved/tuned config from `dev-panel-settings.json`) was nested entirely
+inside `if (DEV_MODE)`, so it only ever ran when the dev panel was also
+being built. Every ordinary visitor to the deployed site -- the actual
+intended audience -- silently ran on whatever hardcoded `def:` values
+happened to be baked into DEV_GROUPS at deploy time, completely
+ignoring however much tuning had gone into the saved settings, while a
+`?dev=1` visitor on the EXACT SAME deployment saw the real config.
+DEV_MODE should only ever gate the dev PANEL UI, never whether
+functional settings load.
+
+Moved `resetSettings()` to run unconditionally, after the DEV_MODE
+block (which still only builds the panel UI). This surfaced 3 more
+spots that assumed the dev panel already existed and would otherwise
+crash the very first time a real visitor's settings actually loaded:
+`applyValues()`'s 'slider' branch (`numEls[key]` is always `undefined`
+without a built panel) and its 'gradient' branch (same, and it was the
+only branch that never fell back to writing `cfg` directly at all --
+gradient settings would have silently never applied for a real
+visitor even with the DEV_MODE gate removed), plus
+`applyPanelStyleValues()`'s 'slider'/'color' branches
+(`panelStyleNumEls` always empty). All four now write the real
+functional value (`cfg[key]`/`panelStyle[key]`) unconditionally and
+only touch dev-panel DOM when it actually exists -- matching the
+pattern the 'color'/'checkbox'/'dropdown' branches already used
+correctly from the start.
+
+Verified against the ACTUAL live Vercel deployment (not just localhost,
+where DEV_MODE is unconditionally true regardless of `?dev=1`, making
+the bug unreproducible there): loaded the plain deployed URL with no
+`?dev=1` and confirmed via network requests that
+`dev-panel-settings.json` now fetches (200 OK) and applies -- visible
+proof: Debug: Show Rise Clear Offset Line's pink/cyan lines rendered
+even with no dev panel, a value that's `def:false` in code and could
+only be showing because the real saved `true` loaded. Reloaded with
+`?dev=1` and confirmed the SAME visual state, dev panel just added on
+top. Console clean, no errors, in both cases.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
