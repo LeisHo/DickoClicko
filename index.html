@@ -2298,6 +2298,28 @@ function pieceThickness(piece){
   return Math.max(vmin(cfg.pieceMinThickness), piece.baseThickness - vmin(cfg.pieceDecaySpeed) * decaying);
 }
 
+// How far a piece's own endcap graphic actually extends PAST the
+// physics point it's anchored to, in world px, once fully emerged --
+// mirrors drawEndcap()'s own geometry exactly (ENDCAP_ALIGNMENT.topY ->
+// designBottomY, scaled by heightThicknessPx/ENDCAP_ALIGNMENT.width,
+// then by heightMult) without actually drawing anything. Used by
+// pieceCollision() below to inflate that point's own collision radius,
+// per explicit request ("the rope endcap should also be affected by
+// collision detection... the rope start and end endcaps should not be
+// allowed to overlap other ropes, or other endcaps") -- previously
+// collision only ever considered the underlying chain's own points,
+// completely ignoring the endcap's own rendered shape sticking out past
+// them, so 2 pieces' points could sit a valid minSep apart while their
+// actual endcap graphics still visibly overlapped. designKey 'none'
+// (no endcap selected at all) returns 0, same as drawEndcap() itself
+// being a no-op in that case.
+function endcapExtensionPx(designKey, heightThicknessPx, heightMult){
+  if (designKey === 'none') return 0;
+  const designBottomY = ENDCAP_BOTTOM_Y[designKey] !== undefined ? ENDCAP_BOTTOM_Y[designKey] : ENDCAP_ALIGNMENT.topY;
+  const heightNormalScale = heightThicknessPx / ENDCAP_ALIGNMENT.width;
+  return (designBottomY - ENDCAP_ALIGNMENT.topY) * heightNormalScale * heightMult;
+}
+
 // Cross-PIECE collision only -- two different fallen pieces push each
 // other apart (so cut-off segments stack or shove each other around
 // instead of freely overlapping, per explicit request), but a piece
@@ -2312,7 +2334,135 @@ function pieceThickness(piece){
 // per-piece bounding-box pre-check (computed once per piece per frame,
 // not per pair) skips the expensive point-by-point double loop for any
 // pair that clearly can't be touching yet.
+// The original 1.15 margin (and the `Math.max(2, ...)` floor) is gone:
+// reported directly -- "when one is laying on top of the other. I still
+// see a couple pixels of space between the 2 when one is laying on top
+// of the other. there should be none." At default thickness (~6px),
+// 1.15x was adding ~0.9px of REAL separation beyond actual contact --
+// not an anti-aliasing illusion, an intentional gap the old margin was
+// built to create. Per the same reasoning as the endcap/rope seam fix
+// (2 independently-rasterized shapes that only ever exactly touch can
+// still show an anti-aliasing hairline), separation now UNDERSHOOTS
+// contact by a small margin instead so touching chains render with a
+// hair of real overlap rather than a hair of real gap.
+//
+// PROPORTIONAL, not a fixed pixel amount -- an earlier version
+// subtracted a fixed 0.75px, which could EXCEED the entire
+// thickness-based separation once both sides decayed down near Piece
+// Minimum Thickness, and `Math.max(0, ...)` clamped the result to
+// EXACTLY 0 -- no enforced separation left between decayed pieces' own
+// centerlines. Reported directly: "as they shrink down in thcikness to
+// minimum thickness, instead of piling ontop of each other, they end up
+// overlapping each other on the ground such that it looks like only a
+// single layer." A fixed FRACTION of the pair's own combined radius can
+// never fully cancel it out regardless of how thin either side has
+// decayed -- 15% is the same kind of judgment call the fixed-pixel
+// version was, just expressed proportionally instead of absolutely.
+const PIECE_SEAM_OVERLAP_FRAC = 0.15;
+
+// Per-chain, per-POINT collision radius -- ordinary rope points use half
+// the chain's own live thickness; the 2 ends (points[0], the cut edge
+// for a piece / the never-capped anchor for mainRope, and points[last],
+// the free tip) get an ADDITIONAL radius on top of that when an endcap
+// actually lives there, approximating the endcap's own elongated shape
+// as a bigger circle centered on that same physics point -- not a
+// precise polygon collision against the endcap's real outline, which
+// would need a much more involved shape-collision system for a
+// decorative feature that's never the rope's own primary silhouette;
+// this is a deliberate, documented simplification that still satisfies
+// the actual request (no visible overlap) in the common case. Per
+// explicit request: "the rope endcap should also be affected by
+// collision detection... the rope start and end endcaps should not be
+// allowed to overlap other ropes, or other endcaps."
+function pieceCollisionRadii(points, thick, tipExtension, cutExtension){
+  const baseRadius = thick / 2;
+  const n = points.length;
+  const radii = new Array(n).fill(baseRadius);
+  radii[n - 1] = baseRadius + tipExtension;
+  radii[0] = baseRadius + cutExtension;
+  let maxRadius = baseRadius;
+  for (const r of radii) if (r > maxRadius) maxRadius = r;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points){
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  return { points, radii, maxRadius, box: { minX, maxX, minY, maxY } };
+}
+
+// Pushes 2 chains' own points apart wherever a pair sits closer than
+// their combined (radius-inflated, seam-undershot) separation -- shared
+// by both mainRope-vs-piece and piece-vs-piece below so the 2
+// relationships behave identically rather than via 2 near-duplicate
+// loops. A cheap bounding-box pre-check (padded by each chain's own
+// largest per-point radius, so an inflated endcap end is never
+// under-counted) skips the expensive point-by-point double loop for any
+// pair that clearly can't be touching yet.
+function resolveChainCollision(dataA, dataB){
+  const pad = dataA.maxRadius + dataB.maxRadius;
+  const ba = dataA.box, bb = dataB.box;
+  if (ba.maxX + pad < bb.minX || bb.maxX + pad < ba.minX ||
+      ba.maxY + pad < bb.minY || bb.maxY + pad < ba.minY) return;
+  const ptsA = dataA.points, ptsB = dataB.points;
+  for (let i = 0; i < ptsA.length; i++){
+    const p = ptsA[i];
+    const ri = dataA.radii[i];
+    for (let j = 0; j < ptsB.length; j++){
+      const q = ptsB[j];
+      const minSep = Math.max(0, (ri + dataB.radii[j]) * (1 - PIECE_SEAM_OVERLAP_FRAC));
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.0001 && dist < minSep){
+        const push = (minSep - dist) / 2;
+        const nx = dx / dist, ny = dy / dist;
+        p.x -= nx * push; p.y -= ny * push;
+        q.x += nx * push; q.y += ny * push;
+      }
+    }
+  }
+}
+
+// endcapExt: given a chain's own live thickness and whichever
+// heightThicknessPx drawEndcap() would actually use for that specific
+// end, returns how far that end's endcap extends past its own point (0
+// when no endcap is selected at all, or when that particular end never
+// gets one).
 function pieceCollision(){
+  const hasEndcapForCollision = cfg.endcapDesign !== 'none';
+  const endcapExt = heightThicknessPx => hasEndcapForCollision ? endcapExtensionPx(cfg.endcapDesign, heightThicknessPx, cfg.endcapHeight) : 0;
+
+  // mainRope-vs-piece: per explicit request ("when i extend the main
+  // rope very very long, such that it reaches the floor and beyond, the
+  // extended long rope should also pile up on top of any rope segments
+  // that are on the floor as opposed to going right through them") --
+  // previously this function only ever repelled 2 DIFFERENT fallen
+  // pieces against each other; mainRope itself was completely excluded
+  // (it already collides with the FLOOR separately, in update()'s own
+  // floor-clamp block, but never with a PILE resting on that floor).
+  // mainRope's own live thickness uses the SAME formula render() computes
+  // (vmin(cfg.ropeThickness) * ropeThicknessMultiplier) -- recomputed
+  // here since that's a render()-local const, not something update()'s
+  // own physics pass already has. mainRope's anchor (points[0]) never
+  // has an endcap (see render()'s own comment on that), so its cut-end
+  // extension is always 0 -- only the tip (points[last]) can have one.
+  if (fallenPieces.length > 0){
+    const mainThick = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
+    const mainData = pieceCollisionRadii(mainRope.points, mainThick, endcapExt(mainThick), 0);
+    fallenPieces.forEach(piece => {
+      const thick = pieceThickness(piece);
+      // Tip always uses this piece's own ORIGINAL baseThickness (matching
+      // drawEndcap()'s own heightThicknessPx param there -- the tip
+      // endcap's LENGTH is deliberately decoupled from live decay, see
+      // pieceThickness()'s own call site in render()); the cut edge (only
+      // present at all when Endcap At Cut End is on) uses the piece's
+      // current live thickness instead, matching drawEndcap() not being
+      // passed a heightThicknessPx override there.
+      const tipExt = endcapExt(piece.baseThickness);
+      const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
+      resolveChainCollision(mainData, pieceCollisionRadii(piece.points, thick, tipExt, cutExt));
+    });
+  }
+
   if (fallenPieces.length < 2) return;
   // Per-PAIR separation, from each piece's own CURRENT (possibly
   // decayed) thickness via pieceThickness() -- not a single global
@@ -2323,57 +2473,16 @@ function pieceCollision(){
   // of a decaying piece stayed held up at the ORIGINAL, un-decayed
   // separation forever -- reported directly: "when the bottom piece
   // starts shrinking in thickness, the top piece doesnt fall down with
-  // it... the top piece stays suspended in the air." Average of both
-  // pieces' own current thicknesses (matching the original formula's
-  // implicit assumption that both share one thickness -- generalized to
-  // differing ones instead of special-cased).
-  //
-  // The original 1.15 margin (and the `Math.max(2, ...)` floor) is gone:
-  // reported directly -- "when one is laying on top of the other. I
-  // still see a couple pixels of space between the 2 when one is laying
-  // on top of the other. there should be none." At default thickness
-  // (~6px), 1.15x was adding ~0.9px of REAL separation beyond actual
-  // contact -- not an anti-aliasing illusion, an intentional gap the old
-  // margin was built to create. Per the same reasoning as the
-  // endcap/rope seam fix above (2 independently-rasterized shapes that
-  // only ever exactly touch can still show an anti-aliasing hairline),
-  // this now UNDERSHOOTS contact by a small, fixed margin instead
-  // (`PIECE_SEAM_OVERLAP_PX`) so the pieces render with a hair of real
-  // overlap rather than a hair of real gap -- same judgment-call
-  // reasoning as that fix's own 1.5px (no measured "correct" overlap
-  // exists for a sub-pixel AA artifact), kept smaller here since it's
-  // subtracted from a possibly-decayed, possibly-thin piece's own
-  // thickness rather than added to a fixed endcap shape.
-  const PIECE_SEAM_OVERLAP_PX = 0.75;
-  const boxes = fallenPieces.map(piece => {
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of piece.points){
-      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-    }
-    return { minX, maxX, minY, maxY };
+  // it... the top piece stays suspended in the air."
+  const pieceData = fallenPieces.map(piece => {
+    const thick = pieceThickness(piece);
+    const tipExt = endcapExt(piece.baseThickness);
+    const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
+    return pieceCollisionRadii(piece.points, thick, tipExt, cutExt);
   });
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
-      const minSep = Math.max(0, (pieceThickness(fallenPieces[a]) + pieceThickness(fallenPieces[b])) / 2 - PIECE_SEAM_OVERLAP_PX);
-      const ba = boxes[a], bb = boxes[b];
-      if (ba.maxX + minSep < bb.minX || bb.maxX + minSep < ba.minX ||
-          ba.maxY + minSep < bb.minY || bb.maxY + minSep < ba.minY) continue;
-      const ptsA = fallenPieces[a].points, ptsB = fallenPieces[b].points;
-      for (let i = 0; i < ptsA.length; i++){
-        const p = ptsA[i];
-        for (let j = 0; j < ptsB.length; j++){
-          const q = ptsB[j];
-          const dx = q.x - p.x, dy = q.y - p.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist > 0.0001 && dist < minSep){
-            const push = (minSep - dist) / 2;
-            const nx = dx / dist, ny = dy / dist;
-            p.x -= nx * push; p.y -= ny * push;
-            q.x += nx * push; q.y += ny * push;
-          }
-        }
-      }
+      resolveChainCollision(pieceData[a], pieceData[b]);
     }
   }
 }
@@ -3449,17 +3558,33 @@ function onPointerDown(e){
   // point turns out to be. Only a QUICK tap (below) still needs real
   // proximity, since that's what targets a specific punch/cut point.
   const hit = nearestPointOnRope(x, y, mainRope.points);
-  downInfo = { mode: 'rope', x, y, hit, startTime: performance.now(), charging: false };
-  logClick('down:rope', { x, y, hitDist: hit.dist, hitIndex: hit.index });
+  // startedInCircle: true only for a press that landed inside the circle
+  // but fell through to here anyway (introPhase !== 'done', per the
+  // guard above) rather than taking the dedicated circle branch. Used
+  // below to suppress charging for exactly this case -- reported
+  // directly: "if i click and hold in the circle... when i let go, the
+  // rope acts as if i had done a regular click and hold Flick. It
+  // shouldnt. Whenever click and hold is initiated within the circle, no
+  // Flick sequeuce should ever follow." Without this, a hold started in
+  // the circle during 'growing' had no dedicated handling at all (the
+  // circle branch is skipped there) and fell all the way through to the
+  // ordinary rope hold-to-charge-punch path, so releasing it fired a full
+  // charged punch the user never intended as a rope interaction -- they
+  // were pressing the CIRCLE, same gesture that means "grow" once
+  // introPhase reaches 'done'.
+  const startedInCircle = isOnCircle(x, y);
+  downInfo = { mode: 'rope', x, y, hit, startTime: performance.now(), charging: false, startedInCircle };
+  logClick('down:rope', { x, y, hitDist: hit.dist, hitIndex: hit.index, startedInCircle });
   // Charging only becomes eligible after a FULL doubleClickThreshold of
   // holding, not the short HOLD_THRESHOLD_MS — this is what keeps it from
   // ever hijacking a real double-click. Provably safe, not just empirically:
   // if this release's own press duration already exceeds doubleClickThreshold,
   // the gap from the FIRST click's release (which is earlier still) must
   // exceed doubleClickThreshold too, so it could never have passed the
-  // double-click gap check below anyway.
+  // double-click gap check below anyway. Also never arms at all when
+  // startedInCircle -- see that flag's own comment.
   holdTimer = setTimeout(() => {
-    if (!downInfo || downInfo.mode !== 'rope') return;
+    if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
     downInfo.charging = true;
     logClick('hold:charging-start', { x, y });
   }, cfg.doubleClickThreshold);
