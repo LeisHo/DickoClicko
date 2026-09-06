@@ -3116,3 +3116,24 @@ GOTCHAS
   clean 200 OK with none failing or stalling on the same server that had
   just produced the 19-second stalls above, and both FLICK graphics
   still render correctly at their normal on-screen size.
+- **Updating FLICK artwork in `ANI/` does NOT also update Animation 2 --
+  `data/FLICK/ANI2/`'s 21 frames are a one-time, pre-copied
+  concatenation, not derived from anything at runtime.** Per the comment
+  at animation 2's definition: ANI2 positions 1-10 are copies of
+  `ANI/1`'s frames in natural order (01,02,03,04,07,10,11,13,14,16);
+  positions 11-21 are copies of `ANI/2`'s frames in REVERSE order
+  (16,13,12,11,10,09,06,04,03,02,01). `ANI/` root (Animation 1's own
+  17-frame set) is NOT one of ANI2's sources at all. When another
+  session updated FRAMES-01..05.png in `ANI/`, `ANI/1/`, and `ANI/2/`
+  (confirmed via md5sum to be byte-identical copies of the same new
+  artwork in all 3 places), only Animation 1 picked up the change --
+  Animation 2's already-baked `ANI2/FRAMES-*.png` files still held the
+  OLD artwork until manually re-copied. Fixed by copying `ANI/1`'s
+  updated 01-04 into `ANI2/FRAMES-01-04.png` and `ANI/2`'s updated
+  01-04 into `ANI2/FRAMES-18-21.png` (reversed per the mapping above),
+  then re-running the resize+WebP pipeline on just those 8 files.
+  `ANI/1`/`ANI/2`'s own FRAMES-05.png isn't part of either 10/11-frame
+  selection, so it has no ANI2 counterpart to update. **Any future
+  FLICK artwork update needs to touch `ANI2/`'s mapped frames
+  explicitly -- there is no code path that keeps them in sync
+  automatically.**

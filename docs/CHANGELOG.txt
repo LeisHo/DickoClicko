@@ -5238,6 +5238,31 @@ Live-verified all 5 reload cleanly as 200 OK and both FLICK graphics
 still render correctly. Committed + pushed.
 
 ================================================================================
+2026-09-05  -  10:58 PM EDT
+
+User: "the new frames should apply to both animations. it seems only
+replaced for Animation 1 not 2." Correct -- the prior entry only
+reprocessed `ANI/` root, which is Animation 1's own separate 17-frame
+set. Animation 2's `data/FLICK/ANI2/` frames are a one-time, pre-copied
+concatenation (ANI2 1-10 = ANI/1's frames in natural order
+01,02,03,04,07,10,11,13,14,16; ANI2 11-21 = ANI/2's frames in REVERSE
+order 16,13,12,11,10,09,06,04,03,02,01), not derived from ANI/ root and
+not kept in sync by any code path.
+
+Confirmed via md5sum that the 5 updated frames were placed identically
+in `ANI/`, `ANI/1/`, and `ANI/2/` (all three matched byte-for-byte), and
+that ANI2's own FRAMES-01-04/18-21.png still held the OLD artwork
+(hashes matched the pre-update ANI/1, ANI/2 files). Frame 05 in ANI/1
+and ANI/2 isn't part of either 10/11-frame selection, so it has no
+ANI2 counterpart. Copied ANI/1's updated 01-04 into
+ANI2/FRAMES-01-04.png and ANI/2's updated 01-04 into
+ANI2/FRAMES-18-21.png (reversed per the mapping), then re-ran the
+resize+WebP pipeline on exactly those 8 files. Live-verified all 21
+ANI2 frames reload as 200 OK and Animation 2 now shows the updated
+artwork. Documented the lack of an automatic sync path in CODE_SUMMARY
+so a future artwork update doesn't repeat this. Committed + pushed.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
