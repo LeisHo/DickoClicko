@@ -3588,18 +3588,85 @@ GOTCHAS
   slow default and End Emerge Speed cranked up, a newly cut piece's own
   endcap grew in visibly slower than mainRope's own newly-cut tip in the
   same run.
-- **Not yet resolved: a reported seam between an endcap and the rope
-  body, on both the main rope and cut-off pieces.** Investigation ruled
-  out the gradient-color-continuity comments already present in
-  `strokeRopeCurve()`/`drawEndcap()` (a few entries above) as an
-  unrelated, already-solved concern -- those are about COLOR continuity
-  across the gradient, not geometric/positional alignment. Formed but did
-  NOT confirm a theory that the seam is a canvas anti-aliasing gap at the
-  boundary between the rope's own `butt`-capped stroke (see
-  `strokeRopeCurve()`'s own comment on why `lineCap` is `'butt'`) and the
-  endcap's separately-filled `Path2D` shape, specifically once the endcap
-  has fully emerged (`mainArcMult`/`tipArcMult` forced to 0 at that point,
-  removing the only overlapping round-cap treatment that existed at that
-  exact boundary). No exact coordinate-level check of the stroke
-  endpoint against the endcap's own neck position (via
-  `ENDCAP_ALIGNMENT`) was completed, and no fix was attempted.
+- **Endcap/rope seam, root-caused and fixed the following round.** The
+  theory formed in the entry above (a canvas anti-aliasing gap between
+  the rope's `butt`-capped stroke and the endcap's separately-filled
+  `Path2D` shape) was confirmed by inspecting `drawEndcap()`'s own
+  transform: once fully emerged, local point `(topCenterX, topY)` --
+  `ENDCAP_ALIGNMENT`'s own reference line, the endcap's neck -- maps to
+  EXACTLY `(tip.x, tip.y)`, the same coordinate `strokeRopeCurve()`'s
+  `butt`-capped stroke also ends at, with the SAME width (`thicknessPx`
+  on both). A mathematically perfect zero-overlap join between 2
+  independently-rasterized shapes is exactly the anti-aliasing seam
+  recipe. Fixed with a new `ENDCAP_SEAM_OVERLAP_PX` (1.5): one extra
+  `ctx.translate(0, -ENDCAP_SEAM_OVERLAP_PX)` inserted between
+  `drawEndcap()`'s own `ctx.rotate(angle)` and its `ctx.scale(...)` calls
+  -- placed there specifically so the offset lands in the ROTATED-but-
+  not-yet-SCALED part of the transform chain, making it a fixed 1.5 CSS
+  px shift along `-dir` (back into the rope) in world space, independent
+  of the rope's own thickness/scale. No measured "correct" overlap exists
+  for a sub-pixel AA artifact -- labeled as a judgment call in the code.
+- **Piece-collision gap, same session: pieceCollision()'s own 1.15x
+  margin was creating a REAL ~0.9px gap at default thickness, not an AA
+  illusion.** Reported directly: "when there are 2 rope segments that
+  have been cut, and one is lying on top of the other. I still see a
+  couple pixels of space between the 2... there should be none." Old
+  formula: `Math.max(2, avgThickness * 1.15)`. New: `Math.max(0,
+  avgThickness - PIECE_SEAM_OVERLAP_PX)` (0.75) -- undershoots exact
+  contact by a small fixed margin (same reasoning as the endcap fix
+  above: a slight real overlap hides any residual AA seam better than
+  exact tangency would) instead of overshooting it into a visible gap.
+- **Default Rope Length split from Rope Length.** `cfg.ropeLength` had
+  been serving 2 roles: a LIVE current-length control (hold-to-grow,
+  direct slider drag, a cut's own display-only sync via
+  `syncControlDisplay()` -- see that function's own comment for the
+  PARTIAL-cut version of this exact bug, fixed in an earlier round) AND
+  the only value a full detach/respawn read as "the default to regrow
+  to." The partial-cut fix didn't close the leak through hold-to-grow
+  (`growRope()`'s own `setCfg('ropeLength', ...)`, a legitimate live
+  update) -- grow the rope, then fully detach, and it regrew to the
+  grown length, not the true default. Reported directly: "Default rope
+  length and 'current' rope length needs to be 2 different figures. When
+  i fully cut a rope, the new rope should be the default length not the
+  new current length." Fixed with a real, separate
+  `cfg.ropeDefaultLength` (own dev-panel slider, same range/default,
+  no `onChange` -- nothing needs to act on it until the NEXT spawn) that
+  nothing overwrites automatically. Every spawn-time read now uses it:
+  `resetBgRope()`'s chain sizing, `resetMainRope()`'s default arg, the
+  `!cfg.introEnabled` instant-snap path, and
+  `detachEntireRopeAndRestartIntro()`'s own 'pausing'->'growing'
+  transition (`introTargetLengthPx`). Verified 2 ways: with Startup
+  Animation Enabled off (the instant-snap path, immune to animation-
+  timing noise), a distinct Default value produced a correspondingly
+  short rope regardless of the live Rope Length display; with the
+  animation on, a full detach after inflating the live rope to 80%vh
+  regrew via the normal 'growing' phase but substantially overshot its
+  Default target under this testing setup's own heavy tab-visibility
+  throttling combined with a deliberately-cranked Startup Extension
+  Speed (60, set purely to shorten manual test waits) -- `MAX_FRAME_DT`
+  (0.25s) caps each frame's dt, but at that rate a single capped frame
+  can still add up to 15%vh, and several throttled real-seconds
+  collapsing into one rendered frame can chain several such jumps. Not a
+  defect in the split itself (confirmed independently by the animation-
+  off test) and not expected in real play at real frame rates/speeds --
+  documented rather than silently treated as a clean pass.
+- **Cutting is now allowed while mainRope is mid-scripted-growth
+  (`introPhase === 'growing'`), not just once `introPhase === 'done'`.**
+  Per explicit request ("allow me to cut it during its extension/growth.
+  I should be able to cut/fully cut the main rope at any time, assuming
+  the rope is longer than the minimum rope length"). `onPointerDown`'s
+  top-level gate changed from `introPhase !== 'done'` to `introPhase !==
+  'done' && introPhase !== 'growing'`, so a click during 'growing' falls
+  through to the ordinary rope hit-test / double-click-cut path, gated
+  by `cutRopeAt()`'s own pre-existing Minimum Rope Length check exactly
+  as requested -- no new length-checking logic needed. The circle-press
+  branch (hold-to-grow, full detach) stays restricted to `introPhase ===
+  'done'`: both of its own mechanics write the SAME `growing` flag the
+  intro's own scripted extension is actively driving, which cutting
+  itself never touches, so allowing circle-presses during 'growing' too
+  risked the two fighting over that one flag. Verified live: a
+  double-click on the visibly-still-growing rope produced a real split
+  (console: `up:double-click {willCut: true}`, a piece separated and
+  fell while the remainder kept growing) -- a first attempt too close to
+  the anchor was correctly refused by the existing minimum-length check,
+  confirming that guard still applies unchanged.

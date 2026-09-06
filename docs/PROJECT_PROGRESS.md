@@ -42,12 +42,15 @@ additions. Current state of each subsystem:
   (starting on/near the circle), hold-to-charge-punch (starting on the
   rope; intensity stacks Click Intensity + Intensity Ceiling over Click
   Hold Max Duration), double-click-to-cut (works on the main rope and on
-  already-fallen pieces, splitting one into two). Double-clicking ANYWHERE
-  inside the circle (no longer just near where the rope happens to pass)
-  detaches the entire rope and replays the startup animation to regrow a
-  fresh one -- regrows to the real configured Rope Length default even
-  after an earlier ordinary cut, not the length that cut left behind (see
-  CODE_SUMMARY gotchas).
+  already-fallen pieces, splitting one into two, and now also works while
+  mainRope is mid-scripted-growth right after a boot or a full detach,
+  not just once that growth finishes -- still gated by the existing
+  Minimum Rope Length check). Double-clicking ANYWHERE inside the circle
+  (no longer just near where the rope happens to pass) detaches the
+  entire rope and replays the startup animation to regrow a fresh one --
+  regrows to Default Rope Length, a dedicated config value separate from
+  the live/current Rope Length control, so an earlier grow or cut never
+  changes what a full detach regrows to (see CODE_SUMMARY gotchas).
 - **Physics**: fixed 1/60s timestep verlet integration; distance
   constraints (`constraintIterations`, default 10) plus a bending
   constraint (`bendStiffness`) that stops the rope folding into a knot
@@ -64,8 +67,12 @@ additions. Current state of each subsystem:
   sharing one alignment reference so size/anchor stay consistent across
   designs; Endcap Height, an independent Endcap Gradient, and "End Emerge"
   (a freshly-cut edge's cap slides into place then scales up instead of
-  appearing instantly). Known unresolved issue: the `form1-01` design
-  still has a flat-neck/seam geometry defect after 2 edit attempts.
+  appearing instantly). An endcap now renders overlapping 1.5px into the
+  rope's own stroke end rather than meeting it at an exact boundary,
+  closing a canvas anti-aliasing seam that was visible between the two
+  independently-drawn shapes. Known unresolved issue: the `form1-01`
+  design still has a flat-neck/seam geometry defect after 2 edit
+  attempts (a separate, geometry-authoring issue, not the AA seam above).
 - **Rope styling**: optional Tip Segment Shape (a vase-like forked
   decorative shape near the endcap), Rope Top/End Curve Arc (half-ellipse,
   0 = flat to 1 = full semicircle), and a draggable-stop rope gradient
@@ -78,9 +85,13 @@ additions. Current state of each subsystem:
   thickness rather than a frame-global value pinned to the undecayed
   default -- a piece resting on top of another no longer stays held up at
   the original separation once the piece beneath it has visibly thinned.
-  Piece Endcap Emerge Speed is its own dev control, independent of
-  mainRope's End Emerge Speed -- a fallen piece's tip/cut-edge emerge
-  animation no longer shares a rate with the still-attached rope's tip.
+  That same separation formula now undershoots exact contact by a small,
+  fixed margin (rather than the old formula's 1.15x margin, which was
+  creating a real, visible ~1-2px gap at rest) so 2 resting pieces show a
+  hair of overlap instead of a hair of gap. Piece Endcap Emerge Speed is
+  its own dev control, independent of mainRope's End Emerge Speed -- a
+  fallen piece's tip/cut-edge emerge animation no longer shares a rate
+  with the still-attached rope's tip.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
@@ -204,16 +215,7 @@ dev-panel support for both creating new custom collapsible groups
 ("allow me to create new groups") and dragging a setting OUT of its
 current collapsible group and INTO a different group (only within-group
 reordering exists today; confirmed via AskUserQuestion that both pieces
-are wanted). Also queued: a reported thin seam between an endcap and the
-rope body, on both the main rope and cut-off pieces -- investigation
-ruled out the gradient-color-continuity comments already in
-`strokeRopeCurve()`/`drawEndcap()` as an unrelated, already-solved
-concern, and formed but did not confirm a theory that it's a canvas
-anti-aliasing gap at the boundary between the rope's `butt`-capped stroke
-and the endcap's separately-filled `Path2D` shape once the endcap has
-fully emerged (`mainArcMult` forced to 0 at that point, removing the only
-overlapping round-cap treatment at that boundary). No root cause
-confirmed, no fix attempted yet.
+are wanted).
 
 Also discussed but not approved: progressive cut-falling
 (the cut-off segment starts sagging/falling from the cut side while still

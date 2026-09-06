@@ -5759,6 +5759,93 @@ and no fix was attempted. Also not started: the dev-panel custom-groups
 groups").
 
 ================================================================================
+2026-09-06  -  08:23 AM EDT
+
+Four more items, same session as the piece-suspension/DEV_MODE-gate round
+above: "I still see a seam between endcaps and ropes"; "when there are 2
+rope segments that have been cut, and one is lying on top of the other. I
+still see a couple pixels of space between the 2... there should be
+none"; "Default rope length and 'current' rope length needs to be 2
+different figures"; and (sent mid-turn) "allow me to cut it during its
+extension/growth."
+
+Endcap/rope seam: root-caused this time. The endcap's own neck
+(ENDCAP_ALIGNMENT.topY) and the rope's own butt-capped stroke end
+(strokeRopeCurve(), deliberately 'butt' not 'round' -- see that
+function's own comment) both land at the EXACT same world coordinate
+with the EXACT same width once an endcap is fully emerged -- a
+mathematically perfect zero-overlap join between 2 independently-
+rasterized canvas shapes (one stroked, one filled), which is exactly the
+recipe for an anti-aliasing hairline gap: each shape's edge pixels get
+their own independently-computed partial coverage with no guarantee they
+sum to fully opaque. Fixed by translating the endcap 1.5px backward
+(into the rope) before drawing it (drawEndcap()'s new
+ENDCAP_SEAM_OVERLAP_PX), inside the rotated-but-not-yet-scaled part of
+its transform chain so the offset is a fixed 1.5 CSS px in world space
+regardless of the rope's own thickness/scale. No measurement exists for
+"correct" overlap (a sub-pixel AA artifact has no real physical size) --
+labeled as a judgment call in the code, same as the piece-gap fix below.
+
+Piece-collision gap: same underlying AA-seam mechanism, but the ~1-2px
+gap here was NOT an AA illusion -- pieceCollision()'s own minSep formula
+used a 1.15x margin (`Math.max(2, avgThickness * 1.15)`), which was
+deliberately creating ~0.9px of REAL separation beyond actual contact at
+default thickness. Replaced with `Math.max(0, avgThickness -
+PIECE_SEAM_OVERLAP_PX)` (0.75px) -- undershoots exact contact by a small
+fixed margin instead of overshooting it, so resting pieces now show a
+hair of real overlap instead of a hair of real gap.
+
+Default vs. current Rope Length: cfg.ropeLength had been serving 2 roles
+at once -- a LIVE control tracking/resizing whatever rope exists right
+now (hold-to-grow, direct slider drag, or a cut's own display-only
+sync), and the ONLY source a full detach/respawn read as "the default
+length to regrow to". A prior round already fixed this for a PARTIAL cut
+(syncControlDisplay(), never touching cfg.ropeLength itself) but the
+same leak still existed through hold-to-grow (a genuine live-length
+update, not a bug on its own) -- grow the rope longer, then fully
+detach, and it regrew to the grown length, not the true original
+default. Fixed properly this time: added a real, separate
+cfg.ropeDefaultLength (own dev-panel slider, same range/default) that
+nothing ever overwrites automatically. Every spawn-time read (boot,
+bgRope's own chain sizing, and detachEntireRopeAndRestartIntro()'s
+'pausing'->'growing' transition) now reads Default Rope Length; Rope
+Length keeps its existing live meaning unchanged. Verified 2 ways: (1)
+with Startup Animation Enabled turned off (the instant-snap
+`setMainRopeTotalLength(vh(cfg.ropeDefaultLength))` path, immune to
+animation-timing noise), confirmed a distinct Default value (10) produced
+a correspondingly short rope regardless of whatever the live Rope Length
+display still showed; (2) with the animation on, watched a full detach
+after inflating the live rope to 80%vh regrow via the normal 'growing'
+phase -- this run overshot its Default target substantially under this
+testing setup's own heavy tab-visibility throttling combined with a
+deliberately-cranked Startup Extension Speed (60, set purely to shorten
+manual test wait time), which the existing MAX_FRAME_DT=0.25s per-frame
+cap doesn't fully protect against at that rate (each capped frame can
+still add up to 15%vh in one step once several throttled real-seconds
+collapse into a single rendered frame). Not a defect in the Default/
+Current split itself (confirmed independently by test (1)) and not
+expected to occur in real play at real frame rates and real (un-cranked)
+growth speeds; noted here rather than silently ignored, per this
+project's own "don't fabricate a clean result" standard.
+
+Cut during growth: the top-level onPointerDown gate changed from
+`introPhase !== 'done'` to `introPhase !== 'done' && introPhase !==
+'growing'`, so a click reaches the ordinary rope hit-test/double-click-
+cut path while mainRope is mid-scripted-extension, not just once the
+intro finishes -- gated by cutRopeAt()'s own pre-existing Minimum Rope
+Length check exactly as requested ("assuming the rope is longer than the
+minimum rope length"). The circle-press branch (hold-to-grow, full
+detach) is still restricted to introPhase 'done' -- both of its own
+mechanics touch the SAME `growing` flag the intro's own scripted
+extension is actively driving, which cutting itself never touches.
+Verified live: double-clicked the visibly-still-growing rope and
+confirmed a real split (console: `up:double-click {willCut: true}`,
+piece visibly separated and fell while the remainder kept growing) --
+first attempt (too close to the anchor) was correctly refused by the
+existing minimum-length check, second attempt further down the growing
+rope succeeded.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
