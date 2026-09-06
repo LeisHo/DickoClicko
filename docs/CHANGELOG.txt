@@ -5263,6 +5263,26 @@ artwork. Documented the lack of an automatic sync path in CODE_SUMMARY
 so a future artwork update doesn't repeat this. Committed + pushed.
 
 ================================================================================
+2026-09-05  -  11:41 PM EDT
+
+User updated frames again ("I UPDATED THE FRAMES IN ALL THE FOLDERS
+AGAIN. REPLACE AND PUSH"). `git status` identified the tracked changes
+precisely: ANI/FRAMES-06-09.png (Animation 1) and ANI/3's 4
+hold-preview frames. ANI/1 and ANI/2 are untracked, so used the
+mapping documented in the prior entry/CODE_SUMMARY plus md5sum
+comparison against ANI2's current baked files to find which of their
+frames had actually changed: ANI/1/FRAMES-07.png (-> ANI2 frame 5) and
+ANI/2/FRAMES-06.png, FRAMES-09.png (-> ANI2 frames 17, 16). Confirmed
+ANI2's already-synced frames 1-4/18-21 from the prior round were still
+correctly in sync (unchanged this round). Copied the 3 changed
+ANI/1+ANI/2 sources into their mapped ANI2 positions, then ran the
+resize+WebP pipeline on all 11 affected files (4 root + 4 hold + 3
+ANI2). Verified live via a no-cache fetch of the served .webp bytes
+(not just relying on the browser's normal cache-validation 304s) --
+confirmed the server was genuinely serving the new byte sizes.
+Committed + pushed.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
