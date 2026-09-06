@@ -4211,13 +4211,22 @@ function update(rawDt){
       adx *= totalRestLen / adist; ady *= totalRestLen / adist;
       desiredX = anchor.x + adx; desiredY = anchor.y + ady;
     }
-    // Seed the pin to the real (unsmoothed) target on the very first
-    // active frame -- otherwise it would ease in from wherever a PRIOR
-    // attraction session last left it (or from 0,0), a stale starting
-    // point with no relation to this new reach.
+    // Seed the pin to the endcap's OWN starting position (attractionOrigin,
+    // captured in onPointerDown) on the very first active frame -- NOT to
+    // the already-clamped desiredX/Y target. Reported directly: "when i
+    // right click and hold, the rope/endcap immediatly snaps towards my
+    // mouse, regardless of speed and intensity settings." Root cause:
+    // seeding straight to the target meant the pin was ALREADY there on
+    // frame 1, with nothing left for the ease/speed logic below to
+    // gradually close -- Intensity and Speed only ever shape how the pin
+    // moves AFTER this seed, so seeding directly to the destination
+    // skipped the "moving" part entirely. Seeding to the origin instead
+    // means frame 1 starts the ease from exactly where the endcap already
+    // was, so the very first frame is gradual too, not just every frame
+    // after it.
     if (mainRope.attractionPinX === null || mainRope.attractionPinX === undefined){
-      mainRope.attractionPinX = desiredX;
-      mainRope.attractionPinY = desiredY;
+      mainRope.attractionPinX = mainRope.attractionOriginX;
+      mainRope.attractionPinY = mainRope.attractionOriginY;
     }
     // Frame-rate-independent ease (not a flat per-frame fraction) so Rope
     // Attraction Intensity means the same thing regardless of the actual
