@@ -4082,7 +4082,25 @@ function update(rawDt){
       tip.x += moveX; tip.y += moveY;
     }
   }
-  const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
+  // Forced false while Rope Attraction is active -- reported directly:
+  // "after i extend the rope, the attraction no longer works. it only
+  // works once i cut the rope." Root cause: positionGrowingTip() (called
+  // below whenever hasPartialTip is true -- not just while actively
+  // holding to grow, but for as long as the last segment remains a
+  // partial one, which is the normal state any time growth stopped
+  // mid-segment) unconditionally overwrites the tip's own x/y AFTER the
+  // attraction nudge above already ran this same frame, silently
+  // discarding it every frame -- exactly why cutting "fixed" it:
+  // performMainRopeSplit() always sets tipGrowLen = segLen, permanently
+  // clearing hasPartialTip until the next growth. Attraction now treats
+  // the tip as fully committed for as long as it's held, matching
+  // cutting's own effect: it re-enters the normal constraint solve
+  // (skipLastSegment below reads this same flag) instead of being
+  // kinematically placed, and positionGrowingTip() is skipped entirely.
+  // Reverts to the real tipGrowLen-based value the instant attraction
+  // ends, so an in-progress hold-to-grow resumes exactly where it left
+  // off.
+  const hasPartialTip = !ropeAttractionActive && mainRope.tipGrowLen < mainRope.segLen;
   // radius is the circle's own drawn edge (not Infinity) while
   // introUnsettled -- lets a spawn point placed beyond the tight
   // anchorBoundaryRadius() free-fall under Startup Rise Gravity instead
@@ -4407,7 +4425,7 @@ function strokeRopeCurve(points, thicknessPx, color){
 // UNDER a still-emerging endcap's own semi-transparent/partial edges in
 // the meantime. No change to WHEN an arc is drawn (still gated by the
 // exact same *ArcMult logic) -- only where in the draw order it lands.
-function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
+function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult, endFacingOverride){
   if (startArcMult === undefined) startArcMult = 0;
   // Set explicitly (not inherited from ctx state) -- drawEndcap() may have
   // run in between this call and the strokeRopeCurve() call that drew the
@@ -4427,7 +4445,11 @@ function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
   const n = points.length;
   const tip = points[n - 1];
   if (endArcMult > 0){
-    const dir = tipDirection(points);
+    // endFacingOverride: see drawEndcap()'s own identical param -- same
+    // "point at the mouse regardless of physical reach" reasoning,
+    // applied here so the plain round-cap arc (shown whenever Endcap
+    // Design is None) also faces the mouse during Rope Attraction.
+    const dir = endFacingOverride || tipDirection(points);
     drawEndArc(tip.x, tip.y, dir.x, dir.y, thicknessPx, endArcMult, arcGradientStops);
   }
   // startArcMult mirrors endArcMult at points[0] instead of points[n-1] --
@@ -4680,7 +4702,7 @@ function tipDirection(points){
 // the same world position the rope's own stroke gradient already
 // occupies, regardless of the endcap's current rotation/scale/slide
 // position.
-function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, gradientInfo, heightThicknessPx){
+function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, gradientInfo, heightThicknessPx, facingOverride){
   const design = ENDCAP_DESIGNS[designKey];
   if (!design) return;
   if (factor === undefined) factor = 1;
@@ -4696,7 +4718,17 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   // decay progresses (Y stays pinned to whatever thickness the piece had
   // when it fell).
   if (heightThicknessPx === undefined) heightThicknessPx = thicknessPx;
-  const dir = tipDirection(points);
+  // facingOverride (mainRope's own tip only, during Rope Attraction): the
+  // endcap should always be doing its best to point at the mouse even
+  // when the rope's real length can't physically reach it, per explicit
+  // request -- tipDirection() alone can't guarantee that, since it reads
+  // the chain's own actual last-segment tangent, which is subject to
+  // gravity/damping/bend and may lag or settle short of the true mouse
+  // angle even at max reach. When provided, this replaces that tangent
+  // outright for rotation purposes only -- it doesn't move any physics
+  // point, so the rope body's own real, physically-limited shape is
+  // completely unaffected; only the decorative cap's own facing changes.
+  const dir = facingOverride || tipDirection(points);
   const tip = points[points.length - 1];
   // rotates local "down" (0,1) to (dir.x,dir.y); derived from the standard
   // rotation matrix (x cosθ - y sinθ, x sinθ + y cosθ) solved for
@@ -5104,6 +5136,19 @@ function render(){
   // 'pausing''s own start rather than its end, is why 'pausing' used to
   // be included here -- it no longer is, now that the spawn moved).
   const showMainRope = introPhase === 'growing' || introPhase === 'done';
+  // Rope Attraction: the tip's own decorative facing (endcap and/or plain
+  // arc, whichever is showing) always points straight at the REAL mouse
+  // position while attracting, regardless of Max Reach Distance or how
+  // far the rope's own physical length can actually stretch -- see
+  // drawEndcap()'s own facingOverride param for why tipDirection() alone
+  // can't guarantee this. null (not computed) whenever attraction isn't
+  // active, so every other draw path is completely unaffected.
+  const attractionFacing = ropeAttractionActive ? (() => {
+    const tip = mainRope.points[mainRope.points.length - 1];
+    const fx = mouseX - tip.x, fy = mouseY - tip.y;
+    const flen = Math.hypot(fx, fy) || 1;
+    return { x: fx / flen, y: fy / flen };
+  })() : null;
   const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, liveThickness);
   const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
   const mainRopeColor = ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
@@ -5136,7 +5181,7 @@ function render(){
     // convention).
     const mainEndcapHeight = mainRope.bootEndcapScale !== null ? mainRope.bootEndcapScale : cfg.endcapHeight * detachScale;
     const mainGradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: mainRope.points[0] } : null;
-    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo);
+    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo, undefined, attractionFacing);
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
     // points array before reusing drawEndcap() puts that cut point at
@@ -5166,7 +5211,7 @@ function render(){
   // every endcap above -- not gated on hasEndcap, since Endcap Design
   // 'none' still needs these to draw exactly as before. See
   // drawRopeEndArcs()'s own comment for why the layering moved.
-  if (showMainRope) drawRopeEndArcs(mainStrokePoints, liveThickness, mainRopeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc);
+  if (showMainRope) drawRopeEndArcs(mainStrokePoints, liveThickness, mainRopeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc, attractionFacing);
   fallenPieces.forEach(piece => {
     const pieceThick = pieceThickness(piece);
     const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
