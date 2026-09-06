@@ -3720,3 +3720,40 @@ GOTCHAS
   returned 200 OK (confirming the count bump didn't leave any request
   pointing at a nonexistent frame), and a real click-triggered playback
   completed a full cycle and returned to rest correctly.
+- **`strokeRopeCurve()` drew the rope body and the plain round-cap arc
+  together, with every `drawEndcap()` call happening afterward -- so a
+  still-emerging (small-scale) decorative endcap always painted on top
+  of the arc, not behind it.** Reported directly: "the growing endcap on
+  both the main rope and the cut off segments, are stilll shwoign above
+  the rope end arch curve endcap piece... The endcap geometry taht is
+  scaling up should be layered behind this semi circle rope end/ rope
+  start geometry." A pure draw-order bug -- the arc's own gating
+  (`mainArcMult`/`tipArcMult`/`cutArcMult`, all zeroed once
+  `factor >= 1`) already correctly decided WHETHER an arc should show at
+  all; only WHEN in paint order it happened was wrong. Split
+  `strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult)`
+  into `strokeRopeCurve(points, thicknessPx, color)` (body only) and a
+  new `drawRopeEndArcs(points, thicknessPx, color, endArcMult,
+  startArcMult)` (just the 2 `drawEndArc()` calls, previously the tail of
+  `strokeRopeCurve()`) -- `drawRopeEndArcs()` sets `ctx.fillStyle`
+  explicitly from its own `color` param rather than trusting whatever
+  `ctx.fillStyle` a `drawEndcap()` call in between left behind (that call
+  restores its OWN saved state via `ctx.save()`/`ctx.restore()`, but this
+  makes the dependency explicit rather than relying on that incidentally
+  working out). In `render()`, every `drawRopeEndArcs()` call now happens
+  AFTER its corresponding `drawEndcap()` call (mainRope's own, and both
+  fallen-piece loops for tip and cut edge) instead of immediately after
+  the rope body -- extracted `computeTipArcMult`/`computeCutArcMult`
+  helpers so the 2nd (arc) pass over `fallenPieces` derives the exact
+  same values the ORIGINAL single pass used to, rather than risking the
+  logic drifting between 2 separate copies. bgRope's own arc+endcap call
+  sites (a different, pre-existing overlap the user didn't report and
+  this round didn't touch) still call `drawRopeEndArcs()` immediately
+  after `strokeRopeCurve()`, preserving their exact prior behavior.
+  Verified live: froze a fresh cut's End Emerge state mid-slide (End
+  Emerge Delay=0, Speed=0, which holds progress at the tiny post-slide
+  scale indefinitely) and confirmed the round arc bump now clearly
+  renders in front of the still-tiny endcap tucked behind it, on both the
+  remaining rope's fresh tip and the fallen piece's own ends; confirmed
+  Endcap Design: None still renders arcs normally (the new call isn't
+  gated on `hasEndcap`).

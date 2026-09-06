@@ -73,6 +73,10 @@ additions. Current state of each subsystem:
   independently-drawn shapes. Known unresolved issue: the `form1-01`
   design still has a flat-neck/seam geometry defect after 2 edit
   attempts (a separate, geometry-authoring issue, not the AA seam above).
+  A still-emerging (small-scale) endcap now correctly renders BEHIND the
+  rope's own plain round-cap end arc rather than in front of it -- a
+  draw-order fix (`drawRopeEndArcs()` now runs after `drawEndcap()`), not
+  a change to when either one shows.
 - **Rope styling**: optional Tip Segment Shape (a vase-like forked
   decorative shape near the endcap), Rope Top/End Curve Arc (half-ellipse,
   0 = flat to 1 = full semicircle), and a draggable-stop rope gradient

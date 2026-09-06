@@ -5904,6 +5904,34 @@ playback completed a full cycle and returned to its resting frame
 correctly.
 
 ================================================================================
+2026-09-06  -  10:50 AM EDT
+
+"the growing endcap on both the main rope and the cut off segments, are
+stilll shwoign above the rope end arch curve endcap piece. It should
+not. The endcap geometry taht is scaling up should be layered behind
+this semi circle rope end/ rope start geometry" -- a draw-order bug, not
+a geometry one. `strokeRopeCurve()` drew the rope body AND the plain
+round-cap arc (`drawEndArc()`) together in one call, with every
+`drawEndcap()` (the decorative, scaling SVG endcap) called afterward --
+so a still-emerging (small-scale) endcap always painted ON TOP of the
+arc underneath it, when the request was the opposite. Split
+`strokeRopeCurve()` into itself (rope body only now) and a new
+`drawRopeEndArcs()` (just the 2 `drawEndArc()` calls), and moved every
+`drawRopeEndArcs()` call to AFTER its corresponding `drawEndcap()` call
+in `render()`'s own sequence -- the arc is still only ever drawn while
+an endcap is absent or mid-emerge (the existing `mainArcMult`/
+`tipArcMult`/`cutArcMult` gating is completely unchanged), just later in
+paint order now. Applies to mainRope's own tip and every fallen piece's
+both ends (tip and cut edge). Verified live: froze a fresh cut's End
+Emerge state mid-slide (End Emerge Delay=0, End Emerge Speed=0, which
+holds progress at the tiny post-slide scale indefinitely rather than
+racing to full size) and confirmed the round arc bump now clearly
+renders in front of the still-tiny endcap tucked behind it, for both the
+remaining rope's fresh cut-edge tip and the fallen piece's own ends.
+Also confirmed Endcap Design: None (the no-endcap case) is unaffected --
+arcs still draw normally, since the new call isn't gated on `hasEndcap`.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
