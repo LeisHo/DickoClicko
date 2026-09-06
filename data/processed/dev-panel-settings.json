@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 5.1,
-    "ropeLength": 4.466547795958542,
+    "ropeLength": 10.534418547185565,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -85,7 +85,8 @@
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
     "endEmergeDelay": 2.45,
-    "endEmergeSpeed": 0.06,
+    "endEmergeSpeed": 0.1,
+    "pieceEndEmergeSpeed": 0.01,
     "endEmergeEasingStrength": 1,
     "endEmergeTweening": "easeInOut",
     "floorEnabled": true,
@@ -307,6 +308,7 @@
       "key": "END EMERGE",
       "collapsed": false,
       "settings": [
+        "pieceEndEmergeSpeed",
         "endEmergeEnabled",
         "endcapStartingScale",
         "endEmergeDelay",
