@@ -4173,3 +4173,48 @@ GOTCHAS
   a long-reach/short-rope case (confirmed the overstretch bug, then the
   ~1.2x-bounded fix). Live re-verification in the Browser pane was still
   not possible -- reported hidden independent of tab-fronting.
+- **Cut jolt: moved from a time-based to an absolute, distance-based
+  self-collision exclusion; attraction: fixed a genuine numerical
+  degeneracy that folds the rope when the reach target lies along the
+  same line as gravity.** Reported directly: "A rope and its endcaps/
+  arch curve caps should NEVER detect or react to collisions with
+  itself," and "i noticed the rope as a particularly hard time pointing
+  at the mouse when i click and hold directly under the endcap, which
+  it is almost pointing to already. It chooses to turn upwards."
+  Cut jolt: `MAIN_COLLISION_GRACE_AGE` (a fixed time window) removed
+  entirely -- couldn't guarantee real separation under weak gravity, a
+  heavy endcap, or slow Rope Fall Speed. Each piece from
+  `performMainRopeSplit()` now carries `piece.mainRopeExcluded = true`
+  plus `mainRopeExcludeOriginX/Y` (the exact split position); the
+  mainRope-vs-piece loop in `pieceCollision()` skips a still-excluded
+  piece unconditionally, only clearing the flag once its own cut edge
+  (`points[0]`) has moved `1.5 * (combined collision radius)` away from
+  that origin -- a real, adaptive, "actually separated" check instead of
+  a guessed duration. The `pileTopY` gate excludes still-excluded pieces
+  from its own `min()` for the same reason the age-based version needed
+  that fix previously.
+  Attraction fold: root-caused via direct Node simulation using the
+  user's own live settings dump (`constraintIterations=9`,
+  `bendStiffness=0.01`, the real reach ratio) -- confirmed a genuine
+  degeneracy: when the pin lies near the same line gravity already pulls
+  the chain along, excess rope length has no natural sideways direction
+  to bow into and instead overshoots then retraces exactly back (a
+  perfect -1.000 segment-cosine fold), persisting even at 40 iterations
+  and bend stiffness up to 0.5 -- ruling out "just needs more
+  iterations/stiffness," both measured, not assumed. Fixed with 2
+  measures verified together in simulation (degenerate case + several
+  ordinary reaches, no regression): (1) `mainRope.attractionEffSegLen`
+  temporarily shrinks the rest length `integrateChain()` solves toward
+  (mainRope's own call only, `mainRope.segLen` itself untouched) to
+  exactly match the pin distance whenever shorter than the rope's real
+  length, so excess length doesn't exist to fold; (2) a small
+  deterministic perpendicular nudge on interior points, scaled by slack
+  and deliberately not dt-scaled (a one-time symmetry-breaker, not a
+  perceptible speed), breaks the exact-degenerate symmetry (1) alone
+  couldn't. Also confirmed the earlier "doesn't track a moving mouse"
+  report (raised then withdrawn by the user) was purely Rope Attraction
+  Intensity being too low, not a pin-easing bug -- no code change
+  needed there.
+  Verified via direct Node simulation of the actual constraint/collision
+  math against the exact reported mechanisms and the user's own live
+  settings; live testing in the Browser pane remains unavailable.

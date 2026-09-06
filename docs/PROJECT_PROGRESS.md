@@ -129,32 +129,25 @@ additions. Current state of each subsystem:
   still-attached rope's tip. mainRope itself now also collides with any
   piece pile on the floor (previously only the floor plane itself), using
   the same shared collision helpers as piece-vs-piece so an extended-long
-  rope piles up on top of a pile rather than clipping through it. A
-  freshly-cut piece starts coincident with mainRope's own tip, so
-  mainRope-vs-piece collision skips any piece younger than 0.3s
-  (MAIN_COLLISION_GRACE_AGE) -- without this, cutting produced a visible
-  jolt on mainRope/bgRope and a freshly-cut piece floated/bounced instead
-  of falling cleanly (a regression caught and fixed immediately after the
-  collision expansion above shipped). The age gate alone only delayed
-  that jolt rather than bounding its size, and the collision ran
-  ambiently whenever any piece existed regardless of mainRope's own
-  position -- both fixed: every collision correction (piece-vs-piece
-  included) is now capped to a fixed px/s rate (COLLISION_MAX_PUSH_PER_S)
-  so any overlap resolves gradually, and mainRope-vs-piece only engages
-  when the tip is actually within 10%vh of the current pile's own
-  topmost point, never during ordinary post-cut hanging/swinging. The
-  cutting jolt persisted even after both of those fixes because it was
-  never a collision bug: a cut's own remaining chain kept its pre-cut
-  velocity (oldx/oldy), shaped by carrying the now-removed trailing mass
-  -- a real recoil, visible mainly because of this project's own
-  deliberately low damping. Both split functions now zero the remaining
-  chain's implied velocity at the moment of the split. A separate,
-  genuine loophole in the proximity gate itself was found after that
-  still wasn't enough: a freshly-cut piece starts coincident with
-  mainRope's own tip, so it always dominated the gate's own "how close
-  is the nearest pile" check for a frame or two after every cut,
-  regardless of any real pile nearby -- fixed by excluding pieces still
-  within their own grace period from that check.
+  rope piles up on top of a pile rather than clipping through it. Every
+  collision correction (piece-vs-piece included) is capped to a fixed
+  px/s rate (COLLISION_MAX_PUSH_PER_S) so any overlap resolves gradually
+  rather than snapping, and mainRope-vs-piece only engages when the tip
+  is actually within 10%vh of the current pile's own topmost point,
+  never during ordinary post-cut hanging/swinging. A cut's own remaining
+  chain also has its implied velocity (oldx/oldy) zeroed at the exact
+  moment of the split -- otherwise it kept carrying momentum shaped by
+  the now-removed trailing mass, a real recoil this project's own
+  deliberately low damping let ring out visibly ("as if having been
+  flicked"). A piece freshly split off mainRope carries a permanent-
+  until-cleared `mainRopeExcluded` flag (plus the exact position it was
+  created at): mainRope-vs-piece collision skips it entirely, and the
+  proximity gate's own "how close is the nearest pile" check ignores it
+  too, until its own cut edge has moved a real, comfortable distance
+  away from that origin -- an absolute, distance-based guarantee (not a
+  fixed time window, which couldn't guarantee real separation under weak
+  gravity or a heavy endcap) that a rope and its own just-cut piece never
+  collide with each other.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
@@ -275,28 +268,32 @@ additions. Current state of each subsystem:
   WebP directly), so any future frame edit needs its WebP regenerated to
   match (resize to 1400px wide, re-encode) before it'll show up live --
   see CODE_SUMMARY gotchas.
-
-Full session-by-session history (every bug report, root cause, and
-verification) is in `CHANGELOG.txt`.
-
 - **Rope Attraction**: right-click-and-hold pins mainRope's own tip to a
-  moving target (eased toward the mouse, capped by both Max Reach
-  Distance and the rope's own real physical length) exactly the way the
-  anchor is already pinned to the circle boundary -- the existing
-  distance/bend relaxation then bends the WHOLE chain between these 2
-  fixed points on its own, so a short rope simply can't reach as far and
-  a long rope bows between the 2 points instead of folding. No per-point
-  nudging logic of any kind; the endcap's own rotation is just
-  `tipDirection()` (unmodified from before this feature existed), flush
-  by construction since its neighbor point IS the pin. 2 earlier designs
-  (a single-point nudge, then a weighted-span nudge) were tried and
-  replaced after real reported problems (a fold/hook, then too much of
-  the rope's own shape moving). New RIGHT CLICK dev-panel group
+  moving target (eased toward the mouse, capped by Max Reach Distance,
+  the rope's own real physical length, AND -- while the pin sits closer
+  than the rope's real length -- a temporarily-shrunk effective rest
+  length plus a small deterministic perpendicular nudge, both needed to
+  stop the excess slack from folding into a sharp hook when the reach
+  target lies near the same line gravity already pulls the chain along)
+  exactly the way the anchor is already pinned to the circle boundary --
+  the existing distance/bend relaxation then bends the WHOLE chain
+  between these 2 fixed points on its own, so a short rope simply can't
+  reach as far and a long rope bows between the 2 points instead of
+  folding. No manual per-point nudging of the reach itself; the endcap's
+  own rotation is just `tipDirection()` (unmodified from before this
+  feature existed), flush by construction since its neighbor point IS
+  the pin. Several earlier designs (a single-point nudge, a weighted-span
+  nudge, the pin alone with no anti-fold handling) were tried and
+  replaced after real reported problems. New RIGHT CLICK dev-panel group
   (Intensity, Speed, Max Reach Distance). Verified via direct Node
-  simulation of the actual constraint math (not a live gesture test) --
+  simulation of the actual constraint math, including with the user's
+  own live settings dump reproducing the exact reported configuration --
   this environment's Browser pane reported itself hidden independent of
   tab-fronting for every task this session touched it (see CODE_SUMMARY
   gotchas).
+
+Full session-by-session history (every bug report, root cause, and
+verification) is in `CHANGELOG.txt`.
 
 ## What's next
 

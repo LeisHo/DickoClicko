@@ -6561,6 +6561,83 @@ the Browser pane was still not possible -- reported hidden independent
 of tab-fronting, the same limitation every task this session has hit.
 
 ================================================================================
+2026-09-06  -  05:40 PM EDT
+
+Direct follow-up after the tip-pin redesign still hadn't fully resolved
+either the cut jolt or the attraction hook. On the jolt: "1. Cut jumping/
+jolting issue is still present - A rope and its endcaps/ arch curve caps
+should NEVER detect or react to collisions with itself." On the reach
+direction: "when i turn it up, while the max reach distance is low, the
+rope and endcap still end up turning upwards. Even if the mouse is
+within the reach distance in terms of left nd right distance," followed
+by "i noticed the rope as a particularly hard time pointing at the mouse
+when i click and hold directly under the endcap, which it is almost
+pointing to already. It chooses to turn upwards" and a live settings
+dump for reproducing the exact configuration.
+
+Cut jolt -- moved from a time-based to an absolute, distance-based
+exclusion after the fixed grace window kept proving insufficient. A
+fixed TIME window can't guarantee real separation happened: under weak
+gravity, a heavy endcap, or a slow Rope Fall Speed, the piece may still
+be genuinely touching mainRope's own tip once the window elapses, and
+even the existing maxPush-capped correction (gradual, not instant) can
+still read as a visible jolt. Each piece split from mainRope now carries
+a permanent-until-cleared mainRopeExcluded flag plus the exact position
+it was created at (mainRopeExcludeOriginX/Y); mainRope-vs-piece
+collision skips it entirely until its own cut edge has moved a real,
+comfortable distance (1.5x the pair's combined collision radius) away
+from that origin, at which point the flag clears permanently and it
+behaves like any other piece from then on. This adapts automatically to
+however fast or slow separation actually happens, rather than guessing
+a duration -- a genuine "never," not "usually not." The pileTopY
+proximity gate was updated to exclude still-excluded pieces from its own
+computation too, for the identical reason the age-based version needed
+that same fix previously. The now-unused MAIN_COLLISION_GRACE_AGE
+constant was removed.
+
+Attraction hook -- root-caused via direct Node simulation using the
+user's own live settings dump (constraintIterations=9, bendStiffness=
+0.01, the real gravity/reach ratio) rather than more guessing, and found
+a genuine numerical degeneracy: whenever the reach target lies close to
+the SAME straight line gravity already pulls the chain along -- worst
+case exactly matching the report, mouse held directly under the endcap,
+right where the rope already hangs -- any excess rope length beyond that
+target distance has NO natural sideways direction to bow into, and
+instead overshoots past the target then retraces EXACTLY back along the
+same line. Confirmed this persists at full strength (a perfect -1.000
+segment-cosine, i.e. a true 180-degree fold) even at 40 solver iterations
+and bend stiffness up to 0.5 -- ruling out "just needs more iterations"
+or "just needs a stiffer bend" as fixes, both already tried and
+measured, not assumed. Fixed with 2 complementary measures verified
+together in simulation across the degenerate case AND several ordinary
+off-axis reaches (confirmed no regression on either): (1) the constraint
+solve now targets a temporarily shrunk rest length exactly matching the
+pin-to-anchor distance whenever that's shorter than the rope's real
+length (new mainRope.attractionEffSegLen, read only by mainRope's own
+integrateChain() call while attracting -- mainRope.segLen itself is
+never touched, so growth/display/every other reader is unaffected), so
+excess length simply doesn't exist to fold in the first place; (2) a
+small, deterministic perpendicular nudge on the chain's own interior
+points, scaled by how much slack is being absorbed and deliberately NOT
+scaled by dt (its role is a one-time-per-frame symmetry-breaking
+tie-breaker, not a perceptible speed), breaks the exact-degenerate
+symmetry that shrinking the rest length alone couldn't. Also confirmed
+directly that the earlier "attraction doesn't track a moving mouse"
+report (raised, then withdrawn by the user in the same exchange) was
+purely a matter of Rope Attraction Intensity being set too low, not a
+bug in the pin-easing logic -- no code change was needed for that part.
+
+Verified: syntax check passed. Both fixes were verified via direct Node
+simulation of the actual constraint/collision math -- the collision fix
+against the exact reported mechanism, and the attraction fix using the
+user's own real live settings dump reproducing the precise
+configuration reported as broken, sweeping solver iterations (1-40) and
+bend stiffness (0.01-0.8) to rule out simpler explanations before
+settling on the 2-part fix. Live testing in the Browser pane remains
+unavailable -- reported hidden independent of tab-fronting, the same
+limitation every task this session has hit.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
