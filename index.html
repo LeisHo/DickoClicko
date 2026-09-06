@@ -1712,35 +1712,49 @@ function isPointInFlick(x, y){
 }
 
 // FLICK animation 2 -- a second, independent graphic, placed above the
-// first by default. Its frames are EVERY file currently in
-// `data/FLICK/ANI/1` (natural-numeric order, whatever frame numbers
-// actually exist there -- no fixed/curated list) followed immediately by
-// EVERY file in `data/FLICK/ANI/2` in REVERSE numeric order, pre-copied
-// into data/FLICK/ANI2/FRAMES-01.png..FRAMES-{FLICK2_FRAME_COUNT}.png in
-// that exact concatenated order so the loading code here stays as simple
-// as animation 1's (a plain sequential file list). Per explicit
-// correction: an EARLIER version of this hardcoded a specific curated
-// subset of frame numbers from each folder; the real rule is simpler --
-// use whatever's actually in each folder, full stop -- and the earlier
-// hardcoded list had drifted out of sync with the folders' actual
-// contents (3 of its listed frame numbers no longer existed on disk).
-// `FLICK2_FRAME_COUNT` must be re-verified (and ANI2 regenerated, same
-// copy+resize+re-encode process) any time ANI/1's or ANI/2's own file
-// counts change -- nothing here derives it automatically. Rests on frame
-// 1 (not auto-playing) until clicked, per explicit request --
-// flick2Playing gates whether flick2AnimTime advances at all (see
-// update() and the pointerdown hit-test below); once started it loops
-// forward (1->N->1, a hard cut back to frame 1, not a ping-pong -- no
-// "loop back" behavior was requested for this one) for as long as it
+// first by default. Its frames are loaded DIRECTLY from
+// `data/FLICK/ANI/1` (in sequence) followed by `data/FLICK/ANI/2` (in
+// REVERSE sequence) -- per explicit correction ("all animation frames
+// should be from ANI not ANi2... none should be from Ani2"). An earlier
+// version pre-copied/re-encoded both folders' frames into a 3rd,
+// separate top-level `data/FLICK/ANI2/` folder purely so the loading
+// code here could stay a simple sequential range (matching animation
+// 1's own `for i=1..N` shape) -- but that meant every edit to ANI/1 or
+// ANI/2 also needed a separate, easy-to-forget rebuild-into-ANI2 step,
+// which is exactly what caused ANI2 to repeatedly drift out of sync
+// with the 2 real source folders across several rounds. Loading from
+// ANI/1 and ANI/2 directly removes that whole intermediate copy step --
+// there is nothing left to keep in sync.
+//
+// Neither folder's own file numbers form a clean 1..N range (ANI/1 and
+// ANI/2 each skip around, e.g. ANI/1 has no 05/06/08/09/14 -- whatever
+// frames the user has actually put there), so the loading code can't
+// stay a bare `for i=1..N` loop the way it could when both source
+// folders got pre-flattened into one sequential ANI2. These 2 arrays
+// list exactly which frame numbers exist in each folder, in the order
+// they're used (ANI1_FRAMES forward, ANI2_FRAMES reversed at the point
+// of use below) -- re-verify (`ls data/FLICK/ANI/1`, `ls
+// data/FLICK/ANI/2`) and update these 2 arrays any time either folder's
+// own contents change; nothing here derives them automatically (this is
+// a static single-file app with no server-side directory listing).
+const ANI1_FRAMES = [1, 2, 3, 4, 7, 10, 11, 12, 13, 15, 16];
+const ANI2_FRAMES = [1, 2, 3, 5, 6, 11, 13, 15, 16];
+// Rests on frame 1 (not auto-playing) until clicked, per explicit
+// request -- flick2Playing gates whether flick2AnimTime advances at all
+// (see update() and the pointerdown hit-test below); once started it
+// loops forward (1->N->1, a hard cut back to frame 1, not a ping-pong --
+// no "loop back" behavior was requested for this one) for as long as it
 // keeps being clicked to restart, same as animation 1's own always-on
 // loop otherwise.
-const FLICK2_FRAME_COUNT = 23;
-const flickFrames2 = []
-for (let i = 1; i <= FLICK2_FRAME_COUNT; i++){
+const FLICK2_FRAME_COUNT = ANI1_FRAMES.length + ANI2_FRAMES.length;
+const flickFrames2 = ([]).concat(
+  ANI1_FRAMES.map(n => 'data/FLICK/ANI/1/FRAMES-' + String(n).padStart(2, '0') + '.webp'),
+  [...ANI2_FRAMES].reverse().map(n => 'data/FLICK/ANI/2/FRAMES-' + String(n).padStart(2, '0') + '.webp'),
+).map(src => {
   const img = new Image();
-  img.src = `data/FLICK/ANI2/FRAMES-${String(i).padStart(2, '0')}.webp`;
-  flickFrames2.push(img);
-}
+  img.src = src;
+  return img;
+});
 let flick2AnimTime = 0;
 let flick2Playing = false;
 
