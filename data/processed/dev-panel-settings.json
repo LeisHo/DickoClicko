@@ -11,7 +11,7 @@
     "endcapHeight": 1.4,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.012192605788249,
+    "ropeLength": 15.012192605788242,
     "ropeDefaultLength": 15,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
@@ -23,13 +23,17 @@
       {
         "pos": 0,
         "color": "#f4c8a4"
+      },
+      {
+        "pos": 1,
+        "color": "#f4c8a4"
       }
     ],
     "endcapGradientEnabled": true,
     "endcapGradientColors": [
       {
         "pos": 1,
-        "color": "#ffc085"
+        "color": "#f4c8a4"
       },
       {
         "pos": 0.412221007916359,
@@ -65,6 +69,17 @@
     ],
     "ropeEndCurveArc": 1,
     "ropeTopCurveArc": 1.1,
+    "arcGradientEnabled": true,
+    "arcGradientColors": [
+      {
+        "pos": 0,
+        "color": "#f4c8a4"
+      },
+      {
+        "pos": 0.9956230360735779,
+        "color": "#f4c8a4"
+      }
+    ],
     "clickIntensity": 1.1,
     "holdDistance": 22,
     "bendStiffness": 0.02,
@@ -265,6 +280,8 @@
       "key": "ROPE",
       "collapsed": false,
       "settings": [
+        "arcGradientEnabled",
+        "arcGradientColors",
         "ropeDefaultLength",
         "endcapGradientEnabled",
         "endcapGradientColors",
@@ -335,11 +352,11 @@
     }
   ],
   "panelGeometry": {
-    "mobile": {
-      "left": 182,
-      "top": 262.9761962890625,
-      "width": 229,
-      "height": 374.7857360839844,
+    "desktop": {
+      "left": 908.0375366210938,
+      "top": 17.912500381469727,
+      "width": 627.9500122070312,
+      "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -352,11 +369,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "desktop": {
-      "left": 908.0375366210938,
-      "top": 17.912500381469727,
-      "width": 627.9500122070312,
-      "height": 570.0250244140625,
+    "mobile": {
+      "left": 182,
+      "top": 262.9761962890625,
+      "width": 229,
+      "height": 374.7857360839844,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
