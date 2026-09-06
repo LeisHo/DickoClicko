@@ -330,6 +330,19 @@ const DEV_GROUPS = [
     { key:'bgRopeGradientColors',  label:'Background Rope Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
     { key:'ropeEndCurveArc',label:'Rope End Curve Arc',type:'slider', unit:'x',     min:0,   max:3,  step:0.1, def:1 },
     { key:'ropeTopCurveArc',label:'Rope Top Curve Arch',type:'slider', unit:'x',    min:0,   max:3,  step:0.1, def:0.8 },
+    // A separate, independent gradient for the plain round-cap end/start
+    // ARC (drawEndArc()) only -- per explicit request ("provide me a
+    // slider to set the gradent of the rope end/start arch curved
+    // endcap"), same pattern as Endcap Gradient's own split from Rope
+    // Gradient above. Local to the arc's own small protrusion (base ->
+    // outward tip), not the whole rope's world-space span -- same
+    // reasoning as Endcap Gradient's own local-vs-world fix (see that
+    // control's render()-side comment): a small end feature mapped
+    // against the whole rope's own anchor-to-tip gradient would clamp to
+    // nearly one constant color. Applies everywhere drawRopeEndArcs() is
+    // called -- mainRope, every fallen piece's tip/cut edge, and bgRope.
+    { key:'arcGradientEnabled', label:'Rope End Arc Gradient Enabled', type:'checkbox', def:false },
+    { key:'arcGradientColors',  label:'Rope End Arc Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
   ]},
   { title:'CLICK', controls:[
     { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.1 },
@@ -3923,7 +3936,7 @@ function update(rawDt){
 // a proportionally flattened arc, not a smaller full circle -- per
 // explicit clarification that Rope End/Top Curve Arc controls how much of
 // a semicircle the end is, not the size of a circle sitting on top of it.
-function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult){
+function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult, gradientStops){
   if (arcMult <= 0) return;
   const halfW = thicknessPx / 2;
   const protrusion = halfW * arcMult;
@@ -3931,6 +3944,20 @@ function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult){
   ctx.save();
   ctx.translate(px, py);
   ctx.rotate(angle);
+  // Optional gradient (Rope End Arc Gradient) -- local to THIS arc's own
+  // small protrusion (base chord at local x=0 -> outward tip at
+  // x=protrusion), created here (inside the already-translated/rotated
+  // space) rather than in world coordinates, same reasoning as Endcap
+  // Gradient's own local-vs-world fix: a small end feature mapped against
+  // the whole rope's own world-space anchor-to-tip span would clamp to
+  // nearly one constant color instead of showing a real gradient. Caller
+  // (drawRopeEndArcs()) already set ctx.fillStyle to the plain fallback
+  // color; this only overrides it when a real gradient is supplied.
+  if (gradientStops && gradientStops.length >= 2){
+    const grad = ctx.createLinearGradient(0, 0, protrusion, 0);
+    [...gradientStops].sort((a, b) => a.pos - b.pos).forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    ctx.fillStyle = grad;
+  }
   ctx.beginPath();
   // local +x now points in the outward `dir` direction; the arc spans
   // -90..+90 degrees (the half where local x >= 0, i.e. the outward-facing
@@ -4035,12 +4062,22 @@ function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
   // run in between this call and the strokeRopeCurve() call that drew the
   // rope body, and its own fill color/gradient would otherwise still be
   // sitting in ctx.fillStyle by the time drawEndArc()'s own ctx.fill() runs.
+  // This is only the FALLBACK when Rope End Arc Gradient is off --
+  // drawEndArc() itself overrides it with a real gradient when enabled
+  // (see that function's own comment).
   ctx.fillStyle = color;
+  // Rope End Arc Gradient -- per explicit request ("provide me a slider
+  // to set the gradent of the rope end/start arch curved endcap"), a
+  // separate/independent gradient from both Rope Gradient (the body
+  // stroke) and Endcap Gradient (the decorative SVG endcap). Read once
+  // here rather than per-arc-call since both ends of the same entity
+  // share the one setting.
+  const arcGradientStops = cfg.arcGradientEnabled ? cfg.arcGradientColors : null;
   const n = points.length;
   const tip = points[n - 1];
   if (endArcMult > 0){
     const dir = tipDirection(points);
-    drawEndArc(tip.x, tip.y, dir.x, dir.y, thicknessPx, endArcMult);
+    drawEndArc(tip.x, tip.y, dir.x, dir.y, thicknessPx, endArcMult, arcGradientStops);
   }
   // startArcMult mirrors endArcMult at points[0] instead of points[n-1] --
   // meaningful for both a fallen piece's own free cut edge (Rope End
@@ -4052,7 +4089,7 @@ function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
     const base = points[0], next = points[1];
     let dx = base.x - next.x, dy = base.y - next.y;
     const dlen = Math.hypot(dx, dy) || 1;
-    drawEndArc(base.x, base.y, dx / dlen, dy / dlen, thicknessPx, startArcMult);
+    drawEndArc(base.x, base.y, dx / dlen, dy / dlen, thicknessPx, startArcMult, arcGradientStops);
   }
 }
 
