@@ -4037,3 +4037,26 @@ GOTCHAS
   logic) rather than a live gesture test -- syntax, dev-panel rendering,
   and pre-spawn no-op behavior (right-click before introPhase==='done')
   were confirmed live.
+- **Follow-up correction: the age-grace fix above only delayed the cut
+  jolt, it never bounded its size, and mainRope-vs-piece was firing
+  ambiently against pieces mainRope wasn't ever extended toward.**
+  Reported directly: "the rope cutting jumping bug is sitll occuring"
+  and "the cut segments of rope on the floor are now sliding around
+  slowly." Two fixes, layered instead of tuning the same mechanism
+  further: (1) new `COLLISION_MAX_PUSH_PER_S` (400 %vmin/s) caps every
+  `resolveChainCollision()` correction to a fixed px/s rate scaled by
+  `dt`, applied to BOTH mainRope-vs-piece and piece-vs-piece (the latter
+  shares the identical coincident-point risk on a piece split, just
+  never reported) -- any overlap now resolves gradually regardless of
+  size or cause; (2) mainRope-vs-piece is now gated on the tip actually
+  being within 10%vh of the CURRENT pile's own topmost point (computed
+  fresh each frame from `fallenPieces`, not a fixed guess), so it only
+  ever engages for the originally-requested "extended-long rope reaches
+  the floor" case, never during mainRope's own ordinary post-cut
+  hang/swing. `pieceCollision()` now takes `dt` as a param (threaded
+  from its one call site in `update()`) to compute `maxPush`.
+  Verification limitation, same as the 2 preceding tasks: this
+  environment's Browser pane reported itself hidden independent of
+  tab-fronting, and navigation failed outright while hidden -- verified
+  by tracing the exact mechanism against both reported symptoms rather
+  than a live repro.

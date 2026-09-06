@@ -135,7 +135,14 @@ additions. Current state of each subsystem:
   (MAIN_COLLISION_GRACE_AGE) -- without this, cutting produced a visible
   jolt on mainRope/bgRope and a freshly-cut piece floated/bounced instead
   of falling cleanly (a regression caught and fixed immediately after the
-  collision expansion above shipped).
+  collision expansion above shipped). The age gate alone only delayed
+  that jolt rather than bounding its size, and the collision ran
+  ambiently whenever any piece existed regardless of mainRope's own
+  position -- both fixed: every collision correction (piece-vs-piece
+  included) is now capped to a fixed px/s rate (COLLISION_MAX_PUSH_PER_S)
+  so any overlap resolves gradually, and mainRope-vs-piece only engages
+  when the tip is actually within 10%vh of the current pile's own
+  topmost point, never during ordinary post-cut hanging/swinging.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full

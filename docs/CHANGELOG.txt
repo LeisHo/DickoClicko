@@ -6298,6 +6298,61 @@ exact nudge-then-constrain interaction against integrateChain()'s own
 logic) rather than a live gesture test.
 
 ================================================================================
+2026-09-06  -  04:15 PM EDT
+
+Follow-up correction to the grace-period fix above -- reported directly:
+"the rope cutting jumping bug is sitll occuring. fix it. the attraction
+function works" (confirming Rope Attraction itself was unaffected), then
+mid-turn: "furthermore, the cut segments of rope on the floor are now
+sliding around slowly."
+
+Root cause of "still occurring": MAIN_COLLISION_GRACE_AGE only DELAYED
+the violent correction, it never bounded its SIZE. The instant a piece's
+age crossed the grace period, if it was still meaningfully overlapping
+mainRope's own (endcap-inflated) tip, resolveChainCollision still threw
+the ENTIRE correction in one frame -- same magnitude jolt as before, just
+shifted 0.3s later.
+
+Root cause of "sliding around slowly": mainRope-vs-piece ran
+unconditionally whenever ANY fallen piece existed, even while mainRope
+was just ordinarily hanging/swinging (cfg.damping=0.986, deliberately
+near-undamped, by design long-lasting) nowhere near a real floor pile --
+so a piece resting anywhere near mainRope's own ambient sway kept getting
+nudged by it every single frame for as long as it kept swinging nearby,
+reading as a slow continuous drift.
+
+Fixed both with a more robust design instead of tuning the same
+mechanism further:
+- New COLLISION_MAX_PUSH_PER_S (400 %vmin/s, judgment call) caps every
+  resolveChainCollision() correction to a fixed px/s rate (scaled by dt)
+  regardless of how large the underlying overlap is -- applied to BOTH
+  mainRope-vs-piece and piece-vs-piece (the latter has the identical
+  coincident-point risk on a piece split, just never reported). Any large
+  overlap now resolves smoothly over several frames instead of an
+  instant snap, no matter how it arose.
+- mainRope-vs-piece is now gated on mainRope's own tip actually being
+  close to the CURRENT pile's own topmost point (within 10%vh, a
+  judgment call) -- computed fresh each frame from the real pile, not a
+  fixed guess. This directly scopes the collision to the originally-
+  requested case (a deliberately extended-long rope reaching down to a
+  floor pile) and prevents it from ever engaging during ordinary post-cut
+  hanging, eliminating the ambient-sway drift at its source rather than
+  just capping its speed.
+
+Verified: syntax check passed. Live re-verification was not possible --
+this environment's Browser pane reported itself hidden (via its own
+tabs_context check) independent of tab-fronting, the same limitation hit
+on the 2 immediately preceding tasks, and navigation attempts while
+hidden failed outright. Verified instead by tracing the exact mechanism
+against both reported symptoms: simulated the fresh-cut sequence (age
+gate holds off collision during the fall; if overlap somehow persists
+past the grace period, maxPush now bounds the correction instead of
+snapping) and the ambient-hang sequence (pileTopY sits near the floor
+once a piece settles, mainRope's own tip sits far above it while hanging
+normally, so the proximity gate stays closed and the two chains never
+interact again unless mainRope is genuinely extended down to the pile).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
