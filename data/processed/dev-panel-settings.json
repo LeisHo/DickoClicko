@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 14.021676382344683,
+    "ropeLength": 14.641161697327451,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -109,16 +109,16 @@
         "color": "#ffc085"
       },
       {
-        "pos": 0.9920996369006372,
-        "color": "#f4d2ad"
+        "pos": 1,
+        "color": "#ffc085"
       }
     ],
-    "introPauseDuration": 5,
+    "introPauseDuration": 2.2,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": true,
     "introExtendStartSpeed": 2,
     "detachWaitDuration": 0,
-    "detachPauseDuration": 5,
+    "detachPauseDuration": 2.1,
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 3.4,
     "detachThicknessMultiplier": 1.05,
