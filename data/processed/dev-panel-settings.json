@@ -119,7 +119,7 @@
     ],
     "bgRopeEndcapPauseHeight": 0.2,
     "mainEndcapGrowSpeed": 3,
-    "introPauseDuration": 1.5,
+    "introPauseDuration": 0.9,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": true,
     "introExtendStartSpeed": 2,
