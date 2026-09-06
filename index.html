@@ -343,6 +343,12 @@ const DEV_GROUPS = [
     // called -- mainRope, every fallen piece's tip/cut edge, and bgRope.
     { key:'arcGradientEnabled', label:'Rope End Arc Gradient Enabled', type:'checkbox', def:false },
     { key:'arcGradientColors',  label:'Rope End Arc Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
+    // Was a hardcoded constant (ARC_SEAM_OVERLAP_PX, see drawEndArc()'s
+    // own comment) closing an anti-aliasing seam between the arc and the
+    // rope body -- exposed as a slider per explicit follow-up request,
+    // after 2 rounds of manually editing the constant and re-pushing
+    // (1.5 -> 4 -> 2.5) to find a value that visually closed the seam.
+    { key:'arcSeamOverlapPx', label:'Rope End Arc Seam Overlap', type:'slider', unit:'px', min:0, max:5, step:0.1, def:3 },
   ]},
   { title:'CLICK', controls:[
     { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.1 },
@@ -3944,26 +3950,25 @@ function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult, gradientStops){
   ctx.save();
   ctx.translate(px, py);
   ctx.rotate(angle);
-  // ARC_SEAM_OVERLAP_PX -- reported as "i see a seam between the rope
-  // and the rope end/start arch curve cap." Same root cause and fix
-  // shape as the earlier endcap/rope seam (see drawEndcap()'s own
-  // ENDCAP_SEAM_OVERLAP_PX comment): this arc's own flat base chord and
-  // the rope's own butt-capped stroke end (strokeRopeCurve()) meet at
-  // the EXACT same world coordinate with the EXACT same width -- a
-  // mathematically perfect zero-overlap join between 2 independently-
-  // rasterized canvas shapes, which anti-aliases into a visible hairline
-  // gap. Shifting the arc's own local origin backward (toward the rope,
-  // along -local-x, i.e. -dir in world space) BEFORE the ellipse below
-  // is drawn moves the WHOLE arc shape (base chord and all) that far
-  // into the rope, hiding the seam under solid overlap. No measured
-  // "correct" overlap exists for a sub-pixel AA artifact -- 1.5px (the
-  // same judgment call as the endcap fix's own value) was tried first,
-  // reported directly as an improvement but still visible ("its better
-  // than before but its stilll visible") -- confirms the fix MECHANISM
-  // is right, just needed more magnitude. Raised to 4px, then set to
-  // 2.5px per explicit follow-up.
-  const ARC_SEAM_OVERLAP_PX = 2.5;
-  ctx.translate(-ARC_SEAM_OVERLAP_PX, 0);
+  // Rope End Arc Seam Overlap (cfg.arcSeamOverlapPx) -- reported as "i
+  // see a seam between the rope and the rope end/start arch curve cap."
+  // Same root cause and fix shape as the earlier endcap/rope seam (see
+  // drawEndcap()'s own ENDCAP_SEAM_OVERLAP_PX comment): this arc's own
+  // flat base chord and the rope's own butt-capped stroke end
+  // (strokeRopeCurve()) meet at the EXACT same world coordinate with the
+  // EXACT same width -- a mathematically perfect zero-overlap join
+  // between 2 independently-rasterized canvas shapes, which
+  // anti-aliases into a visible hairline gap. Shifting the arc's own
+  // local origin backward (toward the rope, along -local-x, i.e. -dir in
+  // world space) BEFORE the ellipse below is drawn moves the WHOLE arc
+  // shape (base chord and all) that far into the rope, hiding the seam
+  // under solid overlap. No measured "correct" overlap exists for a
+  // sub-pixel AA artifact -- started as a hardcoded constant (1.5px,
+  // then 4px, then 2.5px, each a manual edit+push cycle to find a value
+  // that visually closed the seam), now a live-adjustable slider per
+  // explicit follow-up request instead of requiring a code edit for
+  // every retry.
+  ctx.translate(-cfg.arcSeamOverlapPx, 0);
   // Optional gradient (Rope End Arc Gradient) -- local to THIS arc's own
   // small protrusion (base chord at local x=0 -> outward tip at
   // x=protrusion), created here (inside the already-translated/rotated
