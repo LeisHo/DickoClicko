@@ -129,7 +129,7 @@
     "introExtendSpeed": 12,
     "introExtendSpeedTweenEnabled": true,
     "introExtendStartSpeed": 2,
-    "detachWaitDuration": 10,
+    "detachWaitDuration": 1.1,
     "detachPauseDuration": 0.4,
     "detachTipStartScale": 0.5,
     "detachTipGrowDuration": 0.8,
