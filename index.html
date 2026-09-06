@@ -3963,8 +3963,7 @@ function ropeStrokeColor(points, enabled, stops, fallbackColor){
   return grad;
 }
 
-function strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult){
-  if (startArcMult === undefined) startArcMult = 0;
+function strokeRopeCurve(points, thicknessPx, color){
   ctx.strokeStyle = color; ctx.fillStyle = color;
   ctx.lineWidth = thicknessPx; ctx.lineJoin = 'round';
   // Always a flat (butt) cap on the stroke itself now -- it used to be
@@ -4011,7 +4010,33 @@ function strokeRopeCurve(points, thicknessPx, color, endArcMult, startArcMult){
     }
   }
   ctx.stroke();
+}
 
+// Split out of strokeRopeCurve() so callers can draw the rope's own BODY
+// first, then the (decorative SVG) endcap on top of it, and only THEN
+// these plain round-cap arcs -- rather than the arcs always painting
+// immediately after the body, before any endcap. Reported directly:
+// "the growing endcap on both the main rope and the cut off segments,
+// are still showing above the rope end arch curve endcap piece. It
+// should not. The endcap geometry that is scaling up should be layered
+// behind this semi circle rope end/ rope start geometry." Since these
+// arcs are already ONLY drawn while an endcap is absent or still mid-
+// emerge (see mainArcMult/tipArcMult/cutArcMult, gated on
+// `factor >= 1`), moving the arc draw call to AFTER the corresponding
+// drawEndcap() call is exactly what makes the arc win that overlap --
+// still hidden entirely once the endcap fully emerges (factor >= 1
+// zeroes the relevant *ArcMult, same as before), but no longer visible
+// UNDER a still-emerging endcap's own semi-transparent/partial edges in
+// the meantime. No change to WHEN an arc is drawn (still gated by the
+// exact same *ArcMult logic) -- only where in the draw order it lands.
+function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
+  if (startArcMult === undefined) startArcMult = 0;
+  // Set explicitly (not inherited from ctx state) -- drawEndcap() may have
+  // run in between this call and the strokeRopeCurve() call that drew the
+  // rope body, and its own fill color/gradient would otherwise still be
+  // sitting in ctx.fillStyle by the time drawEndArc()'s own ctx.fill() runs.
+  ctx.fillStyle = color;
+  const n = points.length;
   const tip = points[n - 1];
   if (endArcMult > 0){
     const dir = tipDirection(points);
@@ -4602,11 +4627,17 @@ function render(){
       ctx.beginPath();
       ctx.arc(anchor.x, anchor.y, vmin(cfg.circleSize) / 2, 0, Math.PI * 2);
       ctx.clip();
-      strokeRopeCurve(bgRope.points, liveThickness, ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor), cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+      {
+        const bgColor = ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor);
+        strokeRopeCurve(bgRope.points, liveThickness, bgColor);
+        drawRopeEndArcs(bgRope.points, liveThickness, bgColor, cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+      }
       drawBgRopeStartEndcap();
       ctx.restore();
     } else {
-      strokeRopeCurve(bgRope.points, liveThickness, ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor), cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+      const bgColor = ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor);
+      strokeRopeCurve(bgRope.points, liveThickness, bgColor);
+      drawRopeEndArcs(bgRope.points, liveThickness, bgColor, cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
       drawBgRopeStartEndcap();
     }
   }
@@ -4623,13 +4654,22 @@ function render(){
   const hasEndcap = cfg.endcapDesign !== 'none';
   const mainTipFactor = emergeFactor(mainRope.tipEmerge);
   const mainArcMult = (hasEndcap && mainTipFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
-  fallenPieces.forEach(piece => {
+  // computeTipArcMult/computeCutArcMult/pieceStrokePoints: shared by both
+  // the body-stroke pass below and the end-arcs pass further down (after
+  // this piece's own endcap has been drawn) -- factored out so both
+  // passes derive the exact same values from the exact same logic rather
+  // than risking the two drifting apart.
+  const computeTipArcMult = piece => {
     const tipFactor = emergeFactor(piece.tipEmerge);
-    const cutFactor = emergeFactor(piece.cutEdgeEmerge);
     // the shape covers the free/tip end entirely when enabled -- no round-
     // cap arc treatment needed there anymore, same reasoning as hasEndcap.
-    const tipArcMult = (hasEndcap && tipFactor >= 1) || cfg.tipSegmentShapeEnabled ? 0 : cfg.ropeEndCurveArc;
-    const cutArcMult = (hasEndcap && cfg.endcapAtCutEnd && cutFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
+    return (hasEndcap && tipFactor >= 1) || cfg.tipSegmentShapeEnabled ? 0 : cfg.ropeEndCurveArc;
+  };
+  const computeCutArcMult = piece => {
+    const cutFactor = emergeFactor(piece.cutEdgeEmerge);
+    return (hasEndcap && cfg.endcapAtCutEnd && cutFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
+  };
+  fallenPieces.forEach(piece => {
     // Each fallen piece renders at its OWN current (possibly decayed)
     // thickness -- see pieceThickness() -- never mainRope/bgRope's live
     // (possibly Detach-Thickness-Multiplier-boosted) thickness.
@@ -4641,7 +4681,7 @@ function render(){
     // gradient"). Previously always cfg.ropeColor (solid), regardless of
     // Rope Gradient Enabled -- a piece lost its gradient coloring the
     // instant it fell.
-    strokeRopeCurve(strokePoints, pieceThick, ropeStrokeColor(piece.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor), tipArcMult, cutArcMult);
+    strokeRopeCurve(strokePoints, pieceThick, ropeStrokeColor(piece.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor));
   });
   // mainRope's points[0] is the anchor -- free to move within the circle
   // now (see integrateChain()'s own boundaryConstraint), but still never a
@@ -4669,7 +4709,8 @@ function render(){
   const showMainRope = introPhase === 'growing' || introPhase === 'done';
   const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, liveThickness);
   const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
-  if (showMainRope) strokeRopeCurve(mainStrokePoints, liveThickness, ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor), mainEffectiveArcMult, cfg.ropeTopCurveArc);
+  const mainRopeColor = ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
+  if (showMainRope) strokeRopeCurve(mainStrokePoints, liveThickness, mainRopeColor);
   if (cfg.tipSegmentShapeEnabled){
     fallenPieces.forEach(piece => drawTipSegmentShape(piece.points, pieceThickness(piece), cfg.ropeColor));
     if (showMainRope) drawTipSegmentShape(mainRope.points, liveThickness, cfg.ropeColor);
@@ -4724,6 +4765,17 @@ function render(){
       });
     }
   }
+  // Rope-end arcs (the plain round-cap semicircle) are drawn LAST, after
+  // every endcap above -- not gated on hasEndcap, since Endcap Design
+  // 'none' still needs these to draw exactly as before. See
+  // drawRopeEndArcs()'s own comment for why the layering moved.
+  if (showMainRope) drawRopeEndArcs(mainStrokePoints, liveThickness, mainRopeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc);
+  fallenPieces.forEach(piece => {
+    const pieceThick = pieceThickness(piece);
+    const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
+    const pieceColor = ropeStrokeColor(piece.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
+    drawRopeEndArcs(strokePoints, pieceThick, pieceColor, computeTipArcMult(piece), computeCutArcMult(piece));
+  });
   if (mainRope.cutSweep && mainRope.cutSweep.progress < 1) renderCutSweep(mainRope);
   fallenPieces.forEach(piece => { if (piece.cutSweep && piece.cutSweep.progress < 1) renderCutSweep(piece); });
 
