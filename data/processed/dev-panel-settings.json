@@ -1,7 +1,7 @@
 {
   "values": {
     "backgroundColor": "#252546",
-    "circleSize": 21.5,
+    "circleSize": 16.5,
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
@@ -10,8 +10,8 @@
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
-    "ropeThickness": 6.1,
-    "ropeLength": 31.962331504034143,
+    "ropeThickness": 5.1,
+    "ropeLength": 4.466547795958542,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -221,7 +221,7 @@
     },
     {
       "key": "CIRCLE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleSize",
         "circleX",
@@ -257,7 +257,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "endcapGradientEnabled",
         "endcapGradientColors",
