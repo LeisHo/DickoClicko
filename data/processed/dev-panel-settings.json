@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 22.246153846153856,
+    "ropeLength": 34.323076923076975,
     "ropeDefaultLength": 15,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
@@ -95,7 +95,7 @@
     "doubleClickDistance": 11.4,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
-    "cutSpeed": 1.6,
+    "cutSpeed": 1.1,
     "endcapAtCutEnd": true,
     "cutSweepColor": "#ffffff",
     "cutSweepThickness": 0.2,
@@ -106,7 +106,7 @@
     "endcapStartingScale": 0.1,
     "endEmergeDelay": 2.15,
     "endEmergeSpeed": 0.07,
-    "pieceEndEmergeSpeed": 0.01,
+    "pieceEndEmergeSpeed": 0.02,
     "endEmergeEasingStrength": 1,
     "endEmergeTweening": "easeInOut",
     "floorEnabled": true,
@@ -206,7 +206,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "bgRopeEndcapPauseHeight",
         "mainEndcapGrowSpeed",
@@ -278,7 +278,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "arcGradientEnabled",
         "arcGradientColors",
@@ -301,7 +301,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
