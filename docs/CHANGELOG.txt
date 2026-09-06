@@ -5226,6 +5226,18 @@ still render correctly at their normal on-screen size with no visible
 quality loss.
 
 ================================================================================
+2026-09-05  -  10:45 PM EDT
+
+Another session updated 5 source PNGs in `data/FLICK/ANI/` (FRAMES-01
+through 05, animation 1's own artwork). Re-ran the same resize
+(1400px wide) + WebP (quality 90) pipeline from the earlier oversized-
+image fix on just these 5 frames to regenerate their .webp output and
+keep it in sync with the new artwork -- `ANI/1` and `ANI/2` (still
+untracked, still unreferenced by any code) correctly left untouched.
+Live-verified all 5 reload cleanly as 200 OK and both FLICK graphics
+still render correctly. Committed + pushed.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
