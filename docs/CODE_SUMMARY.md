@@ -3806,3 +3806,13 @@ GOTCHAS
   confirmation that the seam itself is gone isn't possible with this
   project's current tooling (no true pixel-crop/zoom), same limitation
   already noted for the endcap fix above.
+- **`ARC_SEAM_OVERLAP_PX` turned from a hardcoded constant into a live
+  dev-panel slider.** After 3 manual edit+push cycles tuning that
+  constant to find a value that visually closed the rope/arc seam (1.5
+  -> 4 -> 2.5), the user asked for a slider instead of further code-edit
+  round-trips. New `arcSeamOverlapPx` control (`type:'slider'`, `min:0,
+  max:5, step:0.1, def:3`) in the ROPE group; `drawEndArc()`'s own
+  `ctx.translate(-cfg.arcSeamOverlapPx, 0)` reads it directly (no local
+  const anymore). Same placement as before -- right after `ctx.rotate`,
+  before the gradient/ellipse -- unchanged reasoning. Verified live: the
+  slider appears with default value 3, no console errors.

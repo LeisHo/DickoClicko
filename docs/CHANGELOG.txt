@@ -5997,6 +5997,19 @@ resolution; the user's own next look is the real test.
 investigation. `ARC_SEAM_OVERLAP_PX` set to 2.5px (was 4px).
 
 ================================================================================
+2026-09-06  -  11:47 AM EDT
+
+"provide me a slider for that overlap magnitude. make max setting 5 px,
+and minimum 0. For now set it to 3 and push" -- after 3 rounds of
+manually editing `ARC_SEAM_OVERLAP_PX` and re-pushing to find a value
+that visually closed the rope/arc seam (1.5 -> 4 -> 2.5), turned it into
+a live dev-panel slider instead so further tuning doesn't need a code
+edit each time. New `Rope End Arc Seam Overlap` control (0-5px, step
+0.1, default 3); `drawEndArc()` now reads `cfg.arcSeamOverlapPx`
+directly instead of a hardcoded local constant. Verified live: slider
+appears in the ROPE group with default value 3, no console errors.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
