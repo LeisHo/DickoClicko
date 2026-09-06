@@ -5867,6 +5867,43 @@ size. Verified each output's dimensions load correctly and spot-checked
 one frame visually before committing.
 
 ================================================================================
+2026-09-06  -  10:30 AM EDT
+
+"i uodated the pngs in Ani, and 1,2,3, update and push" -- follow-up
+round in the same FLICK-frame-update arc. Regenerated WebP for 8 more
+edited Animation-1 frames (data/FLICK/ANI/FRAMES-01,03,10,12-16.png) and
+the hold-preview's FRAMES-01.png (data/FLICK/ANI/3/), same pipeline as
+the prior round -- pushed first as a low-risk, well-understood step.
+
+The "1,2,3" subfolders turned out to need real investigation before
+touching anything: data/FLICK/ANI/1 and data/FLICK/ANI/2 aren't rendered
+directly -- they're source pools that get concatenated into
+data/FLICK/ANI2 (Animation 2's own actual frame folder), per the
+existing code comment (ANI/1 forward, ANI/2 reversed). Checking that
+comment's specific curated frame-number list against what's actually in
+ANI/1 and ANI/2 right now found 3 of its listed numbers didn't exist on
+disk (ANI/1 had no frame 14; ANI/2 had no frames 10 or 12) -- flagged
+this via AskUserQuestion rather than guessing a substitute for missing
+source material. The user's answer corrected the actual rule: it was
+never a fixed curated list at all -- Animation 2 should just be EVERY
+file currently in ANI/1 (forward) + EVERY file currently in ANI/2
+(reverse), whatever numbers happen to exist, no fixed count. (A second
+clarifying question confirmed Animation 1 itself -- the direct 17-frame
+set already updated above -- is unrelated to ANI/1 and ANI/2 and stays
+as-is.) Rebuilt ANI2 accordingly: ANI/1 currently has 12 frames
+(01,02,03,04,05,07,10,11,12,13,15,16), ANI/2 has 11
+(01,02,03,04,05,06,09,11,13,15,16, used in reverse), for a new total of
+23 (up from the old, already-stale 21) -- regenerated every ANI2
+PNG+WebP pair (copy + resize-to-1400px + re-encode) and bumped
+`FLICK2_FRAME_COUNT` from 21 to 23 to match, updating the code comment
+to describe the real "whatever's in the folder" rule instead of a
+specific number list that can silently drift out of sync again. Verified
+live: all 23 `data/FLICK/ANI2/FRAMES-*.webp` requests returned 200 OK
+(no 404s from the count bump), and a real click-triggered Animation 2
+playback completed a full cycle and returned to its resting frame
+correctly.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

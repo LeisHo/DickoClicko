@@ -3694,3 +3694,29 @@ GOTCHAS
   settings. Whoever edits these frames next needs to regenerate the
   `.webp` the same way -- there's no build step or watcher that does
   this automatically.
+- **`FLICK2_FRAME_COUNT`'s own source comment described a curated,
+  hardcoded frame-number list that had silently drifted out of sync with
+  the actual source folders.** The comment claimed Animation 2's 21
+  frames were `data/FLICK/ANI/1`'s frames 01,02,03,04,07,10,11,13,14,16
+  followed by `data/FLICK/ANI/2`'s 16,13,12,11,10,09,06,04,03,02,01
+  reversed -- checked this against the folders' REAL current contents (a
+  user request to update pngs "in Ani, and 1,2,3" prompted the check) and
+  found 3 of those listed numbers didn't exist on disk at all (ANI/1's
+  14; ANI/2's 10 and 12). Flagged via AskUserQuestion rather than
+  guessing a substitute for genuinely-missing source material -- the
+  user's answer corrected the actual intended rule: not a fixed curated
+  list at all, just EVERY file currently present in each folder (forward
+  from ANI/1, reversed from ANI/2), whatever numbers happen to exist. A
+  second clarifying question confirmed Animation 1 (the direct 17-frame
+  set in `data/FLICK/ANI/` itself) is unrelated to this and stays as its
+  own independent source. Rebuilt `data/FLICK/ANI2/` from the current
+  folder contents (ANI/1: 12 frames -> positions 1-12; ANI/2: 11 frames
+  reversed -> positions 13-23) and bumped `FLICK2_FRAME_COUNT` from 21 to
+  23 to match, rewriting the source comment to describe the real "use
+  whatever's in the folder" rule -- **this count and the ANI2 folder's
+  own contents must be regenerated together any time ANI/1's or ANI/2's
+  own file counts change; nothing derives one from the other
+  automatically.** Verified live: all 23 `ANI2/FRAMES-*.webp` requests
+  returned 200 OK (confirming the count bump didn't leave any request
+  pointing at a nonexistent frame), and a real click-triggered playback
+  completed a full cycle and returned to rest correctly.

@@ -179,10 +179,13 @@ additions. Current state of each subsystem:
   (`data/FLICK/ANI/3/`) for as long as it's held, release plays exactly
   one sequence then stops until pressed again. Animation 1
   (`data/FLICK/ANI/`, 17 frames) plays one full ping-pong (1->17->1);
-  animation 2 (`data/FLICK/ANI2/`, 21 frames as of this writing -- another
-  session has been actively revising this frame set, check
-  `FLICK2_FRAME_COUNT` in index.html for the current count -- placed above
-  animation 1 by default) plays one forward pass (1->N). Both Anim Speed
+  animation 2 (`data/FLICK/ANI2/`, 23 frames as of this writing -- built
+  by concatenating EVERY file currently in `data/FLICK/ANI/1` (forward)
+  with EVERY file in `data/FLICK/ANI/2` (reverse), no fixed curated list
+  -- check `FLICK2_FRAME_COUNT` in index.html for the current count and
+  regenerate ANI2 from those 2 source folders together if either one's
+  file count changes, see CODE_SUMMARY gotchas -- placed above animation
+  1 by default) plays one forward pass (1->N). Both Anim Speed
   defaults are 3.2x (live values have since moved further via direct
   tuning). Hit-test rects are computed every frame independent of image
   load state, so a click works immediately on page load. A press while
