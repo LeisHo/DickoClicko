@@ -2390,13 +2390,6 @@ function endcapExtensionPx(designKey, heightThicknessPx, heightMult){
 // version was, just expressed proportionally instead of absolutely.
 const PIECE_SEAM_OVERLAP_FRAC = 0.15;
 
-// See pieceCollision()'s own mainRope-vs-piece call site for the full
-// story -- a freshly-cut piece starts exactly coincident with mainRope's
-// own tip, so mainRope collision must stay off it for a brief window or
-// the near-zero-distance/large-minSep pair produces a violent one-frame
-// separation ("jolt"). 0.3s judgment call, not a measured value.
-const MAIN_COLLISION_GRACE_AGE = 0.3;
-
 // Reported directly after the grace period above shipped: "the rope
 // cutting jumping bug is sitll occuring" plus "the cut segments of rope
 // on the floor are now sliding around slowly." The grace period only
@@ -2531,49 +2524,29 @@ function pieceCollision(dt){
   // inflated radius has room to make contact naturally) without ever
   // firing while mainRope is nowhere near the pile at all.
   if (fallenPieces.length > 0){
-    // pileTopY only ever looks at pieces already PAST their own
-    // MAIN_COLLISION_GRACE_AGE -- reported directly, even after both the
-    // age-gate and the proximity-gate below shipped: "I think it started
-    // occuring after i told you to provide the endcap with collision
-    // detection. Make it so that the endcap doesnt collide with its own
-    // rope." Root cause: a piece freshly split off mainRope starts with
-    // its own points essentially COINCIDENT with mainRope's own tip, so
-    // it was always the CLOSEST possible point to mainRope, meaning it
-    // ALWAYS dominated this min() the instant it was created -- the
-    // proximity gate below (tipY >= pileTopY - 10%vh) was therefore
-    // ALWAYS true for a frame or two right after every single cut,
-    // regardless of whether any genuine floor pile was anywhere nearby,
-    // opening the whole mainRope-vs-piece pass against every OTHER piece
-    // in fallenPieces too. The age-gate inside the loop below correctly
-    // skipped the fresh piece ITSELF, but never stopped it from falsely
-    // triggering this gate check against everything else. Excluding
-    // not-yet-eligible pieces from the gate's own pileTopY computation
-    // closes that loophole -- the gate can now only ever open because of
-    // a piece old enough to actually be collided with in the first
-    // place.
+    // pileTopY only ever looks at pieces NOT currently mainRopeExcluded
+    // (see that flag's own comment in performMainRopeSplit()) -- a piece
+    // freshly split off mainRope starts essentially COINCIDENT with
+    // mainRope's own tip, so it would otherwise always dominate this
+    // min() the instant it's created, making the proximity gate below
+    // (tipY >= pileTopY - 10%vh) ALWAYS true for a moment right after
+    // every single cut regardless of whether any genuine floor pile was
+    // anywhere nearby -- opening the whole mainRope-vs-piece pass against
+    // every OTHER piece too. Excluding a still-excluded piece from this
+    // gate's own pileTopY computation closes that loophole -- the gate
+    // can now only ever open because of a piece actually eligible to be
+    // collided with in the first place.
     let pileTopY = Infinity;
     fallenPieces.forEach(piece => {
-      if (piece.age < MAIN_COLLISION_GRACE_AGE) return;
+      if (piece.mainRopeExcluded) return;
       piece.points.forEach(p => { if (p.y < pileTopY) pileTopY = p.y; });
     });
     const tipY = mainRope.points[mainRope.points.length - 1].y;
     if (tipY >= pileTopY - vh(10)){
       const mainThick = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
-      const mainData = pieceCollisionRadii(mainRope.points, mainThick, endcapExt(mainThick), 0);
+      const mainTipExt = endcapExt(mainThick);
+      const mainData = pieceCollisionRadii(mainRope.points, mainThick, mainTipExt, 0);
       fallenPieces.forEach(piece => {
-        // MAIN_COLLISION_GRACE_AGE: a piece freshly split off mainRope
-        // starts with its own points at the EXACT same position as
-        // mainRope's own (now-shortened) tip -- performMainRopeSplit()
-        // copies them directly. The very next frame or two,
-        // topplePiece()'s tilt/velocity nudges the piece a tiny amount
-        // away, but that's still far closer than this pair's combined
-        // (thickness+endcap-inflated) minSep -- this age gate skips
-        // mainRope collision entirely for a piece still in its initial
-        // fall, so it settles via gravity/floor/piece-vs-piece collision
-        // alone during that window; maxPush above (not this gate alone)
-        // is what actually prevents a violent snap once collision does
-        // engage, including right as this gate opens.
-        if (piece.age < MAIN_COLLISION_GRACE_AGE) return;
         const thick = pieceThickness(piece);
         // Tip always uses this piece's own ORIGINAL baseThickness
         // (matching drawEndcap()'s own heightThicknessPx param there --
@@ -2585,6 +2558,28 @@ function pieceCollision(dt){
         // there.
         const tipExt = endcapExt(piece.baseThickness);
         const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
+        // mainRopeExcluded: an ABSOLUTE, distance-based guarantee this
+        // piece never collides with mainRope until it has genuinely
+        // moved away from wherever it was split off -- see that flag's
+        // own comment in performMainRopeSplit() for the full story on
+        // why a fixed TIME window (this function's earlier
+        // MAIN_COLLISION_GRACE_AGE) couldn't guarantee real separation
+        // on its own. safeDist is the combined collision radius of
+        // mainRope's own tip and this piece's own cut edge, times 1.5 --
+        // a real, comfortable clearance rather than "just barely not
+        // overlapping" -- computed fresh each check since either
+        // radius can change live (Endcap Height, thickness decay).
+        // Cleared PERMANENTLY the first time it's satisfied, so this
+        // piece behaves exactly like any other from then on (including
+        // being eligible again if mainRope is later extended back down
+        // to a pile it happens to be part of).
+        if (piece.mainRopeExcluded){
+          const cutPoint = piece.points[0];
+          const originDist = Math.hypot(cutPoint.x - piece.mainRopeExcludeOriginX, cutPoint.y - piece.mainRopeExcludeOriginY);
+          const safeDist = (mainThick / 2 + mainTipExt + thick / 2 + cutExt) * 1.5;
+          if (originDist < safeDist) return;
+          piece.mainRopeExcluded = false;
+        }
         resolveChainCollision(mainData, pieceCollisionRadii(piece.points, thick, tipExt, cutExt), maxPush);
       });
     }
@@ -3455,6 +3450,25 @@ function performMainRopeSplit(idx){
     // that falls off a thickened rope starts decaying from that real
     // thickness, not the plain unmultiplied default.
     const piece = { points: lowerPoints, segLen: mainRope.segLen, tipEmerge: null, age: 0, baseThickness: vmin(cfg.ropeThickness) * ropeThicknessMultiplier };
+    // mainRopeExcluded: an absolute, distance-based guarantee that mainRope
+    // never collides with the piece it JUST split from -- reported
+    // directly, more than once, after time-based grace periods alone kept
+    // proving insufficient: "A rope and its endcaps/arch curve caps should
+    // NEVER detect or react to collisions with itself." A fixed TIME
+    // window (MAIN_COLLISION_GRACE_AGE) can't guarantee real separation --
+    // under weak gravity, a heavy endcap, or a slow Rope Fall Speed, the
+    // piece may still be genuinely touching mainRope's own tip once that
+    // window elapses, and maxPush's own gradual-not-instant correction
+    // still reads as a visible jolt even though it's no longer a single-
+    // frame snap. This flag instead stays set until the piece's own cut
+    // edge has ACTUALLY moved a real distance away from where it was
+    // created (checked in pieceCollision()) -- adapting automatically to
+    // however fast or slow that separation happens, rather than guessing
+    // a duration. mainRopeExcludeOriginX/Y captures that starting point
+    // once, right here, at the exact instant of the split.
+    piece.mainRopeExcluded = true;
+    piece.mainRopeExcludeOriginX = piece.points[0].x;
+    piece.mainRopeExcludeOriginY = piece.points[0].y;
     // the new piece's OWN near/cut edge (points[0]) is its own fresh cut
     // edge -- separate End Emerge state from mainRope's tipEmerge above,
     // since it's a different entity's different end.
@@ -4182,12 +4196,68 @@ function update(rawDt){
     if (moveDist > maxMove){ const s = maxMove / moveDist; moveX *= s; moveY *= s; }
     mainRope.attractionPinX += moveX;
     mainRope.attractionPinY += moveY;
+    // Excess-slack handling: when the pin sits CLOSER to the anchor than
+    // the rope's own real rest length, the chain has more length than it
+    // needs to span the gap. Reported directly, in 2 forms: "when the
+    // distance is short, the rope 'hits' the max distance and decides to
+    // turn upwards" and, most tellingly, "the rope has a particularly
+    // hard time pointing at the mouse when i click and hold directly
+    // under the endcap, which it is almost pointing to already. It
+    // chooses to turn upwards." Confirmed via direct Node simulation
+    // (not guesswork): whenever the pin lies close to the SAME straight
+    // line as gravity already pulls the chain along (worst case: mouse
+    // held exactly straight down, exactly where the rope already hangs),
+    // the excess slack has no natural "sideways" direction to bow into
+    // and instead overshoots past the pin then retraces EXACTLY back
+    // along that same line -- a genuine numerical degeneracy of a
+    // low-DOF chain with only a few solver iterations, not something
+    // more iterations or a different bend-stiffness value fixes on its
+    // own (tested up to 40 iterations and bendStiffness up to 0.5 in
+    // simulation; the fold persisted at full strength, cosine -1.000,
+    // until either an explicit sideways nudge broke the symmetry or
+    // bendStiffness was pushed so high it made the rope rigidly
+    // straight instead of naturally curved).
+    //
+    // Fixed with 2 complementary measures, both verified in simulation
+    // across the straight-down worst case AND several ordinary
+    // off-axis reaches (no regression on either):
+    // 1. effSegLen temporarily shrinks the REST length integrateChain()
+    //    solves toward (for mainRope's own call below only, never
+    //    mutating mainRope.segLen itself) to exactly span the pin
+    //    distance whenever that's shorter than the rope's real length --
+    //    so the chain gathers up taut to the target instead of dangling
+    //    unused length that then has nowhere to go but fold.
+    // 2. A small, fixed perpendicular nudge on the chain's own interior
+    //    points, scaled by how much slack is being absorbed (0 when the
+    //    pin is at or beyond the rope's real reach) and by a consistent
+    //    left/right sense (rotate the anchor-to-pin direction 90
+    //    degrees) -- deliberately NOT scaled by dt, since its role is a
+    //    one-time-per-frame tie-breaker escaping an unstable equilibrium,
+    //    not a speed the user is meant to perceive or tune. 0.02 (2% of
+    //    segLen per frame) is a judgment call, sized in simulation to be
+    //    the smallest bias that reliably broke the exact-degenerate case
+    //    without visibly distorting an already-working reach.
+    const pinDx = mainRope.attractionPinX - anchor.x, pinDy = mainRope.attractionPinY - anchor.y;
+    const pinDist = Math.hypot(pinDx, pinDy) || 1e-6;
+    const segCount = mainRope.points.length - 1;
+    mainRope.attractionEffSegLen = Math.min(mainRope.segLen, pinDist / segCount);
+    const slack = 1 - mainRope.attractionEffSegLen / mainRope.segLen;
+    if (slack > 0){
+      const dirx = pinDx / pinDist, diry = pinDy / pinDist;
+      const perpx = -diry, perpy = dirx;
+      const bias = mainRope.segLen * 0.02 * slack;
+      for (let i = 1; i < mainRope.points.length - 1; i++){
+        mainRope.points[i].x += perpx * bias;
+        mainRope.points[i].y += perpy * bias;
+      }
+    }
   } else {
     // Cleared (not just left stale) the moment attraction ends, so the
     // NEXT press always re-seeds fresh per the comment above rather than
     // resuming from wherever this session happened to leave off.
     mainRope.attractionPinX = null;
     mainRope.attractionPinY = null;
+    mainRope.attractionEffSegLen = null;
   }
   // Forced false while Rope Attraction is active -- reported directly:
   // "after i extend the rope, the attraction no longer works. it only
@@ -4223,7 +4293,11 @@ function update(rawDt){
   // constraint reads independent of radius), so Anchor Weight isn't lost
   // during the unsettled window.
   const circleR = vmin(cfg.circleSize) / 2;
-  integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
+  // attractionEffSegLen (set just above, only while ropeAttractionActive)
+  // temporarily shrinks the rest length THIS solve targets -- see that
+  // block's own comment -- without ever touching mainRope.segLen itself,
+  // so growth/display/every other reader of segLen is unaffected.
+  integrateChain(mainRope.points, ropeAttractionActive ? mainRope.attractionEffSegLen : mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
     { index: 0, center: circleAnchor(), radius: introUnsettled ? circleR : anchorBoundaryRadius(), weightMult: cfg.anchorWeight },
     ropeAttractionActive ? { x: mainRope.attractionPinX, y: mainRope.attractionPinY } : null);
   // The exact frame introUnsettled flips true->false, the boundary radius
