@@ -2372,6 +2372,31 @@ const PIECE_SEAM_OVERLAP_FRAC = 0.15;
 // separation ("jolt"). 0.3s judgment call, not a measured value.
 const MAIN_COLLISION_GRACE_AGE = 0.3;
 
+// Reported directly after the grace period above shipped: "the rope
+// cutting jumping bug is sitll occuring" plus "the cut segments of rope
+// on the floor are now sliding around slowly." The grace period only
+// DELAYED the violent correction, it never actually bounded its size --
+// the instant a piece's age crosses MAIN_COLLISION_GRACE_AGE, if it's
+// still meaningfully overlapping mainRope's own (endcap-inflated) tip,
+// resolveChainCollision still threw the ENTIRE correction in one frame,
+// same as before. And separately, mainRope-vs-piece ran unconditionally
+// whenever any fallen piece existed at all, even while mainRope was just
+// ordinarily hanging/swinging (low damping, cfg.damping=0.986, by design
+// long-lasting) nowhere near a real floor pile -- so a piece resting
+// anywhere near mainRope's own ambient sway kept getting nudged by it
+// every single frame, reading as a slow, continuous, unwanted drift.
+// COLLISION_MAX_PUSH_PER_S bounds resolveChainCollision()'s own
+// per-frame correction to a fixed px/s rate (scaled by dt so it isn't
+// frame-rate dependent) regardless of how large the underlying overlap
+// is -- a big coincident-point overlap now resolves smoothly over
+// several frames instead of snapping instantly, whether that overlap
+// came from a fresh cut, a residual overlap right as the grace period
+// ends, or genuine contact once mainRope really does reach a floor
+// pile. 400 %vmin/s is a judgment call (fast enough that a real,
+// intentional pile-up still looks responsive within a few frames, not
+// sluggish), not a measured value.
+const COLLISION_MAX_PUSH_PER_S = 400;
+
 // Per-chain, per-POINT collision radius -- ordinary rope points use half
 // the chain's own live thickness; the 2 ends (points[0], the cut edge
 // for a piece / the never-capped anchor for mainRope, and points[last],
@@ -2410,7 +2435,7 @@ function pieceCollisionRadii(points, thick, tipExtension, cutExtension){
 // largest per-point radius, so an inflated endcap end is never
 // under-counted) skips the expensive point-by-point double loop for any
 // pair that clearly can't be touching yet.
-function resolveChainCollision(dataA, dataB){
+function resolveChainCollision(dataA, dataB, maxPush){
   const pad = dataA.maxRadius + dataB.maxRadius;
   const ba = dataA.box, bb = dataB.box;
   if (ba.maxX + pad < bb.minX || bb.maxX + pad < ba.minX ||
@@ -2425,7 +2450,11 @@ function resolveChainCollision(dataA, dataB){
       const dx = q.x - p.x, dy = q.y - p.y;
       const dist = Math.hypot(dx, dy);
       if (dist > 0.0001 && dist < minSep){
-        const push = (minSep - dist) / 2;
+        // Capped at maxPush (see COLLISION_MAX_PUSH_PER_S's own comment)
+        // so a large overlap -- coincident fresh-cut points, or anything
+        // else -- resolves gradually over several frames instead of
+        // snapping to full separation in one.
+        const push = Math.min((minSep - dist) / 2, maxPush);
         const nx = dx / dist, ny = dy / dist;
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
@@ -2439,9 +2468,13 @@ function resolveChainCollision(dataA, dataB){
 // end, returns how far that end's endcap extends past its own point (0
 // when no endcap is selected at all, or when that particular end never
 // gets one).
-function pieceCollision(){
+function pieceCollision(dt){
   const hasEndcapForCollision = cfg.endcapDesign !== 'none';
   const endcapExt = heightThicknessPx => hasEndcapForCollision ? endcapExtensionPx(cfg.endcapDesign, heightThicknessPx, cfg.endcapHeight) : 0;
+  // See COLLISION_MAX_PUSH_PER_S's own comment -- caps every correction
+  // below to a fixed px/s rate (scaled by dt so it's frame-rate
+  // independent) so nothing ever resolves in one violent snap.
+  const maxPush = vmin(COLLISION_MAX_PUSH_PER_S) * dt;
 
   // mainRope-vs-piece: per explicit request ("when i extend the main
   // rope very very long, such that it reaches the floor and beyond, the
@@ -2457,45 +2490,56 @@ function pieceCollision(){
   // own physics pass already has. mainRope's anchor (points[0]) never
   // has an endcap (see render()'s own comment on that), so its cut-end
   // extension is always 0 -- only the tip (points[last]) can have one.
+  //
+  // Gated on the tip actually being close to the CURRENT pile's own
+  // topmost point, not "any fallen piece exists anywhere" -- reported
+  // directly after the age-grace fix below shipped: "the cut segments of
+  // rope on the floor are now sliding around slowly." Without this,
+  // mainRope-vs-piece ran every frame regardless of where mainRope
+  // actually was, so its own ordinary post-cut hang/swing (low damping,
+  // cfg.damping=0.986, deliberately long-lasting) kept nudging any piece
+  // whose bounding box happened to overlap it, read as a slow, unwanted,
+  // continuous drift. The original request was specifically about a
+  // DELIBERATELY extended-long rope reaching down to a floor pile, not
+  // ordinary hanging -- this margin (10%vh, a judgment call) lets the
+  // pass engage a little before actual contact (so the endcap's own
+  // inflated radius has room to make contact naturally) without ever
+  // firing while mainRope is nowhere near the pile at all.
   if (fallenPieces.length > 0){
-    const mainThick = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
-    const mainData = pieceCollisionRadii(mainRope.points, mainThick, endcapExt(mainThick), 0);
-    fallenPieces.forEach(piece => {
-      // MAIN_COLLISION_GRACE_AGE: a piece freshly split off mainRope
-      // starts with its own points at the EXACT same position as
-      // mainRope's own (now-shortened) tip -- performMainRopeSplit()
-      // copies them directly. The very next frame or two, topplePiece()'s
-      // tilt/velocity nudges the piece a tiny amount away, but that's
-      // still far closer than this pair's combined (thickness+endcap-
-      // inflated) minSep, so resolveChainCollision saw a near-zero
-      // distance against a large minSep and threw a huge one-frame
-      // correction at BOTH chains -- reported directly as "the background
-      // and main rope jolt as if having been flicked" on every cut, plus
-      // the freshly-cut piece visibly "floats or bounces" instead of
-      // falling cleanly, since this same fight re-engaged every frame
-      // while it was still falling away from mainRope's own tip. A brief
-      // age-based grace period (0.3s, a judgment call -- long enough for
-      // a piece to fall clear of mainRope's own tip under normal gravity,
-      // no measured "correct" value exists) skips mainRope collision
-      // entirely for a piece still in its initial fall, so it settles via
-      // gravity/floor/piece-vs-piece collision alone (unaffected by this
-      // change) exactly as it did before mainRope-vs-piece existed --
-      // mainRope only starts contesting a piece once that piece has had
-      // time to actually separate and (if genuinely resting under an
-      // extended-long mainRope) settle first.
-      if (piece.age < MAIN_COLLISION_GRACE_AGE) return;
-      const thick = pieceThickness(piece);
-      // Tip always uses this piece's own ORIGINAL baseThickness (matching
-      // drawEndcap()'s own heightThicknessPx param there -- the tip
-      // endcap's LENGTH is deliberately decoupled from live decay, see
-      // pieceThickness()'s own call site in render()); the cut edge (only
-      // present at all when Endcap At Cut End is on) uses the piece's
-      // current live thickness instead, matching drawEndcap() not being
-      // passed a heightThicknessPx override there.
-      const tipExt = endcapExt(piece.baseThickness);
-      const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
-      resolveChainCollision(mainData, pieceCollisionRadii(piece.points, thick, tipExt, cutExt));
-    });
+    let pileTopY = Infinity;
+    fallenPieces.forEach(piece => piece.points.forEach(p => { if (p.y < pileTopY) pileTopY = p.y; }));
+    const tipY = mainRope.points[mainRope.points.length - 1].y;
+    if (tipY >= pileTopY - vh(10)){
+      const mainThick = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
+      const mainData = pieceCollisionRadii(mainRope.points, mainThick, endcapExt(mainThick), 0);
+      fallenPieces.forEach(piece => {
+        // MAIN_COLLISION_GRACE_AGE: a piece freshly split off mainRope
+        // starts with its own points at the EXACT same position as
+        // mainRope's own (now-shortened) tip -- performMainRopeSplit()
+        // copies them directly. The very next frame or two,
+        // topplePiece()'s tilt/velocity nudges the piece a tiny amount
+        // away, but that's still far closer than this pair's combined
+        // (thickness+endcap-inflated) minSep -- this age gate skips
+        // mainRope collision entirely for a piece still in its initial
+        // fall, so it settles via gravity/floor/piece-vs-piece collision
+        // alone during that window; maxPush above (not this gate alone)
+        // is what actually prevents a violent snap once collision does
+        // engage, including right as this gate opens.
+        if (piece.age < MAIN_COLLISION_GRACE_AGE) return;
+        const thick = pieceThickness(piece);
+        // Tip always uses this piece's own ORIGINAL baseThickness
+        // (matching drawEndcap()'s own heightThicknessPx param there --
+        // the tip endcap's LENGTH is deliberately decoupled from live
+        // decay, see pieceThickness()'s own call site in render()); the
+        // cut edge (only present at all when Endcap At Cut End is on)
+        // uses the piece's current live thickness instead, matching
+        // drawEndcap() not being passed a heightThicknessPx override
+        // there.
+        const tipExt = endcapExt(piece.baseThickness);
+        const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
+        resolveChainCollision(mainData, pieceCollisionRadii(piece.points, thick, tipExt, cutExt), maxPush);
+      });
+    }
   }
 
   if (fallenPieces.length < 2) return;
@@ -2517,7 +2561,7 @@ function pieceCollision(){
   });
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
-      resolveChainCollision(pieceData[a], pieceData[b]);
+      resolveChainCollision(pieceData[a], pieceData[b], maxPush);
     }
   }
 }
@@ -4208,7 +4252,7 @@ function update(rawDt){
     // per explicit request ("I want the cut off rope segments to have
     // collision detection with each other so they either stack or push
     // each other around").
-    pieceCollision();
+    pieceCollision(dt);
   } else {
     fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < viewportH() * 1.5));
   }
