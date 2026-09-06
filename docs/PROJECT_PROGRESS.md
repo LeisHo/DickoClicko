@@ -75,67 +75,50 @@ additions. Current state of each subsystem:
   (not with the still-attached main rope) and decay in thickness over
   their own lifetime down to a configurable floor.
 - **Startup animation**: a permanent, always-visible background rope
-  (clipped to the circle's shape) climbs on load, hands off to a
-  freshly-spawned main rope at the exact handoff point (no jump), pauses,
-  then grows via the same hold-to-grow mechanic used during normal play.
-  A double-click-in-circle detach reuses this whole state machine with its
-  own Detach Wait/Pause Duration sliders; the just-detached piece falls
-  immediately, same as any other cut (an earlier version held it frozen
-  until the fresh main rope spawned -- corrected per explicit follow-up:
-  the wait belongs to the new rope's own endcap grow-in, not the falling
-  piece's physics). bgRope's whole chain (not just its start point)
-  rebuilds hanging from the real spawn point both when the climb begins
-  AND at the handoff when mainRope spawns, so it's always already
-  consistent with gravity's direction at both transitions -- no more
-  reaction/jump at either one. mainRope's own whole chain is now rebuilt
-  at that same handoff too (previously only point 0 was repositioned,
-  leaving points 1+ hanging from the OLD anchor position for the entire
-  hidden waiting+rising duration -- harmless when Clear Offset barely
-  moved the spawn point, but once Clear Offset could genuinely reach far
-  from the old position, the gap was large enough for the distance
-  constraint to violently whip the chain back down the instant the
-  handoff ran -- see CODE_SUMMARY gotchas). bgRope's own climb now starts
-  just out of sight below the circle (Rope Thickness + 1, not a full
-  diameter). Startup Rise Gravity's slider step is 0.01 (was 0.1), so
-  values below 0.1 are reachable by dragging, not just by typing.
-  Background Rope Start Endcap (default off) shows a cap at bgRope's
-  climbing start while it's rising -- its own Height and optional
-  Gradient (independent of mainRope's own Endcap Height/Gradient) -- 
-  handing off seamlessly to mainRope's real endcap the instant it
-  spawns. Startup Rise Gravity is no longer a stateful "settled" flag --
-  it's recomputed every frame from distance to the anchor's real REST
-  point (the boundary's own bottom point, not distance from center --
-  measuring from center could read "already settled" before any real
-  falling happened) OR mid-'pausing', so the slow-gravity effect now
-  covers the anchor's entire actual fall, however long that takes,
-  instead of cutting off the instant Pause Duration elapses. The
-  free-fall itself is bounded to the circle's own drawn edge (not
-  fully unconstrained) so it can no longer visibly overshoot past the
-  circle -- see CODE_SUMMARY gotchas.
-  Startup Rise Clear Offset is a straight horizontal line again (briefly a
-  circle earlier this session), measured from the Circle Offset
-  boundary's own bottom point, and is now clamped to the circle's own
-  drawn radius rather than the much smaller anchor confinement radius --
-  a large Offset used to have no visible effect because the climb (and
-  therefore mainRope's spawn point) was clamped to stop at the anchor's
-  own tiny boundary regardless of the slider. A separate Startup Rise
-  Gravity slider (independent of gameplay's own Gravity Strength)
-  controls how fast the anchor settles from its offset spawn point down
-  to its real resting boundary right after spawning -- stays in effect
-  until the anchor actually reaches that boundary (not just until the
-  startup sequence finishes), so there's no abrupt gravity-switch jolt
-  even at extreme slider values. The anchor's own boundaryConstraint (a
-  hard, instant position clamp) is now disabled entirely while unsettled,
-  so a spawn point placed beyond the normal boundary free-falls under
-  Startup Rise Gravity alone instead of being snapped straight back on
-  the very next physics tick -- that snap was happening regardless of
-  how low Startup Rise Gravity was set (the constraint, not gravity, was
-  doing the pulling-back), which read as "it still seems to shoot right
-  back down." mainRope itself now becomes visible starting at
-  'pausing' (the moment it actually spawns/positions at the clearance
-  line) instead of waiting for 'growing' too -- on a detach, this closes
-  a real gap where the just-detached piece had already fallen far away
-  before anything new appeared -- see CODE_SUMMARY gotchas.
+  (bgRope, clipped to the circle's shape) climbs on load, starting just
+  out of sight below the circle (Rope Thickness + 1, not a full
+  diameter). Once it clears Startup Rise Clear Offset (measured from the
+  Circle Offset boundary's own bottom point, clamped to the circle's own
+  drawn edge so an extreme Offset can't send it off-graphic), it HOLDS
+  motionless there -- not mainRope, which doesn't exist yet -- for the
+  whole Pause Duration (Startup Pause Duration at boot, Detach Pause
+  Duration on a detach). If Background Rope Start Endcap is on, bgRope's
+  own endcap scales from Background Rope Endcap Pause Height down to 0
+  over that same pause.
+
+  Only once the pause ends does mainRope actually spawn: its WHOLE chain
+  is rebuilt fresh from the spawn point (not just its anchor point --
+  patching only the anchor left the rest of the chain hanging from the
+  OLD position, which the distance constraint would violently whip back
+  toward the instant a real Clear Offset placed the new spawn point far
+  from it), and it immediately begins both falling and growing at once.
+  Falling: Startup Rise Gravity governs the anchor until it genuinely
+  arrives at its real rest point (the boundary's own bottom point --
+  measuring distance from CENTER instead was tried and discarded, since
+  a Clear Offset can place the spawn point closer to center than the
+  boundary radius despite a real fall still ahead); the anchor's hard
+  boundary clamp relaxes to the circle's own edge (not fully
+  unconstrained) during this fall so it can never visibly leave the
+  circle, then reasserts with its implied velocity zeroed on that exact
+  transition frame so re-tightening the clamp doesn't bounce it. Growing:
+  the same hold-to-grow mechanic normal play uses, paced by Startup/
+  Detach Extension Speed. mainRope only becomes visible once it's
+  actually spawned (start of 'growing') -- never during 'waiting',
+  'rising', or the pause.
+
+  mainRope's own endcap: a detach-triggered spawn scales it from Detach
+  Endcap Start Scale up to full size over Detach Endcap Grow Duration
+  (armed at the actual spawn moment, not the earlier detach trigger, so
+  the grow-in isn't already finished by the time it's shown); a
+  boot-triggered spawn instead starts at Background Rope Endcap Pause
+  Height and grows to full size at Main Rope Endcap Growth Speed -- the
+  two are mutually exclusive, never stacking.
+
+  A double-click-in-circle detach reuses this entire state machine; the
+  just-detached piece falls immediately (not frozen -- the wait belongs
+  to the new rope's own endcap grow-in, not the falling piece's
+  physics). See CODE_SUMMARY gotchas for the fuller history of bugs this
+  mechanism went through to get here.
 - **Dev panel**: fully §12-compliant (resize/move/hide/collapse,
   Desktop/Mobile tabs, drag-to-reorder groups and settings with collapse
   state persisted, built-in appearance group). Copy/Save/Reset use a
@@ -146,7 +129,10 @@ additions. Current state of each subsystem:
   click/hold/double-click diagnostic log lives inside the panel itself --
   now also logs FLICK animation presses/releases (down:flick[2],
   up:flick[2]-play, and an -ignored-playing variant when a press is
-  ignored because that animation is already playing).
+  ignored because that animation is already playing). Every standalone
+  color-picker control (not the gradient editor's per-stop pickers) has
+  Copy/Paste buttons -- a single shared in-memory value, so any color can
+  be copied from one picker and pasted into any other.
 - **Mobile/robustness**: `vh()`/`vw()`/`vmin()`/`resizeCanvas()` fall back
   safely instead of multiplying by zero when `window.innerWidth`/
   `innerHeight` read 0 (a real early-page-life quirk on mobile

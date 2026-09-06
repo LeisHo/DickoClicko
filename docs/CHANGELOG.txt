@@ -5564,6 +5564,80 @@ fall in ~1 second before this fix), with no overshoot past the circle
 observed across repeated runs. Console clean apart from known noise.
 
 ================================================================================
+2026-09-06  -  03:09 AM EDT
+
+Five related changes to the startup/detach sequence, bundled into one
+turn (2 more requests, plus 2 more bug reports, arrived mid-task while
+the first was already being worked).
+
+(1) State machine reorder, per explicit correction: "after the
+background rope has risen to clear the startup rise offset, it stays
+there for the pause duration, then after that duration does the main
+rope spawn and the whole unit begins to fall." Previously mainRope
+spawned IMMEDIATELY on reaching Clear Offset, and 'pausing' was spent
+settling an already-spawned rope -- "the startup pause and detach pause
+settings dont seem to do anything" was the direct symptom, since
+nothing about the visible sequence actually paused. Moved the entire
+spawn (chain rebuild, bgRope resync, endcap arming, 'growing'
+transition) to the END of 'pausing' instead of the start; bgRope now
+genuinely holds motionless at the clear-offset line for the whole pause
+first. showMainRope updated to match (visible from 'growing' onward).
+
+(2) Fixed a bug this reorder immediately exposed: the "bgRope follows
+mainRope's anchor" sync in update() used to fire during 'pausing' too --
+correct under the OLD ordering (mainRope had already spawned by then),
+but under the NEW ordering it dragged bgRope's supposedly-held position
+to wherever the OLD, stale, hidden mainRope was drifting, undoing the
+whole "it stays there" fix from item (1) before it was even pushed.
+Caught via live batched-screenshot verification (bgRope visibly slid
+from the clear-offset line down toward the boundary during what should
+have been a motionless pause) before it ever reached the user. Excluded
+'pausing' from that sync.
+
+(3) "the entire rope unit bounces upwards to the top of the circle,
+then falls back down" once it reaches the circle offset. The
+introUnsettled true->false transition shrinks the boundary clamp radius
+in the SAME integrateChain() call that may still find the anchor
+outside the new, tighter radius -- the resulting clamp doesn't touch
+oldx/oldy, so the FOLLOWING frame reads it as real velocity. Same
+clamp-creates-spurious-velocity mechanism as 2 rounds ago, recurring at
+the opposite transition. Zeroed the implied velocity on exactly that
+transition frame.
+
+(4) "i dont think your detach duration and endcap scale sliders work.
+when i cut the rope entirely, the new main rope has a full height
+endcap regardless of those sliders" -- detachTipScaleProgress used to
+arm at the moment of the detach TRIGGER (start of the hidden
+waiting+rising+pausing sequence), so it had often already finished
+ticking toward 1 (exceeding Detach Endcap Grow Duration) before
+mainRope was ever shown. Armed at the actual spawn moment instead.
+
+(5) New controls, per explicit request: Background Rope Endcap Pause
+Height (bgRope's own endcap scales from this down to 0 over the pause)
+and Main Rope Endcap Growth Speed (mainRope's endcap starts at that
+same Pause Height and grows to full size at this rate) -- boot-spawn
+only, per explicit follow-up clarifying that a detach-triggered spawn
+keeps its own existing mechanism from item (4) unchanged rather than
+the two stacking into a confusing double-scale effect.
+
+Also, a separate request handled in the same turn: Copy/Paste buttons
+on every standalone color-picker control (not the gradient editor's
+per-stop pickers, a meaningfully more complex UI) -- a single shared
+in-memory value, not the OS clipboard.
+
+Verified live via low-latency batched action sequences (steady ~25fps,
+avoiding the tab-throttling artifact from 2 rounds ago): bgRope now
+holds motionless at the clear-offset line for the full pause before
+mainRope spawns; the settle-to-growing transition shows no bounce
+across repeated runs; a detach's endcap visibly starts small and grows
+in real time after spawn; a fresh boot's endcap starts at Background
+Rope Endcap Pause Height and visibly grows to full size across
+consecutive frames; color copy/paste confirmed end-to-end (DOM value +
+cfg + live re-render) by pasting a distinct color into Floor Color and
+watching the floor actually change. Console clean apart from known
+ERR_CONNECTION_RESET local-server noise.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

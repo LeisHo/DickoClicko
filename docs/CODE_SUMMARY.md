@@ -3372,3 +3372,105 @@ GOTCHAS
   now visibly holds near its spawn position for 2+ real seconds before
   gradually settling, with no overshoot past the circle observed across
   repeated runs.
+- **The whole spawn moved from the START of 'pausing' to its END** --
+  per explicit correction ("after the background rope has risen to
+  clear the startup rise offset, it stays there for the pause duration,
+  then after that duration does the main rope spawn and the whole unit
+  begins to fall"). Previously mainRope spawned the instant bgRope
+  reached Clear Offset, and 'pausing' was spent settling an
+  already-spawned rope -- meaning Startup/Detach Pause Duration never
+  actually delayed anything visible, matching "the startup pause and
+  detach pause settings dont seem to do anything." The entire spawn
+  block (whole-chain `makeChain()` rebuild, bgRope resync via
+  `resetBgRope()`, `detachTipScaleProgress`/`bootEndcapScale` arming,
+  `introTargetLengthPx`/`growing=true`) moved from `introPhase ===
+  'rising'`'s completion handler into `introPhase === 'pausing'`'s own
+  `introTimer >= pauseDuration` branch. `showMainRope` changed from
+  `!== 'waiting' && !== 'rising'` to `=== 'growing' || === 'done'` to
+  match (mainRope still doesn't exist in any meaningful sense until the
+  new, later spawn point).
+- **That reorder immediately broke bgRope's own "hold" via a sync this
+  session hadn't touched, caught in live verification before ever
+  reaching the user.** `update()`'s "bgRope follows mainRope's anchor"
+  block (`if (introPhase !== 'waiting' && introPhase !== 'rising'){
+  bgRope.points[0].x = mainRope.points[0].x; ... }`) used to be correct
+  -- under the OLD ordering, mainRope had already spawned by 'pausing',
+  so following it was exactly right. Under the NEW ordering this same
+  line now fires while mainRope is still the OLD, stale, hidden chain
+  (not yet rebuilt), dragging bgRope's supposedly-frozen position along
+  with it every frame -- confirmed via a batched screenshot sequence
+  showing bgRope's cap visibly sliding from the clear-offset line down
+  toward the boundary during what should have been a motionless pause.
+  Fixed by adding `&& introPhase !== 'pausing'` to that condition --
+  bgRope's own points[0] is already `pinnedIndex=0` in its own
+  `integrateChain()` call regardless, so once nothing drives it
+  externally during 'pausing' it simply stays exactly where 'rising'
+  left it.
+- **The introUnsettled true->false transition (see the settled-detection
+  gotcha above) has the SAME clamp-creates-spurious-velocity mechanism
+  as the original spawn-side bug, just at the opposite transition.**
+  When unsettled flips false, the boundaryConstraint radius shrinks from
+  the circle's own edge down to the much tighter `anchorBoundaryRadius()`
+  in the same `integrateChain()` call that computed the new gravityAccel
+  -- if the anchor is still outside that tighter radius (it can be, by
+  up to REST_EPSILON's own margin), the clamp snaps it inward
+  immediately, and since the clamp never touches oldx/oldy, the
+  FOLLOWING frame's verlet step reads that correction as real velocity.
+  Reported directly: "once it has reached the circle offset... the
+  entire rope unit bounces upwards to the top of the circle, then falls
+  back down." Fixed the same way the spawn-teleport case already is:
+  track the previous frame's unsettled state (`anchorWasUnsettled`,
+  module-level) and zero `mainRope.points[0].oldx/oldy` to match `x/y`
+  on exactly the frame it flips from true to false.
+- **`detachTipScaleProgress` was armed at the wrong moment -- the detach
+  TRIGGER, not the actual spawn -- so its own grow-in animation had
+  often already finished ticking (past 1.0) before mainRope was ever
+  shown, regardless of Detach Endcap Start Scale/Grow Duration.**
+  `detachEntireRopeAndRestartIntro()` used to set
+  `mainRope.detachTipScaleProgress = 0` immediately, but the increment
+  in `update()` (`+= rawDt / cfg.detachTipGrowDuration`, unconditional
+  on phase) had then been ticking for the ENTIRE hidden
+  waiting+rising+pausing duration by the time mainRope actually spawned
+  and became visible -- if that hidden duration exceeded Detach Endcap
+  Grow Duration (very plausible: this project's own Clear Offset climbs
+  routinely take several real seconds), the endcap was already at full
+  size (detachScale=1) the instant it was first shown, regardless of
+  either slider's value. Reported directly: "when i cut the rope
+  entirely, the new main rope has a full height endcap regardless of
+  those sliders." Fixed by moving `mainRope.detachTipScaleProgress = 0`
+  from the detach-trigger function to the actual spawn point (the
+  'pausing'->'growing' transition), guarded on `introTriggeredByDetach`.
+- **New: boot-only mainRope endcap grow-in, kept deliberately SEPARATE
+  from the detach-specific mechanism above rather than unified with
+  it** (per explicit follow-up, after the two mechanisms' overlap was
+  surfaced and the user chose "keep both, new one boot-only" over
+  replacing or stacking them). `mainRope.bootEndcapScale` (initialized
+  to `null` in `resetMainRope()`) is armed to `cfg.bgRopeEndcapPauseHeight`
+  at the spawn point ONLY when `!introTriggeredByDetach`, then
+  incremented by `cfg.mainEndcapGrowSpeed * rawDt` each frame in
+  `update()` until it reaches `cfg.endcapHeight`, at which point it's
+  set back to `null` (mutually exclusive with `detachScale` by
+  construction -- render()'s own `mainEndcapHeight` picks
+  `bootEndcapScale` when non-null, `cfg.endcapHeight * detachScale`
+  otherwise, never both). New DEV_GROUPS controls: Background Rope
+  Endcap Pause Height (also reused as bgRope's own pause-endcap shrink
+  starting point, per explicit request that the two share a value) and
+  Main Rope Endcap Growth Speed. Verified live: a fresh boot's endcap
+  visibly starts small and grows taller across consecutive frames; a
+  detach's endcap uses its own separate, unaffected mechanism.
+- **New: Copy/Paste buttons on every standalone color-picker control**
+  (`ctrl.type === 'color'` in the main DEV_GROUPS builder, and the
+  separate Dev-Panel-appearance color builder in
+  `buildPanelStyleGroup()`) -- per explicit request. Deliberately does
+  NOT extend to the gradient editor's own per-stop color pickers (a
+  fundamentally different UI: multiple colors per control, each
+  positioned via drag, edited through one shared hidden native color
+  input) -- scoped to the two standalone-color-picker builders only, to
+  avoid a much larger UI redesign beyond what was asked. A single
+  shared module-level `copiedColorValue`, not the OS clipboard -- no
+  permission prompt, works identically regardless of which picker
+  copied it. Verified live end-to-end (not just DOM): copied Rope
+  Color's value, pasted it into Floor Color, and confirmed the floor
+  itself visibly changed color on screen, proving the paste updates
+  `cfg`/`panelStyle` and triggers a real re-render, not just the input's
+  own displayed value.
