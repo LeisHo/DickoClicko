@@ -6731,6 +6731,54 @@ reported hidden independent of tab-fronting, the same limitation every
 task this session has hit.
 
 ================================================================================
+2026-09-06  -  06:55 PM EDT
+
+New feature, per explicit request: "ok make it so that a rope segment
+that has been cut off will collide with itsel[f]."
+
+Added resolveSelfCollision(), reusing the exact same maxPush-capped,
+seam-undershot separation math as the existing cross-chain
+resolveChainCollision(), but only ever comparing point pairs at least
+MIN_SELF_COLLISION_GAP (4, a judgment call) apart by chain INDEX rather
+than every possible pair. This index gap is the whole reason it's safe
+to add at all: adjacent points are always close together by
+construction (that's what a short connecting segment means), and
+ordinary local bending routinely brings a few-apart points closer still
+without the chain actually overlapping itself in any meaningful sense --
+pushing those apart would fight the very bend/distance constraints
+already shaping the chain's normal curve. This project already hit
+exactly that failure mode once before, with a cruder, adjacency-unaware
+self-collision system (pileRepulsion(), long since removed) that
+repelled ANY two points closer than minSep including two points from
+the SAME chain, causing a severe, reproduced tangle (worst-case segment-
+length ratio >6x) -- documented in CODE_SUMMARY's own gotchas. The new
+index-gap exclusion means only a genuine far-apart-but-spatially-close
+overlap (the piece's own sections folding into a real coil or doubled-
+over heap) ever triggers a push now.
+
+Runs for every fallen piece independently inside pieceCollision(),
+regardless of how many other pieces exist -- the pre-existing pairwise
+piece-vs-piece loop still needs 2+ pieces to do anything, but a single
+piece coiling on itself is just as real a case, so the early-return
+guard was loosened from `fallenPieces.length < 2` to `=== 0` and the new
+self-collision call moved above the pairwise loop, outside that
+narrower guard. Scoped to fallen pieces only, per the request's own
+wording ("a rope segment that has been cut off") -- mainRope itself
+does not self-collide.
+
+Verified via direct Node simulation rather than just code review: built
+a chain deliberately folded into a tight coil (its own far-apart points
+made to overlap in space), ran it through the same distance/bend/self-
+collision loop with the index-gap exclusion active, and confirmed it
+un-folded into a valid, non-tangled shape with segment lengths holding
+at a perfect 1.00 ratio throughout the whole simulation -- direct
+evidence the self-collision resolves real overlap without distorting or
+fighting the chain's own constraints, unlike the old system this
+conceptually replaces. Syntax check passed. Live testing in the Browser
+pane remains unavailable -- reported hidden independent of tab-fronting,
+the same limitation every task this session has hit.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

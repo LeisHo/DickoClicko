@@ -4266,3 +4266,26 @@ GOTCHAS
   every case while the anti-fold minCos health check stayed above 0.85
   throughout, confirming no regression of the fold fix. Live testing in
   the Browser pane remains unavailable.
+- **Self-collision for fallen pieces.** Per explicit request: "make it
+  so that a rope segment that has been cut off will collide with
+  itsel[f]." New `resolveSelfCollision(data, maxPush)` reuses the exact
+  maxPush-capped, seam-undershot math already in `resolveChainCollision()`,
+  but only compares point pairs at least `MIN_SELF_COLLISION_GAP` (4, a
+  judgment call) apart by chain INDEX -- the reason this is safe at all:
+  adjacent points are always close by construction, and normal local
+  bending brings a few-apart points closer still without real
+  self-overlap, which would fight the chain's own bend/distance
+  constraints exactly the way the project's earlier, adjacency-unaware
+  `pileRepulsion()` (long removed) once did, causing a severe reproduced
+  tangle. `pieceCollision()`'s own early-return loosened from
+  `fallenPieces.length < 2` to `=== 0`, and `pieceData.forEach(data =>
+  resolveSelfCollision(data, maxPush))` now runs for every piece
+  independently (even a lone one), ABOVE the pairwise piece-vs-piece
+  loop which still needs 2+. Scoped to fallen pieces only -- mainRope
+  itself does not self-collide, per the request's own wording. Verified
+  via direct Node simulation: a chain deliberately folded into a tight
+  coil (far-apart points made to overlap) un-folded into a valid shape
+  with segment lengths holding a perfect 1.00 ratio throughout, once run
+  through the same distance/bend/self-collision loop with the index-gap
+  exclusion active. Live testing in the Browser pane remains
+  unavailable.

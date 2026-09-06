@@ -126,8 +126,17 @@ additions. Current state of each subsystem:
   once pieces got thin enough). Piece Endcap Emerge Speed is its own dev
   control, independent of mainRope's End Emerge Speed -- a fallen piece's
   tip/cut-edge emerge animation no longer shares a rate with the
-  still-attached rope's tip. mainRope itself now also collides with any
-  piece pile on the floor (previously only the floor plane itself), using
+  still-attached rope's tip. Each fallen piece also self-collides -- its
+  own far-apart sections (at least 4 points apart by chain index,
+  MIN_SELF_COLLISION_GAP) push off each other if a fold/coil brings them
+  spatially close, using the same math as cross-piece collision. The
+  index gap is what makes this safe: it deliberately never touches
+  adjacent-or-near points, which are always close by construction and
+  would otherwise fight the chain's own normal bending -- the exact
+  failure mode that got this project's earlier, adjacency-unaware
+  self-collision system (pileRepulsion()) removed. mainRope itself now
+  also collides with any piece pile on the floor (previously only the
+  floor plane itself), using
   the same shared collision helpers as piece-vs-piece so an extended-long
   rope piles up on top of a pile rather than clipping through it. Every
   collision correction (piece-vs-piece included) is capped to a fixed
