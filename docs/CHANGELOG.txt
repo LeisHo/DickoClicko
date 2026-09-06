@@ -6686,6 +6686,51 @@ directly (the origin-vs-anchor reference point for the first, the
 seed-skips-the-ease timing bug for the second).
 
 ================================================================================
+2026-09-06  -  06:10 PM EDT
+
+Reported directly: "looks good. but it seems the end cap isnt pointing
+directly at the mouse, it seems off by a couple degreees."
+
+Root-caused via direct Node simulation rather than guessing at a tuning
+value: tipDirection() (what the endcap's own rotation actually reads)
+is the tangent between the tip and its immediate neighbor point, and
+that neighbor's position is shaped by gravity and the rest of the
+chain's own relaxation -- which, even with the previous round's
+anti-fold measures in place, generally does NOT land exactly on the
+tip-to-mouse line. Measured the TRUE size of this in simulation across
+several reach configurations: up to ~25 degrees off in some setups, not
+just "a couple" -- the user's own live case happened to sit at the
+smaller end of that range, but the underlying mechanism was the same
+everywhere reach had any real slack.
+
+First tested whether the existing anti-fold perpendicular bias was the
+culprit (a reasonable suspicion, since it's an ongoing per-frame
+sideways nudge) -- ruled out directly: even with that bias set to ZERO,
+the deviation was still present (measured ~24.7 degrees in a
+representative case), confirming the tangent mismatch is a more
+fundamental property of pinning only the very tip, not a side effect of
+the bias fix.
+
+Fixed by directly placing the tip's immediate neighbor point on the ray
+from the tip back toward the mouse, at exactly attractionEffSegLen away
+-- the same kind of direct kinematic placement positionGrowingTip()
+already uses for a different segment elsewhere in this file. Skipped
+for a 2-point rope, where that neighbor point would BE the anchor
+itself (overriding it there would fight the anchor's own separate
+circle-boundary pin instead of only affecting facing).
+
+Verified via direct Node simulation across 3 scenarios (a moderate
+reach, the prior round's degenerate straight-down case, and a
+fully-maxed sideways reach): angular deviation dropped to exactly 0 in
+every case, while the same anti-fold health check used in the previous
+round's own simulation (minimum consecutive-segment cosine) stayed
+comfortably above 0.85 in all 3 -- nowhere near the -1.0 an actual fold
+shows, confirming this fix doesn't reopen the fold the previous round
+just closed. Live testing in the Browser pane remains unavailable --
+reported hidden independent of tab-fronting, the same limitation every
+task this session has hit.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

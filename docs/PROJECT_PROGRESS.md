@@ -282,14 +282,19 @@ additions. Current state of each subsystem:
   the existing distance/bend relaxation then bends the WHOLE chain
   between these 2 fixed points on its own, so a short rope simply can't
   reach as far and a long rope bows between the 2 points instead of
-  folding. No manual per-point nudging of the reach itself; the endcap's
-  own rotation is just `tipDirection()` (unmodified from before this
-  feature existed), flush by construction since its neighbor point IS
-  the pin. Several earlier designs (a single-point nudge, a weighted-span
-  nudge, the pin alone with no anti-fold handling) were tried and
-  replaced after real reported problems. New RIGHT CLICK dev-panel group
-  (Intensity, Speed, Max Reach Distance). Verified via direct Node
-  simulation of the actual constraint math, including with the user's
+  folding. The tip's own immediate neighbor point is ALSO directly
+  placed each frame, exactly on the ray from the tip back toward the
+  mouse, so `tipDirection()` (which reads the tangent between those 2
+  points for the endcap's own rotation) points exactly at the mouse --
+  without this, the neighbor's position was left to gravity/relaxation
+  alone and could land up to ~25 degrees off the true mouse direction
+  even with the anti-fold measures active. Several earlier designs (a
+  single-point nudge, a weighted-span nudge, the pin alone with no
+  anti-fold handling, the pin with anti-fold but no facing correction)
+  were tried and replaced after real reported problems. New RIGHT CLICK
+  dev-panel group (Intensity, Speed, Max Reach Distance). Verified via
+  direct Node simulation of the actual constraint math, including with
+  the user's
   own live settings dump reproducing the exact reported configuration --
   this environment's Browser pane reported itself hidden independent of
   tab-fronting for every task this session touched it (see CODE_SUMMARY

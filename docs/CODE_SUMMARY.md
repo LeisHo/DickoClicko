@@ -4244,3 +4244,25 @@ GOTCHAS
   like every subsequent frame. Verified by syntax check and by tracing
   both mechanisms against their reported symptoms; live testing in the
   Browser pane remains unavailable.
+- **Endcap facing precision: pins the tip's own neighbor point too, not
+  just the tip.** Reported: "the end cap isnt pointing directly at the
+  mouse, it seems off by a couple degreees." `tipDirection()` reads the
+  tangent between the tip and `points[n-2]`, and that neighbor's
+  position is shaped by gravity/relaxation, not guaranteed to land on
+  the tip-to-mouse line even with the prior round's anti-fold measures --
+  measured up to ~25 degrees off in some configurations via direct Node
+  simulation (the user's own case was smaller, same mechanism). Ruled
+  out the anti-fold bias as the cause first (zeroing it entirely still
+  showed ~24.7 degrees of deviation in a representative case) before
+  implementing the real fix: right after `integrateChain()`'s mainRope
+  call, when `ropeAttractionActive && mainRope.points.length > 2`,
+  directly place `points[n-2]` on the ray from the tip back toward the
+  mouse at exactly `mainRope.attractionEffSegLen` -- the same kinematic-
+  placement technique `positionGrowingTip()` already uses for a
+  different segment. Skipped for a 2-point rope, where that neighbor
+  would be the anchor itself. Verified via direct Node simulation across
+  3 scenarios (moderate reach, the degenerate straight-down case, a
+  fully-maxed sideways reach): angular deviation dropped to exactly 0 in
+  every case while the anti-fold minCos health check stayed above 0.85
+  throughout, confirming no regression of the fold fix. Live testing in
+  the Browser pane remains unavailable.
