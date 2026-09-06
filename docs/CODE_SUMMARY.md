@@ -3897,3 +3897,93 @@ GOTCHAS
   (descending), all 200 OK, ZERO requests to `data/FLICK/ANI2/`;
   triggered real playback and confirmed it completes and returns to rest
   with no console errors.
+- **Collision detection expanded to endcaps, decay-proof piling, and
+  mainRope-vs-piece, in one bundled round.** Per 3 related reports:
+  "the rope start and end endcaps should not be allowed to overlap other
+  ropes, or other endcaps"; cut pieces "shrink down in thickness to
+  minimum thickness... end up overlapping each other on the ground such
+  that it looks like only a single layer"; and an extended-long mainRope
+  "should also pile up on top of any rope segments that are on the
+  floor as opposed to going rght through them."
+  - **Endcap collision:** `pieceCollision()` only ever knew about a
+    chain's bare physics points -- the endcap's own rendered shape
+    (which can extend well past that point, especially with Endcap
+    Height cranked up) was invisible to collision entirely. New
+    `endcapExtensionPx(designKey, heightThicknessPx, heightMult)`
+    mirrors `drawEndcap()`'s own geometry (`ENDCAP_ALIGNMENT.topY` ->
+    designBottomY, scaled the same way) without drawing anything, purely
+    to inflate that chain's own tip/cut-edge collision radius. An
+    endcap's real, elongated shape is approximated as a bigger circle
+    centered on its own physics point -- a deliberate simplification
+    documented in the code, not true polygon collision (not worth a
+    full shape-collision system for a decorative, never-primary-
+    silhouette feature).
+  - **Piece-decay-to-single-layer, root cause found in the formula
+    itself:** the prior round's `PIECE_SEAM_OVERLAP_PX` (a fixed
+    0.75px, subtracted from the pair's thickness-based separation to
+    hide an AA seam) could EXCEED the entire separation once both
+    pieces decayed near Piece Minimum Thickness, and `Math.max(0, ...)`
+    clamped the result to exactly 0 -- zero enforced separation between
+    fully-decayed pieces, which is exactly "flattens into one layer."
+    Replaced with `PIECE_SEAM_OVERLAP_FRAC` (0.15), a FRACTION of the
+    pair's own combined radius rather than an absolute pixel amount --
+    can never fully cancel separation regardless of how thin either
+    side has decayed.
+  - **mainRope-vs-piece:** previously absent entirely -- mainRope
+    already collided with the floor PLANE (a separate, pre-existing
+    block in `update()`) but passed straight through a PILE resting on
+    it. Refactored piece-vs-piece's own math into 2 shared helpers,
+    `pieceCollisionRadii(points, thick, tipExtension, cutExtension)`
+    (builds `{points, radii, maxRadius, box}` for any chain) and
+    `resolveChainCollision(dataA, dataB)` (generic pairwise push), then
+    added a new mainRope-vs-each-piece pass reusing those same 2
+    functions rather than a near-duplicate implementation.
+    `pieceCollision()` now runs in this order: (1) mainRope vs. each
+    piece [new], (2) early-return if `fallenPieces.length < 2`, (3)
+    piece vs. piece [existing, refactored onto the shared helpers].
+    mainRope's own live thickness for this pass is recomputed via the
+    same formula `render()` uses (`vmin(cfg.ropeThickness) *
+    ropeThicknessMultiplier`) since that's a `render()`-local value the
+    physics pass doesn't already have; mainRope's own ANCHOR still never
+    gets an endcap (pre-existing, unchanged), only its tip can.
+  - **Bug caught and fixed mid-edit:** the first edit pass introduced
+    `chainCollisionData`/a 3-arg `resolveChainCollision(dataA, dataB,
+    seamOverlapFrac)` referencing an undefined
+    `PIECE_SEAM_OVERLAP_FRAC_GLOBAL`; the second pass then introduced a
+    DIFFERENT `pieceCollisionRadii`/2-arg `resolveChainCollision(dataA,
+    dataB)` pair as part of rewriting `pieceCollision()`'s body,
+    leaving the first block as dead, name-colliding code. Caught via
+    `Grep` for `function chainCollisionData|function
+    resolveChainCollision|function pieceCollisionRadii|function
+    endcapExtensionPx|const PIECE_SEAM_OVERLAP_FRAC|function
+    pieceCollision\(\)`, which showed 2 `resolveChainCollision` matches;
+    fixed with a targeted `Edit` deleting the entire dead first block,
+    re-verified via the same Grep (exactly one of each) and `node
+    --check` (syntax OK).
+  - **Circle-hold Flick-prevention, bundled into the same round (a real
+    bug, not part of the collision work itself):** "if i click and hold
+    in the circle [during a detach's own regrowth], when i let go, the
+    rope acts as if i had done a regular click and hold Flick. It
+    shouldnt." Root-caused to this same session's own earlier "allow
+    cutting during growth" change (see that Gotcha above): during
+    `introPhase === 'growing'`, a press over the circle deliberately
+    skips the circle branch and falls through to the ordinary rope
+    hit-test path so cutting still works -- but that path had no
+    awareness the press had actually landed on the circle, so a genuine
+    hold there became eligible for the hold-to-charge-punch mechanic.
+    Fixed by tracking `startedInCircle` on the rope-mode `downInfo`
+    (`isOnCircle(x, y)` at press time) and refusing to arm the charging
+    `setTimeout` whenever it's true, regardless of `introPhase` --
+    narrower than gating the whole rope-hit path, so cutting during
+    growth is completely unaffected.
+  - Verified live: cut multiple pieces into a pile with Endcap Height
+    cranked up and confirmed no visible endcap-vs-endcap overlap; forced
+    fast decay (Piece Decay Delay=0, Speed=5) and confirmed the pile
+    kept 2-3 visually distinct lobes rather than flattening into one
+    layer over 16+ seconds; confirmed mainRope's own pre-existing floor
+    collision still works. mainRope-vs-piece and the circle-hold fix are
+    verified at the code level (both reuse already-proven mechanisms
+    exactly) rather than via a live gesture-precise test -- this
+    environment's Browser pane has no raw press-and-hold-for-N-ms
+    primitive, only discrete click actions, so a genuine multi-second
+    hold couldn't be scripted precisely. No console errors throughout.

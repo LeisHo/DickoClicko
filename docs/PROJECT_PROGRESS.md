@@ -50,7 +50,12 @@ additions. Current state of each subsystem:
   entire rope and replays the startup animation to regrow a fresh one --
   regrows to Default Rope Length, a dedicated config value separate from
   the live/current Rope Length control, so an earlier grow or cut never
-  changes what a full detach regrows to (see CODE_SUMMARY gotchas).
+  changes what a full detach regrows to (see CODE_SUMMARY gotchas). A
+  press-and-hold that starts inside the circle during a detach's own
+  regrowth ('growing' phase) can never arm the hold-to-charge-punch timer
+  (tracked via `startedInCircle` on the rope-mode downInfo) -- releasing
+  it no longer fires an unintended Flick; cutting during growth (a
+  separate, still-wanted feature) is unaffected.
 - **Physics**: fixed 1/60s timestep verlet integration; distance
   constraints (`constraintIterations`, default 10) plus a bending
   constraint (`bendStiffness`) that stops the rope folding into a knot
@@ -81,6 +86,14 @@ additions. Current state of each subsystem:
   0.6-1, def 1) rather than always full width -- previously only the
   height axis (Endcap Starting Scale) shrank at the start of emergence.
   Applies to both a boot/End-Emerge spawn and a detach-triggered spawn.
+  An endcap's own rendered shape (which can extend well past its
+  underlying physics point, especially with Endcap Height cranked up) is
+  now included in floor collision too, via `endcapExtensionPx()` mirroring
+  `drawEndcap()`'s own geometry to inflate that chain's collision radius
+  -- approximated as a bigger circle centered on the same point rather
+  than true polygon collision (a deliberate simplification for a
+  decorative feature). Endcaps on fallen pieces no longer visibly overlap
+  other pieces or their endcaps.
 - **Rope styling**: optional Tip Segment Shape (a vase-like forked
   decorative shape near the endcap), Rope Top/End Curve Arc (half-ellipse,
   0 = flat to 1 = full semicircle), and a draggable-stop rope gradient
@@ -104,13 +117,19 @@ additions. Current state of each subsystem:
   thickness rather than a frame-global value pinned to the undecayed
   default -- a piece resting on top of another no longer stays held up at
   the original separation once the piece beneath it has visibly thinned.
-  That same separation formula now undershoots exact contact by a small,
-  fixed margin (rather than the old formula's 1.15x margin, which was
-  creating a real, visible ~1-2px gap at rest) so 2 resting pieces show a
-  hair of overlap instead of a hair of gap. Piece Endcap Emerge Speed is
-  its own dev control, independent of mainRope's End Emerge Speed -- a
-  fallen piece's tip/cut-edge emerge animation no longer shares a rate
-  with the still-attached rope's tip.
+  That same separation formula now undershoots exact contact by a small
+  margin -- a fixed FRACTION of the pair's own combined radius
+  (`PIECE_SEAM_OVERLAP_FRAC`, 15%) rather than a fixed pixel amount, so
+  the margin can never exceed and fully cancel out separation once both
+  pieces decay near Piece Minimum Thickness (the old fixed-px version
+  could, which was flattening a whole pile into a single visual layer
+  once pieces got thin enough). Piece Endcap Emerge Speed is its own dev
+  control, independent of mainRope's End Emerge Speed -- a fallen piece's
+  tip/cut-edge emerge animation no longer shares a rate with the
+  still-attached rope's tip. mainRope itself now also collides with any
+  piece pile on the floor (previously only the floor plane itself), using
+  the same shared collision helpers as piece-vs-piece so an extended-long
+  rope piles up on top of a pile rather than clipping through it.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full

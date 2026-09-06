@@ -6120,6 +6120,92 @@ click-to-play and confirmed it completes and returns to rest with no
 console errors.
 
 ================================================================================
+2026-09-06  -  02:59 PM EDT
+
+4 related collision-system items, arriving in quick succession over one
+continuous round: "The rope endcap should also be affected by collision
+detection... the rope start and end endcaps should not be allowed to
+overlap other ropes, or other endcaps"; "right now, if i have many cut
+rope segments, as they shrink down in thcikness to minimum thickness...
+they end up overlapping each other on the ground such that it looks
+like only a single layer... they should never overlap and instead
+should pile on top of each other"; "when i extend the main rope very
+very long, such that it reaches the floor and beyond, the extended long
+rope should also pile up on top of any rope segments that are on the
+floor as opposed to going rght through them as they do now"; and "when
+i click and hold in the circle [during a detach's own regrowth], when i
+let go, the rope acts as if i had done a regular click and hold Flick.
+It shouldnt. Whenever click and hold is initiated within the circle, no
+Flick sequeuce should ever follow."
+
+Endcap collision: pieceCollision() previously only ever considered the
+underlying chain's own bare physics points -- the endcap's own rendered
+shape, which can extend a real distance past those points (especially
+with Endcap Height cranked up), was completely invisible to collision.
+Added endcapExtensionPx(), mirroring drawEndcap()'s own geometry exactly
+(ENDCAP_ALIGNMENT.topY -> designBottomY, scaled by
+heightThicknessPx/ENDCAP_ALIGNMENT.width, then heightMult) without
+drawing anything, and used it to inflate each chain's own tip/cut-edge
+collision radius -- approximating the endcap's real, elongated shape as
+a bigger circle centered on that same point, a deliberate simplification
+documented in the code (a precise polygon collision against the
+endcap's actual outline would need a much more involved shape-collision
+system for a decorative feature that's never the rope's own primary
+silhouette).
+
+Piece-decay-to-single-layer fix: root-caused directly from the formula
+-- the prior round's own PIECE_SEAM_OVERLAP_PX (a fixed 0.75px,
+subtracted from the pair's thickness-based separation to hide an AA
+seam) could EXCEED the entire separation once both pieces decayed near
+Piece Minimum Thickness, and the `Math.max(0, ...)` clamp reduced the
+result to EXACTLY 0 -- no enforced separation left between decayed
+pieces at all, which reads exactly as "flattens into one layer."
+Changed to a fixed FRACTION of the pair's own combined radius
+(PIECE_SEAM_OVERLAP_FRAC, 15%) instead of an absolute pixel amount --
+can never fully cancel the separation out regardless of how thin either
+side has decayed.
+
+mainRope-vs-piece collision: previously completely absent -- mainRope
+already collided with the FLOOR (a separate, pre-existing block in
+update()) but never with a PILE resting on that floor, so a long enough
+rope just clipped straight through. Refactored the piece-vs-piece
+collision math into 2 shared helpers (pieceCollisionRadii(),
+resolveChainCollision()) and added a new mainRope-vs-each-piece pass
+using the exact same functions, so the 2 relationships behave
+identically rather than via 2 near-duplicate implementations. mainRope's
+own live thickness is recomputed via the same formula render() uses
+(vmin(cfg.ropeThickness) * ropeThicknessMultiplier) since that's a
+render()-local value, not something the physics pass already has;
+mainRope's anchor never gets an endcap (unchanged, pre-existing rule),
+only its tip can.
+
+Circle-hold-Flick fix: root-caused by re-reading this exact session's
+own earlier "allow cutting during growth" change -- during a detach's
+own regrowth ('growing' phase), a press over the circle deliberately
+skips the dedicated circle branch (so cutting still works) and falls
+through to the ordinary rope hit-test path instead, but that path had no
+awareness the press had actually landed on the circle -- so a genuine
+hold there became eligible for the ordinary hold-to-charge-punch
+mechanic, and releasing it fired a real punch the user never intended
+as a rope interaction. Fixed by tracking `startedInCircle` on the
+rope-mode downInfo and refusing to ever arm the charging timer when it's
+true, regardless of introPhase -- narrower than gating the whole
+rope-hit path, so cutting during growth (this session's own earlier,
+still-wanted feature) is completely unaffected.
+
+Verified live: cut multiple pieces into a pile with Endcap Height
+cranked up and confirmed no visible endcap-vs-endcap overlap; forced
+fast decay (Piece Decay Delay=0, Speed=5) and confirmed the pile kept
+2-3 visually distinct lobes rather than flattening into one layer over
+16+ seconds; confirmed mainRope's own pre-existing floor collision still
+works. mainRope-vs-piece and the circle-hold fix are verified at the
+code level (both reuse already-proven mechanisms exactly) rather than
+via a live gesture-precise test -- this environment's Browser pane has
+no raw press-and-hold-for-N-ms primitive, only discrete click actions,
+so a genuine multi-second hold couldn't be scripted precisely. No
+console errors throughout.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
