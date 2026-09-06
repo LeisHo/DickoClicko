@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 18.370901623552577,
+    "ropeLength": 18.820400682996276,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -119,15 +119,15 @@
     ],
     "bgRopeEndcapPauseHeight": 0.2,
     "mainEndcapGrowSpeed": 3,
-    "introPauseDuration": 0.4,
+    "introPauseDuration": 0.5,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": true,
     "introExtendStartSpeed": 2,
     "detachWaitDuration": 0,
-    "detachPauseDuration": 0.4,
+    "detachPauseDuration": 0.5,
     "detachTipStartScale": 0.65,
     "detachTipGrowDuration": 0.8,
-    "detachThicknessMultiplier": 1.05,
+    "detachThicknessMultiplier": 1.02,
     "flickX": 23,
     "flickY": 79,
     "flickScale": 57,
@@ -140,6 +140,21 @@
     "flickHoldMaxDuration": 3.3
   },
   "order": [
+    {
+      "key": "DEV PANEL",
+      "collapsed": true,
+      "settings": [
+        "titleFontSize",
+        "tabFontSize",
+        "groupFontSize",
+        "labelFontSize",
+        "opacity",
+        "titleColor",
+        "bodyFontSize",
+        "bgColor",
+        "textColor"
+      ]
+    },
     {
       "key": "FLICK HOLD",
       "collapsed": true,
@@ -195,21 +210,6 @@
         "detachTipStartScale",
         "detachTipGrowDuration",
         "detachThicknessMultiplier"
-      ]
-    },
-    {
-      "key": "DEV PANEL",
-      "collapsed": true,
-      "settings": [
-        "titleFontSize",
-        "tabFontSize",
-        "groupFontSize",
-        "labelFontSize",
-        "opacity",
-        "titleColor",
-        "bodyFontSize",
-        "bgColor",
-        "textColor"
       ]
     },
     {
