@@ -177,7 +177,7 @@
     "flickHoldMaxSpeed": 2.5,
     "flickHoldMaxDuration": 3.3,
     "ropeAttractionIntensity": 0.64,
-    "ropeAttractionSpeed": 135,
+    "ropeAttractionSpeed": 3,
     "ropeAttractionMaxReach": 23
   },
   "order": [
