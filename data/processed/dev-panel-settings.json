@@ -11,14 +11,14 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 34.323076923076975,
+    "ropeLength": 15.012192605788242,
     "ropeDefaultLength": 15,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
       {
         "pos": 0.6887326935684968,
-        "color": "#ffc085"
+        "color": "#ffc28a"
       },
       {
         "pos": 0,
@@ -26,14 +26,14 @@
       },
       {
         "pos": 1,
-        "color": "#f4c8a4"
+        "color": "#ffc18a"
       }
     ],
     "endcapGradientEnabled": true,
     "endcapGradientColors": [
       {
         "pos": 1,
-        "color": "#f4c8a4"
+        "color": "#ffc28a"
       },
       {
         "pos": 0.412221007916359,
@@ -73,11 +73,11 @@
     "arcGradientColors": [
       {
         "pos": 0,
-        "color": "#f4c8a4"
+        "color": "#ffc28a"
       },
       {
         "pos": 0.9956230360735779,
-        "color": "#f4c8a4"
+        "color": "#ffc8a4"
       }
     ],
     "clickIntensity": 1.1,
@@ -206,7 +206,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "bgRopeEndcapPauseHeight",
         "mainEndcapGrowSpeed",
@@ -278,7 +278,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "arcGradientEnabled",
         "arcGradientColors",
