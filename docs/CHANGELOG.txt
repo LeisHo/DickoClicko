@@ -5699,6 +5699,66 @@ only be showing because the real saved `true` loaded. Reloaded with
 top. Console clean, no errors, in both cases.
 
 ================================================================================
+2026-09-06  -  07:46 AM EDT
+
+Three follow-up requests plus one explicit bug report from the same
+session as the settings-loading fix above:
+
+Fixed: "when the bottom piece starts shrinking in thickness, the top
+piece doesnt fall down with it... stays suspended in the air."
+pieceCollision()'s per-pair separation distance (`minSep`) was computed
+ONCE PER FRAME from `cfg.ropeThickness` -- the static, undecayed
+default -- rather than from either piece's own live thickness. A piece
+resting on a decaying one therefore stayed held up at the ORIGINAL
+separation forever, even as pieceThickness() (already correct) reported
+the piece beneath it shrinking toward Piece Minimum Thickness. `minSep`
+is now computed per-PAIR from the average of both pieces' own current
+pieceThickness() values (times the same 1.15 margin). Verified live: cut
+three pieces onto the floor so a third landed crossing over the first
+two (visibly elevated at its crossing point); with Piece Decay Delay
+forced to 0 and Piece Decay Speed cranked for fast observation, the
+elevated piece visibly settled flat within seconds as the pieces beneath
+it decayed -- previously it would have stayed propped up indefinitely.
+
+Added: dev-only gating for two visuals that have no business being
+visible to a real visitor, per explicit follow-up requests --
+"make the animations are only visible in dev mode" and "any offset
+boundaries are only meant to be visible in dev mode" (the second
+prompted directly by the settings-loading fix above making
+Debug: Show Rise Clear Offset Line's saved `true` value actually apply
+outside dev mode for the first time). The FLICK animation overlay block
+and the debug offset-boundary-line block are now both wrapped in
+`if (DEV_MODE)`. For FLICK specifically, the whole rect-computation is
+inside the gate (not just the drawImage calls), so a real visitor also
+gets no invisible dead-click hit-test zone where the graphic used to be.
+Verified unchanged behavior under DEV_MODE=true (every screenshot this
+session shows both rendering exactly as before); the gating itself is a
+direct, low-risk `if` wrap confirmed correct by code inspection.
+
+Added: a separate Piece Endcap Emerge Speed slider (`pieceEndEmergeSpeed`),
+per explicit request -- "provide me a seperate slider for endcap emerge
+speed for endcaps that are on rope segments that have been cut off."
+`tickEmerge()` now takes an explicit `speed` parameter instead of always
+reading `cfg.endEmergeSpeed`; mainRope's own tip still passes
+`cfg.endEmergeSpeed`, while every fallen piece's tip and cut-edge now
+pass the new `cfg.pieceEndEmergeSpeed` instead. Verified live: with
+Piece Endcap Emerge Speed left at its slow default and End Emerge Speed
+cranked up, a newly cut piece's own endcap grew in visibly slower than
+mainRope's own newly-cut tip in the same run, confirming the two are
+now independently controlled.
+
+Not yet addressed this session: a reported thin seam between an
+endcap and the rope body ("i still see a seam between encap and rope
+for the main rope, as well as cut off rope segments") -- investigation
+started (ruled out the gradient-color-continuity comments already in
+strokeRopeCurve()/drawEndcap() as an unrelated, already-solved concern;
+formed but did not confirm a canvas-anti-aliasing-gap theory at the
+butt-cap stroke/endcap-fill boundary) but no root cause was confirmed
+and no fix was attempted. Also not started: the dev-panel custom-groups
++ cross-group-row-dragging feature request ("allow me to create new
+groups").
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

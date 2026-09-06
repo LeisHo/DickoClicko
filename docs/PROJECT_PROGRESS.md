@@ -73,7 +73,14 @@ additions. Current state of each subsystem:
   double-click to delete one).
 - **Floor**: collision + piling; fallen pieces collide with each other
   (not with the still-attached main rope) and decay in thickness over
-  their own lifetime down to a configurable floor.
+  their own lifetime down to a configurable floor. `pieceCollision()`'s
+  per-pair separation distance now tracks each piece's own live (decaying)
+  thickness rather than a frame-global value pinned to the undecayed
+  default -- a piece resting on top of another no longer stays held up at
+  the original separation once the piece beneath it has visibly thinned.
+  Piece Endcap Emerge Speed is its own dev control, independent of
+  mainRope's End Emerge Speed -- a fallen piece's tip/cut-edge emerge
+  animation no longer shares a rate with the still-attached rope's tip.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
@@ -135,6 +142,12 @@ additions. Current state of each subsystem:
   color-picker control (not the gradient editor's per-stop pickers) has
   Copy/Paste buttons -- a single shared in-memory value, so any color can
   be copied from one picker and pasted into any other.
+- **Dev-only visuals**: the FLICK animation overlay and the "Debug: Show
+  Rise Clear Offset Line" boundary visualization now both render only
+  under DEV_MODE, per explicit request that neither should be visible to
+  a real visitor -- previously both could render on the live deployment
+  once the settings-loading fix (below) made their saved config values
+  actually apply outside dev mode too.
 - **Mobile/robustness**: `vh()`/`vw()`/`vmin()`/`resizeCanvas()` fall back
   safely instead of multiplying by zero when `window.innerWidth`/
   `innerHeight` read 0 (a real early-page-life quirk on mobile
@@ -187,9 +200,22 @@ verification) is in `CHANGELOG.txt`.
 ## What's next
 
 Queued (deferred from a large bug-fixing round, per explicit request):
-dev-panel support for dragging a setting OUT of its current collapsible
-group and INTO a different group (only within-group reordering exists
-today). Also discussed but not approved: progressive cut-falling
+dev-panel support for both creating new custom collapsible groups
+("allow me to create new groups") and dragging a setting OUT of its
+current collapsible group and INTO a different group (only within-group
+reordering exists today; confirmed via AskUserQuestion that both pieces
+are wanted). Also queued: a reported thin seam between an endcap and the
+rope body, on both the main rope and cut-off pieces -- investigation
+ruled out the gradient-color-continuity comments already in
+`strokeRopeCurve()`/`drawEndcap()` as an unrelated, already-solved
+concern, and formed but did not confirm a theory that it's a canvas
+anti-aliasing gap at the boundary between the rope's `butt`-capped stroke
+and the endcap's separately-filled `Path2D` shape once the endcap has
+fully emerged (`mainArcMult` forced to 0 at that point, removing the only
+overlapping round-cap treatment at that boundary). No root cause
+confirmed, no fix attempted yet.
+
+Also discussed but not approved: progressive cut-falling
 (the cut-off segment starts sagging/falling from the cut side while still
 attached by a thinning uncut strip, snapping fully free only once the cut
 sweep completes) — assessed as medium difficulty (weaken, not remove, the

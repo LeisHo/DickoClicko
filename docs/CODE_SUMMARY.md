@@ -3543,3 +3543,63 @@ GOTCHAS
   `def:false`, so the lines showing at all means the real saved `true`
   genuinely loaded and applied. Reloaded the same URL with `?dev=1` and
   confirmed identical visual state, the dev panel just added on top.
+- **`pieceCollision()`'s separation distance was pinned to the undecayed
+  default thickness, computed once per frame rather than per pair.**
+  `minSep` used `cfg.ropeThickness` directly even though `pieceThickness()`
+  (a few lines above it in the file) already correctly computes each
+  piece's own current, possibly-decayed thickness. A piece resting on top
+  of another therefore stayed held at the ORIGINAL separation forever as
+  the piece beneath it decayed toward Piece Minimum Thickness -- reported
+  directly: "when the bottom piece starts shrinking in thickness, the top
+  piece doesnt fall down with it... stays suspended in the air." Fixed by
+  moving `minSep`'s computation inside the pair loop, using
+  `(pieceThickness(fallenPieces[a]) + pieceThickness(fallenPieces[b])) / 2
+  * 1.15` (the average generalizes the original formula's implicit
+  same-thickness assumption to two pieces with differing live
+  thicknesses). Verified live: cut three pieces onto the floor so the
+  third landed crossing over the first two, visibly elevated at its
+  crossing point; with Piece Decay Delay forced to 0 and Piece Decay
+  Speed cranked up for fast observation, the elevated piece visibly
+  settled flat within seconds as the pieces beneath it decayed.
+- **The FLICK animation overlay and the Debug: Show Rise Clear Offset
+  Line boundary are now both gated on `DEV_MODE`, not just their own
+  config value.** Per explicit follow-up request that neither should be
+  visible to a real visitor -- the debug-line request came directly off
+  the `resetSettings()` fix above, which for the first time let that
+  control's saved `true` value actually apply outside dev mode too. Both
+  blocks in `render()` are now wrapped in `if (DEV_MODE){...}` (for FLICK,
+  the whole per-frame rect computation is inside the gate, not just the
+  `drawImage()` calls, so a real visitor also gets no invisible dead-click
+  hit-test zone left behind at the old rect). `isPointInFlick()`/
+  `isPointInFlick2()` naturally return false for a real visitor since
+  `flickRect`/`flick2Rect` stay at their zero-sized initial `{0,0,0,0}`.
+- **`tickEmerge(emerge, rawDt)` took an implicit, single global speed
+  (`cfg.endEmergeSpeed`) for every emerge state, including a fallen
+  piece's own tip/cut-edge -- no way to tune a piece's endcap emerge rate
+  independently of the still-attached rope's own tip.** Per explicit
+  request for "a seperate slider for endcap emerge speed for endcaps that
+  are on rope segments that have been cut off," `tickEmerge()` now takes
+  an explicit third `speed` parameter instead of reading `cfg` internally;
+  the caller decides which speed applies. mainRope's own tip still passes
+  `cfg.endEmergeSpeed`; every fallen piece's `tipEmerge`/`cutEdgeEmerge`
+  now pass the new `cfg.pieceEndEmergeSpeed` (same range/default as its
+  sibling; Delay/Easing/Tweening intentionally stayed shared, not asked
+  to split). Verified live: with Piece Endcap Emerge Speed left at its
+  slow default and End Emerge Speed cranked up, a newly cut piece's own
+  endcap grew in visibly slower than mainRope's own newly-cut tip in the
+  same run.
+- **Not yet resolved: a reported seam between an endcap and the rope
+  body, on both the main rope and cut-off pieces.** Investigation ruled
+  out the gradient-color-continuity comments already present in
+  `strokeRopeCurve()`/`drawEndcap()` (a few entries above) as an
+  unrelated, already-solved concern -- those are about COLOR continuity
+  across the gradient, not geometric/positional alignment. Formed but did
+  NOT confirm a theory that the seam is a canvas anti-aliasing gap at the
+  boundary between the rope's own `butt`-capped stroke (see
+  `strokeRopeCurve()`'s own comment on why `lineCap` is `'butt'`) and the
+  endcap's separately-filled `Path2D` shape, specifically once the endcap
+  has fully emerged (`mainArcMult`/`tipArcMult` forced to 0 at that point,
+  removing the only overlapping round-cap treatment that existed at that
+  exact boundary). No exact coordinate-level check of the stroke
+  endpoint against the endcap's own neck position (via
+  `ENDCAP_ALIGNMENT`) was completed, and no fix was attempted.
