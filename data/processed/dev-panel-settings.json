@@ -11,9 +11,9 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 44.50769230769227,
+    "ropeLength": 26.584615384615407,
     "ropeDefaultLength": 15,
-    "ropeColor": "#a5815f",
+    "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
       {
@@ -27,6 +27,21 @@
       {
         "pos": 1,
         "color": "#f4c8a4"
+      }
+    ],
+    "pieceGradientEnabled": true,
+    "pieceGradientColors": [
+      {
+        "pos": 0.0002475814937268938,
+        "color": "#f4c8a4"
+      },
+      {
+        "pos": 0.9973848700691111,
+        "color": "#f4c8a4"
+      },
+      {
+        "pos": 0.4864841942670637,
+        "color": "#fec590"
       }
     ],
     "endcapGradientEnabled": true,
@@ -105,6 +120,7 @@
     "pieceMinThickness": 1.2,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
+    "endcapStartingScaleWidth": 0.88,
     "endEmergeDelay": 2.15,
     "endEmergeSpeed": 0.07,
     "pieceEndEmergeSpeed": 0.02,
@@ -153,11 +169,11 @@
     "flickX": 23,
     "flickY": 80,
     "flickScale": 57,
-    "flickAnimSpeed": 4.6,
+    "flickAnimSpeed": 0.8,
     "flick2X": 31,
     "flick2Y": 60,
     "flick2Scale": 60,
-    "flick2AnimSpeed": 4.6,
+    "flick2AnimSpeed": 0.2,
     "flickHoldMaxSpeed": 2.5,
     "flickHoldMaxDuration": 3.3
   },
@@ -279,8 +295,10 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
+        "pieceGradientEnabled",
+        "pieceGradientColors",
         "arcSeamOverlapPx",
         "arcGradientEnabled",
         "arcGradientColors",
@@ -303,7 +321,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
@@ -331,8 +349,9 @@
     },
     {
       "key": "END EMERGE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
+        "endcapStartingScaleWidth",
         "pieceEndEmergeSpeed",
         "endEmergeEnabled",
         "endcapStartingScale",
