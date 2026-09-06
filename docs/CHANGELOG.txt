@@ -6055,6 +6055,23 @@ failed navigation attempt in the same browser session, unrelated to this
 change).
 
 ================================================================================
+2026-09-06  -  12:24 PM EDT
+
+"i updated animation frames. update and push" -- 3rd such round.
+FRAMES-01.png and FRAMES-03.png were edited directly in all 3 of
+data/FLICK/ANI/, data/FLICK/ANI/3/, and data/FLICK/ANI2/ this time
+(confirmed identical content across all 3 locations for each frame
+number, matching the established sharing convention -- frame 01/03 is
+the same pose reused by animation 1, its own hold-preview set, AND
+animation 2's own frame 1/3 per the dynamic ANI/1-forward mapping).
+data/FLICK/ANI/1 and data/FLICK/ANI/2 (the source pools ANI2 can also be
+rebuilt from) were untouched this round, so ANI2 was NOT rebuilt from
+them -- its own directly-edited FRAMES-01/03 were regenerated in place
+instead, same as the other 2 locations. Regenerated matching WebP for
+all 6 changed PNGs (same 1400px-wide, quality-0.9 pipeline), verified
+all 6 decode at the correct 1400x1257 dimensions before pushing.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
