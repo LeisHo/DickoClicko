@@ -83,8 +83,10 @@ additions. Current state of each subsystem:
   motionless there -- not mainRope, which doesn't exist yet -- for the
   whole Pause Duration (Startup Pause Duration at boot, Detach Pause
   Duration on a detach). If Background Rope Start Endcap is on, bgRope's
-  own endcap scales from Background Rope Endcap Pause Height down to 0
-  over that same pause.
+  own endcap scales from Background Rope Endcap Height (its climb
+  height) DOWN TO Background Rope Endcap Pause Height over that same
+  pause -- and mainRope's own boot-spawn endcap picks up at that exact
+  same Pause Height, so the handoff has no size jump.
 
   Only once the pause ends does mainRope actually spawn: its WHOLE chain
   is rebuilt fresh from the spawn point (not just its anchor point --

@@ -5638,6 +5638,24 @@ watching the floor actually change. Console clean apart from known
 ERR_CONNECTION_RESET local-server noise.
 
 ================================================================================
+2026-09-06  -  03:45 AM EDT
+
+Self-correction from the user right after the previous entry landed:
+"During the Pause period, the background rope endcap scales down to
+the Endcap Pause Height as opposed to 0" -- the shrink had been
+implemented as Pause Height -> 0 instead of the intended (climb) Endcap
+Height -> Pause Height. Fixed the interpolation to run from
+`cfg.bgRopeEndcapHeight` down to `cfg.bgRopeEndcapPauseHeight` instead
+of from Pause Height down to 0. Bonus effect: since mainRope's own
+boot-spawn endcap already started at Pause Height, bgRope's cap now
+ends the pause at that exact same height, making the handoff a
+genuinely seamless continuation rather than a 0 -> Pause Height jump.
+Verified live via a batched screenshot sequence: the cap visibly
+shrinks from full climb height down to a small but clearly still-visible
+size (not vanishing), then mainRope's cap picks up at that same small
+size and grows back up. Console clean apart from known noise.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

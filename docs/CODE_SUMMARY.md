@@ -3453,10 +3453,13 @@ GOTCHAS
   construction -- render()'s own `mainEndcapHeight` picks
   `bootEndcapScale` when non-null, `cfg.endcapHeight * detachScale`
   otherwise, never both). New DEV_GROUPS controls: Background Rope
-  Endcap Pause Height (also reused as bgRope's own pause-endcap shrink
-  starting point, per explicit request that the two share a value) and
-  Main Rope Endcap Growth Speed. Verified live: a fresh boot's endcap
-  visibly starts small and grows taller across consecutive frames; a
+  Endcap Pause Height (also reused as the TARGET bgRope's own
+  pause-endcap shrinks DOWN TO -- corrected after initially shipping as
+  "shrinks to 0"; see this exact turn's own follow-up gotcha below --
+  per explicit request that the two share a value, so the handoff has
+  no size jump) and Main Rope Endcap Growth Speed. Verified live: a
+  fresh boot's endcap visibly starts small and grows taller across
+  consecutive frames; a
   detach's endcap uses its own separate, unaffected mechanism.
 - **New: Copy/Paste buttons on every standalone color-picker control**
   (`ctrl.type === 'color'` in the main DEV_GROUPS builder, and the
@@ -3474,3 +3477,19 @@ GOTCHAS
   itself visibly changed color on screen, proving the paste updates
   `cfg`/`panelStyle` and triggers a real re-render, not just the input's
   own displayed value.
+- **Correction, same session, right after the above shipped: bgRope's
+  pause-endcap shrink direction was implemented backwards.** Built as
+  Pause Height -> 0 (matching a literal first read of "the endcap will
+  scale down to 0"); the user's actual intent, per direct follow-up,
+  was Endcap Height (the climb height) -> Pause Height, never reaching
+  0. Fixed the interpolation (`drawBgRopeStartEndcap()`'s 'pausing'
+  branch) to `cfg.bgRopeEndcapHeight + (cfg.bgRopeEndcapPauseHeight -
+  cfg.bgRopeEndcapHeight) * pauseProgress`. This also means bgRope's cap
+  now ends the pause at EXACTLY the height mainRope's own boot-spawn cap
+  starts at (both `cfg.bgRopeEndcapPauseHeight`), so the handoff is a
+  genuinely seamless continuation with no size jump at all -- a nicer
+  result than the original 0 -> Pause Height jump would have been, not
+  just a correction. Verified live via a batched screenshot sequence:
+  the cap visibly shrinks from full climb height down to a small but
+  clearly still-visible size (never disappearing), then mainRope's cap
+  picks up at that same small size and grows back up.
