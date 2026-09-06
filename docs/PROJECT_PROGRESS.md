@@ -269,13 +269,16 @@ additions. Current state of each subsystem:
   match (resize to 1400px wide, re-encode) before it'll show up live --
   see CODE_SUMMARY gotchas.
 - **Rope Attraction**: right-click-and-hold pins mainRope's own tip to a
-  moving target (eased toward the mouse, capped by Max Reach Distance,
-  the rope's own real physical length, AND -- while the pin sits closer
-  than the rope's real length -- a temporarily-shrunk effective rest
-  length plus a small deterministic perpendicular nudge, both needed to
-  stop the excess slack from folding into a sharp hook when the reach
-  target lies near the same line gravity already pulls the chain along)
-  exactly the way the anchor is already pinned to the circle boundary --
+  moving target (seeded from and eased from the endcap's own position at
+  the moment the hold starts, toward the mouse, capped by Max Reach
+  Distance -- measured from that same starting position, not the anchor
+  -- plus the rope's own real physical length measured from the anchor,
+  AND -- while the pin sits closer than the rope's real length -- a
+  temporarily-shrunk effective rest length plus a small deterministic
+  perpendicular nudge, both needed to stop the excess slack from folding
+  into a sharp hook when the reach target lies near the same line
+  gravity already pulls the chain along) exactly the way the anchor is
+  already pinned to the circle boundary --
   the existing distance/bend relaxation then bends the WHOLE chain
   between these 2 fixed points on its own, so a short rope simply can't
   reach as far and a long rope bows between the 2 points instead of

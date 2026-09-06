@@ -4218,3 +4218,29 @@ GOTCHAS
   Verified via direct Node simulation of the actual constraint/collision
   math against the exact reported mechanisms and the user's own live
   settings; live testing in the Browser pane remains unavailable.
+- **Max Reach Distance's own reference point moved from the anchor to
+  the endcap's OWN position at press-time; fixed an instant-snap bug on
+  attraction start.** Per direct clarification (AskUserQuestion, "the
+  endcap's position when right-click starts" chosen over "its
+  continuously-updating position"): `mainRope.attractionOriginX/Y` now
+  captures the tip's own position once, in `onPointerDown`'s right-click
+  branch, at the exact moment the hold begins. The reach clamp
+  (`update()`'s `ropeAttractionActive` block) measures against this
+  fixed point instead of `mainRope.points[0]` (the anchor) -- anchor-
+  relative conflated "how far can the endcap reach" with "how far down
+  the rope already hangs." The rope's own real-length safety clamp
+  (`totalRestLen`, from the prior round) stays anchor-relative, applied
+  as an independent 2nd clamp after the origin-relative one, since it's
+  a hard physics limit rather than the user-facing reach setting.
+  Separately, reported directly: "when i right click and hold, the
+  rope/endcap immediatly snaps towards my mouse, regardless of speed and
+  intensity settings." Root cause: the pin-seed logic (first active
+  frame only) set `mainRope.attractionPinX/Y` directly to the already-
+  clamped `desiredX/Y` target instead of to the endcap's own starting
+  position -- Intensity/Speed only shape movement AFTER the seed, so
+  seeding straight to the destination skipped the "moving" part on frame
+  1 entirely. Fixed by seeding to `mainRope.attractionOriginX/Y` (already
+  captured for the reach fix above) instead, so frame 1 eases exactly
+  like every subsequent frame. Verified by syntax check and by tracing
+  both mechanisms against their reported symptoms; live testing in the
+  Browser pane remains unavailable.

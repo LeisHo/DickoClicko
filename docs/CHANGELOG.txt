@@ -6638,6 +6638,54 @@ unavailable -- reported hidden independent of tab-fronting, the same
 limitation every task this session has hit.
 
 ================================================================================
+2026-09-06  -  05:55 PM EDT
+
+2 more Rope Attraction refinements. First, a direct factual question:
+"the Max Reach Distance is measure frfom where?" -- answered (from
+mainRope's own anchor point) -- followed immediately by "ok i want it to
+be measured from the endcap position." Clarified via AskUserQuestion
+between 2 real interpretations (the endcap's position captured once at
+the start of the hold, vs. its continuously-updating current position)
+-- the user picked the fixed-at-press-time option, matching a
+grappling-hook-style "how far can it move from where you grabbed it"
+model.
+
+Implemented: mainRope.attractionOriginX/Y captures the endcap's own
+position once, in onPointerDown, at the exact moment a right-click hold
+begins. Max Reach Distance now clamps the mouse-derived target against
+that fixed point instead of the anchor -- previously, measuring from the
+anchor (up at the circle) conflated "how far the endcap can reach" with
+"how far down the rope already hangs before any reach even starts." The
+rope's own real physical-length safety cap (from the prior round, added
+to stop the tip-pin from stretching the whole chain under a low
+Constraint Iterations setting) stays anchor-relative on purpose, applied
+as a separate 2nd clamp -- it's a hard physics limit, not a
+gameplay-facing "how far can it reach" setting, so it shouldn't move
+just because the reach's own reference point did.
+
+Second, reported directly right after: "currently, when i right click
+and hold, the rope/ endcap immediatly snaps towards my mouse, regardless
+of speed and intensity settings. even when those are very low, it stil
+snaps reallly fast." Root-caused immediately from re-reading the pin's
+own seed logic: on the very first active frame, mainRope.attractionPinX/Y
+was seeded directly to the already-computed, fully-clamped desiredX/Y
+target -- meaning the pin was ALREADY at its destination before
+Intensity/Speed ever got a chance to shape anything, since those values
+only govern how the pin moves AFTER the seed. Fixed by seeding to
+mainRope.attractionOriginX/Y (the endcap's own position at press-time,
+conveniently already captured for the Max Reach fix above) instead of
+the target -- frame 1 now starts the exact same gradual ease every
+subsequent frame already used, rather than skipping straight to the end
+of it.
+
+Verified: syntax check passed for both changes. Live testing in the
+Browser pane remains unavailable -- reported hidden independent of
+tab-fronting, the same limitation every task this session has hit;
+verified by tracing both mechanisms against their reported symptoms
+directly (the origin-vs-anchor reference point for the first, the
+seed-skips-the-ease timing bug for the second).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
