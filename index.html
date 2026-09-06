@@ -286,12 +286,28 @@ const DEV_GROUPS = [
       // ever ran -- a real, previously-undiagnosed bug that made the
       // "grow from nothing" effect never actually visible whenever a
       // saved Rope Length loaded successfully (the normal/common case).
-      // The intro sequence already reads cfg.ropeLength itself, fresh, at
-      // the exact moment it needs to (updateIntro()'s 'pausing'->'growing'
-      // transition), so skipping this resize doesn't lose anything --
-      // once introPhase reaches 'done' a real slider drag/reload behaves
-      // exactly as before.
+      // The intro sequence reads its own spawn target (Default Rope
+      // Length, cfg.ropeDefaultLength -- see that control's own comment)
+      // fresh at the exact moment it needs to (updateIntro()'s
+      // 'pausing'->'growing' transition), so skipping THIS control's
+      // resize doesn't lose anything -- once introPhase reaches 'done' a
+      // real slider drag/reload behaves exactly as before.
       onChange: v => { if (mainRope && introPhase === 'done') setMainRopeTotalLength(vh(v)); } },
+    // Separate from Rope Length above, per explicit request ("Default
+    // rope length and 'current' rope length needs to be 2 different
+    // figures. When i fully cut a rope, the new rope should be the
+    // default length not the new current length"). Rope Length (above)
+    // is a LIVE control -- it tracks and can directly resize the rope
+    // that exists RIGHT NOW (via hold-to-grow, a direct slider drag, or
+    // a cut's own display-only sync -- see syncControlDisplay()'s
+    // comment). This one is read ONLY at the moment a fresh rope is
+    // actually spawned (initial boot, and every full detach/respawn via
+    // detachEntireRopeAndRestartIntro()) and is never overwritten by
+    // anything that happens to the live rope afterward -- see
+    // resetMainRope()/resetBgRope()/updateIntro()'s own call sites.
+    // Same range/default as Rope Length for continuity with this
+    // project's existing configured default.
+    { key:'ropeDefaultLength', label:'Default Rope Length', type:'slider', unit:'%vh', min:3, max:120.19262130177428, step:1, def:3.4615384615384612 },
     { key:'ropeColor',      label:'Rope Color',        type:'color',  def:'#a5815f' },
     { key:'ropeGradientEnabled', label:'Rope Gradient Enabled', type:'checkbox', def:false },
     // Each stop is { pos: 0-1, color: hex } -- position along the gradient
@@ -708,6 +724,19 @@ function setCfg(key, value){
 // not the rope's real original configured length. Reported directly:
 // "when I cut the rope in full, the length it extends back to after
 // should be the default length. not the length the cut rope was."
+//
+// This kept cfg.ropeLength itself honest against a CUT, but a later
+// direct report ("Default rope length and 'current' rope length needs
+// to be 2 different figures") showed the same leak still existed
+// through hold-to-grow (growRope() -> setCfg('ropeLength', ...), a
+// genuine live-length update, not a bug) -- growing the rope longer,
+// THEN fully detaching, regrew to the grown length, not the true
+// original default, since cfg.ropeLength was still the only place any
+// "default" lived. Fully resolved by adding a real, separate
+// cfg.ropeDefaultLength (see its own dev-panel comment) that nothing
+// ever overwrites automatically -- this function's own cut-display use
+// below still stands on its own merits (Rope Length's slider SHOULD
+// keep reflecting live current length either way).
 function syncControlDisplay(key, value){
   const num = numEls[key];
   if (num && num.type !== 'checkbox' && document.activeElement !== num.numInput) {
@@ -1791,7 +1820,10 @@ let bgRope = null;
 // Background "peeking" rope: a second, permanently non-interactive chain
 // -- never cut, never grown, never clicked -- that exists purely to be
 // drawn clipped to the circle's own shape (see render()). Built once at
-// Boot at a fixed length (cfg.ropeLength at that moment) using the SAME
+// Boot at a fixed length (cfg.ropeDefaultLength at that moment -- bgRope
+// represents the rope's own default/pristine silhouette, never the live
+// mainRope's current cut/grown length, so it reads the same Default Rope
+// Length spawn-time-only value mainRope itself spawns from) using the SAME
 // targetSeg density every other rope in this file uses. "It cant get
 // extended", per explicit request, means no USER-driven growth (no
 // hold-to-grow, no manual resize) -- maintainBgRopeEnd() below still
@@ -1808,7 +1840,7 @@ function resetBgRope(startX, startY){
   const sx = startX !== undefined ? startX : anchor.x;
   const sy = startY !== undefined ? startY : anchor.y;
   const targetSeg = vh(TARGET_SEG_LEN_VH);
-  const pointCount = Math.max(2, Math.round(vh(cfg.ropeLength) / targetSeg) + 1);
+  const pointCount = Math.max(2, Math.round(vh(cfg.ropeDefaultLength) / targetSeg) + 1);
   bgRope = { points: makeChain(pointCount, sx, sy, targetSeg), segLen: targetSeg };
 }
 
@@ -1846,16 +1878,19 @@ function maintainBgRopeEnd(){
 // length -- used by the startup animation to build a minimal (single-
 // segment) rope instead of the full configured length, so there's
 // something for the intro's own growth phase to visibly extend from
-// scratch. Defaults to the normal full cfg.ropeLength when omitted, same
-// as every pre-intro caller of this function already expects.
+// scratch. Defaults to the normal full cfg.ropeDefaultLength when
+// omitted, same as every pre-intro caller of this function already
+// expects -- this is a SPAWN, so it reads the Default, never whatever
+// length a prior rope happened to be left at (see Default Rope Length's
+// own comment).
 function resetMainRope(startingLengthPx){
   const anchor = circleAnchor();
-  const totalLen = startingLengthPx !== undefined ? startingLengthPx : vh(cfg.ropeLength);
+  const totalLen = startingLengthPx !== undefined ? startingLengthPx : vh(cfg.ropeDefaultLength);
   // Must build with the SAME segLen (targetSeg) that setMainRopeTotalLength()
   // pins everything to, not a POINT_COUNT-derived one -- those two used to
-  // disagree whenever cfg.ropeLength's default no longer matched the fixed
-  // 45%vh TARGET_SEG_LEN_VH was originally computed from (it was, until a
-  // later "set defaults" round changed Rope Length's default without also
+  // disagree whenever cfg.ropeDefaultLength's default no longer matched the
+  // fixed 45%vh TARGET_SEG_LEN_VH was originally computed from (it was, until
+  // a later "set defaults" round changed Rope Length's default without also
   // updating this constant). The mismatch left the rope built at one segLen
   // and then, the moment anything called setMainRopeTotalLength() (e.g. a
   // saved settings reload firing ropeLength's onChange), silently
@@ -2218,7 +2253,25 @@ function pieceCollision(){
   // it... the top piece stays suspended in the air." Average of both
   // pieces' own current thicknesses (matching the original formula's
   // implicit assumption that both share one thickness -- generalized to
-  // differing ones instead of special-cased) times the same 1.15 margin.
+  // differing ones instead of special-cased).
+  //
+  // The original 1.15 margin (and the `Math.max(2, ...)` floor) is gone:
+  // reported directly -- "when one is laying on top of the other. I
+  // still see a couple pixels of space between the 2 when one is laying
+  // on top of the other. there should be none." At default thickness
+  // (~6px), 1.15x was adding ~0.9px of REAL separation beyond actual
+  // contact -- not an anti-aliasing illusion, an intentional gap the old
+  // margin was built to create. Per the same reasoning as the
+  // endcap/rope seam fix above (2 independently-rasterized shapes that
+  // only ever exactly touch can still show an anti-aliasing hairline),
+  // this now UNDERSHOOTS contact by a small, fixed margin instead
+  // (`PIECE_SEAM_OVERLAP_PX`) so the pieces render with a hair of real
+  // overlap rather than a hair of real gap -- same judgment-call
+  // reasoning as that fix's own 1.5px (no measured "correct" overlap
+  // exists for a sub-pixel AA artifact), kept smaller here since it's
+  // subtracted from a possibly-decayed, possibly-thin piece's own
+  // thickness rather than added to a fixed endcap shape.
+  const PIECE_SEAM_OVERLAP_PX = 0.75;
   const boxes = fallenPieces.map(piece => {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of piece.points){
@@ -2229,7 +2282,7 @@ function pieceCollision(){
   });
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
-      const minSep = Math.max(2, (pieceThickness(fallenPieces[a]) + pieceThickness(fallenPieces[b])) / 2 * 1.15);
+      const minSep = Math.max(0, (pieceThickness(fallenPieces[a]) + pieceThickness(fallenPieces[b])) / 2 - PIECE_SEAM_OVERLAP_PX);
       const ba = boxes[a], bb = boxes[b];
       if (ba.maxX + minSep < bb.minX || bb.maxX + minSep < ba.minX ||
           ba.maxY + minSep < bb.minY || bb.maxY + minSep < ba.minY) continue;
@@ -2324,7 +2377,7 @@ function updateIntro(rawDt){
     // (now, or once the async load catches up), skip straight to a full-
     // length rope instead of running the animation.
     if (!cfg.introEnabled){
-      setMainRopeTotalLength(vh(cfg.ropeLength));
+      setMainRopeTotalLength(vh(cfg.ropeDefaultLength));
       introPhase = 'done';
       return;
     }
@@ -2602,8 +2655,12 @@ function updateIntro(rawDt){
       // Captured HERE, not at boot -- by this point (wait + rise + pause,
       // several seconds in) any async settings load has long since
       // resolved, so this is guaranteed to be the real configured target,
-      // never a stale pre-load default.
-      introTargetLengthPx = vh(cfg.ropeLength);
+      // never a stale pre-load default. Reads Default Rope Length, not
+      // Rope Length -- this is a fresh spawn's own target (boot, or a
+      // full detach/respawn), which must always be the real configured
+      // default regardless of whatever length a prior rope was grown to
+      // or cut down to (see Default Rope Length's own comment).
+      introTargetLengthPx = vh(cfg.ropeDefaultLength);
       introGrowStartLengthPx = mainRope.totalLength;
       introPhase = 'growing';
       growing = true; // reuses growRope()/positionGrowingTip() unchanged
@@ -3273,11 +3330,20 @@ function onPointerDown(e){
     }
     return;
   }
-  // no interaction until the startup animation finishes -- there's either
-  // no visible rope yet (waiting/rising/pausing) or it's mid-scripted-
-  // growth (growing), neither of which should be interruptible by a
-  // stray click.
-  if (introPhase !== 'done') return;
+  // No interaction while there's no real interactive rope yet
+  // (waiting/rising/pausing -- only bgRope's own background climb is on
+  // screen). Once mainRope has actually spawned and is mid-scripted-
+  // growth ('growing'), cutting IS now allowed -- per explicit request
+  // ("I should be able to cut/fully cut the main rope at any time,
+  // assuming the rope is longer than the minimum rope length"), gated
+  // the same way an ordinary cut always has been (cutRopeAt()'s own
+  // Minimum Rope Length check, unchanged). The circle branch just below
+  // is still skipped during 'growing' -- see its own guard -- since that
+  // branch's hold-to-grow/full-detach mechanics both touch the SAME
+  // `growing` flag the intro's own scripted extension is actively
+  // driving; a plain click during 'growing' falls through to the
+  // ordinary rope hit-test below instead, which is all a cut needs.
+  if (introPhase !== 'done' && introPhase !== 'growing') return;
   const x = e.clientX, y = e.clientY;
   // defensive: a pointerdown that never reaches onPointerUp/pointercancel
   // (dropped event, capture stolen by another element, etc.) would otherwise
@@ -3287,7 +3353,14 @@ function onPointerDown(e){
   // guarantees at most one holdTimer is ever live at a time.
   clearTimeout(holdTimer);
 
-  if (isOnCircle(x, y)){
+  // introPhase === 'done' required here (not just isOnCircle) -- during
+  // 'growing' the circle-press path below would either fight the intro's
+  // own scripted extension for the `growing` flag (hold-to-grow) or
+  // trigger a full detach mid-detach-triggered-regrowth (double-click),
+  // neither of which this round's "allow cutting during growth" request
+  // asked for. A press over the circle during 'growing' falls through to
+  // the ordinary rope hit-test below instead.
+  if (introPhase === 'done' && isOnCircle(x, y)){
     downInfo = { mode: 'circle' };
     logClick('down:circle', { x, y });
     holdTimer = setTimeout(() => {
@@ -4207,6 +4280,29 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   // rotation matrix (x cosθ - y sinθ, x sinθ + y cosθ) solved for
   // (-sinθ,cosθ) = (dir.x,dir.y).
   const angle = Math.atan2(-dir.x, dir.y);
+  // ENDCAP_SEAM_OVERLAP_PX -- reported as "i still see a seam between
+  // encap and rope for the main rope, as well as cut off rope segments."
+  // The endcap's own neck (ENDCAP_ALIGNMENT.topY, mapped below to exactly
+  // (tip.x,tip.y) once fully emerged) and the rope's own butt-capped
+  // stroke end (strokeRopeCurve(), also exactly at the tip point) meet at
+  // the EXACT same world coordinate with the EXACT same width
+  // (thicknessPx) -- a mathematically perfect edge-to-edge join with zero
+  // overlap. That's exactly the shape canvas's own anti-aliasing seams
+  // between two independently-rasterized shapes: each shape's boundary
+  // pixels get their OWN, independently-computed partial coverage, and
+  // there's no guarantee the two add up to fully opaque at the shared
+  // edge, especially at the non-axis-aligned angles this rope is almost
+  // always drawn at -- a background-colored hairline can show through.
+  // Fixed by drawing the endcap overlapping slightly INTO the rope
+  // (shifted backward along -dir, before the scale/anchor transforms
+  // below) instead of exactly at the boundary, so any anti-aliasing gap
+  // is hidden underneath solid endcap fill rather than exposed between
+  // 2 shapes that only ever just barely touch. No measurement exists for
+  // "how much overlap is enough" (this is a sub-pixel anti-aliasing
+  // artifact, not something with a real physical size) -- 1.5px is a
+  // judgment call: small enough to be invisible against the endcap's own
+  // shape, large enough to reliably exceed a 1-device-pixel AA gap.
+  const ENDCAP_SEAM_OVERLAP_PX = 1.5;
   const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
   const heightNormalScale = heightThicknessPx / ENDCAP_ALIGNMENT.width;
   const startYScale = heightNormalScale * cfg.endcapStartingScale;
@@ -4241,6 +4337,7 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   ctx.save();
   ctx.translate(tip.x, tip.y);
   ctx.rotate(angle);
+  ctx.translate(0, -ENDCAP_SEAM_OVERLAP_PX);
   // Mid-emerge (factor < 1), clip to the rope's own current width right
   // here -- BEFORE the scale() below, so thicknessPx is used directly in
   // world units rather than needing to reason about the design's own
