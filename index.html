@@ -1463,7 +1463,7 @@ const FLICK_BASE_FPS = 12; // playback rate at Flick Anim Speed = 1x
 const flickFrames = [];
 for (let i = 1; i <= FLICK_FRAME_COUNT; i++){
   const img = new Image();
-  img.src = `data/FLICK/ANI/FRAMES-${String(i).padStart(2, '0')}.png`;
+  img.src = `data/FLICK/ANI/FRAMES-${String(i).padStart(2, '0')}.webp`;
   flickFrames.push(img);
 }
 let flickAnimTime = 0;
@@ -1513,7 +1513,7 @@ const FLICK2_FRAME_COUNT = 21;
 const flickFrames2 = []
 for (let i = 1; i <= FLICK2_FRAME_COUNT; i++){
   const img = new Image();
-  img.src = `data/FLICK/ANI2/FRAMES-${String(i).padStart(2, '0')}.png`;
+  img.src = `data/FLICK/ANI2/FRAMES-${String(i).padStart(2, '0')}.webp`;
   flickFrames2.push(img);
 }
 let flick2AnimTime = 0;
@@ -1530,7 +1530,7 @@ const FLICK_HOLD_FRAME_COUNT = 4;
 const flickHoldFrames = [];
 for (let i = 1; i <= FLICK_HOLD_FRAME_COUNT; i++){
   const img = new Image();
-  img.src = `data/FLICK/ANI/3/FRAMES-${String(i).padStart(2, '0')}.png`;
+  img.src = `data/FLICK/ANI/3/FRAMES-${String(i).padStart(2, '0')}.webp`;
   flickHoldFrames.push(img);
 }
 let holdingFlick = null;
