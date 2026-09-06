@@ -3347,6 +3347,28 @@ function cutRopeAt(hit, clickX, clickY){
 function performMainRopeSplit(idx){
   const lowerPoints = mainRope.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
   mainRope.points = mainRope.points.slice(0, idx + 1);
+  // Zero the remaining chain's own implied velocity right at the split --
+  // reported repeatedly, even after 2 rounds of collision-focused fixes:
+  // "the big jump after a cut is still occurring." Root cause was never
+  // collision at all: every remaining point's oldx/oldy still encodes
+  // velocity shaped by carrying the NOW-REMOVED trailing mass/tension a
+  // moment ago (an interior point mid-chain is pulled by BOTH neighbors;
+  // the instant it becomes the new free tip, the pull from everything
+  // that used to hang below it vanishes, but its existing velocity
+  // doesn't) -- next frame's verlet step (vx = (x-oldx)*damping) read
+  // that stale, no-longer-balanced velocity and kept moving the
+  // shortened chain along it with nothing left to counteract, reading as
+  // a sudden snap/recoil ("as if having been flicked") that this
+  // project's own deliberately low damping (0.986) then let ring out
+  // visibly rather than settle quickly. This is real, physically
+  // explicable behavior (an actual rope recoils when a weighted trailing
+  // section is suddenly released) but not the clean cut this project
+  // wants -- zeroing it here makes the remainder start falling fresh
+  // from rest instead of carrying forward momentum that was never really
+  // its own to begin with. The falling PIECE keeps its own full
+  // pre-cut velocity via lowerPoints' oldx/oldy above (untouched) --
+  // only the remaining, still-attached side is affected.
+  mainRope.points.forEach(p => { p.oldx = p.x; p.oldy = p.y; });
   // keep the persisted real total (and its dev-panel display) in sync with
   // the now-shorter remainder — otherwise the next growRope() call would
   // resume accumulating from the stale PRE-cut total, and separately, the
@@ -3432,6 +3454,10 @@ function cutPieceAt(pieceIndex, hit, clickX, clickY){
 function performPieceSplit(piece, idx){
   const lowerPoints = piece.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
   piece.points = piece.points.slice(0, idx + 1);
+  // Zero the remaining half's own implied velocity -- see
+  // performMainRopeSplit()'s identical fix/comment for the full
+  // recoil-from-lost-trailing-mass reasoning, same mechanism here.
+  piece.points.forEach(p => { p.oldx = p.x; p.oldy = p.y; });
   // `piece`'s own tip is now the fresh cut edge -- see
   // performMainRopeSplit()'s identical reasoning.
   piece.tipEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
@@ -3477,6 +3503,12 @@ let downInfo = null;   // {mode:'circle'} or {mode:'rope', x,y,hit,startTime,cha
 let ropeAttractionActive = false;
 let mouseX = 0, mouseY = 0;
 window.addEventListener('pointermove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+// How much of mainRope's own chain (measured from the tip backward)
+// shares in the attraction pull, weighted 0 at its own start up to 1 at
+// the tip -- see update()'s own ropeAttractionActive block for why a
+// single-point nudge folded the rope instead of curving it smoothly.
+// 0.4 (the last 40% of points) is a judgment call, not a measured value.
+const ROPE_ATTRACTION_INFLUENCE_FRAC = 0.4;
 let holdTimer = null;
 let pendingClick = null; // {hit,timer}
 
@@ -4041,25 +4073,38 @@ function update(rawDt){
   // off Startup Extension Speed (or its tween) instead of the manual
   // Rope Growth Rate -- independently tunable, per explicit request.
   if (growing) growRope(rawDt, introPhase === 'growing' ? currentIntroExtendRate() : undefined);
-  // Rope Attraction: nudge mainRope's own tip toward the mouse each frame
-  // while right-click-held, THEN let integrateChain()'s own constraint
-  // solve (just below) resolve it -- deliberately NOT excluded from that
-  // solve the way a growing tip is (see hasPartialTip/skipLastSegment
-  // below): the whole point is that the distance constraint's own
-  // segment-length limit is what naturally caps how far the tip can
-  // actually reach, so a mouse target farther than the rope's real total
-  // length just pulls the chain as far toward it as the rope's own length
-  // allows -- per explicit request ("If the rope length or wahtever isnt
-  // enough for the endcap to fully look at the mouse, it will rotate as
-  // much as it can"). The endcap's own "look at the mouse" rotation is a
-  // free consequence of this: drawEndcap() already orients off
-  // tipDirection(), which reads straight from wherever the tip physics
-  // point actually ends up -- no separate rotation logic needed.
+  // Rope Attraction: nudge the last portion of mainRope's own chain toward
+  // the mouse each frame, THEN let integrateChain()'s own constraint solve
+  // (just below) resolve it -- deliberately NOT excluded from that solve
+  // the way a growing tip is (see hasPartialTip/skipLastSegment below):
+  // the whole point is that the distance constraint's own segment-length
+  // limit is what naturally caps how far the tip can actually reach, so a
+  // mouse target farther than the rope's real total length just pulls the
+  // chain as far toward it as the rope's own length allows -- per explicit
+  // request ("If the rope length or wahtever isnt enough for the endcap to
+  // fully look at the mouse, it will rotate as much as it can").
+  //
+  // Distributed across ROPE_ATTRACTION_INFLUENCE_FRAC of the chain (not
+  // just the single tip point) -- an earlier version nudged only the tip,
+  // which raced ahead of its own neighbors every frame; the bend/distance
+  // constraints then had to visibly "catch up" over several frames,
+  // producing a sharp fold/hook right near the tip instead of a smooth
+  // curve toward the mouse (reported directly via a screenshot: the rope
+  // hangs normally, then hooks sharply upward right at the free end
+  // instead of continuing toward the mouse). Nudging a whole trailing
+  // section at once, weighted from 0 at its own start up to 1 at the tip,
+  // lets the WHOLE tail bend together -- no single point ever gets far
+  // enough ahead of its neighbors to fold back. This also makes the
+  // endcap's own "look at the mouse" rotation land much closer to the
+  // rope body's own real last-segment direction on its own (see
+  // attractionFacing in render() for the small explicit top-up that
+  // guarantees exact alignment even so).
   if (ropeAttractionActive){
-    const tip = mainRope.points[mainRope.points.length - 1];
-    const anchor = mainRope.points[0];
+    const points = mainRope.points;
+    const n = points.length;
+    const anchor = points[0];
     // Max Reach Distance clamps the ATTRACTION TARGET itself (measured
-    // from the rope's own anchor point) rather than the tip's per-frame
+    // from the rope's own anchor point) rather than any point's per-frame
     // movement -- an independent, tunable ceiling on top of whatever the
     // rope's real physical length already allows, so it can be dialed
     // BELOW the rope's full length (a shorter "leash") without fighting
@@ -4068,18 +4113,31 @@ function update(rawDt){
     let tx = mouseX - anchor.x, ty = mouseY - anchor.y;
     const tdist = Math.hypot(tx, ty) || 1e-6;
     if (tdist > maxReach){ tx *= maxReach / tdist; ty *= maxReach / tdist; }
-    let dx = (anchor.x + tx) - tip.x, dy = (anchor.y + ty) - tip.y;
-    const ddist = Math.hypot(dx, dy);
-    if (ddist > 0.0001){
-      // Frame-rate-independent ease (not a flat per-frame fraction) so
-      // Rope Attraction Intensity means the same thing regardless of the
-      // actual frame rate this environment happens to render at.
-      const ease = 1 - Math.pow(1 - cfg.ropeAttractionIntensity, dt * 60);
-      let moveX = dx * ease, moveY = dy * ease;
+    const targetX = anchor.x + tx, targetY = anchor.y + ty;
+    // Frame-rate-independent ease (not a flat per-frame fraction) so Rope
+    // Attraction Intensity means the same thing regardless of the actual
+    // frame rate this environment happens to render at.
+    const ease = 1 - Math.pow(1 - cfg.ropeAttractionIntensity, dt * 60);
+    const maxMove = vmin(cfg.ropeAttractionSpeed) * dt;
+    const influenceStart = Math.max(0, Math.floor(n * (1 - ROPE_ATTRACTION_INFLUENCE_FRAC)));
+    // span is 0 whenever influenceStart lands on the tip itself (a short
+    // rope, e.g. right after a fresh cut down near Minimum Rope Length,
+    // where n*(1-FRAC) rounds up to n-1) -- the loop below then has only
+    // the tip in range, which must get full weight (1), not the 0/0 the
+    // plain division would give it. A short rope should still reach
+    // toward the mouse, just capped harder by its own real length.
+    const span = n - 1 - influenceStart;
+    for (let i = influenceStart; i < n; i++){
+      const weight = span > 0 ? (i - influenceStart) / span : 1;
+      const p = points[i];
+      let dx = targetX - p.x, dy = targetY - p.y;
+      const ddist = Math.hypot(dx, dy);
+      if (ddist <= 0.0001) continue;
+      let moveX = dx * ease * weight, moveY = dy * ease * weight;
       const moveDist = Math.hypot(moveX, moveY);
-      const maxMove = vmin(cfg.ropeAttractionSpeed) * dt;
-      if (moveDist > maxMove){ const s = maxMove / moveDist; moveX *= s; moveY *= s; }
-      tip.x += moveX; tip.y += moveY;
+      const cap = maxMove * weight;
+      if (moveDist > cap){ const s = cap / moveDist; moveX *= s; moveY *= s; }
+      p.x += moveX; p.y += moveY;
     }
   }
   // Forced false while Rope Attraction is active -- reported directly:
