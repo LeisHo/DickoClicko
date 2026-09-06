@@ -81,7 +81,10 @@ additions. Current state of each subsystem:
   decorative shape near the endcap), Rope Top/End Curve Arc (half-ellipse,
   0 = flat to 1 = full semicircle), and a draggable-stop rope gradient
   editor (click a stop to open a native color picker, right-click or
-  double-click to delete one).
+  double-click to delete one). The plain round-cap end/start arc has its
+  own independent gradient too (Rope End Arc Gradient), separate from
+  both the rope-body gradient and Endcap Gradient -- a local gradient
+  across just the arc's own small bump, not the whole rope's span.
 - **Floor**: collision + piling; fallen pieces collide with each other
   (not with the still-attached main rope) and decay in thickness over
   their own lifetime down to a configurable floor. `pieceCollision()`'s

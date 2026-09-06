@@ -5932,6 +5932,28 @@ Also confirmed Endcap Design: None (the no-endcap case) is unaffected --
 arcs still draw normally, since the new call isn't gated on `hasEndcap`.
 
 ================================================================================
+2026-09-06  -  11:05 AM EDT
+
+"provide me a slider to set the gradent of the rope end/start arch
+curved endcap" -- a 3rd, independent gradient (separate from Rope
+Gradient and Endcap Gradient) for the plain round-cap arc
+(`drawEndArc()`), same split pattern Endcap Gradient itself already
+established. New `Rope End Arc Gradient Enabled`/`Colors` dev-panel
+controls; `drawEndArc()` builds its gradient LOCALLY (0 -> protrusion
+along its own outward-facing local axis, inside the already-translated/
+rotated space it draws in) rather than mapping the whole rope's world-
+space anchor-to-tip span onto this one small end feature -- the exact
+same local-vs-world lesson Endcap Gradient's own design comment already
+documents (a small feature against a big span clamps to nearly one
+color). Applies everywhere the arc renders: mainRope's own ends, every
+fallen piece's tip/cut edge, and bgRope. Verified live: with Endcap
+Design set to None (isolating the arc from any competing shape) and the
+new gradient enabled, the arc's own bump showed a clear, real color
+transition from its default tan base to dark-brown outward tip;
+disabling it fell back to the flat rope color exactly as before. No
+console errors either way.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

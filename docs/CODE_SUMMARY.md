@@ -3757,3 +3757,29 @@ GOTCHAS
   remaining rope's fresh tip and the fallen piece's own ends; confirmed
   Endcap Design: None still renders arcs normally (the new call isn't
   gated on `hasEndcap`).
+- **Rope End Arc Gradient -- a 3rd independent gradient, for the plain
+  round-cap arc (`drawEndArc()`) only.** Per explicit request ("provide
+  me a slider to set the gradent of the rope end/start arch curved
+  endcap"), same split-gradient pattern Endcap Gradient itself already
+  established relative to Rope Gradient (see that control's own comment
+  a few entries above). New `arcGradientEnabled`/`arcGradientColors`
+  dev-panel controls. `drawEndArc(px, py, dirx, diry, thicknessPx,
+  arcMult, gradientStops)` gained an optional 7th param -- when 2+ stops
+  are supplied, it builds `ctx.createLinearGradient(0, 0, protrusion, 0)`
+  INSIDE its own already-translated/rotated local space (local x=0 is
+  the flat base chord, x=protrusion is the outward-facing tip), the exact
+  same local-vs-world reasoning Endcap Gradient's own comment documents:
+  mapping the whole rope's world-space anchor-to-tip gradient onto this
+  one small end feature would clamp to nearly one constant color instead
+  of showing a real transition. `drawRopeEndArcs()` reads
+  `cfg.arcGradientEnabled ? cfg.arcGradientColors : null` ONCE per call
+  (both ends of one entity share the setting) and passes it through to
+  both of its own `drawEndArc()` calls -- no changes needed at any of
+  `drawRopeEndArcs()`'s own 4 call sites (mainRope, fallenPieces, bgRope
+  x2), since the gradient lookup happens inside the function using the
+  global `cfg`, not via a threaded parameter. Verified live: with Endcap
+  Design set to None (isolating the arc from any competing shape) and
+  the gradient enabled, the arc's own bump showed a clear, real color
+  transition (tan base -> dark-brown outward tip, its default stops);
+  disabling it fell back to the flat rope color exactly as before, with
+  no console errors in either state.
