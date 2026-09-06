@@ -129,7 +129,7 @@
     "introExtendSpeed": 12,
     "introExtendSpeedTweenEnabled": true,
     "introExtendStartSpeed": 2,
-    "detachWaitDuration": 0,
+    "detachWaitDuration": 10,
     "detachPauseDuration": 0.4,
     "detachTipStartScale": 0.5,
     "detachTipGrowDuration": 0.8,
@@ -336,10 +336,10 @@
   ],
   "panelGeometry": {
     "mobile": {
-      "left": 151.21429443359375,
-      "top": 160.38095092773438,
+      "left": 182,
+      "top": 77.5952377319336,
       "width": 229,
-      "height": 222.2916717529297,
+      "height": 624.5,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
