@@ -2339,7 +2339,31 @@ function updateIntro(rawDt){
       // explicit request: "the main rope [will] start with the rope
       // start at background rope's rope start... will then naturally
       // fall back to its default position. There will not be a sudden
-      // jump." oldx/oldy are set equal to x/y (zero implied velocity) so
+      // jump."
+      //
+      // The WHOLE chain is rebuilt here (not just point 0) -- same fix
+      // shape as 'waiting'->'rising' and bgRope's own handoff rebuild
+      // just below, and for the exact same reason. Only patching point 0
+      // (as this used to do) left points 1+ wherever they'd hung from
+      // mainRope's OLD anchor position for the entire waiting+rising
+      // duration -- normally close enough to the new spawn point to go
+      // unnoticed, but with a real Startup Rise Clear Offset now actually
+      // reaching far from that old position (the fix above), the gap
+      // between old point 1 and new point 0 became large enough for the
+      // distance constraint to violently whip the chain back toward the
+      // old position the instant this handoff ran -- reported directly,
+      // with a screen recording, as "you can also see that the
+      // background rope jumps down to the circle offset" (bgRope visibly
+      // moves too because it re-syncs to mainRope's own anchor every
+      // frame from here on -- see its own comment below). Rebuilding
+      // hanging from the new spawn point means every point is already
+      // consistent with both gravity's direction AND the actual segment
+      // length from frame one, nothing left to violently correct.
+      mainRope.points = makeChain(mainRope.points.length, bgRope.points[0].x, bgRope.points[0].y, mainRope.segLen);
+      // Point 0 explicitly pinned to the exact spawn coordinate (not left
+      // to makeChain()'s own small random per-point x lean, which is only
+      // meant to break points 1+'s symmetry -- see makeChain()'s own
+      // comment) -- oldx/oldy set equal to x/y (zero implied velocity) so
       // the following frame's integration doesn't compute a spurious
       // "teleport" velocity from wherever mainRope's own anchor had
       // independently drifted to while hidden during waiting/rising.
