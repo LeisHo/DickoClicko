@@ -396,15 +396,18 @@ const DEV_GROUPS = [
     { key:'bgRopeEndcapHeight', label:'Background Rope Endcap Height', type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1.45 },
     { key:'bgRopeEndcapGradientEnabled', label:'Background Rope Endcap Gradient Enabled', type:'checkbox', def:false },
     { key:'bgRopeEndcapGradientColors', label:'Background Rope Endcap Gradient Colors', type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
-    // Per explicit request: during 'pausing' (bgRope now holds motionless
-    // at the clear-offset line for the whole pause, rather than mainRope
-    // spawning immediately), its own endcap scales from THIS height down
-    // to 0 over the pause duration -- independent of Background Rope
-    // Endcap Height above, which governs the climb ('rising') instead.
-    // Also doubles as mainRope's own boot-spawn endcap starting scale
-    // (see Main Rope Endcap Growth Speed below) -- per explicit request,
-    // the new rope's cap "picks up" at the same scale bgRope's cap was
-    // shrinking from.
+    // Per explicit request (and a follow-up correction: "During the
+    // Pause period, the background rope endcap scales down to the
+    // Endcap Pause Height as opposed to 0"): during 'pausing' (bgRope
+    // now holds motionless at the clear-offset line for the whole
+    // pause, rather than mainRope spawning immediately), its own endcap
+    // scales FROM Background Rope Endcap Height (above, which still
+    // governs the climb during 'rising') DOWN TO this height, over the
+    // pause duration. Also doubles as mainRope's own boot-spawn endcap
+    // starting scale (see Main Rope Endcap Growth Speed below) -- per
+    // explicit request, the new rope's cap "picks up" at the same scale
+    // bgRope's cap ends the pause at, making the handoff a genuinely
+    // seamless continuation rather than a jump.
     { key:'bgRopeEndcapPauseHeight', label:'Background Rope Endcap Pause Height', type:'slider', unit:'x', min:0, max:3, step:0.05, def:0.5 },
     // Boot-spawn only (per explicit follow-up -- a detach-triggered spawn
     // keeps using its own separate Detach Endcap Start Scale/Grow
@@ -4399,9 +4402,15 @@ function render(){
   // Background Rope Start Endcap: bgRope's own climbing start (points[0])
   // gets mainRope's same endcap design while it's the only thing visible
   // -- 'rising' (at Background Rope Endcap Height) and 'pausing' (scaling
-  // from Background Rope Endcap Pause Height down to 0 over the pause
-  // duration, per explicit request), gone entirely once mainRope actually
-  // spawns at 'growing' (see this control's own DEV_GROUPS comment).
+  // FROM Background Rope Endcap Height DOWN TO Background Rope Endcap
+  // Pause Height over the pause duration -- corrected per explicit
+  // follow-up, "During the Pause period, the background rope endcap
+  // scales down to the Endcap Pause Height as opposed to 0"), gone
+  // entirely once mainRope actually spawns at 'growing' (see this
+  // control's own DEV_GROUPS comment). This also means bgRope's cap now
+  // ends the pause at EXACTLY the height mainRope's own boot-spawn cap
+  // starts at (both use Background Rope Endcap Pause Height), so the
+  // handoff is a genuinely seamless continuation with no size jump.
   // drawEndcap() always anchors to points[points.length-1] and derives
   // direction from the segment before it, so a 2-point slice of bgRope's
   // OWN start, reversed (points[1] then points[0]), puts point 0 in that
@@ -4425,7 +4434,7 @@ function render(){
     } else if (introPhase === 'pausing'){
       const pauseDuration = introTriggeredByDetach ? cfg.detachPauseDuration : cfg.introPauseDuration;
       const pauseProgress = pauseDuration > 0 ? Math.min(1, introTimer / pauseDuration) : 1;
-      h = cfg.bgRopeEndcapPauseHeight * (1 - pauseProgress);
+      h = cfg.bgRopeEndcapHeight + (cfg.bgRopeEndcapPauseHeight - cfg.bgRopeEndcapHeight) * pauseProgress;
     } else {
       return;
     }
