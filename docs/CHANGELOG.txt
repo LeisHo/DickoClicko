@@ -6072,6 +6072,54 @@ all 6 changed PNGs (same 1400px-wide, quality-0.9 pipeline), verified
 all 6 decode at the correct 1400x1257 dimensions before pushing.
 
 ================================================================================
+2026-09-06  -  12:38 PM EDT
+
+"all animation frames should be from ANI not ANI2. is that correct" ->
+confirmed, then: "ok so Animation 2 is - [ANI/1 forward, ANI/2 reverse].
+please reload ALL frames. none should be from Ani2." A real architecture
+change, not another value tweak: Animation 2's frames were previously
+pre-copied/re-encoded into a separate, sibling data/FLICK/ANI2/ folder
+purely so the loading code could stay a simple sequential range --
+convenient for the code, but it meant every edit to ANI/1 or ANI/2
+needed a separate, easy-to-forget rebuild-into-ANI2 step. That's exactly
+what caused ANI2 to repeatedly drift out of sync with the real source
+folders across the last several rounds (2 of ANI2's own frame numbers
+had already gone stale by the time this session caught it once, and the
+folders' own contents had shifted AGAIN since -- ANI/1 lost frame 05,
+ANI/2 lost 04 and 09 -- by the time this round started).
+
+Removed the intermediate copy step entirely: Animation 2 now loads its
+WebP frames directly from data/FLICK/ANI/1 (forward) and
+data/FLICK/ANI/2 (reverse) at page-load time -- there is nothing left to
+keep in sync, ever. Re-checked both folders' CURRENT contents fresh
+(`ls`) rather than trusting the last-known list: ANI/1 has 11 frames
+(01,02,03,04,07,10,11,12,13,15,16), ANI/2 has 9
+(01,02,03,05,06,11,13,15,16) -- regenerated WebP for ALL 20 of these
+("reload ALL frames"), not just whichever ones happened to differ from
+the prior round. Since neither folder's frame numbers form a clean 1..N
+range, replaced the old bare `for i=1..N` loading loop with 2 explicit
+arrays (ANI1_FRAMES, ANI2_FRAMES) that must be re-verified any time
+either folder's contents change (same maintenance burden as before, just
+one array update instead of a full folder rebuild).
+
+Also caught and fixed a real omission: ANI/1 and ANI/2 were still
+UNTRACKED in git (previously fine, since they were only optional source
+material a separate rebuild script read from) -- but now that Animation
+2 loads from them DIRECTLY, they are the actual live assets the deployed
+site needs, and shipping without them would have 404'd in production
+while still working fine on localhost (which reads straight off disk).
+Added both folders (all 40 .png+.webp files) to git for the first time.
+The old data/FLICK/ANI2/ folder is left in place, unreferenced by any
+code now, per this project's own "don't delete without being asked"
+convention.
+
+Verified live: network requests confirm exactly 11 GETs to
+data/FLICK/ANI/1/ (ascending) and 9 to data/FLICK/ANI/2/ (descending),
+all 200 OK, ZERO requests to data/FLICK/ANI2/; triggered a real
+click-to-play and confirmed it completes and returns to rest with no
+console errors.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

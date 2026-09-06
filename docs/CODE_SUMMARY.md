@@ -3859,3 +3859,41 @@ GOTCHAS
   minimum (0.6) and confirmed the endcap renders visibly narrower than
   the rope body beneath it at that frozen state -- previously it would
   have matched the rope's own full width even mid-slide.
+- **Animation 2's frames no longer pre-copy into a separate
+  `data/FLICK/ANI2/` folder -- loaded directly from `data/FLICK/ANI/1`
+  and `data/FLICK/ANI/2` instead.** Per explicit correction ("all
+  animation frames should be from ANI not ANI2... none should be from
+  Ani2"). The old design pre-copied/re-encoded both source folders'
+  frames into a 3rd, separate top-level folder purely so the loading
+  code could stay a simple `for i=1..N` range (matching Animation 1's
+  own shape) -- but every edit to `ANI/1` or `ANI/2` then needed a
+  separate, easy-to-forget rebuild-into-`ANI2` step, which is exactly
+  what caused `ANI2` to repeatedly drift out of sync with the real
+  source folders across several rounds this session (confirmed via
+  `ls`: the folders' own contents had shifted YET AGAIN since the last
+  round -- `ANI/1` lost frame 05, `ANI/2` lost 04 and 09). Since neither
+  folder's frame numbers form a clean 1..N range, replaced the old
+  `FLICK2_FRAME_COUNT`-driven loop with 2 explicit arrays,
+  `ANI1_FRAMES`/`ANI2_FRAMES` (re-verified fresh against `ls` output,
+  not assumed from a prior round), consumed as
+  `ANI1_FRAMES.map(...).concat([...ANI2_FRAMES].reverse().map(...))` to
+  build `flickFrames2`'s own `Image` array -- `FLICK2_FRAME_COUNT` is now
+  `derived` (`.length + .length`) rather than a separately-maintained
+  literal. These 2 arrays are the ONE thing that needs re-verifying by
+  hand (`ls data/FLICK/ANI/1`, `ls data/FLICK/ANI/2`) any time either
+  folder's contents change -- this is a static single-file app with no
+  server-side directory listing, so nothing derives them automatically.
+  **`ANI/1` and `ANI/2` are now tracked in git for the first time**
+  (both `.png` and `.webp`, 40 files) -- they were previously untracked
+  scratch material only a manual rebuild process read from, but now that
+  Animation 2 loads from them directly at runtime, they're live assets
+  the deployed site needs; shipping without them would 404 in production
+  while still working on localhost (which reads straight off disk,
+  tracked or not). The old `data/FLICK/ANI2/` folder is left in place,
+  unreferenced by any code now, per this project's own established
+  "don't delete without being asked" convention for superseded assets.
+  Verified live: network requests showed exactly 11 GETs to
+  `data/FLICK/ANI/1/` (ascending) and 9 to `data/FLICK/ANI/2/`
+  (descending), all 200 OK, ZERO requests to `data/FLICK/ANI2/`;
+  triggered real playback and confirmed it completes and returns to rest
+  with no console errors.
