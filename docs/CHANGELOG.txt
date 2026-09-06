@@ -6475,6 +6475,92 @@ otherwise verified by tracing the exact code path against the reported
 symptoms.
 
 ================================================================================
+2026-09-06  -  05:15 PM EDT
+
+Full-detail follow-up after both the cut-jolt and attraction-hook fixes
+above still weren't right. On the jolt: "I think i know the issue. I
+think it started occuring after i told you to provide the endcap with
+collision detection. Make it so that the endcap doesnt collide with its
+own rope." On the attraction hook: "The upwards turning issue with the
+attraction function is definitely an issue with the Max reach distance.
+When the distance is short, the rope 'hits' the max distance and decides
+to turn upwards. Instead, i want it to simply have the endcap be at that
+max distnce, and the rope behind it will act as appropriate. I dont need
+the ENTIRE rope to participate in the reaching," followed by a full
+formal spec after the previous round's facing-override fix still showed
+a gap between endcap and rope: "The endcap will always try to look at
+the mouse. If there is not enough rope behind to provide that rotation
+without creating the gap disjoint, then the endcap will look as far as
+allowable. The main rope end MUST be attached to the endcap base FLUSH
+at all times. [...] the order of actions will be 1. the end cap points
+to the mouse 2. The end cap moves towards the mouse (wth the rope
+attached FLUSH behind it at the correct tangent angle) 3. If the endcap
+hits the max reach distance, the endcap will stay at that distance while
+looking at the mouse. The rest of the rope behind the end cap will bend
+as necessary to connect flush to the endcap base."
+
+Cut jolt -- found the real loophole this time, directly following the
+user's own diagnosis: a piece freshly split off mainRope starts with its
+own points essentially COINCIDENT with mainRope's own tip, so it ALWAYS
+dominated pileTopY's own min() the instant it was created -- the
+proximity gate (tipY >= pileTopY - 10%vh) was therefore ALWAYS true for
+a frame or two right after every single cut, regardless of any genuine
+floor pile being anywhere nearby, opening the whole mainRope-vs-piece
+pass against every OTHER piece in fallenPieces too. The per-piece
+age-gate inside the loop correctly skipped the fresh piece ITSELF but
+never stopped it from falsely triggering the gate against everything
+else. Fixed by excluding any piece still within MAIN_COLLISION_GRACE_AGE
+from the pileTopY computation itself, so the gate can now only open
+because of a piece genuinely old enough to be collided with in the first
+place.
+
+Rope Attraction -- redesigned from the ground up per the formal spec
+above, replacing BOTH prior nudge-based attempts (a single tip-nudge,
+then a weighted trailing-span nudge) with a genuine 2nd pin point.
+integrateChain() gained a new tipTarget param: pins the chain's own tip
+to a moving target every constraint iteration, EXACTLY mirroring how
+mainRope's anchor is already pinned to the circle boundary via
+boundaryConstraint. mainRope.attractionPin{X,Y} (a persisted point that
+eases toward the mouse-derived, reach-capped target using the existing
+Intensity/Speed sliders, exactly as before) is what gets handed in as
+that target. The existing distance/bend relaxation -- already proven
+stable for the anchor's own pin against ordinary swinging, with zero
+folding ever reported there -- now bends the WHOLE chain between the 2
+fixed points on its own: a short rope simply can't reach as far (the
+solver holds the middle back), a long rope bows between the 2 points
+instead of folding, and the endcap's own rotation needs NO separate
+override mechanism at all anymore -- tipDirection() was reverted to its
+original, pre-attraction form and reads the real last-segment tangent,
+which is flush by construction since that segment's own far end literally
+IS the pin. Removed the now-unnecessary facingOverride/
+endFacingOverride/attractionFacing plumbing from the previous 2 rounds
+entirely.
+
+Caught a real bug via direct Node simulation before shipping, not live
+testing: with only 1 (this project's own default) constraint-solve
+iteration per frame, pinning the tip to a target beyond the rope's own
+real physical length let the WHOLE chain stretch to match it instead of
+being held back the way the anchor's soft boundary-clamp naturally is --
+simulated a 500px target against a 90px-rest-length chain and watched it
+stretch the rendered chain to ~500px total (~5.5x overstretch). Fixed by
+ALSO capping the attraction target's distance from the anchor by the
+rope's own actual rest length (segLen * segment count), not just Max
+Reach Distance -- re-simulated down to a ~1.2x worst-case single-segment
+stretch (a taut but plausible rope, not a runaway one), regardless of
+whatever the user's own Constraint Iterations slider happens to be set
+to.
+
+Verified: syntax check passed. The tip-pin mechanism and its overstretch
+fix were verified via direct Node simulation of the actual constraint
+math (not just code review or a live repro) across 2 cases: a short-
+reach/long-rope scenario (confirmed a natural gravity sag with min
+consecutive-segment cosine ~0, nowhere near the ~-1 a true fold would
+show) and a long-reach/short-rope scenario (confirmed the overstretch
+bug, then confirmed the fix bounds it to ~1.2x). Live re-verification in
+the Browser pane was still not possible -- reported hidden independent
+of tab-fronting, the same limitation every task this session has hit.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

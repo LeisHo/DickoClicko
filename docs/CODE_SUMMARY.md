@@ -4126,3 +4126,50 @@ GOTCHAS
   2-20 in Node. Verification limitation: same as every task this
   session -- Browser pane still reported hidden independent of
   tab-fronting.
+- **Rope Attraction redesigned from the ground up as a genuine 2nd pin
+  point, replacing both prior nudge-based designs; cut-jolt's real
+  loophole finally closed.** Per a full formal spec after 2 rounds of
+  nudge-tuning still folded/gapped: "The main rope end MUST be attached
+  to the endcap base FLUSH at all times... the endcap moves towards the
+  mouse (with the rope attached FLUSH behind it)... If the endcap hits
+  the max reach distance, the endcap will stay at that distance while
+  looking at the mouse. The rest of the rope behind the end cap will
+  bend as necessary to connect flush." `integrateChain()` gained a new
+  `tipTarget` param ({x,y}): pins the chain's own tip to a moving target
+  every constraint iteration, exactly mirroring how `boundaryConstraint`
+  already pins the anchor to the circle. `mainRope.attractionPin{X,Y}`
+  (persisted on the object, eased toward the mouse-derived target using
+  the existing Intensity/Speed sliders, re-seeded fresh whenever
+  attraction starts and cleared to `null` when it ends) is what gets
+  passed in. The existing distance/bend relaxation -- already proven
+  stable for the anchor's own pin -- now bends the whole chain between
+  the 2 pins on its own: no per-point nudge logic left in `update()` at
+  all. `tipDirection()`/`drawEndcap()`/`drawRopeEndArcs()` were reverted
+  to their pre-attraction form (the `facingOverride`/`endFacingOverride`/
+  `attractionFacing` plumbing from the 2 previous rounds is gone
+  entirely) since the endcap's rotation is now flush by construction --
+  its neighbor point IS the pin.
+  Caught a real bug via direct Node simulation before shipping: with
+  only 1 (this project's default) constraint iteration per frame,
+  pinning the tip beyond the rope's own real length let the WHOLE chain
+  stretch to match it (simulated ~5.5x overstretch) instead of being
+  held back the way the anchor's own soft clamp naturally is. Fixed by
+  also capping the target's distance from the anchor by
+  `mainRope.segLen * (mainRope.points.length - 1)` (the rope's own rest
+  length), not just Max Reach Distance -- re-simulated down to a ~1.2x
+  worst-case single-segment stretch.
+  Cut jolt: found the real loophole per direct user diagnosis ("make it
+  so that the endcap doesnt collide with its own rope") -- a freshly-cut
+  piece starts essentially coincident with mainRope's own tip, so it
+  ALWAYS dominated `pileTopY`'s own `min()` the instant it was created,
+  meaning the proximity gate was ALWAYS true for a frame or two after
+  every single cut regardless of any real floor pile, opening the whole
+  mainRope-vs-piece pass against every OTHER piece too. Fixed by
+  excluding any piece still within `MAIN_COLLISION_GRACE_AGE` from the
+  `pileTopY` computation itself.
+  Verified via direct Node simulation of the actual constraint math
+  (not code review or live repro) for both a short-reach/long-rope case
+  (natural gravity sag, no fold: min consecutive-segment cosine ~0) and
+  a long-reach/short-rope case (confirmed the overstretch bug, then the
+  ~1.2x-bounded fix). Live re-verification in the Browser pane was still
+  not possible -- reported hidden independent of tab-fronting.

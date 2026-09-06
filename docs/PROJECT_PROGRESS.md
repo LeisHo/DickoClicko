@@ -148,7 +148,13 @@ additions. Current state of each subsystem:
   velocity (oldx/oldy), shaped by carrying the now-removed trailing mass
   -- a real recoil, visible mainly because of this project's own
   deliberately low damping. Both split functions now zero the remaining
-  chain's implied velocity at the moment of the split.
+  chain's implied velocity at the moment of the split. A separate,
+  genuine loophole in the proximity gate itself was found after that
+  still wasn't enough: a freshly-cut piece starts coincident with
+  mainRope's own tip, so it always dominated the gate's own "how close
+  is the nearest pile" check for a frame or two after every cut,
+  regardless of any real pile nearby -- fixed by excluding pieces still
+  within their own grace period from that check.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
@@ -273,25 +279,22 @@ additions. Current state of each subsystem:
 Full session-by-session history (every bug report, root cause, and
 verification) is in `CHANGELOG.txt`.
 
-- **Rope Attraction**: right-click-and-hold nudges the last 40% of
-  mainRope's own chain (weighted 0 at that range's start up to 1 at the
-  tip, not just the single tip point -- an earlier single-point version
-  let the tip race ahead of its neighbors and fold into a sharp hook)
-  toward the mouse each frame, then lets the existing distance-constraint
-  solver cap how far it can actually reach based on the rope's real
-  length -- a mouse target beyond that just pulls the rope as far as it
-  physically can go, curving smoothly rather than kinking. The tip's own
-  decorative facing (endcap or plain arc, whichever is showing) always
-  points straight at the real mouse position while attracting, via an
-  explicit override that now agrees with the rope body's own real
-  last-segment direction (which also curves toward the mouse) instead of
-  visibly fighting it. Correctly stays active through an in-progress
-  hold-to-grow (forces the tip out of the partial-tip-growth mechanism
-  for the duration, reverting the instant attraction ends). New RIGHT
-  CLICK dev-panel group (Intensity, Speed, Max Reach Distance). Verified
-  by code review (plus a Node-simulated check of the per-point weight
-  formula across chain lengths), not a live gesture test -- this
-  environment's Browser pane reported itself hidden independent of
+- **Rope Attraction**: right-click-and-hold pins mainRope's own tip to a
+  moving target (eased toward the mouse, capped by both Max Reach
+  Distance and the rope's own real physical length) exactly the way the
+  anchor is already pinned to the circle boundary -- the existing
+  distance/bend relaxation then bends the WHOLE chain between these 2
+  fixed points on its own, so a short rope simply can't reach as far and
+  a long rope bows between the 2 points instead of folding. No per-point
+  nudging logic of any kind; the endcap's own rotation is just
+  `tipDirection()` (unmodified from before this feature existed), flush
+  by construction since its neighbor point IS the pin. 2 earlier designs
+  (a single-point nudge, then a weighted-span nudge) were tried and
+  replaced after real reported problems (a fold/hook, then too much of
+  the rope's own shape moving). New RIGHT CLICK dev-panel group
+  (Intensity, Speed, Max Reach Distance). Verified via direct Node
+  simulation of the actual constraint math (not a live gesture test) --
+  this environment's Browser pane reported itself hidden independent of
   tab-fronting for every task this session touched it (see CODE_SUMMARY
   gotchas).
 
