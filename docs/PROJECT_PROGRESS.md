@@ -103,12 +103,15 @@ additions. Current state of each subsystem:
   Gradient (independent of mainRope's own Endcap Height/Gradient) -- 
   handing off seamlessly to mainRope's real endcap the instant it
   spawns. Startup Rise Gravity is no longer a stateful "settled" flag --
-  it's recomputed every frame from whether the anchor is still outside
-  its boundary OR mid-'pausing', so a Clear Offset that places the spawn
-  point on the far side of center from the boundary (closer to center
-  than the boundary radius, despite still needing a real fall to reach
-  it) can no longer cause it to read as "already settled" on frame one
-  and skip the slow-gravity effect entirely -- see CODE_SUMMARY gotchas.
+  it's recomputed every frame from distance to the anchor's real REST
+  point (the boundary's own bottom point, not distance from center --
+  measuring from center could read "already settled" before any real
+  falling happened) OR mid-'pausing', so the slow-gravity effect now
+  covers the anchor's entire actual fall, however long that takes,
+  instead of cutting off the instant Pause Duration elapses. The
+  free-fall itself is bounded to the circle's own drawn edge (not
+  fully unconstrained) so it can no longer visibly overshoot past the
+  circle -- see CODE_SUMMARY gotchas.
   Startup Rise Clear Offset is a straight horizontal line again (briefly a
   circle earlier this session), measured from the Circle Offset
   boundary's own bottom point, and is now clamped to the circle's own

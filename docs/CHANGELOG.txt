@@ -5520,6 +5520,50 @@ fetch a nonexistent FRAMES-04), all 60 FLICK requests clean 200/304,
 console clean apart from known noise. Committed + pushed.
 
 ================================================================================
+2026-09-06  -  02:30 AM EDT
+
+Two more startup-settle bugs, reported directly right after last
+round's fix: "the background and front rope start falling from the
+risd offset, it sometimes falls through beyond the circle bottom" and
+"the startup rise gravity slider still seems off. even at 0.01 it falls
+at a relatively normal speed."
+
+Bug 1 (gravity still fast): last round's `introUnsettled` fix measured
+distance from CENTER -- same flaw class as the flag it replaced. With
+this project's live settings the spawn point sits only ~2.25%vmin from
+center, already "inside" the ~9.25%vmin anchorBoundaryRadius() by that
+measure despite a real ~11.5%vmin fall still ahead. Once introPhase
+left 'pausing' (0.5s by default), the from-center check was immediately
+satisfied and full Gravity Strength (~170x the slider's 0.01) took over
+for the rest of the fall -- Startup Rise Gravity only ever governed the
+first 0.5s. Confirmed via a low-latency BATCHED screenshot sequence
+(steady ~25fps) after an earlier, sparser manual-screenshot test had
+given a misleading "it fell in ~1 second" read caused by the Browser
+pane tab throttling between separate tool calls -- the throttling
+itself was a real confound, not the underlying bug, but it took a
+cleaner measurement to see past it. Fixed by measuring distance from
+the anchor's actual REST point (the boundary's own bottom point --
+where gravity always pulls it toward hanging straight down) instead of
+from center. This only reads "arrived" once the anchor has genuinely
+fallen there, regardless of which side of center it started on --
+matching "up until it falls and hits the circle offset default
+position, then switches" verbatim.
+
+Bug 2 (overshoot past the circle): the free-fall's boundaryConstraint
+radius was Infinity while unsettled -- nothing at all limited how far
+gravity plus the chain's own momentum could carry the anchor. Fixed by
+bounding it to the circle's own drawn edge instead (still far more
+permissive than the tight anchorBoundaryRadius(), so the visible settle
+motion isn't clamped away, but never lets the anchor leave the circle
+graphic).
+
+Verified live via the same low-latency batched sequence: at Startup
+Rise Gravity 0.01, the anchor now visibly holds near its spawn position
+for 2+ real seconds before gradually settling (vs. completing the whole
+fall in ~1 second before this fix), with no overshoot past the circle
+observed across repeated runs. Console clean apart from known noise.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

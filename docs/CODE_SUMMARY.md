@@ -3316,3 +3316,59 @@ GOTCHAS
   settings: triggered a detach and watched the anchor visibly drift down
   over ~2-3 seconds after spawn instead of snapping to its resting
   position immediately.
+- **That very fix (dist-from-CENTER >= anchorBoundaryRadius()) had the
+  SAME root flaw as the flag it replaced, just recomputed every frame
+  instead of persisted -- reported directly right after: "even at 0.01
+  it falls at a relatively normal speed."** With this project's live
+  settings the spawn point sits only ~2.25%vmin from center, already
+  "inside" the ~9.25%vmin anchorBoundaryRadius() by that measure despite
+  a real ~11.5%vmin fall still ahead. Once `introPhase` left 'pausing'
+  (Startup/Detach Pause Duration, 0.5s by default), the from-center OR
+  clause was immediately satisfied too, so `introUnsettled` went false
+  and full Gravity Strength (~170x the slider's 0.01 in this config)
+  took over for the entire remaining fall -- Startup Rise Gravity only
+  ever governed the first 0.5s regardless of its own value. **Measuring
+  this live required a real methodological fix, not just a code one**:
+  an initial verification using separate, sequential tool calls (each
+  with its own screenshot) showed the fall completing in ~1 real second
+  even at gravity 0.01 -- but cross-checking against the dev panel's own
+  FPS counter showed only ~4fps during that test, vs. a steady ~25fps
+  once the SAME sequence was issued as one `browser_batch` call. The
+  Browser pane tab was being throttled between separate tool
+  invocations (a variant of this project's own documented "backgrounded
+  tab stalls the physics clock" gotcha), and `MAX_FRAME_DT`'s per-frame
+  catch-up cap meant a long real gap between two THROTTLED renders could
+  still deliver far more simulated time than the same wall-clock gap
+  would at full frame rate, especially if enough successive frames had
+  each already used their full 0.25s allowance -- making the fall LOOK
+  like it happened in ~1 second when the throttled sampling simply
+  couldn't see how much simulated time had actually elapsed between
+  snapshots. Batching the whole sequence into one `browser_batch` call
+  eliminated the inter-call throttling gaps and gave a trustworthy
+  reading. Fixed the actual code by measuring distance from the anchor's
+  real REST point instead of center:
+  ```
+  const restPoint = { x: circleAnchor().x, y: circleAnchor().y + anchorBoundaryRadius() };
+  const anchorDistFromRest = Math.hypot(mainRope.points[0].x - restPoint.x, mainRope.points[0].y - restPoint.y);
+  const REST_EPSILON = vmin(2); // judgment call, not measured -- "close enough that
+                                 // re-enabling the clamp here is imperceptible"
+  const introUnsettled = introPhase !== 'done' && (introPhase === 'pausing' || anchorDistFromRest > REST_EPSILON);
+  ```
+  restPoint (`circleAnchor().y + anchorBoundaryRadius()`) is the SAME
+  "hanging straight down" point already used elsewhere in this file as
+  `bottomY` -- gravity always pulls the anchor toward it in the absence
+  of sideways forces, so it's the correct "has it actually arrived"
+  target regardless of which side of center the spawn point started on.
+- **New: the free-fall itself was left fully unconstrained
+  (`radius: Infinity`) while unsettled, so nothing bounded how far
+  gravity plus the chain's own momentum could carry the anchor.**
+  Reported directly: "it sometimes falls through beyond the circle
+  bottom." Fixed by bounding the unsettled radius to the circle's own
+  drawn edge (`vmin(cfg.circleSize) / 2`) instead of Infinity -- still
+  far more permissive than the tight `anchorBoundaryRadius()` (the
+  visible settle motion isn't clamped away), but the anchor can never
+  visibly leave the circle graphic. Verified live via the same
+  low-latency batched sequence: at Startup Rise Gravity 0.01, the anchor
+  now visibly holds near its spawn position for 2+ real seconds before
+  gradually settling, with no overshoot past the circle observed across
+  repeated runs.
