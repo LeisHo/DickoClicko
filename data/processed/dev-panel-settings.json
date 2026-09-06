@@ -109,16 +109,16 @@
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 3.4,
     "detachThicknessMultiplier": 1.05,
-    "flickX": 15,
-    "flickY": 85,
-    "flickScale": 15,
+    "flickX": 23,
+    "flickY": 79,
+    "flickScale": 57,
     "flickAnimSpeed": 4.6,
-    "flick2X": 15,
+    "flick2X": 31,
     "flick2Y": 60,
-    "flick2Scale": 50,
+    "flick2Scale": 60,
     "flick2AnimSpeed": 4.6,
-    "flickHoldMaxSpeed": 6,
-    "flickHoldMaxDuration": 1.5
+    "flickHoldMaxSpeed": 2.5,
+    "flickHoldMaxDuration": 3.3
   },
   "order": [
     {
@@ -141,7 +141,7 @@
     },
     {
       "key": "FLICK ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flickX",
         "flickY",
@@ -304,9 +304,9 @@
   "panelGeometry": {
     "mobile": {
       "left": 182,
-      "top": 345.3690490722656,
+      "top": 262.0535888671875,
       "width": 229,
-      "height": 238.1904754638672,
+      "height": 407.3690490722656,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
