@@ -355,6 +355,16 @@ const DEV_GROUPS = [
     { key:'endcapStartingScale', label:'Endcap Starting Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.1 },
     { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:0 },
     { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.01, max:1.5, step:0.01, def:0.01 },
+    // Separate from End Emerge Speed above, per explicit request -- that
+    // one now governs ONLY mainRope's own tip (the still-attached rope's
+    // new cut edge); this one governs BOTH of a FALLEN PIECE's own emerge
+    // states (its own free tip, inherited from before it fell, and its
+    // own newly-created cut edge) -- i.e. every endcap that ends up on a
+    // rope segment that has actually been cut off, as opposed to the
+    // rope still attached to the anchor. Same range/default as its
+    // sibling for consistency; Delay/Easing/Tweening stay shared (not
+    // asked to split).
+    { key:'pieceEndEmergeSpeed', label:'Piece Endcap Emerge Speed', type:'slider', unit:'x', min:0.01, max:1.5, step:0.01, def:0.01 },
     { key:'endEmergeEasingStrength', label:'End Emerge Easing Strength', type:'slider', unit:'x', min:1, max:6, step:0.1, def:6 },
     { key:'endEmergeTweening', label:'End Emerge Tweening', type:'dropdown', def:'easeInOut',
       options:[
@@ -2196,7 +2206,19 @@ function pieceThickness(piece){
 // pair that clearly can't be touching yet.
 function pieceCollision(){
   if (fallenPieces.length < 2) return;
-  const minSep = Math.max(2, vmin(cfg.ropeThickness) * 1.15);
+  // Per-PAIR separation, from each piece's own CURRENT (possibly
+  // decayed) thickness via pieceThickness() -- not a single global
+  // value pinned to cfg.ropeThickness (the un-decayed default) computed
+  // once for every pair regardless of either piece's real live
+  // thickness. That fixed value never shrank as a piece's own thickness
+  // decayed toward Piece Minimum Thickness, so anything resting on top
+  // of a decaying piece stayed held up at the ORIGINAL, un-decayed
+  // separation forever -- reported directly: "when the bottom piece
+  // starts shrinking in thickness, the top piece doesnt fall down with
+  // it... the top piece stays suspended in the air." Average of both
+  // pieces' own current thicknesses (matching the original formula's
+  // implicit assumption that both share one thickness -- generalized to
+  // differing ones instead of special-cased) times the same 1.15 margin.
   const boxes = fallenPieces.map(piece => {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of piece.points){
@@ -2207,6 +2229,7 @@ function pieceCollision(){
   });
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
+      const minSep = Math.max(2, (pieceThickness(fallenPieces[a]) + pieceThickness(fallenPieces[b])) / 2 * 1.15);
       const ba = boxes[a], bb = boxes[b];
       if (ba.maxX + minSep < bb.minX || bb.maxX + minSep < ba.minX ||
           ba.maxY + minSep < bb.minY || bb.maxY + minSep < ba.minY) continue;
@@ -3746,10 +3769,10 @@ function update(rawDt){
   // End Emerge -- same raw-wall-clock, cosmetic-timer treatment as
   // cutSweep just above; a no-op per-tick when there's no active emerge
   // state (nothing cut yet, or End Emerge is off).
-  tickEmerge(mainRope.tipEmerge, rawDt);
+  tickEmerge(mainRope.tipEmerge, rawDt, cfg.endEmergeSpeed);
   fallenPieces.forEach(piece => {
-    tickEmerge(piece.tipEmerge, rawDt);
-    tickEmerge(piece.cutEdgeEmerge, rawDt);
+    tickEmerge(piece.tipEmerge, rawDt, cfg.pieceEndEmergeSpeed);
+    tickEmerge(piece.cutEdgeEmerge, rawDt, cfg.pieceEndEmergeSpeed);
   });
 
   const fallGravity = vh(90) * cfg.gravityStrength * cfg.ropeFallSpeed;
@@ -4089,7 +4112,14 @@ function newEmergeState(){
 // advances one emerge state by rawDt -- same raw-wall-clock convention as
 // cutSweep's own progress (a cosmetic timer, not part of the physics dt),
 // so Rope Animation Speed doesn't also secretly slow/speed emergence.
-function tickEmerge(emerge, rawDt){
+// speed: which of cfg.endEmergeSpeed / cfg.pieceEndEmergeSpeed governs
+// this particular emerge state's own visible grow phase -- per explicit
+// request that a FALLEN PIECE's own endcaps (its inherited tip, and its
+// own new cut edge) grow in at an independently-tunable rate from
+// mainRope's own tip. Passed in by the caller (see this function's own
+// call sites) rather than decided in here, since tickEmerge() itself has
+// no way to know which kind of state it was given.
+function tickEmerge(emerge, rawDt, speed){
   if (!emerge || emerge.progress >= 1) return;
   if (emerge.delayRemaining > 0){
     emerge.delayRemaining = Math.max(0, emerge.delayRemaining - rawDt);
@@ -4110,7 +4140,7 @@ function tickEmerge(emerge, rawDt){
   // regardless of Delay.
   const rate = emerge.progress < EMERGE_SLIDE_SHARE
     ? EMERGE_SLIDE_SHARE / EMERGE_SLIDE_SEC
-    : cfg.endEmergeSpeed / EMERGE_BASE_SEC;
+    : speed / EMERGE_BASE_SEC;
   emerge.progress = Math.min(1, emerge.progress + rawDt * rate);
 }
 
@@ -4603,8 +4633,14 @@ function render(){
   // its comment) now reconciles. Drawn regardless of introPhase (not just
   // during waiting/rising/pausing) so it's just as usable for inspecting
   // Circle Boundary Offset/Circle Size tuning after the animation has
-  // finished.
-  if (cfg.debugShowRiseClearOffset){
+  // finished. Also gated on DEV_MODE, not just its own checkbox -- per
+  // explicit follow-up ("any offset boundaries are only meant to be
+  // visible in dev mode"), prompted directly by this exact debug line
+  // rendering on the live deployed site for a real visitor once the
+  // settings-loading fix above made its saved `true` value actually
+  // apply outside dev mode too. A "Debug:"-labeled control should never
+  // be visible to a real visitor regardless of what got saved.
+  if (DEV_MODE && cfg.debugShowRiseClearOffset){
     const anchor = circleAnchor();
     const boundaryR = anchorBoundaryRadius();
     const bottomY = anchor.y + boundaryR;
@@ -4626,41 +4662,50 @@ function render(){
     ctx.restore();
   }
 
-  // FLICK animation overlay -- drawn last so it's always on top of the
-  // rope/circle. Each rect is computed EVERY frame from cfg values alone
-  // (a fallback 1:1 aspect ratio until that animation's own first frame
-  // image reports its real naturalWidth/naturalHeight) -- previously the
-  // rect was only ever set INSIDE the `complete && naturalWidth > 0`
-  // guard, so isPointInFlick/isPointInFlick2 stayed at their zero-sized
-  // initial {0,0,0,0} until the image had actually finished loading.
-  // Reported as "it fees like the animations take time to load up. whe ni
-  // cick it on startup, they don really work" -- a click in the first
-  // moments after page load (images still loading) hit-tested against
-  // that stale zero-rect and silently missed every time, regardless of
-  // where on screen the graphic visibly was. `complete`/`naturalWidth`
-  // still guards the actual DRAW (nothing to draw until that specific
-  // frame is ready), just no longer the hit-test rect itself.
-  const flickRefImg = flickFrames[0];
-  const flickAspect = (flickRefImg && flickRefImg.naturalWidth > 0) ? (flickRefImg.naturalHeight / flickRefImg.naturalWidth) : 1;
-  const flickW = vmin(cfg.flickScale);
-  const flickH = flickW * flickAspect;
-  flickRect.x = vw(cfg.flickX) - flickW / 2; flickRect.y = vh(cfg.flickY) - flickH / 2;
-  flickRect.w = flickW; flickRect.h = flickH;
-  // holdingFlick 1 swaps in the hold-preview cycle (see onPointerDown) in
-  // place of the normal idle/playing frame, at the same rect.
-  const flickImg = holdingFlick === 1 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames[flickFrameIndex()];
-  if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
-    ctx.drawImage(flickImg, flickRect.x, flickRect.y, flickW, flickH);
-  }
-  const flick2RefImg = flickFrames2[0];
-  const flick2Aspect = (flick2RefImg && flick2RefImg.naturalWidth > 0) ? (flick2RefImg.naturalHeight / flick2RefImg.naturalWidth) : 1;
-  const flick2W = vmin(cfg.flick2Scale);
-  const flick2H = flick2W * flick2Aspect;
-  flick2Rect.x = vw(cfg.flick2X) - flick2W / 2; flick2Rect.y = vh(cfg.flick2Y) - flick2H / 2;
-  flick2Rect.w = flick2W; flick2Rect.h = flick2H;
-  const flick2Img = holdingFlick === 2 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames2[flick2FrameIndex()];
-  if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
-    ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, flick2W, flick2H);
+  // FLICK animation overlay -- dev-only per explicit request ("make the
+  // animations are only visible in dev mode"). Gated on DEV_MODE at the
+  // TOP of this whole block, not just the drawImage() calls -- leaving
+  // flickRect/flick2Rect at their zero-sized initial {0,0,0,0} outside
+  // dev mode means isPointInFlick()/isPointInFlick2() never match a real
+  // click either, so a normal visitor gets no invisible dead-click-zone
+  // where a flick used to be, on top of not seeing it. Drawn last so
+  // it's always on top of the rope/circle when it IS shown. Each rect is
+  // computed EVERY frame from cfg values alone (a fallback 1:1 aspect
+  // ratio until that animation's own first frame image reports its real
+  // naturalWidth/naturalHeight) -- previously the rect was only ever set
+  // INSIDE the `complete && naturalWidth > 0` guard, so
+  // isPointInFlick/isPointInFlick2 stayed at their zero-sized initial
+  // {0,0,0,0} until the image had actually finished loading. Reported as
+  // "it fees like the animations take time to load up. whe ni cick it on
+  // startup, they don really work" -- a click in the first moments after
+  // page load (images still loading) hit-tested against that stale
+  // zero-rect and silently missed every time, regardless of where on
+  // screen the graphic visibly was. `complete`/`naturalWidth` still
+  // guards the actual DRAW (nothing to draw until that specific frame is
+  // ready), just no longer the hit-test rect itself.
+  if (DEV_MODE){
+    const flickRefImg = flickFrames[0];
+    const flickAspect = (flickRefImg && flickRefImg.naturalWidth > 0) ? (flickRefImg.naturalHeight / flickRefImg.naturalWidth) : 1;
+    const flickW = vmin(cfg.flickScale);
+    const flickH = flickW * flickAspect;
+    flickRect.x = vw(cfg.flickX) - flickW / 2; flickRect.y = vh(cfg.flickY) - flickH / 2;
+    flickRect.w = flickW; flickRect.h = flickH;
+    // holdingFlick 1 swaps in the hold-preview cycle (see onPointerDown) in
+    // place of the normal idle/playing frame, at the same rect.
+    const flickImg = holdingFlick === 1 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames[flickFrameIndex()];
+    if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
+      ctx.drawImage(flickImg, flickRect.x, flickRect.y, flickW, flickH);
+    }
+    const flick2RefImg = flickFrames2[0];
+    const flick2Aspect = (flick2RefImg && flick2RefImg.naturalWidth > 0) ? (flick2RefImg.naturalHeight / flick2RefImg.naturalWidth) : 1;
+    const flick2W = vmin(cfg.flick2Scale);
+    const flick2H = flick2W * flick2Aspect;
+    flick2Rect.x = vw(cfg.flick2X) - flick2W / 2; flick2Rect.y = vh(cfg.flick2Y) - flick2H / 2;
+    flick2Rect.w = flick2W; flick2Rect.h = flick2H;
+    const flick2Img = holdingFlick === 2 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames2[flick2FrameIndex()];
+    if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
+      ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, flick2W, flick2H);
+    }
   }
 }
 
