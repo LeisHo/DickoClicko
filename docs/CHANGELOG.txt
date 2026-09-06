@@ -5991,6 +5991,12 @@ limitation as before means this can't be confirmed at true sub-pixel
 resolution; the user's own next look is the real test.
 
 ================================================================================
+2026-09-06  -  11:21 AM EDT
+
+"make it 2.5 then push" -- explicit follow-up value adjustment, no new
+investigation. `ARC_SEAM_OVERLAP_PX` set to 2.5px (was 4px).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
