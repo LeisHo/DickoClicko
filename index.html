@@ -316,6 +316,18 @@ const DEV_GROUPS = [
     // determine where a gradient color kicks in"). See buildRow()'s
     // 'gradient' case for the actual editor UI.
     { key:'ropeGradientColors',  label:'Rope Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
+    // A separate, independent gradient for FALLEN PIECES (cut-off rope
+    // segments) only -- per explicit request ("give me a gradient
+    // slider that is for the cut segments of rope"), same split-gradient
+    // pattern as Endcap Gradient/Rope End Arc Gradient's own earlier
+    // splits from Rope Gradient. Previously every fallen piece reused
+    // Rope Gradient (still-attached mainRope's own setting), so a piece
+    // couldn't have a different gradient than the rope it fell from.
+    // Recomputed per piece each frame from its OWN current points span,
+    // same convention Rope Gradient's own per-piece retention already
+    // uses (see ropeStrokeColor()'s call sites in render()).
+    { key:'pieceGradientEnabled', label:'Piece Gradient Enabled', type:'checkbox', def:false },
+    { key:'pieceGradientColors',  label:'Piece Gradient Colors',  type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
     // A separate, independent gradient for the ENDCAP graphic only -- per
     // explicit request ("leave the current slider for the rope only. and
     // give me the same slider but the endcaps"). Previously the endcap
@@ -388,6 +400,25 @@ const DEV_GROUPS = [
   { title:'END EMERGE', controls:[
     { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:true },
     { key:'endcapStartingScale', label:'Endcap Starting Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.1 },
+    // The hidden/mid-slide endcap previously started at FULL width
+    // (normalScale, unaffected by Endcap Starting Scale above -- that
+    // control only ever shrank the HEIGHT axis) and only ever scaled in
+    // height. Per explicit request ("while we currently have the hidden
+    // endcaps at 100% width from the beginning, only scaling in height,
+    // provide me a slider for the Endcap Starting Scale for Width"),
+    // this blends the WIDTH axis the same way (start at this fraction of
+    // full width, scale up to full width over the same slide->scale
+    // sequence -- see drawEndcap()'s own xScale). Range narrower than
+    // Endcap Starting Scale's own (0.1-1) per explicit spec (0.6-1) --
+    // presumably width degrades faster than height at extreme shrink.
+    // Default 1 preserves the exact current always-full-width behavior
+    // until deliberately tuned down. drawEndcap() is the ONE shared
+    // function every spawn path (boot's own End Emerge AND a detach's
+    // own grow-in, which reuses the same factor-driven slide/scale
+    // sequence, just with a different heightMult -- see
+    // detachScale/mainEndcapHeight in render()) already funnels through,
+    // so this applies to both without any extra wiring.
+    { key:'endcapStartingScaleWidth', label:'Endcap Starting Scale (Width)', type:'slider', unit:'x', min:0.6, max:1, step:0.02, def:1 },
     { key:'endEmergeDelay',   label:'End Emerge Delay',   type:'slider', unit:'s', min:0, max:3, step:0.05, def:0 },
     { key:'endEmergeSpeed',   label:'End Emerge Speed',   type:'slider', unit:'x', min:0.01, max:1.5, step:0.01, def:0.01 },
     // Separate from End Emerge Speed above, per explicit request -- that
@@ -4402,6 +4433,11 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
   const heightNormalScale = heightThicknessPx / ENDCAP_ALIGNMENT.width;
   const startYScale = heightNormalScale * cfg.endcapStartingScale;
+  // Endcap Starting Scale (Width) -- see this control's own comment.
+  // Blended the SAME way startYScale/yScale already are, just along X:
+  // starts at this fraction of normalScale, reaches full normalScale
+  // once scaleFactor (below) reaches 1.
+  const startXScale = normalScale * cfg.endcapStartingScaleWidth;
   // Sequential, not simultaneous, per explicit request ("instead of
   // simultaneously rescaling the endcap back up, the rescaling only
   // begins once the endcap top edge has aligned with the rope end"):
@@ -4420,6 +4456,7 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   const slideFactor = Math.min(1, factor / SLIDE_SHARE);
   const scaleFactor = Math.max(0, Math.min(1, (factor - SLIDE_SHARE) / (1 - SLIDE_SHARE)));
   const yScale = startYScale + (heightNormalScale - startYScale) * scaleFactor;
+  const xScale = startXScale + (normalScale - startXScale) * scaleFactor;
   // The hidden endcap starts exactly ONE full natural design-height up
   // the rope from the tip -- "it will be up the rope exactly the height
   // of the endcap geometry after scaling", per explicit request. No
@@ -4458,8 +4495,10 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   // is used as the anchor always lands at local (0,0) regardless of scale
   // -- so THAT point stays exactly at the tip no matter how much vertical
   // stretch (heightMult), emergence shrink, or emergence anchor-shift is
-  // applied.
-  ctx.scale(normalScale, yScale * heightMult);
+  // applied. X uses xScale (Endcap Starting Scale (Width)'s own blend)
+  // instead of the raw normalScale -- previously ALWAYS normalScale, i.e.
+  // full width from the very start of emergence, regardless of factor.
+  ctx.scale(xScale, yScale * heightMult);
   ctx.translate(-ENDCAP_ALIGNMENT.topCenterX, -anchorY);
   if (gradientInfo && gradientInfo.stops && gradientInfo.stops.length >= 2){
     // Self-contained gradient across the endcap's OWN local extent (its
@@ -4737,13 +4776,14 @@ function render(){
     // (possibly Detach-Thickness-Multiplier-boosted) thickness.
     const pieceThick = pieceThickness(piece);
     const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
-    // A fallen piece keeps showing the rope gradient it had while still
-    // attached, recomputed each frame from its OWN current points span --
-    // per explicit request ("i want cut off rope segments to retrain the
-    // gradient"). Previously always cfg.ropeColor (solid), regardless of
-    // Rope Gradient Enabled -- a piece lost its gradient coloring the
-    // instant it fell.
-    strokeRopeCurve(strokePoints, pieceThick, ropeStrokeColor(piece.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor));
+    // A fallen piece gets its own independent gradient (Piece Gradient)
+    // now, recomputed each frame from its OWN current points span --
+    // previously reused Rope Gradient (per an earlier request, "i want
+    // cut off rope segments to retrain the gradient" -- which asked for
+    // a piece to KEEP HAVING a gradient at all, not necessarily the same
+    // one mainRope has). Falls back to cfg.ropeColor (solid) when off,
+    // same as before.
+    strokeRopeCurve(strokePoints, pieceThick, ropeStrokeColor(piece.points, cfg.pieceGradientEnabled, cfg.pieceGradientColors, cfg.ropeColor));
   });
   // mainRope's points[0] is the anchor -- free to move within the circle
   // now (see integrateChain()'s own boundaryConstraint), but still never a
@@ -4835,7 +4875,7 @@ function render(){
   fallenPieces.forEach(piece => {
     const pieceThick = pieceThickness(piece);
     const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
-    const pieceColor = ropeStrokeColor(piece.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
+    const pieceColor = ropeStrokeColor(piece.points, cfg.pieceGradientEnabled, cfg.pieceGradientColors, cfg.ropeColor);
     drawRopeEndArcs(strokePoints, pieceThick, pieceColor, computeTipArcMult(piece), computeCutArcMult(piece));
   });
   if (mainRope.cutSweep && mainRope.cutSweep.progress < 1) renderCutSweep(mainRope);
