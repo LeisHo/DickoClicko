@@ -1,7 +1,7 @@
 {
   "values": {
     "backgroundColor": "#252546",
-    "circleSize": 16.5,
+    "circleSize": 20,
     "circleX": 50,
     "circleY": 18,
     "circleColor": "#111023",
@@ -10,8 +10,9 @@
     "endcapDesign": "form1-01",
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
-    "ropeThickness": 5.1,
-    "ropeLength": 36.70174792568862,
+    "ropeThickness": 7.1,
+    "ropeLength": 3.7115384615384612,
+    "ropeDefaultLength": 3.4615384615384612,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -222,7 +223,7 @@
     },
     {
       "key": "CIRCLE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleSize",
         "circleX",
@@ -260,6 +261,7 @@
       "key": "ROPE",
       "collapsed": false,
       "settings": [
+        "ropeDefaultLength",
         "endcapGradientEnabled",
         "endcapGradientColors",
         "endcapDesign",
@@ -329,11 +331,11 @@
     }
   ],
   "panelGeometry": {
-    "desktop": {
-      "left": 908.0375366210938,
-      "top": 17.912500381469727,
-      "width": 627.9500122070312,
-      "height": 570.0250244140625,
+    "mobile": {
+      "left": 182,
+      "top": 262.0535888671875,
+      "width": 229,
+      "height": 407.3690490722656,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -346,11 +348,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "mobile": {
-      "left": 182,
-      "top": 262.0535888671875,
-      "width": 229,
-      "height": 407.3690490722656,
+    "desktop": {
+      "left": 908.0375366210938,
+      "top": 17.912500381469727,
+      "width": 627.9500122070312,
+      "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
