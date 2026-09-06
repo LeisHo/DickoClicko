@@ -85,8 +85,16 @@ additions. Current state of each subsystem:
   rebuilds hanging from the real spawn point both when the climb begins
   AND at the handoff when mainRope spawns, so it's always already
   consistent with gravity's direction at both transitions -- no more
-  reaction/jump at either one. bgRope's own climb now starts just out of
-  sight below the circle (Rope Thickness + 1, not a full diameter).
+  reaction/jump at either one. mainRope's own whole chain is now rebuilt
+  at that same handoff too (previously only point 0 was repositioned,
+  leaving points 1+ hanging from the OLD anchor position for the entire
+  hidden waiting+rising duration -- harmless when Clear Offset barely
+  moved the spawn point, but once Clear Offset could genuinely reach far
+  from the old position, the gap was large enough for the distance
+  constraint to violently whip the chain back down the instant the
+  handoff ran -- see CODE_SUMMARY gotchas). bgRope's own climb now starts
+  just out of sight below the circle (Rope Thickness + 1, not a full
+  diameter).
   Startup Rise Clear Offset is a straight horizontal line again (briefly a
   circle earlier this session), measured from the Circle Offset
   boundary's own bottom point, and is now clamped to the circle's own

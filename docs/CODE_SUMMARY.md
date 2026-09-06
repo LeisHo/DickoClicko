@@ -3174,3 +3174,40 @@ GOTCHAS
   climb now visibly passes the old boundary reference line, and
   mainRope's post-handoff settle drifts down gradually across several
   seconds instead of snapping in one frame.
+- **That boundaryConstraint fix was necessary but NOT sufficient -- a
+  second, distinct bug was hiding behind it, only exposed once Clear
+  Offset could genuinely reach far from the old spawn position.**
+  Reported again ("same issue as before") with a specific new detail
+  from a screen recording: at the handoff moment, the rope spawns at
+  the circle offset boundary instead of the clear offset, AND bgRope
+  visibly jumps down to the boundary. Re-tested against the ACTUAL live
+  saved settings (read directly from
+  `data/processed/dev-panel-settings.json` -- Circle Offset 1.5, Clear
+  Offset 11.5 -- not the exaggerated values used to verify the previous
+  fix) and watched a detach frame-by-frame via tightly-spaced
+  screenshots: the climb correctly reached the real Clear Offset target
+  (confirming fix #1 still works), but the INSTANT the handoff fired,
+  the rope visibly bent/whipped and snapped back down to the old
+  boundary. Root cause: at the 'rising'->'pausing' handoff, only
+  `mainRope.points[0]` was ever repositioned to the new spawn point --
+  points 1+ were left wherever they'd hung from mainRope's OLD anchor
+  position for the entire hidden waiting+rising duration. That gap used
+  to be small (the old clamp meant Clear Offset could never push the
+  spawn point far from where the chain was already hanging), so it went
+  unnoticed; once fix #1 let Clear Offset genuinely reach far from the
+  old position, the gap between old point 1 and new point 0 became
+  large enough for the distance constraint to violently whip the whole
+  chain back the instant the handoff ran. bgRope visibly "jumping" too
+  is a side effect, not a separate bug -- it re-syncs to mainRope's own
+  anchor every frame from the handoff onward. Fixed by rebuilding
+  mainRope's ENTIRE chain at the handoff via `makeChain()`, hanging from
+  the new spawn point, instead of only patching point 0 -- the exact
+  same fix shape already used for the 'waiting'->'rising' transition and
+  for bgRope's own handoff rebuild in the same function. Point 0 is
+  still explicitly pinned to the exact spawn coordinate afterward (not
+  left to makeChain()'s own small random per-point lean, which is only
+  meant to break points 1+'s symmetry -- see makeChain()'s own comment),
+  with oldx/oldy set equal to x/y for the same zero-implied-velocity
+  reason as before. Verified live across 2 repeated detach cycles with
+  the real saved settings: the post-handoff settle is now a smooth,
+  straight downward drift with no bend or whip.

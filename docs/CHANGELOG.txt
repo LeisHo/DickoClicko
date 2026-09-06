@@ -5352,6 +5352,55 @@ position drifted down gradually across 3 consecutive screenshots taken
 ~2s apart, rather than snapping in a single frame.
 
 ================================================================================
+2026-09-06  -  12:21 AM EDT
+
+"same issue as before" -- user provided a specific new detail this
+time from a saved screen recording: at the 4-second mark (main rope
+spawn), the rope spawns at the circle offset boundary instead of the
+clear offset, AND the background rope visibly jumps down to the circle
+offset. The PREVIOUS fix (relaxing boundaryConstraint's clamp) was real
+and necessary but not sufficient -- a second, distinct bug was hiding
+behind it.
+
+Re-tested against the ACTUAL live saved settings this time (Circle
+Offset 1.5, Clear Offset 11.5, Startup Rise Gravity 0.1 -- read directly
+from data/processed/dev-panel-settings.json rather than assuming), not
+the artificially exaggerated values used to verify the previous fix.
+Live-watched a detach cycle frame-by-frame via tightly-spaced
+screenshots: the climb correctly reached the pink (real Clear Offset)
+line -- confirming the FIRST fix still works -- but the instant the
+handoff fired, the rope visibly bent/whipped and snapped back down to
+the cyan (old boundary) line, exactly matching "spawns at the circle
+offset" and "jumps down to the circle offset."
+
+Root cause: at the 'rising'->'pausing' handoff, only mainRope.points[0]
+was ever repositioned to the new spawn point -- points 1+ were left
+wherever they'd hung from mainRope's OLD anchor position for the
+ENTIRE hidden waiting+rising duration. That gap used to be small
+(the old boundary-based clamp meant Clear Offset could never push the
+spawn point far from where the chain was already hanging), so it went
+unnoticed -- but now that the first fix lets Clear Offset genuinely
+reach far from the old position, the gap between old point 1 and new
+point 0 became large enough for the distance constraint to violently
+whip the whole chain back toward the old resting spot the instant the
+handoff ran. bgRope visibly "jumping" too is a side effect, not a
+separate bug -- it re-syncs to mainRope's own anchor every frame from
+the handoff onward, so it moves wherever mainRope's anchor gets whipped
+to.
+
+Fixed by rebuilding mainRope's ENTIRE chain at the handoff (via
+makeChain(), hanging from the new spawn point) instead of only patching
+point 0 -- the exact same fix shape already used for the
+'waiting'->'rising' transition and for bgRope's own handoff rebuild
+just below this code in the same function.
+
+Verified live across 2 repeated detach cycles with the real saved
+settings: the climb still reaches the actual Clear Offset target, and
+the post-handoff settle is now a smooth, straight downward drift with
+no bend or whip -- console clean apart from the known
+ERR_CONNECTION_RESET local-server noise.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
