@@ -3270,3 +3270,49 @@ GOTCHAS
   explicit request -- min was already 0, but the old step meant nothing
   between 0 and 0.1 was reachable by dragging (typing already bypassed
   step, per §12h, so this was purely a drag-granularity gap).
+- **New: Background Rope Endcap Height** (`bgRopeEndcapHeight`) **and
+  Gradient Enabled/Colors** (`bgRopeEndcapGradientEnabled`/
+  `bgRopeEndcapGradientColors`), independent of mainRope's own Endcap
+  Height/Gradient -- applied to the prior round's Background Rope Start
+  Endcap via the same `bgRopeEndcapGradientInfo`/`worldTop: bgRope.points[0]`
+  pattern `mainGradientInfo` already uses for mainRope's own tip.
+  Verified live: enabling both plus a taller height (2.5x) produced a
+  visibly taller, gradient-colored cap during the climb, distinct from
+  mainRope's own unmodified settings.
+- **`introGravitySettled` (the stateful "has the anchor reached its
+  boundary" flag from 2 rounds ago) had a real flaw: it measured
+  distance from CENTER, not distance from the boundary's actual resting
+  spot, so a spawn point on the far side of center from where the
+  anchor will rest could read as "already settled" the instant it
+  spawns, despite a real fall still ahead of it.** With this project's
+  actual live settings (Circle Offset 1.5 -> anchorBoundaryRadius()
+  ~9.25%vmin; Clear Offset 11.5, Enabled) the spawn point computes to
+  ~2.25%vmin from center -- comfortably inside the ~9.25%vmin boundary
+  radius by that measure, even though it's ABOVE center while the real
+  resting spot is ~9.25%vmin BELOW it, an ~11.5%vmin fall genuinely
+  still ahead. `dist <= anchorBoundaryRadius()` was satisfied on literal
+  frame one after spawn, flipping settled immediately and switching to
+  full Gravity Strength before Startup Rise Gravity ever got a window
+  to visibly apply. Reported directly: "the startup rise gravity slider
+  doesnt seem to do anything." Fixed by dropping the stateful flag
+  entirely in favor of a value recomputed fresh every frame:
+  ```
+  const anchorDistFromCenter = Math.hypot(mainRope.points[0].x - circleAnchor().x, mainRope.points[0].y - circleAnchor().y);
+  const introUnsettled = introPhase !== 'done' && (introPhase === 'pausing' || anchorDistFromCenter > anchorBoundaryRadius());
+  ```
+  Unsettled while genuinely mid-startup (`introPhase === 'pausing'` --
+  the actual window between spawn and 'growing', i.e. Startup/Detach
+  Pause Duration's own real purpose) OR while the anchor is still
+  genuinely outside its boundary (covers 'growing' too, so a Pause
+  Duration shorter than the real fall can't cut the slow-gravity window
+  short and reintroduce the ORIGINAL abrupt-jolt bug this whole
+  mechanism exists to prevent -- see that bug's own earlier gotcha
+  entry) -- but the `introPhase !== 'done'` guard means this NEVER
+  applies during normal gameplay, even if a hard punch transiently
+  flings the anchor past its boundary, so ordinary gameplay physics are
+  unaffected. This also let `introGravitySettled`'s 3 reset sites (boot,
+  detach, the 'rising'->'pausing' handoff) be deleted entirely -- no
+  persisted state left to reset. Verified live with the real saved
+  settings: triggered a detach and watched the anchor visibly drift down
+  over ~2-3 seconds after spawn instead of snapping to its resting
+  position immediately.

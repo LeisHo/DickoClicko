@@ -5456,6 +5456,51 @@ design/color, no visible pop) by mainRope's own endcap at the handoff.
 Console clean apart from known noise.
 
 ================================================================================
+2026-09-06  -  01:44 AM EDT
+
+Two new controls plus a real fix for a report that undercut this
+session's own recent gravity work.
+
+Background Rope Endcap Height and Gradient Enabled/Colors: new
+controls, independent of mainRope's own Endcap Height/Gradient, applied
+to last round's Background Rope Start Endcap. Verified live: enabling
+both plus a taller height (2.5x) produced a visibly taller,
+gradient-colored cap during the climb, distinct from mainRope's own
+(unmodified) endcap settings.
+
+"The startup rise gravity slider doesnt seem to do anything" -- traced
+to a real flaw in `introGravitySettled`, the stateful flag from 2
+rounds ago that flips true (switching to full Gravity Strength, hard
+clamp back on) the instant the anchor's distance from center drops to
+<= anchorBoundaryRadius(). With this project's actual live settings
+(Circle Offset 1.5, Clear Offset 11.5), the spawn point computed out to
+only 2.25%vmin from center -- comfortably "inside" the ~9.25%vmin
+boundary radius despite sitting on the OPPOSITE side of center from
+where the anchor will actually rest, and despite a real ~11.5%vmin fall
+still ahead of it. The flag flipped settled on literally the first
+frame after spawn, so Startup Rise Gravity never got a window to
+visibly apply at all -- the anchor just used full Gravity Strength from
+frame one, matching the "doesn't do anything" report exactly once
+computed through by hand.
+
+Fixed by replacing the stateful flag with a value recomputed fresh
+every frame: unsettled while introPhase === 'pausing' (the actual
+window between spawn and 'growing' -- Startup/Detach Pause Duration's
+own real purpose) OR while the anchor is still genuinely outside its
+boundary (covers 'growing' too, so a short Pause Duration can't cut the
+slow-gravity window short and reintroduce the original abrupt-jolt bug
+this mechanism exists to prevent), but never during 'done' regardless
+of a transient excursion (a hard punch flinging the anchor briefly past
+its boundary mid-gameplay) -- so ordinary gameplay physics are
+unaffected.
+
+Verified live with the real saved settings: triggered a detach and
+watched the anchor visibly drift down over ~2-3 seconds after spawn
+instead of snapping to its resting position immediately, then
+transition normally into 'growing'. Console clean apart from known
+noise.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

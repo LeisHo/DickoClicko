@@ -98,10 +98,17 @@ additions. Current state of each subsystem:
   just out of sight below the circle (Rope Thickness + 1, not a full
   diameter). Startup Rise Gravity's slider step is 0.01 (was 0.1), so
   values below 0.1 are reachable by dragging, not just by typing.
-  Background Rope Start Endcap (default off) shows mainRope's own endcap
-  design at bgRope's climbing start while it's rising, handing off
-  seamlessly (same design/color, no pop) to mainRope's real endcap the
-  instant it spawns.
+  Background Rope Start Endcap (default off) shows a cap at bgRope's
+  climbing start while it's rising -- its own Height and optional
+  Gradient (independent of mainRope's own Endcap Height/Gradient) -- 
+  handing off seamlessly to mainRope's real endcap the instant it
+  spawns. Startup Rise Gravity is no longer a stateful "settled" flag --
+  it's recomputed every frame from whether the anchor is still outside
+  its boundary OR mid-'pausing', so a Clear Offset that places the spawn
+  point on the far side of center from the boundary (closer to center
+  than the boundary radius, despite still needing a real fall to reach
+  it) can no longer cause it to read as "already settled" on frame one
+  and skip the slow-gravity effect entirely -- see CODE_SUMMARY gotchas.
   Startup Rise Clear Offset is a straight horizontal line again (briefly a
   circle earlier this session), measured from the Circle Offset
   boundary's own bottom point, and is now clamped to the circle's own
