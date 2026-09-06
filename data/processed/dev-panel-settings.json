@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 9.513324917748546,
+    "ropeLength": 10.376126609465194,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -97,7 +97,7 @@
     "introRiseSpeed": 5.5,
     "startupRiseGravity": 0.1,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 3.5,
+    "introRiseClearOffset": 11.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "introPauseDuration": 0.5,
@@ -303,9 +303,9 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 1162.0250244140625,
-      "top": 29.125,
-      "width": 719.9625244140625,
+      "left": 908.0375366210938,
+      "top": 17.912500381469727,
+      "width": 627.9500122070312,
       "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
