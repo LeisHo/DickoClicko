@@ -87,6 +87,15 @@
     width:40px; height:22px; border:1px solid #3a3a4a; border-radius:4px; background:none; padding:0;
   }
   .dp-row input[type=checkbox] { width:16px; height:16px; }
+  /* Copy/Paste a color between any two color pickers in the panel --
+     shared copiedColorValue, see its own comment. */
+  .dp-color-copy, .dp-color-paste {
+    flex:0 0 auto; width:20px; height:20px; line-height:18px; padding:0;
+    font-size:10px; font-weight:600; text-align:center;
+    background:#0f0f18; color:#c9c9d8; border:1px solid #3a3a4a; border-radius:4px;
+    cursor:pointer;
+  }
+  .dp-color-copy:hover, .dp-color-paste:hover { background:#1c1c2c; color:#e8e8f0; }
   .dp-dropdown {
     flex:1 1 auto; min-width:0; font-size:11px;
     background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
@@ -387,6 +396,23 @@ const DEV_GROUPS = [
     { key:'bgRopeEndcapHeight', label:'Background Rope Endcap Height', type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1.45 },
     { key:'bgRopeEndcapGradientEnabled', label:'Background Rope Endcap Gradient Enabled', type:'checkbox', def:false },
     { key:'bgRopeEndcapGradientColors', label:'Background Rope Endcap Gradient Colors', type:'gradient', def:[{pos:0, color:'#a5815f'}, {pos:1, color:'#3d2817'}] },
+    // Per explicit request: during 'pausing' (bgRope now holds motionless
+    // at the clear-offset line for the whole pause, rather than mainRope
+    // spawning immediately), its own endcap scales from THIS height down
+    // to 0 over the pause duration -- independent of Background Rope
+    // Endcap Height above, which governs the climb ('rising') instead.
+    // Also doubles as mainRope's own boot-spawn endcap starting scale
+    // (see Main Rope Endcap Growth Speed below) -- per explicit request,
+    // the new rope's cap "picks up" at the same scale bgRope's cap was
+    // shrinking from.
+    { key:'bgRopeEndcapPauseHeight', label:'Background Rope Endcap Pause Height', type:'slider', unit:'x', min:0, max:3, step:0.05, def:0.5 },
+    // Boot-spawn only (per explicit follow-up -- a detach-triggered spawn
+    // keeps using its own separate Detach Endcap Start Scale/Grow
+    // Duration mechanism above, unchanged). Governs how fast mainRope's
+    // endcap grows from Background Rope Endcap Pause Height up to its
+    // normal Endcap Height once mainRope spawns -- independent of End
+    // Emerge's own speed control, per explicit request.
+    { key:'mainEndcapGrowSpeed', label:'Main Rope Endcap Growth Speed', type:'slider', unit:'x/s', min:0.1, max:20, step:0.1, def:3 },
     { key:'introPauseDuration',  label:'Startup Pause Duration',    type:'slider', unit:'s',     min:0,   max:5,   step:0.1, def:0.4 },
     { key:'introExtendSpeed',    label:'Startup Extension Speed',   type:'slider', unit:'%vh/s', min:0.5, max:100, step:0.5, def:15 },
     { key:'introExtendSpeedTweenEnabled', label:'Startup Extension Speed Tween Enabled', type:'checkbox', def:false },
@@ -517,6 +543,23 @@ function buildPanelStyleGroup(){
       const color = document.createElement('input'); color.type = 'color'; color.value = panelStyle[ctrl.key];
       color.addEventListener('input', () => { panelStyle[ctrl.key] = color.value; applyPanelStyle(); });
       row.appendChild(color);
+      // Same shared copiedColorValue every other color picker in the
+      // panel uses -- see that variable's own comment.
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button'; copyBtn.className = 'dp-color-copy'; copyBtn.textContent = 'C';
+      copyBtn.title = 'Copy this color';
+      copyBtn.addEventListener('click', () => { copiedColorValue = color.value; });
+      const pasteBtn = document.createElement('button');
+      pasteBtn.type = 'button'; pasteBtn.className = 'dp-color-paste'; pasteBtn.textContent = 'P';
+      pasteBtn.title = 'Paste copied color';
+      pasteBtn.addEventListener('click', () => {
+        if (copiedColorValue === null) return;
+        color.value = copiedColorValue;
+        panelStyle[ctrl.key] = copiedColorValue;
+        applyPanelStyle();
+      });
+      row.appendChild(copyBtn);
+      row.appendChild(pasteBtn);
       panelStyleNumEls[ctrl.key] = { color };
     }
     gb.appendChild(row);
@@ -552,6 +595,12 @@ function applyPanelStyleValues(saved){
    Dev panel build-out
 --------------------------------------------------------------------- */
 const numEls = {};
+// Shared across every color picker in the panel -- per explicit request
+// ("provide a copy and paste buttons so i can copy colors from one to
+// another"). A single in-memory value, not the OS clipboard: no
+// permission prompt, no async, works identically for every color
+// control regardless of which one copied it.
+let copiedColorValue = null;
 function buildDevPanel(){
   const body = document.getElementById('dpGroups');
   DEV_GROUPS.forEach(group => {
@@ -694,6 +743,24 @@ function buildRow(ctrl){
     color.type = 'color'; color.value = ctrl.def;
     color.addEventListener('input', () => { cfg[ctrl.key] = color.value; });
     row.appendChild(color);
+    // Copy/Paste: copies this picker's current color into the shared
+    // value, or overwrites this picker from whatever was last copied
+    // (from ANY color picker in the panel, including this one) -- see
+    // copiedColorValue's own comment.
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button'; copyBtn.className = 'dp-color-copy'; copyBtn.textContent = 'C';
+    copyBtn.title = 'Copy this color';
+    copyBtn.addEventListener('click', () => { copiedColorValue = color.value; });
+    const pasteBtn = document.createElement('button');
+    pasteBtn.type = 'button'; pasteBtn.className = 'dp-color-paste'; pasteBtn.textContent = 'P';
+    pasteBtn.title = 'Paste copied color';
+    pasteBtn.addEventListener('click', () => {
+      if (copiedColorValue === null) return;
+      color.value = copiedColorValue;
+      cfg[ctrl.key] = copiedColorValue;
+    });
+    row.appendChild(copyBtn);
+    row.appendChild(pasteBtn);
     numEls[ctrl.key] = { type:'color' };
   } else if (ctrl.type === 'checkbox') {
     const cb = document.createElement('input');
@@ -1786,6 +1853,13 @@ function resetMainRope(startingLengthPx){
     // emerged" (nothing's ever been cut off it yet, or it's a fresh
     // rope), same convention as growDir/tipOffset.
     tipEmerge: null,
+    // Boot-only endcap grow-in (see the 'pausing'->'growing' spawn code's
+    // own comment) -- null means "not growing in" (either not yet armed,
+    // or already finished). Deliberately NOT armed here at construction
+    // time; set explicitly at the actual spawn moment instead, since
+    // resetMainRope() itself runs well before that (this rope's chain
+    // doesn't become visible until 'growing' starts).
+    bootEndcapScale: null,
   };
 }
 
@@ -2164,6 +2238,12 @@ let introGrowStartLengthPx = 0;
 // definition (the only way to re-enter 'waiting' after boot is another
 // detach), so staying true is correct, not stale.
 let introTriggeredByDetach = false;
+// Tracks the PREVIOUS frame's unsettled state (see update()'s own
+// introUnsettled computation) so the exact frame it flips from true to
+// false can be detected and have its own implied-velocity zeroed out --
+// see that transition's own comment near the integrateChain() call for
+// why. Starts true (matching introUnsettled's own default reasoning).
+let anchorWasUnsettled = true;
 // Gates Startup Rise Gravity vs. Gravity Strength -- see
 // introUnsettled()'s own comment (defined near update()) for the full,
 // twice-corrected mechanism.
@@ -2354,7 +2434,27 @@ function updateIntro(rawDt){
       bgRope.points[0].y = clearY;
       introPhase = 'pausing';
       introTimer = 0;
-      // mainRope "spawns" exactly where bgRope's climb just ended -- no
+      // mainRope does NOT spawn here anymore -- per explicit correction
+      // ("after the background rope has risen to clear the startup rise
+      // offset, it stays there for the pause duration, then after that
+      // duration does the main rope spawn and the whole unit begins to
+      // fall"). bgRope simply holds at clearY (nothing here moves it)
+      // for the whole 'pausing' duration; the actual spawn moved to the
+      // 'pausing'->'growing' transition below.
+    } else {
+      bgRope.points[0].y -= step;
+    }
+  } else if (introPhase === 'pausing'){
+    introTimer += rawDt;
+    // Boot's own (first-ever) startup animation uses Startup Pause
+    // Duration; a double-click-triggered full detach (see
+    // detachEntireRopeAndRestartIntro()) reuses this ENTIRE state
+    // machine but pauses for its own, separately-tunable Detach Pause
+    // Duration instead -- per explicit request ("give me a duplicate,
+    // but this is the pause for when the rope is fully cut").
+    const pauseDuration = introTriggeredByDetach ? cfg.detachPauseDuration : cfg.introPauseDuration;
+    if (introTimer >= pauseDuration){
+      // mainRope "spawns" exactly where bgRope has been holding -- no
       // jump -- then, from this frame on, mainRope's own already-running
       // physics (the same boundaryConstraint every other frame already
       // uses) naturally settles it toward wherever it actually wants to
@@ -2368,20 +2468,20 @@ function updateIntro(rawDt){
       // shape as 'waiting'->'rising' and bgRope's own handoff rebuild
       // just below, and for the exact same reason. Only patching point 0
       // (as this used to do) left points 1+ wherever they'd hung from
-      // mainRope's OLD anchor position for the entire waiting+rising
-      // duration -- normally close enough to the new spawn point to go
-      // unnoticed, but with a real Startup Rise Clear Offset now actually
-      // reaching far from that old position (the fix above), the gap
-      // between old point 1 and new point 0 became large enough for the
-      // distance constraint to violently whip the chain back toward the
-      // old position the instant this handoff ran -- reported directly,
-      // with a screen recording, as "you can also see that the
-      // background rope jumps down to the circle offset" (bgRope visibly
-      // moves too because it re-syncs to mainRope's own anchor every
-      // frame from here on -- see its own comment below). Rebuilding
-      // hanging from the new spawn point means every point is already
-      // consistent with both gravity's direction AND the actual segment
-      // length from frame one, nothing left to violently correct.
+      // mainRope's OLD anchor position for the entire waiting+rising+
+      // pausing duration -- normally close enough to the new spawn point
+      // to go unnoticed, but with a real Startup Rise Clear Offset now
+      // actually reaching far from that old position, the gap between
+      // old point 1 and new point 0 became large enough for the distance
+      // constraint to violently whip the chain back toward the old
+      // position the instant this handoff ran -- reported directly, with
+      // a screen recording, as "you can also see that the background
+      // rope jumps down to the circle offset" (bgRope visibly moves too
+      // because it re-syncs to mainRope's own anchor every frame from
+      // here on -- see its own comment below). Rebuilding hanging from
+      // the new spawn point means every point is already consistent with
+      // both gravity's direction AND the actual segment length from
+      // frame one, nothing left to violently correct.
       mainRope.points = makeChain(mainRope.points.length, bgRope.points[0].x, bgRope.points[0].y, mainRope.segLen);
       // Point 0 explicitly pinned to the exact spawn coordinate (not left
       // to makeChain()'s own small random per-point x lean, which is only
@@ -2398,17 +2498,17 @@ function updateIntro(rawDt){
       // way for 5-10 seconds then it settles to the position i expect" --
       // a nudge attempted HERE, at the handoff, was tried first and
       // measured to fail: by this point mainRope has already been
-      // integrating (hidden) for the ENTIRE waiting+rising duration, long
-      // enough to have already settled deep into makeChain()'s own
-      // perfectly-symmetric trap -- a one-frame nudge this late is
-      // fighting settled inertia across the whole chain, not preventing
-      // it, and live tracing confirmed even an 8%-of-boundary-radius kick
-      // here decayed back to the exact same symmetric x within ~1-2s
-      // (i.e. it just relocated the freeze, it didn't fix it). Fixing the
-      // chain's own construction instead means the whole hidden
-      // wait+rise+pause duration is naturally available to settle into a
-      // real off-axis resting pose BEFORE this handoff ever runs, so
-      // there's nothing left to fight here.
+      // integrating (hidden) for the ENTIRE waiting+rising+pausing
+      // duration, long enough to have already settled deep into
+      // makeChain()'s own perfectly-symmetric trap -- a one-frame nudge
+      // this late is fighting settled inertia across the whole chain,
+      // not preventing it, and live tracing confirmed even an
+      // 8%-of-boundary-radius kick here decayed back to the exact same
+      // symmetric x within ~1-2s (i.e. it just relocated the freeze, it
+      // didn't fix it). Fixing the chain's own construction instead means
+      // the whole hidden wait+rise+pause duration is naturally available
+      // to settle into a real off-axis resting pose BEFORE this handoff
+      // ever runs, so there's nothing left to fight here.
       // bgRope resumes following mainRope's own anchor from here on (see
       // update()'s own bgRope sync) -- rebuild it HERE, at the moment of
       // that handoff, both for the usual race-avoidance reason (locks its
@@ -2434,19 +2534,25 @@ function updateIntro(rawDt){
       // not off by that lean.
       bgRope.points[0].x = mainRope.points[0].x;
       bgRope.points[0].y = mainRope.points[0].y;
-    } else {
-      bgRope.points[0].y -= step;
-    }
-  } else if (introPhase === 'pausing'){
-    introTimer += rawDt;
-    // Boot's own (first-ever) startup animation uses Startup Pause
-    // Duration; a double-click-triggered full detach (see
-    // detachEntireRopeAndRestartIntro()) reuses this ENTIRE state
-    // machine but pauses for its own, separately-tunable Detach Pause
-    // Duration instead -- per explicit request ("give me a duplicate,
-    // but this is the pause for when the rope is fully cut").
-    const pauseDuration = introTriggeredByDetach ? cfg.detachPauseDuration : cfg.introPauseDuration;
-    if (introTimer >= pauseDuration){
+      // detachTipScaleProgress is armed HERE (the actual spawn moment),
+      // not back at the initial detach trigger -- arming it there meant
+      // it had already been ticking for the ENTIRE hidden waiting+rising+
+      // pausing duration by the time mainRope was ever shown, often
+      // exceeding Detach Endcap Grow Duration before the endcap was ever
+      // visible at all. Reported directly: "when i cut the rope entirely,
+      // the new main rope has a full height endcap regardless of those
+      // sliders." undefined (-> full size) for boot, which never sets
+      // this, same as before.
+      if (introTriggeredByDetach) mainRope.detachTipScaleProgress = 0;
+      // Boot-only endcap grow-in (per explicit request, and per explicit
+      // follow-up clarifying detach keeps its OWN existing mechanism
+      // above unchanged rather than sharing this one): starts at
+      // Background Rope Endcap Pause Height -- the same height bgRope's
+      // own endcap was shrinking FROM during 'pausing' (see render()'s
+      // own bgRope-endcap comment) -- and grows to mainRope's normal
+      // Endcap Height at Main Rope Endcap Growth Speed (see update()'s
+      // own per-frame increment). Left null (skipped) on a detach spawn.
+      if (!introTriggeredByDetach) mainRope.bootEndcapScale = cfg.bgRopeEndcapPauseHeight;
       // Captured HERE, not at boot -- by this point (wait + rise + pause,
       // several seconds in) any async settings load has long since
       // resolved, so this is guaranteed to be the real configured target,
@@ -2516,15 +2622,11 @@ function detachEntireRopeAndRestartIntro(){
   // means every point starts fresh and consistent on every detach-
   // triggered restart, not just the very first boot.
   resetBgRope();
-  // The fresh rope's own tip endcap starts scaled down and grows back to
-  // normal size over Detach Endcap Grow Duration -- per explicit request
-  // ("the end cap at the rope end will not be at full height... within a
-  // duration of time that endcap grows back to normal size"). Deliberately
-  // NOT the End Emerge system (that's delay+slide+scale for CUT edges);
-  // this is its own simple linear scale-up tied to the detach-and-regrow
-  // sequence specifically, undefined (-> full size, current/original
-  // behavior) for the very first boot-time rope, which never sets this.
-  mainRope.detachTipScaleProgress = 0;
+  // detachTipScaleProgress is armed at the actual SPAWN moment instead
+  // (the 'pausing'->'growing' transition in updateIntro()), not here --
+  // see that site's own comment for why arming it this early was a real
+  // bug ("the new main rope has a full height endcap regardless of
+  // those sliders").
   introTriggeredByDetach = true;
   ropeThicknessMultiplier *= cfg.detachThicknessMultiplier;
   introPhase = 'waiting';
@@ -3525,6 +3627,33 @@ function update(rawDt){
   const circleR = vmin(cfg.circleSize) / 2;
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
     { index: 0, center: circleAnchor(), radius: introUnsettled ? circleR : anchorBoundaryRadius(), weightMult: cfg.anchorWeight });
+  // The exact frame introUnsettled flips true->false, the boundary radius
+  // shrinks from circleR down to the much tighter anchorBoundaryRadius()
+  // in the SAME integrateChain() call above -- if the anchor was still
+  // outside that tighter radius (it can be, by up to REST_EPSILON's own
+  // margin), this clamps it inward immediately, and since the clamp
+  // itself never touches oldx/oldy, the FOLLOWING frame's verlet step
+  // reads that positional correction as real velocity -- the same
+  // clamp-creates-spurious-velocity mechanism already fixed once for the
+  // spawn transition, recurring here at the settle transition instead.
+  // Reported directly: "once it has reached the circle offset... the
+  // entire rope unit bounces upwards to the top of the circle, then
+  // falls back down." Fixed the same way spawn already is: zero the
+  // implied velocity on exactly this one transition frame.
+  if (anchorWasUnsettled && !introUnsettled){
+    mainRope.points[0].oldx = mainRope.points[0].x;
+    mainRope.points[0].oldy = mainRope.points[0].y;
+  }
+  anchorWasUnsettled = introUnsettled;
+  // Boot-only endcap grow-in (see the 'pausing'->'growing' spawn code's
+  // own comment for why this is armed only there, and only for boot) --
+  // null once finished, so this whole block is skipped as soon as
+  // there's nothing left to grow (and permanently skipped for a
+  // detach-triggered spawn, which never arms it).
+  if (mainRope.bootEndcapScale !== null){
+    mainRope.bootEndcapScale = Math.min(cfg.endcapHeight, mainRope.bootEndcapScale + cfg.mainEndcapGrowSpeed * rawDt);
+    if (mainRope.bootEndcapScale >= cfg.endcapHeight) mainRope.bootEndcapScale = null;
+  }
   if (hasPartialTip) positionGrowingTip();
 
   // Background "peeking" rope (see render()'s own comment on the clip):
@@ -3537,11 +3666,18 @@ function update(rawDt){
   // solve, via the SAME cfg values mainRope uses) is fully independent,
   // so it swings on its own rather than mirroring mainRope's body shape --
   // only its start point is driven externally, per explicit request.
-  // EXCEPT during 'waiting'/'rising': bgRope IS the startup animation's
-  // own climbing visual now (see updateIntro()), so its anchor is driven
-  // by that phase's own logic instead -- left untouched here so this
-  // block doesn't fight it.
-  if (introPhase !== 'waiting' && introPhase !== 'rising'){
+  // EXCEPT during 'waiting'/'rising'/'pausing': bgRope IS the startup
+  // animation's own climbing (then holding) visual through all 3 of
+  // those phases now (see updateIntro()), so its anchor is driven by
+  // that phase's own logic instead -- left untouched here so this block
+  // doesn't fight it. 'pausing' was NOT excluded here until this fix --
+  // since mainRope no longer spawns until 'pausing' ENDS, this line was
+  // still forcing bgRope's held position to follow the OLD, stale,
+  // hidden mainRope (wherever it had drifted to during the entire
+  // waiting+rising+pausing duration) every single frame, completely
+  // undoing "it stays there for the pause duration" -- bgRope visibly
+  // moved off the clear-offset line during the pause instead of holding.
+  if (introPhase !== 'waiting' && introPhase !== 'rising' && introPhase !== 'pausing'){
     bgRope.points[0].x = mainRope.points[0].x;
     bgRope.points[0].y = mainRope.points[0].y;
   }
@@ -4262,26 +4398,38 @@ function render(){
   // normally peeks through the circle's own bounds.
   // Background Rope Start Endcap: bgRope's own climbing start (points[0])
   // gets mainRope's same endcap design while it's the only thing visible
-  // -- 'rising' only, gone the instant mainRope spawns at 'pausing' (see
-  // this control's own DEV_GROUPS comment). drawEndcap() always anchors to
-  // points[points.length-1] and derives direction from the segment before
-  // it, so a 2-point slice of bgRope's OWN start, reversed (points[1] then
-  // points[0]), puts point 0 in that "tip" slot with the correct climb
-  // direction -- same reversal trick already used for a piece's own cut
-  // edge below. factor:1 (no End Emerge slide-in -- this cap has always
-  // been "there", it's a substitute for one, not a fresh cut appearing).
-  // Drawn inside the SAME clip scope as bgRope's own stroke just below (not
-  // after it) so it obeys Background Rope Clip Enabled identically -- the
-  // climbing tip shouldn't show its cap outside the circle any more than
-  // it shows rope there.
+  // -- 'rising' (at Background Rope Endcap Height) and 'pausing' (scaling
+  // from Background Rope Endcap Pause Height down to 0 over the pause
+  // duration, per explicit request), gone entirely once mainRope actually
+  // spawns at 'growing' (see this control's own DEV_GROUPS comment).
+  // drawEndcap() always anchors to points[points.length-1] and derives
+  // direction from the segment before it, so a 2-point slice of bgRope's
+  // OWN start, reversed (points[1] then points[0]), puts point 0 in that
+  // "tip" slot with the correct climb direction -- same reversal trick
+  // already used for a piece's own cut edge below. factor:1 (no End
+  // Emerge slide-in -- this cap has always been "there", it's a
+  // substitute for one, not a fresh cut appearing). Drawn inside the SAME
+  // clip scope as bgRope's own stroke just below (not after it) so it
+  // obeys Background Rope Clip Enabled identically -- the climbing tip
+  // shouldn't show its cap outside the circle any more than it shows
+  // rope there.
   // Independent gradient/height from mainRope's own Endcap Gradient/Height
   // (see this control's own DEV_GROUPS comment) -- worldTop: bgRope's own
   // start, same convention mainGradientInfo below uses for mainRope's tip.
   const bgRopeEndcapGradientInfo = cfg.bgRopeEndcapGradientEnabled ? { stops: cfg.bgRopeEndcapGradientColors, worldTop: bgRope.points[0] } : null;
   const drawBgRopeStartEndcap = () => {
-    if (cfg.bgRopeStartEndcapEnabled && introPhase === 'rising' && bgRope.points.length >= 2){
-      drawEndcap([bgRope.points[1], bgRope.points[0]], liveThickness, cfg.endcapDesign, cfg.ropeColor, cfg.bgRopeEndcapHeight, 1, bgRopeEndcapGradientInfo);
+    if (!cfg.bgRopeStartEndcapEnabled || bgRope.points.length < 2) return;
+    let h;
+    if (introPhase === 'rising'){
+      h = cfg.bgRopeEndcapHeight;
+    } else if (introPhase === 'pausing'){
+      const pauseDuration = introTriggeredByDetach ? cfg.detachPauseDuration : cfg.introPauseDuration;
+      const pauseProgress = pauseDuration > 0 ? Math.min(1, introTimer / pauseDuration) : 1;
+      h = cfg.bgRopeEndcapPauseHeight * (1 - pauseProgress);
+    } else {
+      return;
     }
+    drawEndcap([bgRope.points[1], bgRope.points[0]], liveThickness, cfg.endcapDesign, cfg.ropeColor, h, 1, bgRopeEndcapGradientInfo);
   };
   if (introPhase !== 'waiting'){
     if (cfg.bgRopeClipEnabled){
@@ -4343,18 +4491,17 @@ function render(){
   // physically integrating, so its anchor settles naturally) throughout
   // 'waiting'/'rising'/'pausing' -- it just wasn't DRAWN until 'growing'
   // started, per the original "no rope, just the circle" / "the dot
-  // climbs, not a rope" spec. Now shown starting at 'pausing' too (the
-  // moment mainRope actually spawns/positions at the clearance line) --
-  // per explicit correction after a detach: "you see the new main rope
-  // spawn after the background rope starts falling" -- confirmed via
-  // direct tracing that mainRope stayed invisible through the ENTIRE
-  // rising climb AND pause, only appearing once 'growing' began, by which
-  // point the just-detached piece (falling immediately, per the earlier
-  // revert) had already fallen ~350px away. 'rising' alone is NOT
-  // included -- mainRope only actually spawns/positions itself at the
-  // clearance-line handoff (start of 'pausing'), so showing it any
-  // earlier would show it sitting somewhere not yet meaningful.
-  const showMainRope = introPhase !== 'waiting' && introPhase !== 'rising';
+  // climbs, not a rope" spec. mainRope now actually spawns/positions
+  // itself at the 'pausing'->'growing' handoff, not any earlier -- per
+  // explicit correction ("after the background rope has risen to clear
+  // the startup rise offset, it stays there for the pause duration, then
+  // after that duration does the main rope spawn"). 'waiting', 'rising',
+  // AND 'pausing' are all excluded accordingly; showing it any earlier
+  // would show it sitting somewhere not yet meaningful (an even earlier
+  // version of this same reasoning, back when the spawn point itself was
+  // 'pausing''s own start rather than its end, is why 'pausing' used to
+  // be included here -- it no longer is, now that the spawn moved).
+  const showMainRope = introPhase === 'growing' || introPhase === 'done';
   const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, liveThickness);
   const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
   if (showMainRope) strokeRopeCurve(mainStrokePoints, liveThickness, ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor), mainEffectiveArcMult, cfg.ropeTopCurveArc);
@@ -4371,11 +4518,22 @@ function render(){
     // detachScale: 1 for the boot-time rope (detachTipScaleProgress never
     // set) or once its own grow-back has finished; otherwise blends from
     // Detach Endcap Start Scale up to 1 as detachTipScaleProgress rises --
-    // see detachEntireRopeAndRestartIntro()/update()'s own tick.
+    // see detachEntireRopeAndRestartIntro()/update()'s own tick. Kept as
+    // its own separate mechanism, applying only to a detach-triggered
+    // spawn -- per explicit follow-up, NOT unified with the boot-only
+    // grow-in below, to avoid the two stacking into a confusing
+    // double-scale effect on a detach.
     const detachScale = mainRope.detachTipScaleProgress === undefined ? 1
       : cfg.detachTipStartScale + (1 - cfg.detachTipStartScale) * mainRope.detachTipScaleProgress;
+    // Boot-only endcap grow-in (see update()'s own per-frame increment
+    // and the 'pausing'->'growing' spawn code's own comment) -- overrides
+    // detachScale entirely while active, rather than combining with it,
+    // since bootEndcapScale is never armed on a detach spawn in the first
+    // place (the two are mutually exclusive by construction, not just by
+    // convention).
+    const mainEndcapHeight = mainRope.bootEndcapScale !== null ? mainRope.bootEndcapScale : cfg.endcapHeight * detachScale;
     const mainGradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: mainRope.points[0] } : null;
-    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight * detachScale, mainTipFactor, mainGradientInfo);
+    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo);
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
     // points array before reusing drawEndcap() puts that cut point at
