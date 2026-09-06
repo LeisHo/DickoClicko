@@ -1662,20 +1662,29 @@ function isPointInFlick(x, y){
 }
 
 // FLICK animation 2 -- a second, independent graphic, placed above the
-// first by default. Its 21 frames are `data/FLICK/ANI/1`'s own frames
-// (natural-numeric order: 01,02,03,04,07,10,11,13,14,16 -- 10 frames)
-// followed immediately by `data/FLICK/ANI/2`'s frames in REVERSE order
-// (16,13,12,11,10,09,06,04,03,02,01 -- 11 frames), pre-copied into
-// data/FLICK/ANI2/FRAMES-01.png..FRAMES-21.png in that exact concatenated
-// order so the loading code here stays as simple as animation 1's (a
-// plain sequential file list). Rests on frame 1 (not auto-playing) until
-// clicked, per explicit request -- flick2Playing gates whether
-// flick2AnimTime advances at all (see update() and the pointerdown
-// hit-test below); once started it loops forward (1->21->1, a hard cut
-// back to frame 1, not a ping-pong -- no "loop back" behavior was
-// requested for this one) for as long as it keeps being clicked to
-// restart, same as animation 1's own always-on loop otherwise.
-const FLICK2_FRAME_COUNT = 21;
+// first by default. Its frames are EVERY file currently in
+// `data/FLICK/ANI/1` (natural-numeric order, whatever frame numbers
+// actually exist there -- no fixed/curated list) followed immediately by
+// EVERY file in `data/FLICK/ANI/2` in REVERSE numeric order, pre-copied
+// into data/FLICK/ANI2/FRAMES-01.png..FRAMES-{FLICK2_FRAME_COUNT}.png in
+// that exact concatenated order so the loading code here stays as simple
+// as animation 1's (a plain sequential file list). Per explicit
+// correction: an EARLIER version of this hardcoded a specific curated
+// subset of frame numbers from each folder; the real rule is simpler --
+// use whatever's actually in each folder, full stop -- and the earlier
+// hardcoded list had drifted out of sync with the folders' actual
+// contents (3 of its listed frame numbers no longer existed on disk).
+// `FLICK2_FRAME_COUNT` must be re-verified (and ANI2 regenerated, same
+// copy+resize+re-encode process) any time ANI/1's or ANI/2's own file
+// counts change -- nothing here derives it automatically. Rests on frame
+// 1 (not auto-playing) until clicked, per explicit request --
+// flick2Playing gates whether flick2AnimTime advances at all (see
+// update() and the pointerdown hit-test below); once started it loops
+// forward (1->N->1, a hard cut back to frame 1, not a ping-pong -- no
+// "loop back" behavior was requested for this one) for as long as it
+// keeps being clicked to restart, same as animation 1's own always-on
+// loop otherwise.
+const FLICK2_FRAME_COUNT = 23;
 const flickFrames2 = []
 for (let i = 1; i <= FLICK2_FRAME_COUNT; i++){
   const img = new Image();
