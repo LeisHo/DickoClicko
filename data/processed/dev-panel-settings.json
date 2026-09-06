@@ -11,8 +11,8 @@
     "endcapHeight": 1.4,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 3.661538461538462,
-    "ropeDefaultLength": 3.4615384615384612,
+    "ropeLength": 20.061375851007913,
+    "ropeDefaultLength": 15,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -191,7 +191,7 @@
     },
     {
       "key": "STARTUP ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "bgRopeEndcapPauseHeight",
         "mainEndcapGrowSpeed",
@@ -227,7 +227,7 @@
     },
     {
       "key": "CIRCLE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "circleSize",
         "circleX",
