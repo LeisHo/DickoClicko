@@ -3783,3 +3783,26 @@ GOTCHAS
   transition (tan base -> dark-brown outward tip, its default stops);
   disabling it fell back to the flat rope color exactly as before, with
   no console errors in either state.
+- **Seam between the rope body and its own end/start arc -- same root
+  cause and fix as the earlier endcap/rope seam.** `drawEndArc()`'s own
+  flat base chord and `strokeRopeCurve()`'s own `butt`-capped stroke end
+  meet at the exact same world coordinate with the exact same width once
+  drawn -- the identical zero-overlap-join-between-2-independently-
+  rasterized-shapes setup that produced the endcap seam, just between
+  the arc and the rope body instead of the endcap and the rope body.
+  Fixed identically: added `ARC_SEAM_OVERLAP_PX` (1.5) and a
+  `ctx.translate(-ARC_SEAM_OVERLAP_PX, 0)` right after `drawEndArc()`'s
+  own `ctx.rotate(angle)` and before the gradient/ellipse drawing below
+  it -- shifts the arc's own local origin backward (along -dir, into the
+  rope) before anything is drawn relative to it, so the WHOLE shape
+  (base chord and ellipse both) lands overlapping into the rope body
+  rather than exactly touching it. Placed before the gradient's own
+  `createLinearGradient(0, 0, protrusion, 0)` so the gradient's local
+  0->protrusion span is computed in the SAME shifted space the ellipse
+  itself is drawn in -- no separate adjustment needed for Rope End Arc
+  Gradient to stay correct. Verified live: isolated the arc (Endcap
+  Design: None) and confirmed it still renders as one smooth, cohesive
+  bump with no visible regression; no console errors. Sub-pixel
+  confirmation that the seam itself is gone isn't possible with this
+  project's current tooling (no true pixel-crop/zoom), same limitation
+  already noted for the endcap fix above.

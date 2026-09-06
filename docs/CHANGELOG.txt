@@ -5954,6 +5954,29 @@ disabling it fell back to the flat rope color exactly as before. No
 console errors either way.
 
 ================================================================================
+2026-09-06  -  11:03 AM EDT
+
+"i see a seam between the rope and the rope end/start arch curve cap.
+fix that" -- same root cause and fix shape as the earlier endcap/rope
+seam (this project's own established anti-aliasing-seam pattern): the
+arc's own flat base chord (`drawEndArc()`) and the rope's own
+`butt`-capped stroke end (`strokeRopeCurve()`) meet at the exact same
+world coordinate with the exact same width -- a perfect zero-overlap
+join between 2 independently-rasterized canvas shapes, which
+anti-aliases into a visible hairline gap. Fixed the same way: shifted
+the arc's own local origin 1.5px backward (into the rope, along -dir)
+right after its own rotate/before drawing the ellipse, so the WHOLE arc
+shape (base chord included) overlaps slightly into the rope body
+instead of exactly touching it -- same judgment-call overlap amount as
+the endcap fix, no measured "correct" value exists for a sub-pixel AA
+artifact. Verified live: isolated the arc (Endcap Design: None) and
+confirmed it still renders as one smooth, cohesive bump with no visible
+regression; no console errors. Sub-pixel-level confirmation that the
+seam itself is gone isn't possible with this project's current tooling
+(no true pixel-crop/zoom available), same limitation already noted for
+the endcap fix.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

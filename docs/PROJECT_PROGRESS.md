@@ -84,7 +84,10 @@ additions. Current state of each subsystem:
   double-click to delete one). The plain round-cap end/start arc has its
   own independent gradient too (Rope End Arc Gradient), separate from
   both the rope-body gradient and Endcap Gradient -- a local gradient
-  across just the arc's own small bump, not the whole rope's span.
+  across just the arc's own small bump, not the whole rope's span. That
+  arc also now overlaps 1.5px into the rope's own stroke end (same fix
+  as the endcap/rope seam) rather than meeting it at an exact boundary,
+  closing the same class of canvas anti-aliasing seam.
 - **Floor**: collision + piling; fallen pieces collide with each other
   (not with the still-attached main rope) and decay in thickness over
   their own lifetime down to a configurable floor. `pieceCollision()`'s
