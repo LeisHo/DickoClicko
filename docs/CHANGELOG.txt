@@ -5401,6 +5401,61 @@ no bend or whip -- console clean apart from the known
 ERR_CONNECTION_RESET local-server noise.
 
 ================================================================================
+2026-09-06  -  01:12 AM EDT
+
+Three small, related requests handled together.
+
+(1) "allow me to set startup rise gravity even lower. right now its
+lowest is 0.1. I want 0.01" -- the slider's min was already 0, but its
+step (0.1) meant 0.01 wasn't reachable by DRAGGING (only by typing,
+which already bypassed step). Changed step to 0.01.
+
+(2) "and when I cut the rope in full, the length it extends back to
+after should be the default length. no the length the cut rope was" --
+a real bug. `performMainRopeSplit()` (an ordinary cut) called
+`setCfg('ropeLength', mainRope.totalLength / viewportH() * 100)` to
+keep the dev-panel's Rope Length display honest about the now-shorter
+rope -- but `setCfg()` also writes `cfg.ropeLength` itself, which a
+later FULL detach reads as "the default" to regrow to
+(`introTargetLengthPx = vh(cfg.ropeLength)`). So an ordinary cut
+silently corrupted the true default, and a subsequent full detach
+regrew to whatever length that cut had left, not the real configured
+default. Fixed by adding `syncControlDisplay()` -- identical to
+`setCfg()`'s own slider/numInput sync but without the `cfg[key]` write
+-- and using it in `performMainRopeSplit()` instead.
+`growRope()`'s OWN `setCfg('ropeLength', ...)` call (fired continuously
+during legitimate hold-to-grow or the intro's own scripted growth) was
+deliberately left untouched -- that's the user actively choosing a new
+length via growing, not an incidental truncation, so it's correct for
+that call to redefine the default.
+
+(3) "provide me a checkbox to set the rising background rope start
+endcap to the same endcap as the front rope. This background rope
+endcap will disappear when the front rope is spawn. So its visible when
+rising, but not after" -- new checkbox, Background Rope Start Endcap
+(default off). `drawEndcap()` always anchors to the LAST point of
+whatever array it's given and derives direction from the segment before
+it; passing `[bgRope.points[1], bgRope.points[0]]` (reversed) puts
+bgRope's own climbing start in that "tip" slot with the correct
+direction. Gated to `introPhase === 'rising'` only, and drawn inside the
+same clip scope as bgRope's own stroke (so it respects Background Rope
+Clip Enabled identically) -- gone the instant mainRope spawns at
+'pausing' and takes over the endcap role itself.
+
+Verified live: Startup Rise Gravity accepts 0.01 (confirmed via the
+DOM's own slider step attribute, not just the visual). Cut-then-detach:
+cut the rope, confirmed the dev-panel display dropped to the shorter
+length, triggered a full detach, and confirmed the regrown rope's
+on-screen extent matched its PRE-CUT extent pixel-for-pixel once
+growth finished -- not the cut length. (A dev-panel numeric readout via
+`document.querySelectorAll` turned out to be reading a stale/hidden
+DOM node stuck at the cut value the whole time; the visual on-screen
+comparison was the reliable check, not that readout.) The new endcap:
+visible only during the climb, then replaced seamlessly (identical
+design/color, no visible pop) by mainRope's own endcap at the handoff.
+Console clean apart from known noise.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

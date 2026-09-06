@@ -45,7 +45,9 @@ additions. Current state of each subsystem:
   already-fallen pieces, splitting one into two). Double-clicking ANYWHERE
   inside the circle (no longer just near where the rope happens to pass)
   detaches the entire rope and replays the startup animation to regrow a
-  fresh one.
+  fresh one -- regrows to the real configured Rope Length default even
+  after an earlier ordinary cut, not the length that cut left behind (see
+  CODE_SUMMARY gotchas).
 - **Physics**: fixed 1/60s timestep verlet integration; distance
   constraints (`constraintIterations`, default 10) plus a bending
   constraint (`bendStiffness`) that stops the rope folding into a knot
@@ -94,7 +96,12 @@ additions. Current state of each subsystem:
   constraint to violently whip the chain back down the instant the
   handoff ran -- see CODE_SUMMARY gotchas). bgRope's own climb now starts
   just out of sight below the circle (Rope Thickness + 1, not a full
-  diameter).
+  diameter). Startup Rise Gravity's slider step is 0.01 (was 0.1), so
+  values below 0.1 are reachable by dragging, not just by typing.
+  Background Rope Start Endcap (default off) shows mainRope's own endcap
+  design at bgRope's climbing start while it's rising, handing off
+  seamlessly (same design/color, no pop) to mainRope's real endcap the
+  instant it spawns.
   Startup Rise Clear Offset is a straight horizontal line again (briefly a
   circle earlier this session), measured from the Circle Offset
   boundary's own bottom point, and is now clamped to the circle's own

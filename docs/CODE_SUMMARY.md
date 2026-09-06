@@ -3211,3 +3211,62 @@ GOTCHAS
   reason as before. Verified live across 2 repeated detach cycles with
   the real saved settings: the post-handoff settle is now a smooth,
   straight downward drift with no bend or whip.
+- **`setCfg()` conflates two different jobs -- "write the real config
+  value" and "sync the on-screen display" -- and a cut relying on both
+  at once corrupted the true Rope Length default.** `performMainRopeSplit()`
+  called `setCfg('ropeLength', mainRope.totalLength / viewportH() * 100)`
+  purely to keep the dev-panel's Rope Length number honest about the
+  now-shorter rope after a cut -- but `setCfg()` ALSO writes
+  `cfg.ropeLength` itself, which `updateIntro()`'s 'pausing'->'growing'
+  transition reads as "the real configured default" to regrow toward
+  (`introTargetLengthPx = vh(cfg.ropeLength)`). So an ordinary cut
+  silently overwrote that default, and a LATER full detach (double-click
+  in the circle) regrew to whatever length the cut had left the rope at,
+  not its real original configured length. Reported directly: "when I
+  cut the rope in full, the length it extends back to after should be
+  the default length. not the length the cut rope was." Fixed by adding
+  `syncControlDisplay(key, value)` right next to `setCfg()` -- identical
+  slider/numInput DOM sync, deliberately WITHOUT the `cfg[key] = value`
+  write -- and switching `performMainRopeSplit()` to call that instead.
+  `growRope()`'s own `setCfg('ropeLength', ...)` call (fired every frame
+  during hold-to-grow AND the intro's own scripted 'growing' phase) was
+  deliberately left calling the real `setCfg()` -- growing (whether
+  user-driven or the intro's own scripted extension toward the existing
+  target) is the user's/the system's own legitimate way of arriving at a
+  new real length, not an incidental truncation, so it's correct for
+  that call site to keep redefining the default as it goes. Verified
+  live: cut the rope (dev-panel display dropped to the shorter length,
+  confirming the display-sync half still works), triggered a full
+  detach, and confirmed the regrown rope's on-screen extent matched its
+  PRE-CUT extent pixel-for-pixel once growth finished. **Gotcha found
+  while verifying**: a `document.querySelectorAll('[data-key="ropeLength"]')`
+  read kept returning a stale "7.692" value throughout the whole regrow
+  --  turned out to be a real DOM node but with `offsetParent === null`
+  (inside a currently-collapsed dev-panel group), and despite that not
+  being why it should be stale (display:none doesn't stop `.value` from
+  being written), it never actually updated -- root cause not fully
+  chased down given the visual on-screen comparison already gave a
+  reliable, unambiguous answer; don't trust a single dev-panel numeric
+  readout as the sole verification for a rope-length claim without also
+  checking the actual rendered rope.
+- **New: Background Rope Start Endcap** (`bgRopeStartEndcapEnabled`,
+  default off) -- bgRope's own climbing start (points[0]) can show
+  mainRope's same endcap design while it's rising. `drawEndcap()` always
+  anchors to `points[points.length-1]` and derives direction from the
+  segment before it, so `[bgRope.points[1], bgRope.points[0]]` (a
+  reversed 2-point slice, same trick already used for a piece's own cut
+  edge) puts point 0 in that "tip" slot with the correct climb
+  direction. Gated to `introPhase === 'rising'` only and drawn INSIDE
+  the same clip scope as bgRope's own stroke (not after it) so it
+  respects Background Rope Clip Enabled identically -- the climbing tip
+  shouldn't show its cap outside the circle any more than it shows rope
+  there. `factor: 1` (no End Emerge slide-in -- this cap substitutes for
+  one that's always "already there", not a fresh cut appearing).
+  Verified live: visible only during the climb, then replaced
+  seamlessly (identical design/color, no visible pop, since it's the
+  same `cfg.endcapDesign`/`cfg.ropeColor` mainRope's own tip already
+  uses) by mainRope's real endcap at the handoff.
+- **Startup Rise Gravity's slider step reduced 0.1 -> 0.01** per
+  explicit request -- min was already 0, but the old step meant nothing
+  between 0 and 0.1 was reachable by dragging (typing already bypassed
+  step, per §12h, so this was purely a drag-granularity gap).
