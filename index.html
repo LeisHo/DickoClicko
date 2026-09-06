@@ -580,15 +580,22 @@ function applyPanelStyleValues(saved){
   // active tab happened to be showing, rather than silently keeping it.
   PANEL_STYLE_CONTROLS.forEach(ctrl => {
     const v = (saved && ctrl.key in saved) ? saved[ctrl.key] : ctrl.def;
+    // panelStyle write happens regardless of whether el exists -- a real
+    // visitor (no dev panel built, panelStyleNumEls always empty here)
+    // still needs applyPanelStyle() below to see the real value, even
+    // though the dev-panel-appearance sliders/colors it would otherwise
+    // sync have nothing to sync to.
     panelStyle[ctrl.key] = v;
     const el = panelStyleNumEls[ctrl.key];
-    if (ctrl.type === 'slider'){
-      el.slider.min = ctrl.min; el.slider.max = ctrl.max;
-      if (v > ctrl.max) el.slider.max = v;
-      if (v < ctrl.min) el.slider.min = v;
-      el.slider.value = v; el.numInput.value = round(v, 3);
-    } else if (ctrl.type === 'color'){
-      el.color.value = v;
+    if (el){
+      if (ctrl.type === 'slider'){
+        el.slider.min = ctrl.min; el.slider.max = ctrl.max;
+        if (v > ctrl.max) el.slider.max = v;
+        if (v < ctrl.min) el.slider.min = v;
+        el.slider.value = v; el.numInput.value = round(v, 3);
+      } else if (ctrl.type === 'color'){
+        el.color.value = v;
+      }
     }
   });
   applyPanelStyle();
@@ -1073,10 +1080,17 @@ function applyValues(values){
     const v = values[ctrl.key];
     const el = numEls[ctrl.key];
     if (ctrl.type === 'slider'){
+      // cfg write and onChange happen regardless of whether el exists --
+      // a real visitor (no dev panel built, el always undefined here)
+      // still needs the actual functional value/side-effect to apply;
+      // only the slider/numInput DOM sync is dev-panel-only, per the
+      // same convention 'color'/'checkbox'/'dropdown' below already use.
       cfg[ctrl.key] = v;
-      if (v > parseFloat(el.slider.max)) el.slider.max = v;
-      if (v < parseFloat(el.slider.min)) el.slider.min = v;
-      el.slider.value = v; el.numInput.value = round(v, 3);
+      if (el){
+        if (v > parseFloat(el.slider.max)) el.slider.max = v;
+        if (v < parseFloat(el.slider.min)) el.slider.min = v;
+        el.slider.value = v; el.numInput.value = round(v, 3);
+      }
       if (ctrl.onChange) ctrl.onChange(v);
     } else if (ctrl.type === 'color'){
       cfg[ctrl.key] = v;
@@ -1092,14 +1106,20 @@ function applyValues(values){
       if (select) select.value = v;
       if (ctrl.onChange) ctrl.onChange(v);
     } else if (ctrl.type === 'gradient'){
-      if (el && el.setStops && Array.isArray(v) && v.length){
+      if (Array.isArray(v) && v.length){
         // Auto-converts a pre-existing save from the OLD gradient format
         // (a plain array of hex strings, evenly spaced) to the current
         // {pos, color} shape, rather than silently doing nothing with it
         // -- a save from before this round's editor rebuild should still
         // load correctly, not just get dropped.
         const stops = typeof v[0] === 'object' ? v : v.map((c, i) => ({ pos: v.length > 1 ? i / (v.length - 1) : 0, color: c }));
-        el.setStops(stops);
+        // el.setStops() writes cfg[ctrl.key] itself (see its own
+        // definition) AND re-renders the gradient bar UI -- but el is
+        // always undefined for a real visitor with no dev panel built,
+        // so cfg has to be set directly here too, same reasoning as the
+        // 'slider' branch above.
+        if (el && el.setStops) el.setStops(stops);
+        else cfg[ctrl.key] = stops.map(s => ({ ...s }));
       }
     }
   }));
@@ -4715,8 +4735,21 @@ if (DEV_MODE){
   initResizeHandles();
   initDevPanelChrome();
   initDeviceTabs();
-  resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 }
+// Runs regardless of DEV_MODE -- previously nested inside the block
+// above, so a real visitor (no ?dev=1, not localhost) never loaded the
+// saved/tuned settings at all and silently ran on whatever DEV_GROUPS'
+// own hardcoded `def:` values happened to be, while a `?dev=1` visitor
+// on the SAME deployment saw the real tuned config. Reported directly:
+// "how come when I open in mobile [plain URL] vs [?dev=1], the settings
+// are different?" DEV_MODE should only gate whether the dev PANEL UI
+// exists, never whether the functional settings load -- moving this
+// call out required also guarding applyValues()'s 'slider'/'gradient'
+// branches and applyPanelStyleValues()'s 'slider'/'color' branches
+// (see their own comments) against numEls/panelStyleNumEls being empty,
+// which it always is when buildDevPanel()/buildPanelStyleGroup() above
+// never ran.
+resetSettings(); // load last-saved values/order/geometry, if any (falls back to defaults if nothing saved)
 // Re-synced HERE, right before the first real frame -- not left at its
 // module-init-time value set alongside FIXED_DT above. Everything since
 // then (DEV_MODE's synchronous dev-panel construction, resetSettings()'s
