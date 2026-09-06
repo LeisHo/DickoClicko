@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 6.1,
-    "ropeLength": 11.87409117269218,
+    "ropeLength": 14.021676382344683,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -97,28 +97,28 @@
     "introRiseSpeed": 5.5,
     "startupRiseGravity": 0.1,
     "introRiseClearOffsetEnabled": true,
-    "introRiseClearOffset": 11.5,
+    "introRiseClearOffset": 6.5,
     "debugShowRiseClearOffset": true,
     "bgRopeClipEnabled": true,
     "bgRopeStartEndcapEnabled": true,
-    "bgRopeEndcapHeight": 1,
-    "bgRopeEndcapGradientEnabled": false,
+    "bgRopeEndcapHeight": 0.8,
+    "bgRopeEndcapGradientEnabled": true,
     "bgRopeEndcapGradientColors": [
       {
-        "pos": 0,
-        "color": "#a5815f"
+        "pos": 0.007294648657733975,
+        "color": "#ffc085"
       },
       {
-        "pos": 1,
-        "color": "#3d2817"
+        "pos": 0.9920996369006372,
+        "color": "#f4d2ad"
       }
     ],
-    "introPauseDuration": 2.9,
+    "introPauseDuration": 5,
     "introExtendSpeed": 15,
     "introExtendSpeedTweenEnabled": true,
     "introExtendStartSpeed": 2,
     "detachWaitDuration": 0,
-    "detachPauseDuration": 0.5,
+    "detachPauseDuration": 5,
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 3.4,
     "detachThicknessMultiplier": 1.05,
@@ -154,7 +154,7 @@
     },
     {
       "key": "FLICK ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flickX",
         "flickY",
@@ -249,7 +249,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "endcapGradientEnabled",
         "endcapGradientColors",
@@ -269,7 +269,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
