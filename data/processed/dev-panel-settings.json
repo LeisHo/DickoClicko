@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 39.46153846153847,
+    "ropeLength": 44.50769230769227,
     "ropeDefaultLength": 15,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
@@ -80,6 +80,7 @@
         "color": "#f4c8a4"
       }
     ],
+    "arcSeamOverlapPx": 2.8,
     "clickIntensity": 1.1,
     "holdDistance": 22,
     "bendStiffness": 0.01,
@@ -280,6 +281,7 @@
       "key": "ROPE",
       "collapsed": false,
       "settings": [
+        "arcSeamOverlapPx",
         "arcGradientEnabled",
         "arcGradientColors",
         "ropeDefaultLength",
