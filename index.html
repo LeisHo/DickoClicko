@@ -2481,6 +2481,57 @@ function resolveChainCollision(dataA, dataB, maxPush){
   }
 }
 
+// How many points apart (by chain INDEX, not distance) a pair must be
+// before self-collision even considers them -- per explicit request
+// ("make it so that a rope segment that has been cut off will collide
+// with itsel[f]"). This can't just reuse resolveChainCollision() against
+// a piece and itself: ADJACENT (or near-adjacent) points are ALWAYS
+// close together by construction (that's what being connected by a
+// short segment means), and normal bending routinely brings points a
+// few indices apart even closer without the piece actually overlapping
+// itself in any real sense -- pushing those apart would fight the same
+// bend/distance constraints already governing the chain's own shape.
+// This project already hit exactly that failure mode once, with a
+// DIFFERENT, cruder self-collision system (the removed pileRepulsion()
+// -- see its own history in the CODE_SUMMARY gotchas): it repelled ANY
+// 2 points closer than minSep with zero concept of chain adjacency,
+// including 2 points from the SAME chain, and caused a severe,
+// reproduced tangle (worst-case segment-length ratio >6x). Skipping any
+// pair within this many indices of each other avoids repeating that --
+// only a REAL self-overlap (the piece's own far-apart sections folding
+// all the way back onto each other, e.g. a tight coil or a doubled-over
+// heap) ever triggers a push. 4 is a judgment call, not a measured
+// value -- large enough that ordinary local bending never engages it,
+// small enough that a real coil still gets caught.
+const MIN_SELF_COLLISION_GAP = 4;
+
+// Pushes a SINGLE chain's own far-apart points away from each other
+// wherever 2 of them (at least MIN_SELF_COLLISION_GAP indices apart) sit
+// closer than their combined (radius-inflated, seam-undershot)
+// separation -- see that constant's own comment for why the index gap
+// is what makes this safe to run at all. Reuses the exact same
+// maxPush-capped, seam-undershot math as resolveChainCollision() (cross-
+// chain), just against one chain's own point set instead of 2 different
+// chains'.
+function resolveSelfCollision(data, maxPush){
+  const pts = data.points, radii = data.radii;
+  for (let i = 0; i < pts.length; i++){
+    const p = pts[i], ri = radii[i];
+    for (let j = i + MIN_SELF_COLLISION_GAP; j < pts.length; j++){
+      const q = pts[j];
+      const minSep = Math.max(0, (ri + radii[j]) * (1 - PIECE_SEAM_OVERLAP_FRAC));
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.0001 && dist < minSep){
+        const push = Math.min((minSep - dist) / 2, maxPush);
+        const nx = dx / dist, ny = dy / dist;
+        p.x -= nx * push; p.y -= ny * push;
+        q.x += nx * push; q.y += ny * push;
+      }
+    }
+  }
+}
+
 // endcapExt: given a chain's own live thickness and whichever
 // heightThicknessPx drawEndcap() would actually use for that specific
 // end, returns how far that end's endcap extends past its own point (0
@@ -2585,7 +2636,7 @@ function pieceCollision(dt){
     }
   }
 
-  if (fallenPieces.length < 2) return;
+  if (fallenPieces.length === 0) return;
   // Per-PAIR separation, from each piece's own CURRENT (possibly
   // decayed) thickness via pieceThickness() -- not a single global
   // value pinned to cfg.ropeThickness (the un-decayed default) computed
@@ -2602,6 +2653,12 @@ function pieceCollision(dt){
     const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
     return pieceCollisionRadii(piece.points, thick, tipExt, cutExt);
   });
+  // Self-collision: a piece's own far-apart points pushing off each
+  // other -- see MIN_SELF_COLLISION_GAP's own comment for why an index
+  // gap is what makes this safe. Runs for every piece regardless of how
+  // many others exist (unlike the pairwise loop below), since a lone
+  // piece coiling on itself is just as real a case as 2+ pieces piling.
+  pieceData.forEach(data => resolveSelfCollision(data, maxPush));
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
       resolveChainCollision(pieceData[a], pieceData[b], maxPush);
