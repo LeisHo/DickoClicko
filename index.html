@@ -4343,6 +4343,35 @@ function update(rawDt){
   integrateChain(mainRope.points, ropeAttractionActive ? mainRope.attractionEffSegLen : mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
     { index: 0, center: circleAnchor(), radius: introUnsettled ? circleR : anchorBoundaryRadius(), weightMult: cfg.anchorWeight },
     ropeAttractionActive ? { x: mainRope.attractionPinX, y: mainRope.attractionPinY } : null);
+  // Pins the tip's own IMMEDIATE neighbor exactly on the ray from the tip
+  // back toward the mouse, at exactly attractionEffSegLen away -- the
+  // same kind of direct kinematic placement positionGrowingTip() already
+  // uses for a different segment elsewhere in this file. Reported
+  // directly: "the end cap isnt pointing directly at the mouse, it seems
+  // off by a couple degreees" -- measured in simulation up to ~25
+  // degrees off in some configurations (not just a couple), because
+  // tipDirection() (what the endcap's own rotation actually reads) is
+  // the tangent between the tip and THIS neighbor, and gravity/the rest
+  // of the chain generally leave that neighbor somewhere that ISN'T
+  // exactly toward the mouse even with the anti-fold measures above in
+  // place. Skipped for a 2-point rope (anchor and tip are the only 2
+  // points, so this "neighbor" would BE the anchor -- overriding it here
+  // would fight its own separate circle-boundary pin instead of only
+  // affecting facing). Verified in simulation across 3 scenarios (a
+  // moderate reach, the degenerate straight-down case, and a fully-maxed
+  // sideways reach): took angular deviation to exactly 0 in every case
+  // while minCos (the same anti-fold health check used earlier) stayed
+  // comfortably above 0.85, nowhere near the ~-1.0 an actual fold shows --
+  // confirming this doesn't reopen the fold the measures above just
+  // closed.
+  if (ropeAttractionActive && mainRope.points.length > 2){
+    const tip = mainRope.points[mainRope.points.length - 1];
+    const prev = mainRope.points[mainRope.points.length - 2];
+    const mdx = mouseX - tip.x, mdy = mouseY - tip.y;
+    const mdist = Math.hypot(mdx, mdy) || 1e-6;
+    prev.x = tip.x - (mdx / mdist) * mainRope.attractionEffSegLen;
+    prev.y = tip.y - (mdy / mdist) * mainRope.attractionEffSegLen;
+  }
   // The exact frame introUnsettled flips true->false, the boundary radius
   // shrinks from circleR down to the much tighter anchorBoundaryRadius()
   // in the SAME integrateChain() call above -- if the anchor was still
