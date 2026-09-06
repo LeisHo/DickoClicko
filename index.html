@@ -2309,7 +2309,23 @@ function updateIntro(rawDt){
     const bottomY = circleAnchor().y + boundaryR;
     const appliedOffset = cfg.introRiseClearOffsetEnabled ? vmin(cfg.introRiseClearOffset) : 0;
     const rawClearY = bottomY - appliedOffset;
-    const clearY = Math.min(circleAnchor().y + boundaryR, Math.max(circleAnchor().y - boundaryR, rawClearY));
+    // Clamped to the circle's own drawn radius, NOT anchorBoundaryRadius() --
+    // that used to cap Startup Rise Clear Offset at the tiny anchor
+    // boundary itself, so raising the slider past it did nothing ("the main
+    // rope is still spawning at its own offset boundary instead of
+    // spawning at the startup clear offset"). anchorBoundaryRadius() used
+    // to be the right bound here because mainRope's spawn point, placed
+    // beyond it, would get hard-snapped straight back by
+    // integrateChain()'s own boundaryConstraint on the very next physics
+    // tick (see that fix's own comment above) -- that snap is what's
+    // actually fixed now, at its source, by relaxing the boundaryConstraint
+    // itself while introGravitySettled is false (see update()'s own call
+    // below), so this clamp no longer needs to protect against it. Still
+    // clamped to SOMETHING (the circle's own edge) so an extreme Offset
+    // can't send the clear line -- and therefore mainRope's spawn point --
+    // outside the circle graphic entirely.
+    const circleR = vmin(cfg.circleSize) / 2;
+    const clearY = Math.min(circleAnchor().y + circleR, Math.max(circleAnchor().y - circleR, rawClearY));
     const step = vh(cfg.introRiseSpeed) * rawDt;
     if (bgRope.points[0].y - clearY <= step){
       bgRope.points[0].y = clearY;
@@ -3385,19 +3401,30 @@ function update(rawDt){
   // the instant 'growing' completed and gravity jumped from 0.01 to
   // 1.7 -- 170x -- in one frame). integrateChain()'s own
   // boundaryConstraint clamps a point to EXACTLY boundaryConstraint.radius
-  // the instant it's found beyond it (see that function), so "distance
-  // from center equals the boundary radius" is a precise, immediate,
-  // reliable signal the anchor has reached and is now resting against its
-  // boundary -- checked using last frame's already-integrated position,
-  // before this frame's own integrateChain() call below. introGravitySettled
-  // itself (see its own comment) is reset to false at every point the
-  // anchor gets manually repositioned (boot, a fresh detach, and the
-  // 'rising'->'pausing' handoff), so a newly-teleported anchor re-arms
-  // Startup Rise Gravity until IT settles too, independent of intro phase.
+  // the instant it's found beyond it (see that function) -- which used to
+  // mean a mainRope spawned beyond the boundary (a large Startup Rise
+  // Clear Offset) got hard-snapped back to EXACTLY that radius on the very
+  // next physics tick regardless of Startup Rise Gravity's own value,
+  // producing a velocity-kick "shoot" on the frame after (the clamp moves
+  // position without touching oldx/oldy, so the FOLLOWING frame's verlet
+  // step reads the clamp's own correction as real motion). Reported
+  // directly: "even though the startup gravity is low, it still seems to
+  // shoot right back down to the default offset." Fixed below by
+  // disabling that hard clamp entirely while unsettled (radius: Infinity),
+  // so a spawn point placed outside the boundary free-falls in under
+  // Startup Rise Gravity alone, same as any other unconstrained point,
+  // rather than being rigidly pinned to the boundary from frame one. Once
+  // it naturally arrives at or inside the real boundary, this check flips
+  // introGravitySettled true and normal clamped confinement resumes.
+  // introGravitySettled itself (see its own comment) is reset to false at
+  // every point the anchor gets manually repositioned (boot, a fresh
+  // detach, and the 'rising'->'pausing' handoff), so a newly-teleported
+  // anchor re-arms Startup Rise Gravity until IT settles too, independent
+  // of intro phase.
   if (!introGravitySettled){
     const a = mainRope.points[0];
     const dist = Math.hypot(a.x - circleAnchor().x, a.y - circleAnchor().y);
-    if (Math.abs(dist - anchorBoundaryRadius()) < 0.1) introGravitySettled = true;
+    if (dist <= anchorBoundaryRadius()) introGravitySettled = true;
   }
   const gravityAccel = vh(90) * (introGravitySettled ? cfg.gravityStrength : cfg.startupRiseGravity);
 
@@ -3415,8 +3442,14 @@ function update(rawDt){
   // Rope Growth Rate -- independently tunable, per explicit request.
   if (growing) growRope(rawDt, introPhase === 'growing' ? currentIntroExtendRate() : undefined);
   const hasPartialTip = mainRope.tipGrowLen < mainRope.segLen;
+  // radius is Infinity while !introGravitySettled (see that flag's own
+  // comment above) -- lets a spawn point placed beyond the real boundary
+  // free-fall under Startup Rise Gravity instead of being hard-clamped
+  // back on the spot. weightMult still applies either way (a separate
+  // object field the distance constraint reads regardless of radius), so
+  // Anchor Weight isn't lost during the unsettled window.
   integrateChain(mainRope.points, mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
-    { index: 0, center: circleAnchor(), radius: anchorBoundaryRadius(), weightMult: cfg.anchorWeight });
+    { index: 0, center: circleAnchor(), radius: introGravitySettled ? anchorBoundaryRadius() : Infinity, weightMult: cfg.anchorWeight });
   if (hasPartialTip) positionGrowingTip();
 
   // Background "peeking" rope (see render()'s own comment on the clip):
