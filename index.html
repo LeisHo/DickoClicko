@@ -2360,6 +2360,13 @@ function endcapExtensionPx(designKey, heightThicknessPx, heightMult){
 // version was, just expressed proportionally instead of absolutely.
 const PIECE_SEAM_OVERLAP_FRAC = 0.15;
 
+// See pieceCollision()'s own mainRope-vs-piece call site for the full
+// story -- a freshly-cut piece starts exactly coincident with mainRope's
+// own tip, so mainRope collision must stay off it for a brief window or
+// the near-zero-distance/large-minSep pair produces a violent one-frame
+// separation ("jolt"). 0.3s judgment call, not a measured value.
+const MAIN_COLLISION_GRACE_AGE = 0.3;
+
 // Per-chain, per-POINT collision radius -- ordinary rope points use half
 // the chain's own live thickness; the 2 ends (points[0], the cut edge
 // for a piece / the never-capped anchor for mainRope, and points[last],
@@ -2449,6 +2456,29 @@ function pieceCollision(){
     const mainThick = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
     const mainData = pieceCollisionRadii(mainRope.points, mainThick, endcapExt(mainThick), 0);
     fallenPieces.forEach(piece => {
+      // MAIN_COLLISION_GRACE_AGE: a piece freshly split off mainRope
+      // starts with its own points at the EXACT same position as
+      // mainRope's own (now-shortened) tip -- performMainRopeSplit()
+      // copies them directly. The very next frame or two, topplePiece()'s
+      // tilt/velocity nudges the piece a tiny amount away, but that's
+      // still far closer than this pair's combined (thickness+endcap-
+      // inflated) minSep, so resolveChainCollision saw a near-zero
+      // distance against a large minSep and threw a huge one-frame
+      // correction at BOTH chains -- reported directly as "the background
+      // and main rope jolt as if having been flicked" on every cut, plus
+      // the freshly-cut piece visibly "floats or bounces" instead of
+      // falling cleanly, since this same fight re-engaged every frame
+      // while it was still falling away from mainRope's own tip. A brief
+      // age-based grace period (0.3s, a judgment call -- long enough for
+      // a piece to fall clear of mainRope's own tip under normal gravity,
+      // no measured "correct" value exists) skips mainRope collision
+      // entirely for a piece still in its initial fall, so it settles via
+      // gravity/floor/piece-vs-piece collision alone (unaffected by this
+      // change) exactly as it did before mainRope-vs-piece existed --
+      // mainRope only starts contesting a piece once that piece has had
+      // time to actually separate and (if genuinely resting under an
+      // extended-long mainRope) settle first.
+      if (piece.age < MAIN_COLLISION_GRACE_AGE) return;
       const thick = pieceThickness(piece);
       // Tip always uses this piece's own ORIGINAL baseThickness (matching
       // drawEndcap()'s own heightThicknessPx param there -- the tip
