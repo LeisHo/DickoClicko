@@ -153,7 +153,9 @@ additions. Current state of each subsystem:
   one bad frame can't permanently freeze the app.
 - **FLICK animations**: two small, independent WebP overlays, each with its
   own X/Y/Scale/Speed dev-panel group. Both are hold-to-preview,
-  click-to-trigger: press-and-hold cycles 4 preview frames
+  click-to-trigger: press-and-hold cycles 3 preview frames (as of this
+  writing -- check `FLICK_HOLD_FRAME_COUNT` in index.html for the
+  current count, reduced from 4 this session)
   (`data/FLICK/ANI/3/`) for as long as it's held, release plays exactly
   one sequence then stops until pressed again. Animation 1
   (`data/FLICK/ANI/`, 17 frames) plays one full ping-pong (1->17->1);

@@ -5501,6 +5501,25 @@ transition normally into 'growing'. Console clean apart from known
 noise.
 
 ================================================================================
+2026-09-06  -  02:07 AM EDT
+
+Another round of FLICK frame updates ("i updated teh animation frames
+again"). git status identified ANI/FRAMES-11,12,15 as tracked-modified;
+also found ANI/1's FRAMES-11 and ANI/2's FRAMES-11,12 updated (mapping
+into Animation 2's baked ANI2/FRAMES-07,14,13 respectively, confirmed
+via md5sum). Propagated and re-ran the resize+WebP pipeline on all 6
+affected files.
+
+This round also deleted `ANI/3/FRAMES-04.png` (the 4th hold-preview
+frame) -- asked the user directly rather than guessing whether this was
+accidental or intentional; confirmed intentional (reducing the
+hold-preview cycle to 3 frames), so `FLICK_HOLD_FRAME_COUNT` was
+changed 4 -> 3 to match, and the deletion committed. Verified live:
+reload requests exactly `ANI/3/FRAMES-01,02,03.webp` (no attempt to
+fetch a nonexistent FRAMES-04), all 60 FLICK requests clean 200/304,
+console clean apart from known noise. Committed + pushed.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
