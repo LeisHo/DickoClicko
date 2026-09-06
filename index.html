@@ -3660,6 +3660,16 @@ function onPointerDown(e){
   if (e.button === 2){
     if (introPhase === 'done'){
       ropeAttractionActive = true;
+      // Max Reach Distance is measured from the endcap's OWN position at
+      // the moment the hold starts, not from the anchor -- captured once
+      // here and held fixed for the whole hold (a fresh capture on every
+      // new press), per explicit request/clarification. Previously
+      // measured from the anchor, which conflated "how far can it reach"
+      // with "how far down the rope already hangs before any reach even
+      // starts."
+      const tip = mainRope.points[mainRope.points.length - 1];
+      mainRope.attractionOriginX = tip.x;
+      mainRope.attractionOriginY = tip.y;
       logClick('down:rope-attraction', { x: e.clientX, y: e.clientY });
     }
     return;
@@ -4156,27 +4166,51 @@ function update(rawDt){
   // existed) reads the real last-segment tangent, which is automatically
   // flush by construction since the segment's own far end IS the pin.
   //
-  // The target distance is ALSO capped by the rope's own real rest
-  // length (segLen * segment count), not just Max Reach Distance --
-  // caught via direct simulation before shipping: with only 1 (this
-  // project's own default) constraint-solve iteration per frame, a pin
-  // held far beyond the chain's actual reach stretched the WHOLE rope to
-  // match it (simulated: a 500px target on a 90px-rest-length chain
-  // stretched the rendered chain to ~500px total, a ~5.5x overstretch)
-  // rather than being held back by the solver the way the anchor's own
-  // soft boundary-clamp naturally is -- the solver is simply too weak at
-  // 1 iteration to resist an aggressively pinned, actively-moving
-  // endpoint. Capping the target itself keeps the worst-case single-
-  // segment stretch to roughly 1.2x in the same simulation (a taut-but-
-  // plausible rope, not a runaway one) regardless of how many iterations
-  // the user's own Constraint Iterations slider is set to.
+  // Max Reach Distance is measured from mainRope.attractionOriginX/Y --
+  // the endcap's OWN position at the moment the hold started (captured
+  // once, in onPointerDown) -- not from the anchor. Per explicit
+  // clarification: measuring from the anchor conflated "how far the
+  // endcap can reach" with "how far down the rope already hangs before
+  // any reach even starts," since the anchor sits up at the circle while
+  // the endcap's own resting position is already some real distance
+  // below it.
+  //
+  // The target distance is SEPARATELY capped by the rope's own real rest
+  // length (segLen * segment count) from the ANCHOR, applied as a 2nd,
+  // independent clamp -- this one stays anchor-relative since it's a
+  // hard PHYSICS safety limit, not a gameplay-facing "how far can it
+  // reach" setting. Caught via direct simulation before shipping: with
+  // only 1 (this project's own default) constraint-solve iteration per
+  // frame, a pin held far beyond the chain's actual reach stretched the
+  // WHOLE rope to match it (simulated: a 500px target on a 90px-rest-
+  // length chain stretched the rendered chain to ~500px total, a ~5.5x
+  // overstretch) rather than being held back by the solver the way the
+  // anchor's own soft boundary-clamp naturally is -- the solver is
+  // simply too weak at 1 iteration to resist an aggressively pinned,
+  // actively-moving endpoint. Capping the target itself keeps the
+  // worst-case single-segment stretch to roughly 1.2x in the same
+  // simulation (a taut-but-plausible rope, not a runaway one) regardless
+  // of how many iterations the user's own Constraint Iterations slider
+  // is set to.
   if (ropeAttractionActive){
     const anchor = mainRope.points[0];
-    const maxReach = Math.min(vmin(cfg.ropeAttractionMaxReach), mainRope.segLen * (mainRope.points.length - 1));
-    let tx = mouseX - anchor.x, ty = mouseY - anchor.y;
+    const originX = mainRope.attractionOriginX, originY = mainRope.attractionOriginY;
+    const maxReach = vmin(cfg.ropeAttractionMaxReach);
+    let tx = mouseX - originX, ty = mouseY - originY;
     const tdist = Math.hypot(tx, ty) || 1e-6;
     if (tdist > maxReach){ tx *= maxReach / tdist; ty *= maxReach / tdist; }
-    const desiredX = anchor.x + tx, desiredY = anchor.y + ty;
+    let desiredX = originX + tx, desiredY = originY + ty;
+    // 2nd clamp: pull the desired target back toward the anchor if it's
+    // farther than the rope's own real rest length allows -- see the
+    // comment above for why this stays anchor-relative even though Max
+    // Reach Distance itself is now origin-relative.
+    const totalRestLen = mainRope.segLen * (mainRope.points.length - 1);
+    let adx = desiredX - anchor.x, ady = desiredY - anchor.y;
+    const adist = Math.hypot(adx, ady) || 1e-6;
+    if (adist > totalRestLen){
+      adx *= totalRestLen / adist; ady *= totalRestLen / adist;
+      desiredX = anchor.x + adx; desiredY = anchor.y + ady;
+    }
     // Seed the pin to the real (unsmoothed) target on the very first
     // active frame -- otherwise it would ease in from wherever a PRIOR
     // attraction session last left it (or from 0,0), a stale starting
