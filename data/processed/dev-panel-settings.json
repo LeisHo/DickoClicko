@@ -11,7 +11,7 @@
     "endcapHeight": 1.45,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 5.1,
-    "ropeLength": 10.534418547185565,
+    "ropeLength": 36.70174792568862,
     "ropeColor": "#a5815f",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -84,8 +84,8 @@
     "pieceMinThickness": 1.2,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
-    "endEmergeDelay": 2.45,
-    "endEmergeSpeed": 0.1,
+    "endEmergeDelay": 2.15,
+    "endEmergeSpeed": 0.09,
     "pieceEndEmergeSpeed": 0.01,
     "endEmergeEasingStrength": 1,
     "endEmergeTweening": "easeInOut",
@@ -222,7 +222,7 @@
     },
     {
       "key": "CIRCLE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "circleSize",
         "circleX",
