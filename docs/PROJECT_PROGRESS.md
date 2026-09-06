@@ -271,12 +271,17 @@ verification) is in `CHANGELOG.txt`.
   toward the mouse each frame, then lets the existing distance-constraint
   solver cap how far it can actually reach based on the rope's real
   length -- a mouse target beyond that just pulls the rope as far as it
-  physically can go. The endcap's own "look at the mouse" rotation is a
-  free consequence of `drawEndcap()`'s existing `tipDirection()`-based
-  orientation. New RIGHT CLICK dev-panel group (Intensity, Speed, Max
-  Reach Distance). Verified by code review, not a live gesture test --
-  this environment's Browser pane reported itself hidden independent of
-  tab-fronting for this task (see CODE_SUMMARY gotchas).
+  physically can go. The tip's own decorative facing (endcap or plain
+  arc, whichever is showing) always points straight at the real mouse
+  position while attracting, via an explicit override -- not left to
+  `tipDirection()`'s own physics-derived tangent, which could lag or
+  settle short of the true angle. Correctly stays active through an
+  in-progress hold-to-grow (forces the tip out of the partial-tip-growth
+  mechanism for the duration, reverting the instant attraction ends).
+  New RIGHT CLICK dev-panel group (Intensity, Speed, Max Reach Distance).
+  Verified by code review, not a live gesture test -- this environment's
+  Browser pane reported itself hidden independent of tab-fronting for
+  every task this session touched it (see CODE_SUMMARY gotchas).
 
 ## What's next
 

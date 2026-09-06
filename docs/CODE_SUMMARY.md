@@ -4060,3 +4060,30 @@ GOTCHAS
   tab-fronting, and navigation failed outright while hidden -- verified
   by tracing the exact mechanism against both reported symptoms rather
   than a live repro.
+- **2 more Rope Attraction refinements.** "After i extend the rope, the
+  attraction no longer works. it only works once i cut the rope" --
+  root-caused to `positionGrowingTip()`, called in `update()` whenever
+  `hasPartialTip` (`mainRope.tipGrowLen < mainRope.segLen`) is true, not
+  just while actively holding to grow. It runs AFTER the attraction
+  nudge in source order and unconditionally overwrites the tip's own
+  x/y, silently discarding the nudge every frame -- cutting "fixed" it
+  only because `performMainRopeSplit()` always commits `tipGrowLen =
+  segLen`. Fixed: `hasPartialTip` is now `!ropeAttractionActive &&
+  mainRope.tipGrowLen < mainRope.segLen`, so attraction forces the tip
+  into the normal constraint solve (skipping `positionGrowingTip()`
+  entirely) for as long as it's held, reverting the instant it ends.
+  Separately, "the endcap should always be doing its best to point at
+  the mouse" even when the rope can't physically reach it --
+  `tipDirection()` alone reads the chain's own real last-segment
+  tangent (subject to gravity/damping/bend, can lag short of the true
+  angle), so it can't guarantee this. Added `facingOverride`
+  (`drawEndcap`) / `endFacingOverride` (`drawRopeEndArcs`): computed
+  once in `render()` as `attractionFacing`, only while attraction is
+  active, from the RAW mouseX/mouseY (ignoring Max Reach Distance
+  entirely, since this only affects rotation, never any physics point)
+  -- threaded into mainRope's own `drawEndcap()`/`drawRopeEndArcs()`
+  call sites only; bgRope, fallen pieces, and cut edges pass no override
+  and are unaffected. Verification limitation: same as the 3 preceding
+  tasks in this session -- verified by tracing both mechanisms (source
+  order for the first, the override's data flow for the second) rather
+  than a live repro.

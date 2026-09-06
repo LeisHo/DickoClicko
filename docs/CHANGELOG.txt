@@ -6353,6 +6353,60 @@ normally, so the proximity gate stays closed and the two chains never
 interact again unless mainRope is genuinely extended down to the pile).
 
 ================================================================================
+2026-09-06  -  04:30 PM EDT
+
+2 more Rope Attraction refinements, both reported directly in immediate
+follow-up: "in regards to the attraction fucntion, whenever the
+attraction is triggered, i want the end point of the endcap to try to
+point at the mouse. Even if the rope cant reach the mouse or cant make
+the distance, the endcap should always be doing its best to point at the
+mouse", and separately "it seems after i extend the rope, the attraction
+no lnger works. it only works once i cut the rope."
+
+"No longer works after extending" root cause: positionGrowingTip() runs
+whenever mainRope.tipGrowLen < mainRope.segLen (hasPartialTip) -- not
+just while actively HOLDING to grow, but for as long as the last segment
+remains partial, which is the normal resting state any time growth
+stopped mid-segment. It runs AFTER the attraction nudge in update()'s own
+per-frame order and unconditionally overwrites the tip's own x/y,
+silently discarding whatever the nudge just did, every single frame.
+Cutting "fixed" it only because performMainRopeSplit() always commits
+tipGrowLen = segLen, permanently clearing hasPartialTip until the next
+growth. Fixed by forcing hasPartialTip false whenever Rope Attraction is
+active: the tip re-enters the normal constraint solve (skipLastSegment
+reads this same flag) instead of being kinematically placed, and
+positionGrowingTip() is skipped entirely for the duration -- reverting
+the instant attraction ends, so an in-progress hold-to-grow resumes
+exactly where it left off, unaffected.
+
+"Endcap should always point at the mouse" -- tipDirection() alone reads
+the chain's own actual last-segment tangent, which is subject to
+gravity/damping/bend and can lag or settle short of the true mouse angle
+even at max reach, so it can't guarantee the facing the request asked
+for. Added an optional facingOverride (drawEndcap) / endFacingOverride
+(drawRopeEndArcs) param -- computed once in render() only while
+attraction is active, as the real (unclamped) mouse direction from the
+tip, ignoring Max Reach Distance entirely for rotation purposes -- which
+replaces tipDirection()'s result outright for whichever tip visual is
+currently showing (SVG endcap or the plain round-cap arc). This only
+changes the decorative cap's own rotation; it never moves any physics
+point, so the rope body's own real, physically-limited shape is
+completely unaffected -- exactly the "point at the mouse regardless of
+whether the rope can make the distance" split the request asked for.
+
+Verified: syntax check passed. Live re-verification was not possible for
+either fix -- same limitation as the 3 immediately preceding tasks in
+this session (Browser pane reported hidden, navigation fails outright
+while hidden). Verified by tracing both mechanisms directly: confirmed
+positionGrowingTip()'s own call site runs after the attraction block in
+update()'s source order and is now correctly gated out by the same
+hasPartialTip flag; confirmed attractionFacing is computed from the raw
+mouseX/mouseY (not the Max-Reach-clamped attraction target) and threaded
+into both the mainRope drawEndcap() and drawRopeEndArcs() call sites
+specifically, with every other call site (bgRope, fallen pieces, cut
+edges) left passing no override at all and therefore unaffected.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
