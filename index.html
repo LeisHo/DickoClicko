@@ -2458,7 +2458,15 @@ const ENDCAP_COLLISION_RADIUS_FRAC = 0.5;
 // exactly as before if the new gating fix doesn't hold up either --
 // nothing here was deleted, only gated, per the user's own explicit
 // "may want to change it back."
-const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = true;
+// Attempt #5 (the pileTopY settledness check, PILE_SETTLED_MAX_SPEED)
+// reported "no good" -- back to false. Whatever's actually wrong here
+// goes deeper than every mechanism tried so far (2 topplePiece()
+// velocity bugs, 1 ruled-out self-collision-radii hypothesis, 1
+// piece-vs-piece spawn-grace fix, 1 pileTopY settledness fix) -- all 5
+// were real, logically-sound fixes for real gaps in this code, and none
+// of them were sufficient. Leave false until there's a fundamentally
+// different theory, not another patch on the same design.
+const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = false;
 
 // Per-chain, per-POINT collision radius -- ordinary rope points use half
 // the chain's own live thickness; the 2 ends (points[0], the cut edge

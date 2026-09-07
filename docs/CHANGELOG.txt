@@ -7280,6 +7280,31 @@ this is verified at the code-logic level only. This is fix attempt #5
 on the same symptom pair -- awaiting the user's own re-test.
 
 ================================================================================
+2026-09-07  -  06:04 AM EDT
+
+"ok thats no good. change it bac[k]" -- the pileTopY settledness fix
+(previous entry, fix attempt #5) didn't resolve it either.
+`ENABLE_ENDCAP_AND_MAINROPE_COLLISION` flipped back to `false`, exactly
+as it was after the original revert 2 entries ago. One-line change --
+the flag exists specifically for this.
+
+5 attempts total this session on "shoots downward fast"/"floating",
+each a real, independently-verified or logically-sound fix for a real
+gap in the endcap-collision/mainRope-vs-piece code, none sufficient:
+topplePiece() pivot-frame bug, topplePiece() growing-tip bug, the
+ruled-out self-collision-radii hypothesis, the piece-vs-piece
+spawn-grace fix, and the pileTopY settledness check. Staying reverted
+(flag off) until there's a genuinely different theory rather than
+another patch on the same design -- all 5 attempts' code remains in
+place behind the flag, per the user's own standing "don't fully
+delete, may want to change it back."
+
+Verified: syntax check passed. No live re-test attempted -- this is a
+return to a state the user already directly confirmed works ("both
+problems were more or less fixed"), not new behavior needing fresh
+verification.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

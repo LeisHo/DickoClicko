@@ -20,36 +20,31 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
-"Shoots downward fast" / "floating" -- confirmed via user re-test that
-disabling `ENABLE_ENDCAP_AND_MAINROPE_COLLISION` (everything `a29da9c`
-added) fixed both, after 4 prior fix attempts each fixed a real but
-insufficient bug (2 topplePiece() velocity bugs, 1 ruled-out self-
-collision-radii hypothesis, 1 piece-vs-piece spawn-grace fix). That
-localized the real cause to this specific code, which was then traced
-precisely: mainRope-vs-piece's own proximity gate (pileTopY) excluded a
-piece only while its `mainRopeExcluded` flag was set, and that flag
-clears the instant the piece has moved a small, thickness-scaled
-distance from where it was cut -- completely independent of whether it
-has actually LANDED. Cutting twice in quick succession (exactly what
-both bug videos showed) let the first piece clear its own exclusion
-while still mid-fall, high up -- at which point it started counting
-toward `pileTopY` as if it were resting pile, opening mainRope-vs-piece
-collision (endcap-inflated radii, no protection for this specific,
-older, unrelated piece) against a piece that was never actually
-settled.
+"Shoots downward fast" / "floating" -- `ENABLE_ENDCAP_AND_MAINROPE_
+COLLISION` is back to `false` (attempt #5, the pileTopY settledness
+check, reported "no good"). Confirmed-working state is the flag OFF --
+that's where it stays until there's a genuinely different theory, not
+another patch on the same a29da9c-added design.
 
-Fixed at the actual gate: `pileTopY`'s own loop now also requires
-genuine settledness (`PILE_SETTLED_MAX_SPEED = vmin(5)`, a judgment
-call -- real per-point velocity, not just "cleared its own exclusion
-timer") before a piece counts toward it. `ENABLE_ENDCAP_AND_MAINROPE_
-COLLISION` is back to `true` with this fix live. NOT yet live-verified
-against a fresh re-test or video -- this session's Browser pane, working
-intermittently at best, made every live-reproduction attempt this round
-too slow/unreliable to complete (the intro's own auto-growth pace, and
-requestAnimationFrame throttling whenever the pane backgrounds between
-tool calls). This is fix attempt #5 on the same symptom pair; flip the
-flag back to `false` again if it doesn't hold up -- nothing was deleted,
-only gated, same as before.
+5 attempts total this session, all real, logically-sound fixes for
+real gaps in the endcap-collision/mainRope-vs-piece code, none
+sufficient to resolve the user's actual reported symptom: (1) topplePiece()
+pivot-frame velocity bug, (2) topplePiece() growing-tip velocity bug,
+(3) self-collision-radii hypothesis (ruled out -- user reported no
+change), (4) piece-vs-piece spawn-grace (didn't help -- wrong collision
+path, per (5)'s own finding), (5) pileTopY settledness check (traced a
+real logic gap -- a piece counted as "pile" the instant it cleared its
+own age-based exclusion, regardless of whether it had landed -- but
+reported "no good" too). That (3) and (4) and (5) each targeted a
+different, independently-real problem in the SAME code without fixing
+the user-visible symptom is itself informative: either something is
+still being missed in this design, or the endcap-collision/mainRope-
+vs-piece feature is fundamentally not worth the complexity it costs to
+get right, and staying reverted (current state) is the right call
+regardless of whether the exact remaining bug ever gets found.
+
+The code for all 5 attempts remains in place, gated behind the same
+flag -- nothing has been deleted at any point this session.
 
 Separately fixed this same session: fallen pieces/mainRope rested on the
 floor at their own CENTERLINE (a real, distinct bug from the above,
