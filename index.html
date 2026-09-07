@@ -3099,7 +3099,10 @@ function updateIntro(rawDt){
 function detachEntireRopeAndRestartIntro(){
   if (mainRope.points.length >= 2){
     const fallingPoints = mainRope.points.map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
-    topplePiece(fallingPoints);
+    // see topplePiece()'s own comment: this whole rope's own last point is
+    // the kinematically-placed growing tip whenever mainRope was cut off
+    // mid-growth, not a settled physics point.
+    topplePiece(fallingPoints, mainRope.tipGrowLen < mainRope.segLen);
     // Captured BEFORE ropeThicknessMultiplier compounds further below --
     // this piece is the OLD rope, falling at whatever thickness it
     // actually had, not the NEW (about to be thicker) one the fresh
@@ -3426,7 +3429,32 @@ function cutThroughDuration(){
 // floor collision naturally fold it into a heap instead of it standing
 // there as a rigid straight column. Shared by both cutRopeAt (the piece
 // falling off the main rope) and cutPieceAt (a fallen piece split in two).
-function topplePiece(points){
+// preserveTipZeroVelocity: true when points[points.length-1] was mainRope's
+// own kinematically-placed growing tip at the moment of this cut (tipGrowLen
+// < segLen) -- positionGrowingTip() deliberately keeps that point's
+// oldx/oldy identical to its x/y every frame (zero implied velocity, "never
+// entering the solver", per that function's own comment), which is NOT a
+// real previous-frame position the way every other point's oldx/oldy is.
+// The rotation below is only correct for points whose old/new pair both
+// describe genuine, same-reference-frame instants; fed a pivot with real
+// velocity (pivot.x != pivot.oldx/oldy) and a tip whose "old" was faked
+// equal to its "new", it derives an old-state rotation from a DIFFERENT
+// reference point (pivot.oldx/oldy) than the new-state rotation (pivot.x/y)
+// for the one point that was never supposed to have a "previous state" at
+// all -- confirmed by direct simulation: a stationary-old-position tip
+// (oldx=x, oldy=y) next to a pivot moving at (5,2)px/frame comes out of a
+// ~13-degree topple with a spurious ~1.2px/frame implied velocity, roughly
+// 22% of the pivot's own -- for a short, freshly-cut rope (few points, cut
+// mid-growth) that tip IS most of the piece's visible extent, so this reads
+// exactly as the reported "flung/shoots downward far faster than normal" on
+// a piece that was mid-growth the instant it got fully detached. Re-zeroing
+// the tip's oldx/oldy AFTER the topple rotation restores the same "just
+// created, no velocity yet" invariant positionGrowingTip() already
+// guaranteed before this piece was ever toppled -- the piece still gets its
+// random tilt (the tip's POSITION is still rotated normally above), only
+// its fabricated non-velocity is prevented from leaking a fraction of the
+// pivot's real velocity into it.
+function topplePiece(points, preserveTipZeroVelocity){
   const angle = (Math.random() - 0.5) * 0.6;
   const pivot = points[0];
   const cosA = Math.cos(angle), sinA = Math.sin(angle);
@@ -3469,6 +3497,10 @@ function topplePiece(points){
     p.y = pivot.y + dx * sinA + dy * cosA;
     p.oldx = pivot.oldx + odx * cosA - ody * sinA;
     p.oldy = pivot.oldy + odx * sinA + ody * cosA;
+  }
+  if (preserveTipZeroVelocity){
+    const tip = points[points.length - 1];
+    tip.oldx = tip.x; tip.oldy = tip.y;
   }
 }
 
@@ -3526,6 +3558,11 @@ function cutRopeAt(hit, clickX, clickY){
 // and a new fallen piece -- called immediately from cutRopeAt() when Fall
 // Delay is 0, or from update() once a pendingCut's delay has elapsed.
 function performMainRopeSplit(idx){
+  // captured before mainRope.tipGrowLen is reset below -- see
+  // topplePiece()'s own comment: lowerPoints' own last point (mainRope's
+  // pre-cut tip) is the kinematically-placed growing tip, not a settled
+  // physics point, whenever the cut lands mid-growth.
+  const hadPartialTip = mainRope.tipGrowLen < mainRope.segLen;
   const lowerPoints = mainRope.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
   mainRope.points = mainRope.points.slice(0, idx + 1);
   // Zero the remaining chain's own implied velocity right at the split --
@@ -3580,7 +3617,7 @@ function performMainRopeSplit(idx){
     // real separation -- this is the same instant the piece starts
     // actually falling, which is also the only instant toppling makes
     // physical sense (a still-attached piece has no reason to tumble).
-    topplePiece(lowerPoints);
+    topplePiece(lowerPoints, hadPartialTip);
     // age/baseThickness drive this piece's own independent thickness
     // decay (see pieceThickness()) -- baseThickness captures mainRope's
     // real live thickness AT THE MOMENT of falling (including whatever

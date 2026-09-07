@@ -6945,6 +6945,83 @@ simulation or pure code tracing due to the video/screenshot evidence
 not being found at the time.
 
 ================================================================================
+2026-09-06  -  11:27 PM EDT
+
+Direct follow-up after re-testing on current code -- "issues still
+persist. though the floor offset is slightly better. i saved a new
+screencap. It shows me cutting the rope to show how it floats when it
+falls. Then i fully cut the short rope thats left and that piece shoots
+downwards really fast." A fresh recording (Recording 2026-09-06
+231018.mp4), analyzed the same way as the previous round (OpenCV
+frame-by-frame connected-component tracking, cross-checked against
+direct visual inspection of extracted frames), confirmed both symptoms
+are real on CURRENT code, not stale pre-fix footage this time.
+
+Found a SECOND, distinct velocity bug in topplePiece() -- the same
+function fixed last round, but a different mechanism, surviving that
+fix. That fix corrected using the pivot's CURRENT position instead of
+its OLD position when rotating another point's old-state coordinates;
+it did not address mainRope's own currently-growing tip, which
+positionGrowingTip() deliberately keeps at a FAKE "old" position
+(identical to its current one, i.e. zero implied velocity, so it never
+enters the solver -- see that function's own comment). Rotating that
+fabricated old-state through the exact same transform as a pivot with
+real velocity mixes two different reference instants for the SAME
+point: the tip's "new" position comes from rotating around the pivot's
+CURRENT position, but its "old" position comes from rotating around
+the pivot's OLD position -- for a point whose old and new were
+supposed to be identical (zero velocity), this discrepancy manifests
+as a spurious implied velocity. Verified directly via Python
+simulation: a stationary-old-position tip next to a pivot moving at
+(5,2)px/frame gained a spurious ~1.2px/frame velocity (about 22% of
+the pivot's own) after a representative ~13-degree topple -- confirming
+the leak is real and roughly the size this symptom would need. For a
+short, freshly-cut rope (few points, cut mid-growth), that tip point
+IS most of the piece's own visible extent, so a leaked fraction of the
+anchor's velocity reads exactly as "shoots downward really fast" --
+frame-by-frame tracking of the new video's own full-detach piece
+measured it covering ~199px in 0.33s (average ~597px/s), roughly 8-9x
+the ~68px/s a from-rest free-fall under this project's own gravity
+constant would average over the same window.
+
+Fixed by giving topplePiece() an optional preserveTipZeroVelocity
+parameter: when true, the piece's own last point has its oldx/oldy
+re-zeroed (set equal to its now-toppled x/y) immediately after the
+rotation loop, restoring the "just created, no momentum yet" invariant
+positionGrowingTip() already guaranteed before toppling -- the point's
+POSITION still gets the normal random tilt; only its fabricated
+non-velocity is prevented from leaking real motion. Passed as
+`mainRope.tipGrowLen < mainRope.segLen` (captured before that field is
+reset) at both of mainRope's own call sites -- detachEntireRopeAndRestartIntro()
+(full detach) and performMainRopeSplit() (ordinary mid-rope cut, since
+a cut can just as easily land while the tip is still mid-growth as a
+full detach can). performPieceSplit() (splitting an already-fallen
+piece) is untouched -- fallen pieces never call growRope()/
+positionGrowingTip(), so every one of their points is already a
+settled physics point with no fabricated old-state to protect.
+
+The floating symptom was also re-confirmed on current code, directly
+measured this time (not just centroid drift): a piece settled and then
+sat COMPLETELY motionless (zero pixel movement) for 0.2s+ with a real,
+visible ~70-90px gap above the pile beneath it -- a genuine frozen
+equilibrium, not slow settling. This is consistent with
+ENDCAP_COLLISION_RADIUS_FRAC (0.5, shipped last round) having helped
+without fully closing the gap -- but reducing that fraction again
+without a fresh, principled measurement of what value would actually be
+correct would just be another guess layered on the last one, so it was
+deliberately left alone this round. Flagged in PROJECT_PROGRESS.md as
+an open item needing its own dedicated measurement pass.
+
+Verified: syntax check passed (extracted <script> content, node
+--check). The topplePiece() fix itself is verified by direct Python
+simulation of the exact rotation formula (confirms the spurious
+velocity exists pre-fix and is exactly zero post-fix, while the
+point's position is still genuinely toppled, not frozen in place) --
+not yet verified against a live re-run of the game itself, since this
+session's Browser pane remained unavailable (see prior entries' same
+limitation) for the whole of this investigation.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

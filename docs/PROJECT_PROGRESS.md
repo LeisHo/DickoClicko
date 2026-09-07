@@ -20,6 +20,14 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
+Open item: fallen pieces still "float" (settle with a visible, measured
+~70-90px gap above the pile instead of flush contact) even after
+ENDCAP_COLLISION_RADIUS_FRAC — see "Recently completed" below for the
+full history. Reducing that fraction further would just be another
+unmeasured guess; needs either a live debugging session or a fresh video
+specifically to measure what fraction would actually close the gap before
+touching it again.
+
 Note: this project has had multiple Claude sessions actively editing
 `index.html` concurrently for an extended stretch (settings-persistence
 work, anchor physics, End Emerge, and this session's Tip Segment Shape
@@ -157,7 +165,38 @@ additions. Current state of each subsystem:
   position consistently; verified equivalent to the original formula
   whenever the pivot is stationary, so ordinary mid-rope cuts are
   unaffected -- only the moving-pivot case, where the bug actually
-  lived, changed. mainRope itself now also collides with any piece pile
+  lived, changed. A SECOND, distinct velocity bug in the same function
+  survived that fix and was found via a fresh user-recorded video showing
+  "shoots downward really fast" still happening on a full detach of a
+  short, freshly-cut rope: `topplePiece()`'s rotation is only mathematically
+  correct for points whose old/new position pair are both real,
+  same-instant physics state -- but mainRope's own currently-growing tip
+  (positionGrowingTip()) deliberately fakes its old position equal to its
+  new one every frame (zero implied velocity, by design, so it never enters
+  the solver). Rotating that fabricated "old" position through the SAME
+  transform as a pivot with real velocity derives the tip's rotated-old
+  state from a different reference instant than its rotated-new state,
+  leaking a real fraction of the pivot's own velocity (~20-30% for a
+  typical topple angle, confirmed via direct simulation) into a point that
+  should have had none -- for a short piece cut off mid-growth, that tip
+  IS most of the piece's visible extent, so the leak reads as the whole
+  piece shooting off. `topplePiece()` now takes an optional
+  `preserveTipZeroVelocity` flag (passed as `mainRope.tipGrowLen <
+  mainRope.segLen`, i.e. "was this piece's own last point still mid-growth
+  the instant it was cut") that re-zeros just that one point's implied
+  velocity after the topple rotation, restoring the same "just created, no
+  momentum yet" invariant the tip already had before toppling -- its
+  position still gets the normal random tilt, only the fabricated
+  non-velocity is prevented from leaking real motion into it. Does not
+  apply to a piece splitting off an already-fallen piece (performPieceSplit)
+  -- fallen pieces have no growing-tip concept, every one of their points is
+  already a settled physics point. The SAME video also re-confirmed
+  "floating" is still present, just less severe than before
+  ENDCAP_COLLISION_RADIUS_FRAC shipped (a real, visible ~70-90px gap
+  measured directly from this video's frames) -- left unresolved this
+  round rather than adjusting that fraction again without new measurement
+  of what value would actually be correct; needs its own dedicated look.
+  mainRope itself now also collides with any piece pile
   on the floor (previously only the floor plane itself), using
   the same shared collision helpers as piece-vs-piece so an extended-long
   rope piles up on top of a pile rather than clipping through it. Every
