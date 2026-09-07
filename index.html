@@ -2658,7 +2658,31 @@ function pieceCollision(dt){
   // gap is what makes this safe. Runs for every piece regardless of how
   // many others exist (unlike the pairwise loop below), since a lone
   // piece coiling on itself is just as real a case as 2+ pieces piling.
-  pieceData.forEach(data => resolveSelfCollision(data, maxPush));
+  //
+  // Deliberately uses THICKNESS-ONLY radii here (tipExt/cutExt both 0),
+  // NOT pieceData's own endcap-inflated radii shared with cross-piece
+  // collision below -- reported directly right after self-collision
+  // shipped: "when i fully cut the rope, the cut off rope gets flung to
+  // the floor, far faster thn the normal falling speed" and separately
+  // "cut segments... look like theyre floating" on the pile. A piece's 2
+  // ends can each carry a LARGE endcap-inflated radius (Endcap Height is
+  // a live-tunable multiplier with real range), and MIN_SELF_COLLISION_GAP
+  // (4) doesn't exclude the pair formed by a piece's own tip and cut edge
+  // -- they're always far apart by index. A full-rope detach in
+  // particular is the LONGEST possible piece and gets tossed by
+  // topplePiece()'s own random tilt, which can easily curl those 2
+  // oversized-radius ends close enough in space to register as deeply
+  // overlapping -- producing exactly a sudden, large, "flung" correction
+  // on the very first frame, and later a mismatched resting shape/height
+  // once it's part of a pile ("floating"). The endcap graphics
+  // themselves visually touching or overlapping is a MUCH rarer, more
+  // extreme event than the rope BODY folding on itself (the actual
+  // request), so it's not worth this risk -- self-collision now only
+  // ever concerns the rope's own physical body.
+  pieceData.forEach((data, i) => {
+    const thick = pieceThickness(fallenPieces[i]);
+    resolveSelfCollision(pieceCollisionRadii(data.points, thick, 0, 0), maxPush);
+  });
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
       resolveChainCollision(pieceData[a], pieceData[b], maxPush);
