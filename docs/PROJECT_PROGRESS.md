@@ -20,25 +20,34 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
-STILL UNRESOLVED after 4 attempts this session: "shoots downward fast"
-and "floating" both persisted even after the piece-vs-piece spawn-grace
-fix (setPieceSpawnGrace/pieceSpawnGraceActive). Confirmed directly (live
-interactive testing, not just video) that the spawn-grace fix's own code
-IS what's actually running — ruling out a stale build as the
-explanation. Live reproduction of the exact reported scenario (2 cuts
-landing close together, in the same space) proved hard to cleanly
-instrument via this tooling's synthetic pointer events in the time
-available, so this remains diagnosed-but-not-yet-confirmed-fixed. Needs
-either a fresh user-recorded video of the CURRENT code (same proven
-frame-analysis method as every earlier round) or a more patient live
-debugging pass with proper instrumentation, rather than another blind
-code-level guess — 4 attempts (2 topplePiece() bugs, 1 ruled-out
-self-collision-radii hypothesis, 1 spawn-grace fix) have each fixed a
-real, verified bug without resolving the user's actual reported
-symptom, which is a strong signal the mental model of the root cause is
-still incomplete somewhere.
+"Shoots downward fast" / "floating" reported STILL PERSISTING even after
+4 separate fix attempts this session (2 real topplePiece() velocity
+bugs, 1 ruled-out self-collision-radii hypothesis, 1 piece-vs-piece
+spawn-grace fix — each a genuine, independently-verified bug, none of
+which resolved the user's actual reported symptom). Per explicit
+request ("revert the collision system for the ropes back to before the
+issue came up. but dont fully delete the code, i may want to change it
+back"), the collision behavior added in `a29da9c` (the commit
+immediately preceding the FIRST-EVER report of these symptoms) is now
+DISABLED via a single flag — `ENABLE_ENDCAP_AND_MAINROPE_COLLISION =
+false` — rather than removed. With it false: every point's endcap-
+inflated collision radius is 0 (thickness-only everywhere, matching
+pre-a29da9c behavior) and mainRope-vs-piece collision doesn't run at
+all (mainRope collides with the floor only again, not a pile). Plain
+piece-vs-piece collision (thickness-only, pre-existing before a29da9c)
+still runs; self-collision (a separate, later, explicitly-requested
+feature) and the topplePiece() velocity fixes (piece-CREATION velocity,
+a different mechanism from collision) are unaffected either way. Flip
+the flag back to `true` to restore current collision behavior exactly —
+nothing was deleted, only gated. Awaiting the user's own re-test of
+whether this actually resolves both symptoms; if it does, that
+localizes the real root cause to something in the endcap-radius/
+mainRope-vs-piece design itself (not yet identified more precisely) —
+if it doesn't, the root cause is somewhere else entirely (topplePiece,
+self-collision, or something not yet considered), since a29da9c's own
+additions would then be provably innocent.
 
-Separately fixed this same round: fallen pieces/mainRope rested on the
+Separately fixed this same session: fallen pieces/mainRope rested on the
 floor at their own CENTERLINE (a real, distinct bug from the above,
 confirmed by inspection) — see "Recently completed" below.
 

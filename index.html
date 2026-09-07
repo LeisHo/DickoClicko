@@ -2422,6 +2422,32 @@ const COLLISION_MAX_PUSH_PER_S = 400;
 // direction. 0.5 is a judgment call.
 const ENDCAP_COLLISION_RADIUS_FRAC = 0.5;
 
+// Reverts pieceCollision() to how it worked BEFORE `a29da9c` ("Expand
+// collision detection: endcaps, decay-proof piling, mainRope-vs-piece")
+// -- the commit immediately preceding the FIRST-EVER report of "the cut
+// off rope gets flung to the floor, far faster than the normal falling
+// speed" and cut segments "look like theyre floating". 4 separate fix
+// attempts on top of that commit's own design (2 real topplePiece()
+// velocity bugs, 1 ruled-out self-collision-radii hypothesis, 1
+// piece-vs-piece spawn-grace fix) each fixed a genuine, independently-
+// verified bug WITHOUT resolving the user's actual reported symptom --
+// reported "still persists" every time. Per explicit request ("revert
+// the collision system for the ropes back to before the issue came up.
+// but dont fully delete the code, i may want to change it back"), set
+// to false to disable exactly what that commit added: every point's
+// endcap-inflated collision radius (hasEndcapForCollision below), and
+// mainRope-vs-piece collision entirely (mainRope previously only ever
+// collided with the floor, not a pile). Ordinary piece-vs-piece
+// collision (thickness-only, no endcap radius, no mainRope) still runs
+// either way -- that existed before a29da9c too, was never implicated
+// in any of the 4 reports, and removing it wasn't asked for. Self-
+// collision (033b908, a separate later feature, already thickness-only)
+// and the topplePiece() velocity fixes (a different mechanism --
+// piece-creation velocity, not collision) are UNAFFECTED by this flag
+// either way. Flip back to true to restore current (post-a29da9c)
+// behavior exactly -- nothing below this flag was deleted, only gated.
+const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = false;
+
 // Per-chain, per-POINT collision radius -- ordinary rope points use half
 // the chain's own live thickness; the 2 ends (points[0], the cut edge
 // for a piece / the never-capped anchor for mainRope, and points[last],
@@ -2596,7 +2622,11 @@ function resolveSelfCollision(data, maxPush){
 // when no endcap is selected at all, or when that particular end never
 // gets one).
 function pieceCollision(dt){
-  const hasEndcapForCollision = cfg.endcapDesign !== 'none';
+  // see ENABLE_ENDCAP_AND_MAINROPE_COLLISION's own comment -- forcing
+  // this false reverts endcapExt() below to always return 0 (thickness-
+  // only radii everywhere, matching this function's own pre-a29da9c
+  // behavior) regardless of cfg.endcapDesign.
+  const hasEndcapForCollision = ENABLE_ENDCAP_AND_MAINROPE_COLLISION && cfg.endcapDesign !== 'none';
   // endcapExt approximates the endcap's own real, elongated/tapered shape
   // as a bigger CIRCLE for collision purposes (a documented simplification
   // -- see endcapExtensionPx()'s own comment) -- but a circle whose radius
@@ -2656,7 +2686,11 @@ function pieceCollision(dt){
   // pass engage a little before actual contact (so the endcap's own
   // inflated radius has room to make contact naturally) without ever
   // firing while mainRope is nowhere near the pile at all.
-  if (fallenPieces.length > 0){
+  // see ENABLE_ENDCAP_AND_MAINROPE_COLLISION's own comment -- this whole
+  // block is what a29da9c added; forcing the flag false skips it
+  // entirely, reverting mainRope to colliding with the floor only (via
+  // update()'s own separate floor-clamp block), never a piece pile.
+  if (ENABLE_ENDCAP_AND_MAINROPE_COLLISION && fallenPieces.length > 0){
     // pileTopY only ever looks at pieces NOT currently mainRopeExcluded
     // (see that flag's own comment in performMainRopeSplit()) -- a piece
     // freshly split off mainRope starts essentially COINCIDENT with

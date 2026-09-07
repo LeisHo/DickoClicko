@@ -7165,6 +7165,61 @@ and-land sequence made getting one impractical before running out of
 reasonable time to spend on this pass.
 
 ================================================================================
+2026-09-07  -  02:01 AM EDT
+
+"the issues still persist. can you revert the collision system for the
+ropes back to before the issue came up? but dont fully delete the
+code, i may want to change it back." -- after 4 straight fix attempts
+this session (2 real topplePiece() velocity bugs, 1 ruled-out self-
+collision-radii hypothesis, 1 piece-vs-piece spawn-grace fix) each
+fixed a genuine, verified bug without resolving "shoots downward fast"
+/ "floating", the user asked to step back entirely rather than attempt
+a 5th theory.
+
+"Before the issue came up" = immediately before `a29da9c` ("Expand
+collision detection: endcaps, decay-proof piling, mainRope-vs-piece"),
+the commit this session's own git archaeology (2 entries ago) already
+identified as landing right before the FIRST-EVER report of both
+symptoms.
+
+Reverted by adding a single new flag, `ENABLE_ENDCAP_AND_MAINROPE_
+COLLISION` (default false), rather than deleting or rewriting anything:
+- `hasEndcapForCollision` (pieceCollision()'s own local) now ANDs
+  against the flag -- forced false, endcapExt() always returns 0, so
+  every point's collision radius is thickness-only everywhere (mainRope
+  and every piece), matching this project's own pre-a29da9c formula
+  exactly.
+- The entire mainRope-vs-piece block (added whole-cloth by a29da9c) is
+  now gated on the same flag -- forced false, it's skipped entirely,
+  reverting mainRope to colliding with the floor only (via update()'s
+  own separate, older floor-clamp block), never a piece pile.
+
+Deliberately left unchanged: ordinary piece-vs-piece collision (thick-
+ness-only, no endcap radius) -- this existed BEFORE a29da9c too (a29da9c
+only added the endcap-radius inflation to it, refactoring the loop
+itself along the way), was never implicated in any of the 4 fix
+attempts' own reports, and removing it wasn't asked for. Self-collision
+(033b908, a separate, later, explicitly-requested feature, already
+thickness-only) and both topplePiece() velocity fixes (piece-CREATION
+velocity -- a different mechanism from collision entirely, never
+touched by a29da9c) are also unaffected either way -- reverting "the
+collision system" doesn't mean reverting everything shipped since.
+
+The flag itself, and every line it gates, carries a comment explaining
+exactly what it reverts and why, specifically so flipping it back to
+`true` later is a clean, well-documented one-line change, not
+archaeology -- per the user's own explicit "may want to change it back."
+
+Verified: syntax check passed; reloaded the live local dev server and
+confirmed no console errors, the flag's own string is present in the
+served source, and the game renders/runs normally. Did NOT attempt
+another live reproduction of the specific bug scenario this round --
+the immediately preceding entry already spent real time on that with
+inconclusive results, and this task is a revert of already-existing,
+previously-proven code, not new logic needing the same level of
+scrutiny.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
