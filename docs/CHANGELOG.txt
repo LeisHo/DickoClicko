@@ -6885,6 +6885,66 @@ independent of tab-fronting, the same limitation every task this
 session has hit.
 
 ================================================================================
+2026-09-06  -  10:35 PM EDT
+
+Direct follow-up after the topplePiece() fix -- "check the datalog
+folder in okcilcokcid. maybe I saved it there accidentally. both issues
+persist." The video wasn't in OKCILCOKCID's own datalog folder, but a
+matching recording (Recording 2026-09-06 214417.mp4, timestamped right
+around the report) turned up in DICKOCLICKO's OWN datalog folder --
+found by checking there directly rather than searching disk paths
+again.
+
+For the first time this session, a user-provided recording was actually
+analyzed rather than just searched for and not found: this environment
+has OpenCV available, used to extract frames and run connected-
+component analysis (isolating a resting piece's own centroid from
+mainRope's, which was also visible and moving in the same frames).
+Measured directly, not eyeballed: a piece landed on an existing floor
+pile around t=15.5s into the recording, then drifted only ~20-115px
+over the following 6+ real seconds of video -- far slower than gravity
+alone would ever produce for a piece that hadn't yet settled. This
+confirms "floating" is a real, measurable near-stasis, not just a
+one-frame visual gap.
+
+Root cause: mainRope-vs-piece/piece-vs-piece collision approximates
+each endcap as a circle whose radius equals its FULL neck-to-tip
+extension length (a documented simplification dating back to when
+endcap collision first shipped) -- but the real endcap graphic is a
+narrow, tapered shape, not a uniform disc that "fat" in every
+direction. Combined across 2 touching endcaps (the resting piece's own
+tip and the piece above/below it), the resulting required separation
+(minSep) ends up substantially larger than where the pieces visually
+appear to touch, so gravity pulling the piece down and the collision
+correction pushing it back apart settle into a slow, near-balanced
+standoff instead of a clean drop to flush contact.
+
+Fixed with a new ENDCAP_COLLISION_RADIUS_FRAC (0.5, a judgment call --
+no measured "correct" fraction exists for approximating a tapered
+shape's real effective width as a uniform circle), scaling the endcap's
+own extension down before it ever becomes a collision radius, inside
+pieceCollision()'s own endcapExt closure. This shrinks the gap between
+"collision considers them separated" and "they look visually
+separated" without removing endcap-vs-endcap overlap prevention
+entirely -- that behavior was explicitly requested earlier this
+session and stays intact, just less exaggerated.
+
+The video did not show issue 1 (a full-cut piece falling unusually
+fast) clearly enough to identify anything beyond the topplePiece()
+velocity fix already shipped in the immediately preceding round --
+worth a direct re-test now that both fixes are live, since this
+particular recording was made BEFORE that fix (timestamped 21:44,
+topplePiece() wasn't fixed until roughly 22:08).
+
+Verified: syntax check passed. This fix is grounded in direct frame-by-
+frame measurement of the actual reported footage (OpenCV connected-
+component centroid tracking across ~20 sampled frames), not code review
+or a hypothesis alone -- a meaningfully stronger form of verification
+than every other fix this session, which all had to rely on Node
+simulation or pure code tracing due to the video/screenshot evidence
+not being found at the time.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

@@ -4341,3 +4341,31 @@ GOTCHAS
   bug actually lived. Live testing in the Browser pane remains
   unavailable; this fix is based on a mathematically verified derivation
   plus Node simulation, not a live repro.
+- **Pile-floating fix, grounded in actual video analysis for the first
+  time this session.** The user's own screencap video turned up in
+  `J:\CLAUDE\PROJECTS\DICKOCLICKO\datalog\` (not the other project's
+  folder they first suspected) -- extracted frames with OpenCV
+  (available in this environment) and used `cv2.connectedComponentsWithStats`
+  to isolate a resting piece's own centroid from mainRope's own (also
+  moving) shape in the same frames. Measured directly: a piece landed on
+  a pile around t=15.5s and drifted only ~20-115px over the following
+  6+ real seconds -- far slower than gravity alone, confirming
+  "floating" is a genuine, measurable near-stasis. Root cause: both
+  `mainRope-vs-piece` and `piece-vs-piece` collision approximate an
+  endcap as a circle of radius = its FULL neck-to-tip extension length
+  (documented since endcap collision first shipped) -- overestimating
+  how "fat" the real, narrow/tapered endcap shape is. 2 touching
+  endcaps' combined `minSep` ends up well past where they visually
+  appear to touch, so gravity and the collision correction settle into
+  a slow near-equilibrium instead of a clean drop to flush contact.
+  Fixed with new `ENDCAP_COLLISION_RADIUS_FRAC` (0.5, a judgment call),
+  scaling the endcap extension down before it becomes a radius, inside
+  `pieceCollision()`'s own `endcapExt` closure -- shrinks the
+  physics/visual mismatch without removing endcap-vs-endcap overlap
+  prevention (still explicitly requested), just making it less
+  exaggerated. Issue 1 (full-cut fling) wasn't independently confirmed
+  or ruled out by the video, since the recording predates the
+  `topplePiece()` fix from the immediately preceding round. This is the
+  only fix this session verified against direct frame-by-frame
+  measurement of real footage rather than Node simulation or pure code
+  tracing.

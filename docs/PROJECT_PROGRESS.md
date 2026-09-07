@@ -165,7 +165,16 @@ additions. Current state of each subsystem:
   px/s rate (COLLISION_MAX_PUSH_PER_S) so any overlap resolves gradually
   rather than snapping, and mainRope-vs-piece only engages when the tip
   is actually within 10%vh of the current pile's own topmost point,
-  never during ordinary post-cut hanging/swinging. A cut's own remaining
+  never during ordinary post-cut hanging/swinging. Both mainRope-vs-piece
+  and piece-vs-piece scale the endcap's own collision-radius contribution
+  down to half its full extension length (ENDCAP_COLLISION_RADIUS_FRAC) --
+  found via direct video frame analysis (OpenCV connected-component
+  centroid tracking, not just eyeballing) that a piece resting on a pile
+  drifted only ~20-115px over 6+ real seconds instead of settling flush,
+  because the FULL endcap length used as a collision-circle radius
+  overestimates how "fat" the real, narrow/tapered endcap graphic
+  actually is, leaving a real physics/visual gap between 2 touching
+  endcaps that gravity alone took a very long time to close. A cut's own remaining
   chain also has its implied velocity (oldx/oldy) zeroed at the exact
   moment of the split -- otherwise it kept carrying momentum shaped by
   the now-removed trailing mass, a real recoil this project's own
