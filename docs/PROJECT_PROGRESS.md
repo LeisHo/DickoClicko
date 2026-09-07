@@ -129,13 +129,21 @@ additions. Current state of each subsystem:
   still-attached rope's tip. Each fallen piece also self-collides -- its
   own far-apart sections (at least 4 points apart by chain index,
   MIN_SELF_COLLISION_GAP) push off each other if a fold/coil brings them
-  spatially close, using the same math as cross-piece collision. The
-  index gap is what makes this safe: it deliberately never touches
-  adjacent-or-near points, which are always close by construction and
-  would otherwise fight the chain's own normal bending -- the exact
-  failure mode that got this project's earlier, adjacency-unaware
-  self-collision system (pileRepulsion()) removed. mainRope itself now
-  also collides with any piece pile on the floor (previously only the
+  spatially close, using thickness-only radii (not the endcap-inflated
+  radii cross-piece collision uses -- a piece's own tip and cut edge are
+  always far apart by index, so the gap exclusion never protects that
+  pair, and a large endcap radius on both ends could register as a deep
+  overlap after an ordinary topple/swing, causing a real regression: a
+  fully-detached rope being flung to the floor far faster than normal,
+  and pile pieces resting with a visible floating offset -- both fixed
+  by excluding endcap inflation from this specific pass). The index gap
+  is what makes self-collision safe at all: it deliberately never
+  touches adjacent-or-near points, which are always close by
+  construction and would otherwise fight the chain's own normal bending
+  -- the exact failure mode that got this project's earlier, adjacency-
+  unaware self-collision system (pileRepulsion()) removed. mainRope
+  itself now also collides with any piece pile on the floor (previously
+  only the
   floor plane itself), using
   the same shared collision helpers as piece-vs-piece so an extended-long
   rope piles up on top of a pile rather than clipping through it. Every

@@ -4289,3 +4289,26 @@ GOTCHAS
   through the same distance/bend/self-collision loop with the index-gap
   exclusion active. Live testing in the Browser pane remains
   unavailable.
+- **Self-collision regression: excluded endcap-inflated radii from a
+  piece's own self-collision pass.** Reported directly right after
+  self-collision shipped: "the cut off rope gets flung to the floor, far
+  faster thn the normal falling speed" and cut segments "look like theyre
+  floating" on the pile. Root cause: self-collision reused `pieceData`'s
+  own endcap-inflated radii (shared with cross-piece collision, where
+  that inflation was explicitly requested). `MIN_SELF_COLLISION_GAP`'s
+  index exclusion never protects a piece's tip-vs-cut-edge pair (always
+  far apart by index); with Endcap Height set high, either end can carry
+  a large radius, and a full-rope detach (the longest possible piece,
+  always given a random `topplePiece()` rotation) can easily curl those
+  2 oversized ends close enough in space to register as a deep overlap
+  -- a large, sudden correction on the very first post-detach frame.
+  Fixed: the self-collision call site now computes thickness-only radii
+  (`pieceCollisionRadii(data.points, thick, 0, 0)`) instead of reusing
+  `pieceData`'s endcap-inflated version -- self-collision now only ever
+  concerns the rope's own physical body, not its decorative endcaps;
+  cross-piece/mainRope-vs-piece collision (where endcap-vs-endcap
+  overlap between DIFFERENT ropes was explicitly requested) are
+  unaffected. Root-caused directly from re-reading the just-shipped
+  code (the video attached to the report wasn't found on disk when
+  checked) rather than a live repro; live testing in the Browser pane
+  remains unavailable.

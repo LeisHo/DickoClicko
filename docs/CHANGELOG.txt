@@ -6779,6 +6779,55 @@ pane remains unavailable -- reported hidden independent of tab-fronting,
 the same limitation every task this session has hit.
 
 ================================================================================
+2026-09-06  -  09:55 PM EDT
+
+Regression report (with a saved screencap video) right after fallen-
+piece self-collision shipped: "1. when i fully cut the rope, the cut off
+rope gets flung to the floor, far faster thn the normal falling speed.
+2. When cut segments land on each other on the floor, there seems to be
+some offset boundary of the segments already on the floor. So the new
+cut segments falling on top look like theyre floating." The video itself
+wasn't found on disk when checked, so this was root-caused directly from
+re-reading the just-shipped self-collision code rather than from the
+recording.
+
+Root cause: self-collision reused pieceData's own endcap-inflated
+radii, the SAME radii object shared with cross-piece collision (where
+that inflation was explicitly requested earlier this session). A
+piece's tip and cut edge can each carry a large radius once Endcap
+Height is set high, and MIN_SELF_COLLISION_GAP's own index exclusion
+doesn't help here at all -- a piece's 2 ends are always far apart by
+index, regardless of how short or long the piece is. A full-rope
+detach is the LONGEST possible piece and always gets a random topple
+via topplePiece() -- easily enough rotation to curl those 2 oversized-
+radius ends close together in space, registering as a deep overlap and
+producing a large, sudden self-collision correction on the very first
+frame post-detach ("flung... far faster"), plus a mismatched resting
+shape once such a piece later settles into a pile ("floating").
+
+Fixed by computing thickness-ONLY radii (tipExt/cutExt both 0)
+specifically for the self-collision pass, instead of reusing pieceData's
+own endcap-inflated radii. The endcap graphics themselves visually
+touching or overlapping across a single piece's own 2 ends is a much
+rarer, more extreme event than the rope BODY folding on itself (the
+actual original request), so self-collision now only ever concerns the
+rope's own physical body -- cross-piece and mainRope-vs-piece collision
+(where endcap-vs-endcap overlap between DIFFERENT ropes was explicitly
+requested) are completely unaffected by this change.
+
+Verified: syntax check passed. This fix is based on direct code-level
+root-cause analysis of the newly-added self-collision feature -- the
+mechanism (oversized endcap-inflated radii on a piece's own far-apart
+ends, with no index-gap protection against that specific pair) directly
+and specifically explains both reported symptoms. Live testing in the
+Browser pane remains unavailable, the same limitation every task this
+session has hit -- if either symptom persists after this fix, the
+"floating" one in particular could instead be the endcap-collision-
+radius approximation's own already-documented limitation (approximating
+the endcap as a bigger circle rather than its true visual outline),
+which predates self-collision entirely and would need a separate look.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
