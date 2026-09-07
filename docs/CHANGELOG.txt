@@ -7095,6 +7095,76 @@ verified against a live re-run of the game itself (Browser pane
 unavailable throughout, same limitation as every fix this session).
 
 ================================================================================
+2026-09-07  -  01:54 AM EDT
+
+"The two issues still persist" -- reported after the spawn-grace fix
+above. Before attempting a 5th code-level theory on the same symptom
+pair, checked the cheap possibility first: is the tested build actually
+current? Confirmed local HEAD == origin/master == the spawn-grace
+commit, and this session's Browser pane -- unavailable for basically
+this entire session until now -- finally worked end-to-end: navigated
+to the local dev server, and direct JS inspection found the string
+"pieceSpawnGraceActive" present in the live page's own source. (An
+initial `typeof pieceSpawnGraceActive === 'undefined'` check looked
+alarming but was a red herring -- EVERY game function, including
+long-established ones like topplePiece and pieceCollision, is
+`undefined` on `window`, because none of them are exposed globally;
+this is normal closure scoping, not a broken build. A screenshot
+confirmed the game genuinely running.) Rules out "stale build" as the
+explanation for the continued reports.
+
+With the Browser pane finally working, attempted LIVE interactive
+reproduction for the first time this session (every prior fix was
+verified via video analysis, Node simulation, or code reading alone).
+Dispatching synthetic PointerEvents directly at the canvas does reach
+the game's real input handling -- hold-to-grow during the intro's own
+auto-growth window and double-click-to-cut both fired successfully.
+However: (1) the intro's own auto-growth is very slow, so building a
+rope long enough to test took many real seconds per attempt; (2) a
+background/hidden Browser pane throttles requestAnimationFrame the same
+way any browser tab does, so growth silently stalled entirely until the
+tab was explicitly fronted; (3) getting 2 pieces to genuinely overlap in
+the same space at the same time (the specific scenario the spawn-grace
+fix targets) via scripted timing, rather than just letting one piece
+fall the full, uncontested screen height, proved unreliable to
+orchestrate cleanly. Observed pieces falling and landing within roughly
+a second of a cut, consistent with (but not conclusively proving) the
+symptom persisting -- not a clean, instrumented measurement the way the
+video-based frame analysis was for earlier rounds.
+
+Given 4 attempts this session (2 real topplePiece() bugs, 1 ruled-out
+self-collision-radii hypothesis, 1 real spawn-grace gap) have each
+fixed a genuine, verified bug without resolving the user's actual
+reported symptom, continuing to theorize a 5th time without new
+evidence was judged not worth it right now -- flagged in
+PROJECT_PROGRESS.md as needing either a fresh video of the CURRENT
+code (the one method that has reliably produced real findings all
+session) or a more patient, properly-instrumented live debugging pass,
+rather than another blind guess.
+
+Separately, while live-testing, the user flagged a distinct, simpler,
+well-specified bug: "the cut rope segments are sitting on the floor on
+their midline... offset that boundary by half of each rope's
+thickness." update()'s own floor-collision block clamped every point
+(mainRope's and every fallen piece's) straight to floorY(), which is
+where each chain's own CENTERLINE sits -- since rope thickness is drawn
+symmetric around that centerline, a piece lying flat visually sank into
+the floor by half its own rendered thickness. Fixed by clamping to
+`floorY() - thickness/2` instead, using each chain's own live thickness
+(mainRope's own render()-matching formula; each piece's current,
+possibly-decayed thickness via pieceThickness(), matching
+pieceCollision()'s own convention) -- so the real rendered underside
+rests on the floor line, not the centerline.
+
+Verified: syntax check passed. Code-reviewed against the existing,
+already-established pattern this project uses for this exact class of
+offset (PIECE_SEAM_OVERLAP_FRAC, ENDCAP_COLLISION_RADIUS_FRAC) -- not
+yet confirmed via a clean live screenshot; the intro's own slow
+auto-growth and this session's limited success scripting a clean cut-
+and-land sequence made getting one impractical before running out of
+reasonable time to spend on this pass.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

@@ -4736,15 +4736,30 @@ function update(rawDt){
     // too, not just cut-off pieces — otherwise growing it long enough to
     // reach the floor just clips straight through with no reaction at all.
     const fY = floorY();
-    const allPoints = mainRope.points.slice();
-    fallenPieces.forEach(piece => allPoints.push(...piece.points));
-    allPoints.forEach(p => {
-      if (p.y > fY){
-        p.y = fY;
-        p.oldx = p.x - (p.x - p.oldx) * 0.3;
-        p.oldy = p.y;
-      }
-    });
+    // Each chain's own points sit on their CENTERLINE, not their visible
+    // bottom edge -- clamping every point straight to fY (as this used to)
+    // put that centerline ON the floor line, so a rope lying flat visibly
+    // sank into the floor by half its own thickness (the floor line ran
+    // through its horizontal middle instead of under it). Per explicit
+    // request ("offset that boundary by half of each rope's thickness"),
+    // each chain now clamps to fY minus its OWN current half-thickness --
+    // mainRope's live thickness (matching render()'s own formula) and
+    // each piece's live, possibly-decayed thickness via pieceThickness()
+    // (matching pieceCollision()'s own convention) -- so the chain's real
+    // rendered UNDERSIDE rests on the floor line instead of its center.
+    const clampToFloor = (points, thick) => {
+      const half = thick / 2;
+      const clampY = fY - half;
+      points.forEach(p => {
+        if (p.y > clampY){
+          p.y = clampY;
+          p.oldx = p.x - (p.x - p.oldx) * 0.3;
+          p.oldy = p.y;
+        }
+      });
+    };
+    clampToFloor(mainRope.points, vmin(cfg.ropeThickness) * ropeThicknessMultiplier);
+    fallenPieces.forEach(piece => clampToFloor(piece.points, pieceThickness(piece)));
     // The OLD pileRepulsion() had no concept of chain adjacency -- it
     // repelled ANY two points closer than minSep, including two points
     // from far apart in the SAME chain that simply ended up

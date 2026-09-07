@@ -20,15 +20,27 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
-Just shipped, awaiting the user's own re-test: piece-vs-piece spawn
-grace (setPieceSpawnGrace/pieceSpawnGraceActive) — see "Recently
-completed" below. Both "shoots downward fast" and "floating" traced back
-to piece-vs-piece collision never having any grace period for a
-freshly-created piece spawning already overlapping a DIFFERENT,
-unrelated existing piece (mainRope-vs-piece already had this via
-mainRopeExcluded; piece-vs-piece never did). If this doesn't fully
-resolve it, the ENDCAP_COLLISION_RADIUS_FRAC angle from the prior round
-is still a live, unmeasured lead worth revisiting.
+STILL UNRESOLVED after 4 attempts this session: "shoots downward fast"
+and "floating" both persisted even after the piece-vs-piece spawn-grace
+fix (setPieceSpawnGrace/pieceSpawnGraceActive). Confirmed directly (live
+interactive testing, not just video) that the spawn-grace fix's own code
+IS what's actually running — ruling out a stale build as the
+explanation. Live reproduction of the exact reported scenario (2 cuts
+landing close together, in the same space) proved hard to cleanly
+instrument via this tooling's synthetic pointer events in the time
+available, so this remains diagnosed-but-not-yet-confirmed-fixed. Needs
+either a fresh user-recorded video of the CURRENT code (same proven
+frame-analysis method as every earlier round) or a more patient live
+debugging pass with proper instrumentation, rather than another blind
+code-level guess — 4 attempts (2 topplePiece() bugs, 1 ruled-out
+self-collision-radii hypothesis, 1 spawn-grace fix) have each fixed a
+real, verified bug without resolving the user's actual reported
+symptom, which is a strong signal the mental model of the root cause is
+still incomplete somewhere.
+
+Separately fixed this same round: fallen pieces/mainRope rested on the
+floor at their own CENTERLINE (a real, distinct bug from the above,
+confirmed by inspection) — see "Recently completed" below.
 
 Note: this project has had multiple Claude sessions actively editing
 `index.html` concurrently for an extended stretch (settings-persistence
@@ -236,8 +248,34 @@ additions. Current state of each subsystem:
   mainRopeExcluded's own × 1.5) from where it spawned, then clears
   permanently. Verified via Node simulation that the grace activates
   immediately at spawn and clears naturally within a handful of frames
-  under normal gravity (not a permanent freeze). Not yet confirmed
-  against a live re-test.
+  under normal gravity (not a permanent freeze). Reported "still
+  persists" after this shipped -- see "Currently working on" above for
+  the full status.
+
+  Live interactive testing (first time this session the Browser pane
+  actually worked end-to-end): dispatching synthetic PointerEvents
+  directly at the canvas DOES reach the game's own input handling (hold-
+  to-grow during the intro's own auto-growth phase, and double-click-to-
+  cut both work) -- confirmed the currently-served page really does run
+  the spawn-grace fix's own code (ruling out a stale build), but
+  reliably reproducing the EXACT reported scenario (2 cuts landing close
+  together in time, genuinely overlapping) through scripted events
+  proved too unreliable to get a clean before/after measurement in the
+  time available.
+
+  Separately, floor rest position was fixed: mainRope/fallen pieces
+  clamped their own CENTERLINE to the floor line, so a piece lying flat
+  visually sank into the floor by half its own thickness (reported
+  directly: "the floor line goes through the horizontal center of the
+  rope when its lying flat"). Both clamps (mainRope's own live thickness,
+  each piece's own current/decayed thickness via pieceThickness()) now
+  stop at `floorY() - thickness/2` instead of `floorY()`, so the chain's
+  real rendered underside rests on the floor line. Syntax-checked; not
+  yet confirmed via a clean live screenshot (the intro's own auto-growth
+  pace and this tooling's synthetic-cut reliability made a fast visual
+  check impractical this same session -- code-reviewed correct against
+  the existing, already-proven pattern used elsewhere for this exact
+  kind of offset).
 
   mainRope itself now also collides with any piece pile
   on the floor (previously only the floor plane itself), using
