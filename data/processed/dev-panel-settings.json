@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 31.584615384615432,
+    "ropeLength": 19.812192605788244,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -176,9 +176,9 @@
     "flick2AnimSpeed": 0.2,
     "flickHoldMaxSpeed": 2.5,
     "flickHoldMaxDuration": 3.3,
-    "ropeAttractionIntensity": 0.64,
-    "ropeAttractionSpeed": 3,
-    "ropeAttractionMaxReach": 23
+    "ropeAttractionIntensity": 0.06,
+    "ropeAttractionSpeed": 23,
+    "ropeAttractionMaxReach": 64
   },
   "order": [
     {
