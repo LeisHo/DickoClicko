@@ -3406,12 +3406,38 @@ function topplePiece(points){
     // zero out whatever velocity the point already had from an in-progress
     // swing (rotating position but resetting oldx/oldy to match would kill
     // that momentum, which is exactly the "shouldn't freeze mid-swing" bug).
+    //
+    // odx/ody MUST be measured against the pivot's own OLD position
+    // (pivot.oldx/oldy), not its current one -- a real bug, found by
+    // direct derivation after 2 reported symptoms ("the cut off rope gets
+    // flung to the floor, far faster th[a]n the normal falling speed" on
+    // a full detach; cut segments "look like theyre floating" once
+    // piled) both survived an unrelated fix attempt. Using the pivot's
+    // CURRENT position for the OLD relative vector mixes 2 different
+    // points in time into one frame of reference: worked through by hand
+    // for a pivot moving (0,0)->(5,0) with a point p rigidly co-moving
+    // (0,10)->(5,10) -- zero real velocity relative to the pivot -- a 90
+    // degree topple then produced an implied velocity of (0,5) for p
+    // under the old (buggy) formula, when the only physically consistent
+    // answer for a point with no relative motion is to end up moving
+    // with the pivot's OWN velocity, (5,0): completely the wrong
+    // DIRECTION, not just a wrong magnitude. mainRope's own former
+    // anchor -- pivot for a FULL detach specifically, since the entire
+    // rope becomes one piece -- is exactly the point most likely to
+    // carry real, sometimes-erratic velocity right at the moment of a
+    // cut (it's the one point subject to the circle's own boundary-
+    // clamp physics), which is why this showed up prominently on full
+    // cuts even though the same bug always applied to every piece
+    // creation. Fixed by using pivot.oldx/oldy (matching, same-instant
+    // reference) for the old-state rotation, exactly mirroring how
+    // pivot.x/y (current) is already correctly used for the current-
+    // state rotation just below.
     const dx = p.x - pivot.x, dy = p.y - pivot.y;
-    const odx = p.oldx - pivot.x, ody = p.oldy - pivot.y;
+    const odx = p.oldx - pivot.oldx, ody = p.oldy - pivot.oldy;
     p.x = pivot.x + dx * cosA - dy * sinA;
     p.y = pivot.y + dx * sinA + dy * cosA;
-    p.oldx = pivot.x + odx * cosA - ody * sinA;
-    p.oldy = pivot.y + odx * sinA + ody * cosA;
+    p.oldx = pivot.oldx + odx * cosA - ody * sinA;
+    p.oldy = pivot.oldy + odx * sinA + ody * cosA;
   }
 }
 
