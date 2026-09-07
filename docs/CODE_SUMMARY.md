@@ -4312,3 +4312,32 @@ GOTCHAS
   code (the video attached to the report wasn't found on disk when
   checked) rather than a live repro; live testing in the Browser pane
   remains unavailable.
+- **Real velocity bug found in `topplePiece()`, unrelated to collision
+  entirely -- both prior symptoms ("flung... far faster" on a full
+  detach, "floating" on a pile) survived the self-collision fix above,
+  which pointed at the wrong mechanism.** `topplePiece()` rotates every
+  point's current AND old position around `points[0]` (the pivot) by a
+  random topple angle, intending to add a topple bias without erasing
+  existing swing momentum. Bug: the OLD-position rotation measured each
+  point's old position relative to the pivot's CURRENT position
+  (`pivot.x`/`y`) instead of the pivot's own OLD position
+  (`pivot.oldx`/`oldy`) -- mixing 2 different instants into one frame of
+  reference. Verified via direct Node simulation: a pivot moving
+  `(0,0)->(5,0)` with a point rigidly co-moving `(0,10)->(5,10)` (zero
+  real relative velocity) produced an implied velocity of `(0,5)` under
+  the buggy formula after a 90-degree topple, when the only physically
+  consistent result is the pivot's OWN velocity, `(5,0)` -- wrong
+  direction, not just wrong magnitude. Explains the full-detach symptom
+  specifically: the pivot for a full detach is the OLD ANCHOR (the
+  entire rope becomes one piece), the one point in the whole chain most
+  likely to carry real velocity from the circle's own boundary-clamp
+  physics right at the cut moment -- but the same bug applied to every
+  piece creation, consistent with the "floating"-on-a-pile symptom too.
+  Fixed by using `pivot.oldx`/`oldy` for the old-state rotation,
+  mirroring how `pivot.x`/`y` is already correctly used for the current-
+  state rotation. Verified equivalent to the original formula whenever
+  the pivot is stationary (the common case, `pivot.x === pivot.oldx`) --
+  changes nothing there, only corrects the moving-pivot case where the
+  bug actually lived. Live testing in the Browser pane remains
+  unavailable; this fix is based on a mathematically verified derivation
+  plus Node simulation, not a live repro.

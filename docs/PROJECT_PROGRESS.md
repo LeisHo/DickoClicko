@@ -129,22 +129,36 @@ additions. Current state of each subsystem:
   still-attached rope's tip. Each fallen piece also self-collides -- its
   own far-apart sections (at least 4 points apart by chain index,
   MIN_SELF_COLLISION_GAP) push off each other if a fold/coil brings them
-  spatially close, using thickness-only radii (not the endcap-inflated
-  radii cross-piece collision uses -- a piece's own tip and cut edge are
-  always far apart by index, so the gap exclusion never protects that
-  pair, and a large endcap radius on both ends could register as a deep
-  overlap after an ordinary topple/swing, causing a real regression: a
-  fully-detached rope being flung to the floor far faster than normal,
-  and pile pieces resting with a visible floating offset -- both fixed
-  by excluding endcap inflation from this specific pass). The index gap
-  is what makes self-collision safe at all: it deliberately never
-  touches adjacent-or-near points, which are always close by
-  construction and would otherwise fight the chain's own normal bending
-  -- the exact failure mode that got this project's earlier, adjacency-
-  unaware self-collision system (pileRepulsion()) removed. mainRope
-  itself now also collides with any piece pile on the floor (previously
-  only the
-  floor plane itself), using
+  spatially close, using thickness-only radii, never the endcap-inflated
+  radii cross-piece collision uses (a piece's own tip and cut edge are
+  always far apart by index, so the gap exclusion can't protect that
+  specific pair on its own). The index gap is what makes self-collision
+  safe at all: it deliberately never touches adjacent-or-near points,
+  which are always close by construction and would otherwise fight the
+  chain's own normal bending -- the exact failure mode that got this
+  project's earlier, adjacency-unaware self-collision system
+  (pileRepulsion()) removed.
+  `topplePiece()` (the random initial tilt every newly-cut/detached
+  piece gets) had a genuine, independently-verified velocity bug: it
+  measured a point's OLD position relative to the pivot's CURRENT
+  position instead of the pivot's own OLD position, mixing 2 different
+  instants into one frame of reference -- for a pivot that itself had
+  real velocity, this produced an implied velocity in the WRONG
+  DIRECTION for every other point in the piece, not just a wrong
+  magnitude (confirmed by hand and via simulation). This is what
+  actually caused 2 reported regressions that an earlier, incorrect
+  self-collision fix didn't resolve: "the cut off rope gets flung to the
+  floor, far faster than the normal falling speed" on a full detach
+  (whose pivot is the OLD ANCHOR -- the one point in the whole chain
+  most likely to carry real velocity from the circle's own boundary-
+  clamp physics right at the cut moment) and cut segments "look like
+  theyre floating" once piled (the same bug applies to every piece
+  creation, not just full detaches). Fixed by using the pivot's own old
+  position consistently; verified equivalent to the original formula
+  whenever the pivot is stationary, so ordinary mid-rope cuts are
+  unaffected -- only the moving-pivot case, where the bug actually
+  lived, changed. mainRope itself now also collides with any piece pile
+  on the floor (previously only the floor plane itself), using
   the same shared collision helpers as piece-vs-piece so an extended-long
   rope piles up on top of a pile rather than clipping through it. Every
   collision correction (piece-vs-piece included) is capped to a fixed

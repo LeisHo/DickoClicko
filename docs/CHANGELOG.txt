@@ -6828,6 +6828,63 @@ the endcap as a bigger circle rather than its true visual outline),
 which predates self-collision entirely and would need a separate look.
 
 ================================================================================
+2026-09-06  -  10:10 PM EDT
+
+Direct follow-up after the endcap-radii self-collision fix above:
+"both issues still occurring." The video the user mentioned attaching
+still wasn't found on disk when checked -- went back to first
+principles on the code itself rather than guessing again, and found a
+genuine, independently-derivable bug in topplePiece() that has nothing
+to do with collision at all.
+
+topplePiece() rotates every point's CURRENT position AND its OLD
+position around points[0] (the pivot), by the same random topple angle
+-- the stated intent (per its own existing comment) is to add a topple
+bias without erasing whatever swing momentum a point already had. But
+the OLD-position rotation measured each point's old position relative
+to the pivot's CURRENT position (pivot.x/y), not the pivot's own OLD
+position (pivot.oldx/oldy) -- mixing two different instants in time
+into a single frame of reference. Worked through by hand, then
+confirmed via direct Node simulation: a pivot moving (0,0)->(5,0) with
+a point rigidly co-moving (0,10)->(5,10) -- i.e. ZERO real velocity
+relative to the pivot -- produced an implied velocity of (0,5) after a
+90-degree topple under the buggy formula. The only physically
+consistent result for a point with no relative motion to the pivot is
+to end up moving with the pivot's OWN velocity, (5,0) -- the buggy
+formula wasn't just off by a magnitude, it had the wrong DIRECTION
+entirely.
+
+This directly explains why a full detach specifically showed the
+"flung... far faster" symptom so clearly: the pivot for a full detach
+is the OLD ANCHOR (the entire rope becomes one falling piece), and the
+anchor is exactly the one point subject to the circle's own boundary-
+clamp physics -- the most likely point in the whole chain to be
+carrying real, sometimes-erratic velocity right at the moment of a cut.
+But the exact same bug applied to every single piece creation
+(including ordinary partial cuts), which is consistent with the second
+symptom too -- a piece settling into a subtly wrong resting position/
+shape once it lands on a pile reads as "floating."
+
+Fixed by using pivot.oldx/oldy for the old-state rotation, mirroring
+how pivot.x/y (current) is already correctly used for the current-state
+rotation right below it in the same function. Verified via Node
+simulation on both ends of the behavior: the corrected formula gives
+the pivot-matching (5,0) in the co-moving case above (vs. the buggy
+formula's wrong (0,5)), AND is confirmed mathematically equivalent to
+the ORIGINAL formula whenever the pivot itself is stationary (the
+common case for an ordinary mid-rope cut, where pivot.x===pivot.oldx) --
+so this changes nothing for the common case and only corrects the
+specific scenario where the pivot genuinely has velocity, which is
+exactly where the bug lived.
+
+Verified: syntax check passed; both the buggy-vs-fixed comparison and
+the stationary-pivot equivalence were confirmed via direct Node
+simulation of the actual rotation math, not just derived on paper. Live
+testing in the Browser pane remains unavailable -- reported hidden
+independent of tab-fronting, the same limitation every task this
+session has hit.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
