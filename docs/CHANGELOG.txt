@@ -7220,6 +7220,66 @@ previously-proven code, not new logic needing the same level of
 scrutiny.
 
 ================================================================================
+2026-09-07  -  05:41 AM EDT
+
+"ok both problems were more or less fixed. can you look into the code
+we just took out and figure out why it was causing the issues it was
+causing" -- with the revert confirmed working, went back into the
+disabled code (still fully present, just gated off) to find the actual
+mechanism, then "so you can fix it?" / "fix it" once the mechanism was
+identified.
+
+Root cause: mainRope-vs-piece collision's own proximity gate
+(pileTopY, in pieceCollision()) only ever excluded a piece from
+counting toward it while that piece's `mainRopeExcluded` flag was set.
+That flag clears the instant the piece has moved a small, thickness-
+scaled distance (radius x1.5) from where it was cut -- a criterion
+about DISTANCE TRAVELED SINCE CREATION, with no relationship at all to
+whether the piece has actually landed. Cutting the rope twice in quick
+succession (exactly what both of the user's bug videos showed) let the
+FIRST piece clear its own exclusion within a few frames -- still high
+up, barely fallen under gravity -- at which point it started counting
+toward pileTopY as genuine "pile," even though it was still mid-air.
+The freshly-reset mainRope, spawning right at the circle, was very
+often already within the gate's own vh(10) proximity margin of that
+still-falling piece's CURRENT position. The gate opened -- not because
+a real floor pile was nearby, but because a recently-freed, unrelated,
+still-airborne piece happened to be spatially close. Once open,
+collision ran with full endcap-inflated radii and no protection at all
+for this specific pairing (mainRopeExcluded only ever protected a piece
+from the ONE mainRope instance it just split from, never from an
+older, different piece it happens to be near) -- producing a large,
+sudden correction at up to COLLISION_MAX_PUSH_PER_S ("shoots downward
+really fast"), settling at the still-inflated minSep once resolved
+("floating"). This is why the piece-vs-piece spawn-grace fix from 2
+entries ago didn't help: it protected a different collision path
+entirely. mainRope-vs-piece was always the one with no comparable
+protection.
+
+Fixed at the actual gate rather than tuning radii again: pileTopY's own
+loop now also requires genuine settledness -- real per-point velocity
+below PILE_SETTLED_MAX_SPEED (vmin(5)/s, a judgment call, same kind as
+every other tuning constant in this collision system) -- not just
+"cleared its own exclusion timer." A piece that's still accelerating
+under gravity has picked up real velocity by the time it travels
+radius x1.5 (that distance takes several frames of acceleration to
+cover); a piece that's actually landed sits essentially still frame to
+frame regardless of how recently it was cut. ENABLE_ENDCAP_AND_
+MAINROPE_COLLISION (added last entry to disable this whole mechanism)
+is back to true with this fix live -- the flag and its own comment were
+updated to describe the actual fix rather than just "reverted", and
+flipping it back to false still disables the whole mechanism exactly
+as before if this doesn't hold up either.
+
+Verified: syntax check passed. Did NOT get a clean live reproduction
+this round -- attempted it (the Browser pane worked intermittently
+earlier this session), but the intro's own auto-growth pace combined
+with requestAnimationFrame throttling whenever the pane backgrounds
+between tool calls made it too slow to complete in reasonable time, so
+this is verified at the code-logic level only. This is fix attempt #5
+on the same symptom pair -- awaiting the user's own re-test.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

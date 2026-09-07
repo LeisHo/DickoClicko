@@ -2422,31 +2422,43 @@ const COLLISION_MAX_PUSH_PER_S = 400;
 // direction. 0.5 is a judgment call.
 const ENDCAP_COLLISION_RADIUS_FRAC = 0.5;
 
-// Reverts pieceCollision() to how it worked BEFORE `a29da9c` ("Expand
-// collision detection: endcaps, decay-proof piling, mainRope-vs-piece")
-// -- the commit immediately preceding the FIRST-EVER report of "the cut
-// off rope gets flung to the floor, far faster than the normal falling
-// speed" and cut segments "look like theyre floating". 4 separate fix
-// attempts on top of that commit's own design (2 real topplePiece()
-// velocity bugs, 1 ruled-out self-collision-radii hypothesis, 1
-// piece-vs-piece spawn-grace fix) each fixed a genuine, independently-
-// verified bug WITHOUT resolving the user's actual reported symptom --
-// reported "still persists" every time. Per explicit request ("revert
-// the collision system for the ropes back to before the issue came up.
-// but dont fully delete the code, i may want to change it back"), set
-// to false to disable exactly what that commit added: every point's
-// endcap-inflated collision radius (hasEndcapForCollision below), and
-// mainRope-vs-piece collision entirely (mainRope previously only ever
-// collided with the floor, not a pile). Ordinary piece-vs-piece
-// collision (thickness-only, no endcap radius, no mainRope) still runs
-// either way -- that existed before a29da9c too, was never implicated
-// in any of the 4 reports, and removing it wasn't asked for. Self-
-// collision (033b908, a separate later feature, already thickness-only)
-// and the topplePiece() velocity fixes (a different mechanism --
-// piece-creation velocity, not collision) are UNAFFECTED by this flag
-// either way. Flip back to true to restore current (post-a29da9c)
-// behavior exactly -- nothing below this flag was deleted, only gated.
-const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = false;
+// Was reverting pieceCollision() to how it worked BEFORE `a29da9c`
+// ("Expand collision detection: endcaps, decay-proof piling,
+// mainRope-vs-piece") -- the commit immediately preceding the
+// FIRST-EVER report of "the cut off rope gets flung to the floor, far
+// faster than the normal falling speed" and cut segments "look like
+// theyre floating". 4 separate fix attempts on top of that commit's own
+// design (2 real topplePiece() velocity bugs, 1 ruled-out
+// self-collision-radii hypothesis, 1 piece-vs-piece spawn-grace fix)
+// each fixed a genuine, independently-verified bug WITHOUT resolving
+// the user's actual reported symptom -- reported "still persists"
+// every time. Per explicit request ("revert the collision system for
+// the ropes back to before the issue came up. but dont fully delete
+// the code, i may want to change it back"), this flag disabled exactly
+// what that commit added -- endcap-inflated collision radii and
+// mainRope-vs-piece collision entirely -- confirmed by the user's own
+// re-test to have actually fixed both symptoms.
+//
+// With the real cause confirmed to live somewhere in this code, traced
+// it precisely: the mainRope-vs-piece proximity gate (pileTopY, below)
+// only ever excluded a piece while its OWN mainRopeExcluded flag was
+// set -- and that flag clears the instant the piece has moved a small,
+// thickness-scaled distance from where it was cut, regardless of
+// whether it has actually LANDED. Cutting twice in quick succession
+// (exactly what both bug reports showed) let the FIRST piece clear its
+// own exclusion while still mid-fall, high up -- at which point it
+// started counting as "the pile" for gating purposes, opening
+// mainRope-vs-piece collision against a piece that was never actually
+// resting, with endcap-inflated radii and (for THIS specific, older,
+// unrelated piece) no protection at all. Fixed at the actual gate
+// (see PILE_SETTLED_MAX_SPEED below, in pieceCollision() itself) by
+// requiring genuine settledness (near-zero velocity), not just
+// "cleared its own exclusion timer" -- re-enabled here so that fix is
+// live. Flip back to false to disable this whole mechanism again
+// exactly as before if the new gating fix doesn't hold up either --
+// nothing here was deleted, only gated, per the user's own explicit
+// "may want to change it back."
+const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = true;
 
 // Per-chain, per-POINT collision radius -- ordinary rope points use half
 // the chain's own live thickness; the 2 ends (points[0], the cut edge
@@ -2703,9 +2715,51 @@ function pieceCollision(dt){
     // gate's own pileTopY computation closes that loophole -- the gate
     // can now only ever open because of a piece actually eligible to be
     // collided with in the first place.
+    // PILE_SETTLED_MAX_SPEED: the actual root cause found once
+    // ENABLE_ENDCAP_AND_MAINROPE_COLLISION's own history was traced --
+    // mainRopeExcluded clears the instant a piece has moved a small,
+    // thickness-scaled distance (radius x1.5) from where it was cut,
+    // completely independent of whether that piece has actually LANDED.
+    // Cut twice in quick succession and the FIRST piece clears its own
+    // exclusion within a few frames -- still high up, barely fallen --
+    // and immediately starts counting toward pileTopY below as if it
+    // were resting pile, even though it's still mid-fall. The freshly
+    // reset mainRope, spawning right at the circle, is very often
+    // already within the vh(10) proximity margin of that still-airborne
+    // piece's CURRENT position -- so the gate opens against it, with
+    // full endcap-inflated radii and no protection at all for this
+    // specific pairing (mainRopeExcluded only ever protected a piece
+    // from the ONE mainRope instance it just split from, never from an
+    // older, unrelated piece it happens to be spatially near) -- a
+    // large, sudden correction at up to COLLISION_MAX_PUSH_PER_S. This
+    // is what "shoots downward really fast" and the subsequent
+    // endcap-inflated-minSep "floating" actually were: not a mistuned
+    // radius, but this gate opening against a piece that was never
+    // really part of any pile yet. A piece only genuinely belongs to
+    // "the pile" once it's actually SETTLED -- at rest, not still
+    // accelerating under gravity -- which distance-since-creation alone
+    // can never guarantee (a piece cut right next to the floor clears
+    // mainRopeExcluded almost immediately despite genuinely resting;
+    // one cut high up stays legitimately airborne far longer). Checking
+    // real per-point speed instead is the direct, principled fix: a
+    // still-falling piece has picked up real velocity by the time it's
+    // moved radius x1.5 (that distance takes several frames of
+    // acceleration to cover), while a piece that's actually landed sits
+    // essentially still frame to frame. vmin(5)/s is a judgment call --
+    // no measured "correct" settled threshold exists, same as every
+    // other tuning constant in this collision system -- chosen well
+    // below the speed gravity would produce within a fraction of a
+    // second of real falling.
+    const PILE_SETTLED_MAX_SPEED = vmin(5);
     let pileTopY = Infinity;
     fallenPieces.forEach(piece => {
       if (piece.mainRopeExcluded) return;
+      let maxSpeed = 0;
+      piece.points.forEach(p => {
+        const speed = Math.hypot(p.x - p.oldx, p.y - p.oldy) / dt;
+        if (speed > maxSpeed) maxSpeed = speed;
+      });
+      if (maxSpeed > PILE_SETTLED_MAX_SPEED) return;
       piece.points.forEach(p => { if (p.y < pileTopY) pileTopY = p.y; });
     });
     const tipY = mainRope.points[mainRope.points.length - 1].y;
