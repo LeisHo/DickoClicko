@@ -2415,6 +2415,13 @@ const PIECE_SEAM_OVERLAP_FRAC = 0.15;
 // sluggish), not a measured value.
 const COLLISION_MAX_PUSH_PER_S = 400;
 
+// See pieceCollision()'s own endcapExt closure for the full story --
+// scales the endcap's full neck-to-tip extension down before it becomes
+// a collision-circle radius, since a circle that big overestimates how
+// "fat" the real, narrow/tapered endcap shape actually is in every
+// direction. 0.5 is a judgment call.
+const ENDCAP_COLLISION_RADIUS_FRAC = 0.5;
+
 // Per-chain, per-POINT collision radius -- ordinary rope points use half
 // the chain's own live thickness; the 2 ends (points[0], the cut edge
 // for a piece / the never-capped anchor for mainRope, and points[last],
@@ -2539,7 +2546,31 @@ function resolveSelfCollision(data, maxPush){
 // gets one).
 function pieceCollision(dt){
   const hasEndcapForCollision = cfg.endcapDesign !== 'none';
-  const endcapExt = heightThicknessPx => hasEndcapForCollision ? endcapExtensionPx(cfg.endcapDesign, heightThicknessPx, cfg.endcapHeight) : 0;
+  // endcapExt approximates the endcap's own real, elongated/tapered shape
+  // as a bigger CIRCLE for collision purposes (a documented simplification
+  // -- see endcapExtensionPx()'s own comment) -- but a circle whose radius
+  // equals the endcap's full neck-to-tip length is a substantial
+  // OVERESTIMATE of how "fat" that shape really is in every direction; the
+  // real endcap sticks out that far only along its own narrow axis, not
+  // as a uniform disc. Reported directly (with a screencap video):
+  // freshly-landed pieces resting on a pile stayed suspended at a nearly
+  // constant height for many real seconds instead of settling flush,
+  // reading as "floating" -- measured directly from the video via
+  // connected-component frame analysis (not just eyeballed): a piece's
+  // own resting position drifted only ~20px over 6+ real seconds, far
+  // slower than gravity alone would ever produce, consistent with a
+  // combined (both ends' full endcap length) minSep that's simply much
+  // larger than the pieces' own VISUAL contact point, so gravity and the
+  // collision push it back apart from stay in a near-balanced standoff
+  // for a long time before finally, slowly closing that oversized gap.
+  // ENDCAP_COLLISION_RADIUS_FRAC (0.5, a judgment call -- no measured
+  // "correct" fraction exists for approximating a tapered shape's real
+  // effective width as a circle) scales the extension down before it
+  // ever becomes a radius, shrinking the gap between "collision says
+  // separated" and "looks visually separated" without removing the
+  // endcap-vs-endcap overlap prevention the mainRope-vs-piece/piece-vs-
+  // piece collision was originally built for.
+  const endcapExt = heightThicknessPx => hasEndcapForCollision ? endcapExtensionPx(cfg.endcapDesign, heightThicknessPx, cfg.endcapHeight) * ENDCAP_COLLISION_RADIUS_FRAC : 0;
   // See COLLISION_MAX_PUSH_PER_S's own comment -- caps every correction
   // below to a fixed px/s rate (scaled by dt so it's frame-rate
   // independent) so nothing ever resolves in one violent snap.
