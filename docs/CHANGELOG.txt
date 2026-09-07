@@ -7022,6 +7022,79 @@ session's Browser pane remained unavailable (see prior entries' same
 limitation) for the whole of this investigation.
 
 ================================================================================
+2026-09-06  -  11:47 PM EDT
+
+Direct follow-up: "both issues persist. do [not] change anything yet.
+figure out what was changed right before i brought upt these 2 issues"
+-- an explicit redirect away from another forward-guessing fix attempt
+(the immediately preceding entry's topplePiece() fix, real but
+evidently insufficient) toward git archaeology on the ORIGINAL
+regression instead.
+
+Traced back to `a29da9c` ("Expand collision detection: endcaps,
+decay-proof piling, mainRope-vs-piece") -- the commit this session's
+own summary already identifies as landing immediately before the FIRST
+ever report of both symptoms, but whose actual diff nobody had gone
+back to read since, across every fix attempt built on top of it.
+
+Reading that diff directly (not just its commit message) found the
+real gap: mainRope-vs-piece collision got its own dedicated spawn-time
+exclusion (mainRopeExcluded) specifically because "a rope colliding
+with the piece it just split from" was reported and fixed -- but
+piece-vs-piece collision (2 DIFFERENT fallen pieces pushing each other
+apart) never had any equivalent protection, in this commit or any
+since. A freshly-created piece spawning already spatially overlapping
+a DIFFERENT, unrelated existing piece (2 cuts landing close together in
+time, or a new piece falling through wherever an earlier one already
+is) gets shoved apart immediately by resolveChainCollision()'s own
+per-frame push. That push is capped (COLLISION_MAX_PUSH_PER_S, 400
+%vmin/s) but computes to ~2952px/s for this project's own viewport
+(vmin = min(738,914) * 4) -- plenty fast to read as "shoots downward
+really fast" for however many frames a real spawn-time overlap takes to
+resolve, then settle into "floating" once the correction stops at the
+(already-known-oversized, endcap-inflated) minSep distance.
+
+Cross-checked directly against the user's own latest video: the
+newly-cut piece from a full detach (~t=17.65s) visually and
+positionally overlapped a still-falling piece from an earlier mid-rope
+cut (~t=16.19s) for the entire duration of its own reported "fast
+fall," both descending in tandem afterward -- consistent with mutual
+collision push, not independent free-fall.
+
+This is a materially different, more direct candidate than either of
+this session's 2 already-shipped topplePiece() fixes or the
+already-ruled-out self-collision-radii hypothesis (b92cb53) -- none of
+those touch cross-piece collision's total absence of spawn-time grace.
+Presented to the user as an investigation-only finding first (no code
+changed); on their explicit "do it" following a request for a
+recommendation, implemented the fix below.
+
+Fixed by generalizing mainRopeExcluded's own grace pattern into 2 new
+shared functions: `setPieceSpawnGrace(piece)`, called right after all 3
+piece-creation sites (detachEntireRopeAndRestartIntro,
+performMainRopeSplit, performPieceSplit) capture that piece's own
+points[0] position at the moment of creation; `pieceSpawnGraceActive(
+piece, radius)`, checked per-pair inside the piece-vs-piece loop using
+that SAME piece's own already-computed maxRadius (self-contained,
+since -- unlike mainRopeExcluded, which always pairs against mainRope
+specifically -- piece-vs-piece can't know in advance which other
+piece(s) it needs clearance from), excludes a piece from EVERY
+piece-vs-piece pair until its own reference point has moved a real
+distance (its own radius x2, a judgment call, same kind as
+mainRopeExcluded's own x1.5) from where it spawned, then clears
+permanently -- same convention as mainRopeExcluded. Deliberately left
+mainRopeExcluded itself completely untouched (it's a separate,
+already-proven mechanism protecting a different collision pair); the
+new grace is purely additive.
+
+Verified: syntax check passed. A standalone Node simulation of the
+exact grace-check formula confirmed the mechanism activates immediately
+at spawn (collision skipped) and clears naturally within a handful of
+frames under ordinary gravity (not a permanent freeze) -- not yet
+verified against a live re-run of the game itself (Browser pane
+unavailable throughout, same limitation as every fix this session).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

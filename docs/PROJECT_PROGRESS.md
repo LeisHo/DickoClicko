@@ -20,13 +20,15 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
-Open item: fallen pieces still "float" (settle with a visible, measured
-~70-90px gap above the pile instead of flush contact) even after
-ENDCAP_COLLISION_RADIUS_FRAC — see "Recently completed" below for the
-full history. Reducing that fraction further would just be another
-unmeasured guess; needs either a live debugging session or a fresh video
-specifically to measure what fraction would actually close the gap before
-touching it again.
+Just shipped, awaiting the user's own re-test: piece-vs-piece spawn
+grace (setPieceSpawnGrace/pieceSpawnGraceActive) — see "Recently
+completed" below. Both "shoots downward fast" and "floating" traced back
+to piece-vs-piece collision never having any grace period for a
+freshly-created piece spawning already overlapping a DIFFERENT,
+unrelated existing piece (mainRope-vs-piece already had this via
+mainRopeExcluded; piece-vs-piece never did). If this doesn't fully
+resolve it, the ENDCAP_COLLISION_RADIUS_FRAC angle from the prior round
+is still a live, unmeasured lead worth revisiting.
 
 Note: this project has had multiple Claude sessions actively editing
 `index.html` concurrently for an extended stretch (settings-persistence
@@ -196,6 +198,47 @@ additions. Current state of each subsystem:
   measured directly from this video's frames) -- left unresolved this
   round rather than adjusting that fraction again without new measurement
   of what value would actually be correct; needs its own dedicated look.
+
+  Both symptoms persisted after the topplePiece() fix above. Per the
+  user's own explicit redirect ("figure out what was changed right before
+  i brought up these 2 issues" instead of another forward-guessing fix
+  attempt), git-archaeology on the original regression commit
+  (`a29da9c`, which first added piece-vs-piece endcap-inflated collision)
+  found the real gap: mainRope-vs-piece collision got its own dedicated
+  spawn-time exclusion (mainRopeExcluded) specifically because "a rope
+  colliding with the piece it just split from" was reported and fixed --
+  but piece-vs-piece collision (2 DIFFERENT fallen pieces pushing each
+  other apart) never had any equivalent protection. A freshly-created
+  piece spawning already spatially overlapping a different, unrelated
+  existing piece (2 cuts landing close together, or a new piece falling
+  through wherever an earlier one already is) gets shoved apart
+  immediately by resolveChainCollision()'s own per-frame push, capped at
+  COLLISION_MAX_PUSH_PER_S but still ~2952px/s for this project's own
+  viewport -- easily read as "shoots downward really fast" for however
+  many frames the real overlap takes to resolve, then "floating" once it
+  settles at the (already-known-oversized) endcap-inflated minSep.
+  Cross-checked directly against the user's own video: the newly-cut
+  piece from a full detach visually and positionally overlapped a
+  still-falling piece from an earlier mid-rope cut for the entire
+  duration of its own reported "fast fall."
+
+  Fixed by generalizing mainRopeExcluded's own grace pattern to every
+  piece: setPieceSpawnGrace(piece), called right after all 3 piece-
+  creation sites (detachEntireRopeAndRestartIntro, performMainRopeSplit,
+  performPieceSplit), captures that piece's own points[0] position at
+  creation; pieceSpawnGraceActive(piece, radius) — checked per-pair in
+  the piece-vs-piece loop, using that piece's own already-computed
+  maxRadius (self-contained, since piece-vs-piece can't know in advance
+  which other piece it needs clearance from, unlike mainRopeExcluded
+  which always pairs against mainRope specifically) — excludes a piece
+  from every piece-vs-piece pair until its own reference point has moved
+  a real distance (its own radius × 2, a judgment call, same kind as
+  mainRopeExcluded's own × 1.5) from where it spawned, then clears
+  permanently. Verified via Node simulation that the grace activates
+  immediately at spawn and clears naturally within a handful of frames
+  under normal gravity (not a permanent freeze). Not yet confirmed
+  against a live re-test.
+
   mainRope itself now also collides with any piece pile
   on the floor (previously only the floor plane itself), using
   the same shared collision helpers as piece-vs-piece so an extended-long

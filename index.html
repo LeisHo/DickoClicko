@@ -2488,6 +2488,57 @@ function resolveChainCollision(dataA, dataB, maxPush){
   }
 }
 
+// Gives a freshly-created piece the same kind of collision grace
+// mainRopeExcluded already gives a piece split off mainRope specifically
+// (see performMainRopeSplit()'s own comment) -- but generalized to
+// protect against ANY other already-fallen piece it might spawn
+// spatially overlapping, not just the one it split from. Piece-vs-piece
+// collision never had this at all: mainRope-vs-piece got its own
+// dedicated exclusion because "a rope colliding with the piece it just
+// split from" was reported and fixed directly, but a NEW piece spawning
+// already overlapping a DIFFERENT, unrelated existing piece (e.g. 2
+// cuts landing close together in time, or a piece falling through
+// wherever an earlier piece happens to already be) had nothing
+// protecting it -- resolveChainCollision's own per-frame push cap
+// (COLLISION_MAX_PUSH_PER_S) still applies, but at up to ~2952px/s for
+// this project's own viewport that's easily fast enough to look like
+// "shoots downward really fast" for as many frames as a real spawn-time
+// overlap takes to resolve, then settle into whatever (endcap-inflated,
+// see ENDCAP_COLLISION_RADIUS_FRAC's own comment) minSep the correction
+// stops at -- "floating". Reported directly, persisting through 2
+// topplePiece() velocity fixes and the already-shipped self-collision-
+// radii fix, none of which touch this gap.
+//
+// setPieceSpawnGrace(piece) is called once, right after every piece is
+// created (all 3 sites: detachEntireRopeAndRestartIntro,
+// performMainRopeSplit, performPieceSplit) -- unconditionally, since any
+// newly-created piece could in principle spawn overlapping an existing
+// one, not just the ones that also happen to trigger mainRopeExcluded.
+//
+// pieceSpawnGraceActive(piece, radius) is checked per-pair inside the
+// piece-vs-piece loop below; `radius` is that SAME piece's own maxRadius
+// (already computed by pieceCollisionRadii()) -- self-contained, based
+// only on this piece's own geometry, since (unlike mainRopeExcluded,
+// which always pairs against mainRope specifically) piece-vs-piece can't
+// know in advance which other piece(s) it needs clearance from. `* 2` is
+// a judgment call, same kind as mainRopeExcluded's own `* 1.5` -- no
+// measured "correct" multiplier exists for either. Clears PERMANENTLY
+// the first time it's satisfied, same convention as mainRopeExcluded.
+function setPieceSpawnGrace(piece){
+  const p0 = piece.points[0];
+  piece.spawnGraceOriginX = p0.x;
+  piece.spawnGraceOriginY = p0.y;
+  piece.spawnGrace = true;
+}
+function pieceSpawnGraceActive(piece, radius){
+  if (!piece.spawnGrace) return false;
+  const p0 = piece.points[0];
+  const dist = Math.hypot(p0.x - piece.spawnGraceOriginX, p0.y - piece.spawnGraceOriginY);
+  if (dist < radius * 2) return true;
+  piece.spawnGrace = false;
+  return false;
+}
+
 // How many points apart (by chain INDEX, not distance) a pair must be
 // before self-collision even considers them -- per explicit request
 // ("make it so that a rope segment that has been cut off will collide
@@ -2716,6 +2767,13 @@ function pieceCollision(dt){
   });
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
+      // see setPieceSpawnGrace()'s own comment -- a freshly-created piece
+      // still within its own spawn grace is excluded from EVERY
+      // piece-vs-piece pair this frame, not just whichever piece it
+      // actually spawned overlapping (which this loop has no way to
+      // identify specifically).
+      if (pieceSpawnGraceActive(fallenPieces[a], pieceData[a].maxRadius) ||
+          pieceSpawnGraceActive(fallenPieces[b], pieceData[b].maxRadius)) continue;
       resolveChainCollision(pieceData[a], pieceData[b], maxPush);
     }
   }
@@ -3122,6 +3180,7 @@ function detachEntireRopeAndRestartIntro(){
     // points[0]) starts its own fresh emerge, same convention
     // performMainRopeSplit() already uses for an ordinary cut.
     piece.cutEdgeEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
+    setPieceSpawnGrace(piece);
     fallenPieces.push(piece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
@@ -3648,6 +3707,7 @@ function performMainRopeSplit(idx){
     // edge -- separate End Emerge state from mainRope's tipEmerge above,
     // since it's a different entity's different end.
     piece.cutEdgeEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
+    setPieceSpawnGrace(piece);
     fallenPieces.push(piece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
@@ -3710,6 +3770,7 @@ function performPieceSplit(piece, idx){
     // doesn't restart.
     const newPiece = { points: lowerPoints, segLen: piece.segLen, tipEmerge: null, age: 0, baseThickness: pieceThickness(piece) };
     newPiece.cutEdgeEmerge = cfg.endEmergeEnabled ? newEmergeState() : null;
+    setPieceSpawnGrace(newPiece);
     fallenPieces.push(newPiece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
