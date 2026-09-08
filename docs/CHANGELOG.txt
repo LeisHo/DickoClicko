@@ -7417,6 +7417,47 @@ network log tools can return buffered history — verify with a fresh
 unique marker when in doubt" lesson.
 
 ================================================================================
+2026-09-08  -  01:40 AM EDT
+
+"i updated the frames again. update and push" -- then, mid-task,
+resolving the ANI/3 ambiguity flagged in the previous entry: "in folder
+3, it is meant to be in sequence of 1, 1a, 1b, 1c, then 1b, 1a, then
+continues to loop."
+
+Re-scanned all 4 FLICK source folders (ANI/, ANI/1, ANI/2, ANI/3) via
+`ls`+mtime this time, not just the 2 the last request named, since this
+message didn't scope itself the way the previous one did. Found frames
+11/12/13/15/16 newly stale in ANI/, ANI/1, and ANI/2 (15 files) --
+same frame-NUMBER sets as before, content-only refresh, regenerated via
+`sharp` same as last round.
+
+Rebuilt the ANI/3 hold-preview cycle per the clarification: it's not a
+1..N numbered range at all, it's 4 specific images (FRAMES-01,
+FRAMES-01A, FRAMES-01B, FRAMES-01c -- exact casing preserved, matters
+for a real case-sensitive deployment even though this filesystem
+doesn't care) played as a 6-step ping-pong (1,1a,1b,1c,1b,1a, loop).
+`flickHoldFrames` now loads those 4 files directly by name instead of
+a padStart(2,'0') loop; new `FLICK_HOLD_SEQUENCE = [0,1,2,3,2,1]` holds
+indices INTO that array for each step, and `flickHoldFrameIndex()`
+maps the live cycle position through this sequence instead of a bare
+modulo over the image count -- `FLICK_HOLD_FRAME_COUNT` now means the
+sequence's own length (6) rather than the distinct-image count (4),
+since those stopped being the same number. Generated .webp for all 4
+source PNGs (none existed before -- this whole folder had no working
+.webp since the previous edit that deleted frames 2/3, per the last
+entry's own flag).
+
+Verified: syntax check passed. Confirmed via the live dev server's
+network log that all 4 new hold-preview URLs (FRAMES-01/01A/01B/
+01c.webp) return 200 OK with the new naming, and that the currently-
+served page's own source contains FLICK_HOLD_SEQUENCE (ruling out a
+stale build). A batch of `loop() error` console messages again looked
+alarming but are the same known-stale buffered entries from an
+unrelated earlier diagnostic test this session (confirmed via a fresh
+unique console marker + direct DOM check, same as the immediately
+preceding round) -- not a real regression.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

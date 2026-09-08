@@ -1782,13 +1782,28 @@ let flick2Playing = false;
 // starts at release. but while its holding, cycle throug the frames").
 // holdingFlick is 1, 2, 3, or null -- which animation (if any) is currently
 // being held; shared by both since only one graphic can be held at a time.
-const FLICK_HOLD_FRAME_COUNT = 3;
-const flickHoldFrames = [];
-for (let i = 1; i <= FLICK_HOLD_FRAME_COUNT; i++){
+// 4 real source images (data/FLICK/ANI/3/FRAMES-01/01A/01B/01c) --
+// NOT a plain 1..N numbered range like FLICK_HOLD_FRAME_COUNT's old
+// name implied; exact suffix casing (01A/01B uppercase, 01c lowercase)
+// matters since a real deployment serves case-sensitively even though
+// this environment's own filesystem doesn't. Per explicit request
+// ("in folder 3, it is meant to be in sequence of 1, 1a, 1b, 1c, then
+// 1b, 1a, then continues to loop"), cycled as a 6-step ping-pong over
+// those 4 images -- FLICK_HOLD_SEQUENCE holds indices INTO
+// flickHoldFrames for each step; flickHoldFrameIndex() below maps the
+// live cycle position into this sequence rather than a bare modulo
+// over the image count, so index 3 (1c) is never immediately
+// preceded/followed by index 0 (1) the way a plain 4-frame loop would.
+const flickHoldFrames = ['01', '01A', '01B', '01c'].map(suffix => {
   const img = new Image();
-  img.src = `data/FLICK/ANI/3/FRAMES-${String(i).padStart(2, '0')}.webp`;
-  flickHoldFrames.push(img);
-}
+  img.src = `data/FLICK/ANI/3/FRAMES-${suffix}.webp`;
+  return img;
+});
+const FLICK_HOLD_SEQUENCE = [0, 1, 2, 3, 2, 1];
+// The modulo divisor for flickHoldCyclePos below -- this is the
+// SEQUENCE's own length (6 steps), not the distinct-image count (4),
+// now that the 2 aren't the same thing.
+const FLICK_HOLD_FRAME_COUNT = FLICK_HOLD_SEQUENCE.length;
 let holdingFlick = null;
 let flickHoldTime = 0;
 // The hold-cycle speeds up the longer the hold lasts -- per explicit
@@ -1804,7 +1819,8 @@ let flickHoldTime = 0;
 // way flickFrameIndex()/flick2FrameIndex() do.
 let flickHoldCyclePos = 0;
 function flickHoldFrameIndex(){
-  return Math.floor(((flickHoldCyclePos % FLICK_HOLD_FRAME_COUNT) + FLICK_HOLD_FRAME_COUNT) % FLICK_HOLD_FRAME_COUNT);
+  const step = Math.floor(((flickHoldCyclePos % FLICK_HOLD_FRAME_COUNT) + FLICK_HOLD_FRAME_COUNT) % FLICK_HOLD_FRAME_COUNT);
+  return FLICK_HOLD_SEQUENCE[step];
 }
 
 function flick2FrameIndex(){

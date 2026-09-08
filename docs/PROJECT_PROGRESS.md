@@ -26,12 +26,15 @@ and click/hold interaction are all confirmed working; the live
 per-frame tick itself wasn't observable this session -- see "Recently
 completed" below for why).
 
-Animations 1 and 2's frames were just refreshed (user edited the source
-PNGs; the matching .webp files -- what the game actually loads -- have
-been regenerated to match, see "Recently completed" below). `sharp` is
-now available in this environment (`npm install sharp` works, ~5s) --
-prefer it over the earlier Playwright/Chromium-canvas workaround for
-any future PNG->WebP regeneration need in this project.
+Animations 1 and 2's frames have been refreshed twice now (user edits
+land on the source PNGs; `sharp` regenerates the matching .webp --
+what the game actually loads -- each time, see "Recently completed"
+below). `sharp` is available in this environment (`npm install sharp`
+works, ~5s) -- prefer it over the earlier Playwright/Chromium-canvas
+workaround for any future PNG->WebP regeneration need in this project.
+
+The ANI/3 hold-preview gap flagged last round is resolved: it's a
+1/1a/1b/1c ping-pong (FLICK_HOLD_SEQUENCE), not a 1..N numbered range.
 
 "Shoots downward fast" / "floating" -- `ENABLE_ENDCAP_AND_MAINROPE_
 COLLISION` is back to `false` (attempt #5, the pileTopY settledness
@@ -410,10 +413,13 @@ additions. Current state of each subsystem:
   gotchas.
 - **FLICK animations**: 3 small, independent overlays, each with its own
   X/Y/Scale/Speed dev-panel group. All 3 are hold-to-preview,
-  click-to-trigger: press-and-hold cycles 3 preview frames (as of this
-  writing -- check `FLICK_HOLD_FRAME_COUNT` in index.html for the
-  current count, reduced from 4 this session)
-  (`data/FLICK/ANI/3/`) for as long as it's held, release plays exactly
+  click-to-trigger: press-and-hold cycles a shared preview
+  (`data/FLICK/ANI/3/FRAMES-01/01A/01B/01c`) as a 6-step ping-pong
+  (1,1a,1b,1c,1b,1a, loop -- `FLICK_HOLD_SEQUENCE` in index.html holds
+  the index-into-`flickHoldFrames` for each step; NOT a plain 1..N
+  numbered range despite `FLICK_HOLD_FRAME_COUNT`'s name -- that
+  constant is the SEQUENCE's length now, 6, not the distinct-image
+  count, 4) for as long as it's held, release plays exactly
   one sequence then stops until pressed again. Animation 1
   (`data/FLICK/ANI/`, 17 frames) plays one full ping-pong (1->17->1);
   animation 2 (loaded directly from `data/FLICK/ANI/1` in sequence then
