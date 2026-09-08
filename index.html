@@ -596,22 +596,25 @@ DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = Array.isArray(c.def
 // user-requested row order that interleaved slider and color rows, since
 // each array was always built as one contiguous block.
 // Accent/slider color, font family, button height/text-border, scroll
-// strength, capitalize toggles, and letter-spacing were added to bring
-// this group's own STRUCTURAL configurability in line with
-// J:\CLAUDE\PROJECTS\.claude\TEMPLATE_DEV_PANEL.html's own "Dev Panel"
-// group -- per explicit request ("implement the stylizing and visuals
-// of the tempalte"). Every new field's `def` is chosen to reproduce
-// this panel's EXISTING hardcoded look exactly (accentColor matches the
-// #3a3a4a already used for buttons/active-tab/icon-btn, sliderColor
-// matches the #7d8cff already on range inputs, fontFamily matches the
-// existing system-font stack, buttonTextBorder matches the existing
-// 5px vertical button padding, scrollStrength=1 means "native, no
-// scroll multiplier applied") -- deliberately NOT adopting the
-// template's own arbitrary starting look (blue accent, Verdana,
-// capitalized text) as this project's new default, since that would
-// silently change the panel's current appearance rather than just add
-// the capability to change it. The template's "Text Edit Mode" (inline
-// group/label renaming) was NOT ported -- out of scope, not requested.
+// strength, capitalize toggles, letter-spacing, and Text Edit Mode were
+// added to bring this group's own STRUCTURAL configurability in line
+// with J:\CLAUDE\PROJECTS\.claude\TEMPLATE_DEV_PANEL.html's own "Dev
+// Panel" group -- per explicit request ("implement the stylizing and
+// visuals of the tempalte", then, after an initial pass kept every new
+// field's fallback equal to this panel's OWN pre-existing look, "you
+// didnt implement the stylizing and visuals of the dev panel tempalte
+// / also provide the Text Edit mode checkbox"). Corrected: the fields
+// that come FROM the template (accentColor, sliderColor, fontFamily,
+// buttonTextBorder, scrollStrength, buttonHeight, capsButtonText,
+// capsTabText, capsGroupNames) now default to the TEMPLATE's own actual
+// values (blue #5b85c8 accent/slider, Verdana, capitalized button/tab/
+// group text) -- this project's own PRE-EXISTING, independently-tuned
+// fields from before this whole task (titleFontSize/tabFontSize/
+// groupFontSize/labelFontSize/bodyFontSize/opacity/titleColor/bgColor/
+// textColor) are untouched, since those were never part of "the
+// template's stylizing" to begin with. capsSettingsText and every
+// letter-spacing field already matched the template's own defaults
+// (false / 0) and needed no change.
 const PANEL_STYLE_CONTROLS = [
   { key:'titleFontSize', type:'slider', label:'Dev Panel Title Font Size',          min:9,  max:22, step:1,    def:13 },
   { key:'tabFontSize',   type:'slider', label:'Desktop/Mobile Tab Font Size',       min:8,  max:18, step:1,    def:11 },
@@ -622,9 +625,9 @@ const PANEL_STYLE_CONTROLS = [
   { key:'bodyFontSize',  type:'slider', label:'Body Text Font Size',                min:8,  max:18, step:1,    def:12 },
   { key:'bgColor',       type:'color',  label:'Dev Panel Background Color',      def:'#12121e' },
   { key:'textColor',     type:'color',  label:'Dev Panel Non-Title Text Color',  def:'#c9c9d8' },
-  { key:'accentColor',   type:'color',  label:'Dev Panel Accent Color',          def:'#3a3a4a' },
-  { key:'sliderColor',   type:'color',  label:'Dev Panel Slider Color',          def:'#7d8cff' },
-  { key:'fontFamily',    type:'dropdown', label:'Dev Panel Font (All Text)', def:'-apple-system, Segoe UI, Roboto, sans-serif', options:[
+  { key:'accentColor',   type:'color',  label:'Dev Panel Accent Color',          def:'#5b85c8' },
+  { key:'sliderColor',   type:'color',  label:'Dev Panel Slider Color',          def:'#5b85c8' },
+  { key:'fontFamily',    type:'dropdown', label:'Dev Panel Font (All Text)', def:'Verdana, Geneva, sans-serif', options:[
     { value:'-apple-system, Segoe UI, Roboto, sans-serif', label:'System Default' },
     { value:'monospace', label:'Monospace' },
     { value:'Arial, Helvetica, sans-serif', label:'Arial' },
@@ -633,16 +636,22 @@ const PANEL_STYLE_CONTROLS = [
     { value:'Calibri, Arial, sans-serif', label:'Calibri' },
   ] },
   { key:'buttonHeight',        type:'slider', label:'Dev Panel Button Height',           min:14, max:44, step:1,   def:21 },
-  { key:'buttonTextBorder',    type:'slider', label:'Dev Panel Button Text Border',       min:0,  max:16, step:1,   def:5 },
-  { key:'scrollStrength',      type:'slider', label:'Dev Panel Scroll Strength',          min:0.2,max:5,  step:0.1, def:1 },
-  { key:'capsButtonText',      type:'checkbox', label:'Capitalize Button Text',           def:false },
-  { key:'capsTabText',         type:'checkbox', label:'Capitalize Tab Text',              def:false },
-  { key:'capsGroupNames',      type:'checkbox', label:'Capitalize Group Names',           def:false },
+  { key:'buttonTextBorder',    type:'slider', label:'Dev Panel Button Text Border',       min:0,  max:16, step:1,   def:0 },
+  { key:'scrollStrength',      type:'slider', label:'Dev Panel Scroll Strength',          min:0.2,max:5,  step:0.1, def:0.2 },
+  { key:'capsButtonText',      type:'checkbox', label:'Capitalize Button Text',           def:true },
+  { key:'capsTabText',         type:'checkbox', label:'Capitalize Tab Text',              def:true },
+  { key:'capsGroupNames',      type:'checkbox', label:'Capitalize Group Names',           def:true },
   { key:'capsSettingsText',    type:'checkbox', label:'Capitalize Settings Text',         def:false },
   { key:'buttonLetterSpacing', type:'slider', label:'Dev Panel Button Letter Spacing',    min:-1, max:4,  step:0.1, def:0 },
   { key:'tabLetterSpacing',    type:'slider', label:'Dev Panel Tab Letter Spacing',       min:-1, max:4,  step:0.1, def:0 },
   { key:'groupLetterSpacing',  type:'slider', label:'Dev Panel Group Letter Spacing',     min:-1, max:4,  step:0.1, def:0 },
   { key:'settingsLetterSpacing', type:'slider', label:'Dev Panel Settings Letter Spacing', min:-1, max:4, step:0.1, def:0 },
+  // Text Edit Mode (§12-adjacent, ported from the template's own
+  // checkboxDevTextEditMode) -- per explicit request. When on, clicking
+  // a group title or setting label opens an inline rename editor instead
+  // of the group's normal collapse/expand toggle -- see
+  // openDevTextEditFor()/applyDevTextOverrides()'s own comments.
+  { key:'textEditMode',        type:'checkbox', label:'Enable Label Rename Mode',         def:false },
 ];
 const panelStyle = {};
 PANEL_STYLE_CONTROLS.forEach(c => panelStyle[c.key] = c.def);
@@ -834,6 +843,104 @@ let copiedColorValue = null;
 // string concat (unlike this function's pre-refactor form) since `name`
 // can now come from user input (see addDevGroup) instead of only a
 // hardcoded DEV_GROUPS title.
+/* ---------------------------------------------------------------------
+   Text Edit Mode (§12-adjacent, ported from TEMPLATE_DEV_PANEL.html's
+   own checkboxDevTextEditMode/openDevTextEditFor, per explicit request)
+   -- right-click-free inline rename of any group title or setting
+   label. `devTextOverrides` is keyed by a stable id ('group:'+data-key
+   or 'row:'+data-key -- both already unique across the whole panel,
+   the same identity getPanelOrder()/applyOrder() rely on) rather than
+   DOM position, so a rename survives drag-reordering. `devTextOriginals`
+   remembers each element's REAL text the first time it's ever seen,
+   so an override can always be reverted to the true original (typing
+   the original text back, or clearing the field, clears the override
+   rather than storing a redundant copy).
+--------------------------------------------------------------------- */
+let devTextOverrides = {};
+const devTextOriginals = {};
+function devTextOriginalFor(key, currentText){
+  if (!(key in devTextOriginals)) devTextOriginals[key] = currentText;
+  return devTextOriginals[key];
+}
+// Re-applies every stored override (or, where none exists, each
+// element's own remembered original) across every group title and
+// setting label currently in the panel -- called once after the panel
+// is first built, and again whenever devTextOverrides is replaced
+// wholesale (Reset). Skips an element mid-edit (its own open textarea)
+// so a live rename-in-progress is never clobbered by this sweep.
+function applyDevTextOverrides(){
+  document.querySelectorAll('#dpGroups .dp-group').forEach(g => {
+    const titleSpan = g.querySelector(':scope > .dp-group-header > span:last-child');
+    if (!titleSpan || titleSpan.querySelector('textarea')) return;
+    const key = 'group:' + g.dataset.key;
+    const original = devTextOriginalFor(key, titleSpan.textContent);
+    titleSpan.textContent = devTextOverrides[key] != null ? devTextOverrides[key] : original;
+  });
+  document.querySelectorAll('#dpGroups .dp-row label').forEach(label => {
+    if (label.querySelector('textarea')) return;
+    const row = label.closest('.dp-row');
+    if (!row) return;
+    const key = 'row:' + row.dataset.key;
+    const original = devTextOriginalFor(key, label.textContent);
+    label.textContent = devTextOverrides[key] != null ? devTextOverrides[key] : original;
+  });
+}
+// Opens an inline <textarea> over `el` (a group title span or a row
+// label) to type a replacement. Commits on blur/Enter (empty or
+// unchanged-from-original clears the override rather than storing a
+// no-op copy), reverts on Escape.
+function openDevTextEditFor(el, key){
+  if (!key || el.querySelector('textarea')) return;
+  const original = devTextOriginalFor(key, el.textContent);
+  const currentValue = devTextOverrides[key] != null ? devTextOverrides[key] : original;
+  const originalHTML = el.innerHTML;
+  const input = document.createElement('textarea');
+  input.rows = 1;
+  input.value = currentValue;
+  el.textContent = '';
+  el.appendChild(input);
+  input.focus();
+  input.select();
+  // Stop this element's own drag-reorder/collapse-toggle listeners from
+  // seeing events that originate inside the textarea.
+  input.addEventListener('pointerdown', ev => ev.stopPropagation());
+  input.addEventListener('click', ev => ev.stopPropagation());
+  let settled = false;
+  function commit(){
+    if (settled) return;
+    settled = true;
+    const typed = input.value;
+    devTextOverrides[key] = (typed === '' || typed === original) ? null : typed;
+    el.textContent = devTextOverrides[key] != null ? devTextOverrides[key] : original;
+  }
+  function cancel(){
+    if (settled) return;
+    settled = true;
+    el.innerHTML = originalHTML;
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); input.blur(); }
+    else if (ev.key === 'Escape') cancel();
+  });
+}
+// Delegated single listener (not one per label) -- capture phase +
+// preventDefault so clicking a checkbox row's label text doesn't also
+// toggle the checkbox (native <label> click-through behavior).
+function setupDevTextEditMode(){
+  const groupsEl = document.getElementById('dpGroups');
+  groupsEl.addEventListener('click', e => {
+    if (!panelStyle.textEditMode) return;
+    const label = e.target.closest('.dp-row label');
+    if (!label || label.querySelector('textarea')) return;
+    const row = label.closest('.dp-row');
+    if (!row) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openDevTextEditFor(label, 'row:' + row.dataset.key);
+  }, true);
+}
+
 function createGroupElement(name){
   const g = document.createElement('div');
   g.className = 'dp-group';
@@ -848,6 +955,14 @@ function createGroupElement(name){
   gb.className = 'dp-group-body';
   h.addEventListener('click', e => {
     if (e.target.closest('.dp-drag-handle')) return;
+    // Text Edit Mode takes over the WHOLE header click (not just the
+    // title text) while it's on -- matches the template's own
+    // toggleSection() behavior -- so collapse/expand is unreachable
+    // via a plain click until the mode is switched off again.
+    if (panelStyle.textEditMode){
+      openDevTextEditFor(title, 'group:' + g.dataset.key);
+      return;
+    }
     g.classList.toggle('collapsed');
   });
   g.appendChild(h); g.appendChild(gb);
@@ -1729,6 +1844,10 @@ async function saveSettings(){
     values: { ...cfg },
     order: getPanelOrder(),
     panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
+    // Not device-split (unlike panelGeometry/panelStyle) -- a renamed
+    // label should read the same regardless of which tab is active,
+    // same rationale as cfg's own settings values.
+    textOverrides: { ...devTextOverrides },
   };
   const btn = document.getElementById('dpSaveBtn');
   const flash = (text, holdMs) => {
@@ -1818,6 +1937,10 @@ async function resetSettings(){
     applyValues(snap.values);
   }
   applyPanelGeometry(snap && snap.panelGeometry ? snap.panelGeometry[activeDeviceTab] : null);
+  // Always resolve (falling back to {}), same "don't silently keep
+  // whatever was already showing" convention as applyPanelStyleValues().
+  devTextOverrides = (snap && snap.textOverrides) ? { ...snap.textOverrides } : {};
+  applyDevTextOverrides();
 }
 
 function copySettings(){
@@ -1828,6 +1951,7 @@ function copySettings(){
     values: { ...cfg },
     order: getPanelOrder(),
     panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
+    textOverrides: { ...devTextOverrides },
   };
   const text = JSON.stringify(snapshot, null, 2);
   const btn = document.getElementById('dpCopyBtn');
@@ -6576,6 +6700,8 @@ if (DEV_MODE){
   initDeviceTabs();
   initPanelScrollStrength();
   document.getElementById('dpAddGroupBtn').addEventListener('click', addDevGroup);
+  setupDevTextEditMode();
+  applyDevTextOverrides();
 }
 // Runs regardless of DEV_MODE -- previously nested inside the block
 // above, so a real visitor (no ?dev=1, not localhost) never loaded the

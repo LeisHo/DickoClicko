@@ -35,15 +35,27 @@ Follow-up: ported the CONCRETE reference `J:\CLAUDE\PROJECTS\.claude\TEMPLATE_DE
 own styling/grouping capabilities (beyond what §12's text alone
 specifies) -- 16 new "Dev Panel" appearance settings (accent/slider
 color, font family, button height/text-border, scroll strength, 4x
-capitalize toggles, 4x letter-spacing), all defaulted to reproduce
-the panel's EXISTING look exactly (no silent visual change); a "+ Add
-Group" button; and one-level group nesting (drag a group into another
-top-level group's own body) with recursive order capture/restore that
-lets a nested arrangement, and a purely custom group, both survive
-Reset/reload. Verified via a jsdom test of the actual capture/restore/
-target-selection logic (5/5 passing) -- see CHANGELOG.txt for the full
-account, including one test-setup mistake caught before trusting the
-result. NOT drag-tested live (Browser pane still down).
+capitalize toggles, 4x letter-spacing); a "+ Add Group" button; and
+one-level group nesting (drag a group into another top-level group's
+own body) with recursive order capture/restore that lets a nested
+arrangement, and a purely custom group, both survive Reset/reload.
+**Corrected in a follow-up round** ("you didnt implement the
+stylizing and visuals... also provide the Text Edit mode checkbox"):
+the fields that genuinely come FROM the template (accent/slider
+color, font, button text border, scroll strength, 3 of the 4
+capitalize toggles) now default to the template's OWN actual look
+(blue `#5b85c8` accent, Verdana, capitalized button/tab/group text)
+-- this project's own PRE-EXISTING appearance fields (font sizes,
+opacity, bg/title/text color) predate this task and stay untouched,
+since those were never part of "the template's stylizing." Also added
+Text Edit Mode (a checkbox enabling inline click-to-rename for any
+group title or setting label, persisted alongside the rest of the
+settings blob). Verified via 2 jsdom tests -- nesting/order (5/5) and
+text-edit rename/persist/cancel (5/5) -- exercising the actual
+function bodies verbatim; see CHANGELOG.txt for the full account,
+including one test-setup mistake caught before trusting a result. NOT
+drag/rename-tested live (Browser pane still down) -- this is now the
+3rd consecutive dev-panel change awaiting the user's own live test.
 
 This session's Browser pane has gotten WORSE, not better: beyond the
 earlier 0x0-viewport/hidden state, a fresh navigate() call is now

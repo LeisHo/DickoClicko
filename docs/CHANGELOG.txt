@@ -7936,6 +7936,69 @@ entries. Awaiting the user's own live test, especially the actual
 drag-to-nest gesture itself.
 
 ================================================================================
+2026-09-08  -  06:38 AM EDT
+
+Direct correction to the previous entry: "you didnt implement the
+stylizing and visuals of the dev panel tempalte / also provide the
+Text Edit mode checkbox." Right call on both counts -- the previous
+pass had deliberately kept every new appearance field's DEFAULT equal
+to this panel's own pre-existing look (to avoid a silent visual
+change), which meant nothing actually looked different after adding
+the controls, defeating the actual point of "implementing the
+template's stylizing." And Text Edit Mode had been explicitly scoped
+out as "not requested" -- now it was.
+
+Fix 1 -- adopt the template's own actual defaults for the fields that
+genuinely COME FROM it: accentColor/sliderColor #3a3a4a/#7d8cff ->
+#5b85c8 (template's blue, both), fontFamily -> Verdana/Geneva,
+buttonTextBorder 5->0, scrollStrength 1->0.2, capsButtonText/
+capsTabText/capsGroupNames false->true (capsSettingsText stays false
+and every letter-spacing stays 0 -- both already matched the
+template). This DOES change the panel's default look now, on purpose
+-- distinct from this project's own PRE-EXISTING, independently-tuned
+fields (titleFontSize/tabFontSize/groupFontSize/labelFontSize/
+bodyFontSize/opacity/titleColor/bgColor/textColor), which predate this
+whole task and were never part of "the template's stylizing" to begin
+with -- left untouched, same reasoning as before, just scoped more
+precisely this time to only the fields the template actually
+contributed.
+
+Fix 2 -- Text Edit Mode, ported in full: a new 'Enable Label Rename
+Mode' checkbox in the built-in Dev Panel group; devTextOverrides
+(id-keyed by the SAME stable 'group:'+data-key/'row:'+data-key
+identity getPanelOrder()/applyOrder() already rely on, so a rename
+survives drag-reordering) + devTextOriginals (remembers each
+element's real text the first time it's seen); applyDevTextOverrides()
+(re-applies every stored override, or each element's own original,
+across every group title and row label); openDevTextEditFor() (an
+inline <textarea> over the clicked element, commit on blur/Enter,
+Escape reverts, retyping the true original or leaving it empty clears
+the override rather than storing a redundant copy); a delegated
+capture-phase click listener on #dpGroups (setupDevTextEditMode())
+for row labels; and the existing per-group header click handler
+(inside createGroupElement()) now routes to rename instead of
+collapse-toggle whenever the mode is on. Persisted alongside the rest
+of the settings blob (`textOverrides` added to the saveSettings()/
+copySettings() snapshot and resetSettings()'s restore) -- not device-
+split, a rename should read the same on both tabs, same as cfg's own
+values.
+
+Verified via a 2nd standalone jsdom test (same setup as the previous
+entry's nesting test): a plain applyDevTextOverrides() sweep with no
+overrides is a true no-op; renaming a group title via
+openDevTextEditFor()+commit stores the override and survives a fresh
+re-sweep (simulating what happens after Reset); retyping the exact
+original text clears the stored override rather than keeping a
+redundant copy; Escape/cancel restores the pre-edit DOM byte-for-byte
+and stores nothing; an empty commit also clears rather than storing
+an empty-string override. All 5 assertions passed. Also re-ran the
+full-script syntax check and the CSS brace-balance check (CSS itself
+wasn't touched this round, confirmed still 69/69 balanced). No live
+visual/interaction confirmation this round either -- same Browser
+pane limitation as every recent entry; this is now the 3rd
+consecutive dev-panel change awaiting the user's own live test.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
