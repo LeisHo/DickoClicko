@@ -7531,6 +7531,16 @@ confirmed nothing else stale. Pulled a concurrent, unrelated Save
 Settings commit (dev-panel-settings.json) before pushing.
 
 ================================================================================
+2026-09-08  -  03:03 AM EDT
+
+"i updated Frames-03 and 07. update and push" -- 5th round of the same
+PNG-vs-webp regeneration. Full re-scan found the expected 5 (03 x3
+folders, ANI/1/2 don't both use every number; 07 only in ANI/ and
+ANI/1/ since 07 isn't in ANI2_FRAMES) -- regenerated via sharp,
+verified loading at correct 1400x1257 dimensions via the live dev
+server, final re-scan clean.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
