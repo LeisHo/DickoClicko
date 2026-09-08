@@ -20,7 +20,8 @@
        applies them via style.minWidth/minHeight instead, as the one source
        of truth the resize-drag math also reads from directly. */
     background:var(--dp-bg, rgba(18,18,26,0.94)); color:var(--dp-text-color, #c9c9d8);
-    font:var(--dp-body-size, 12px)/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size:var(--dp-body-size, 12px); line-height:1.4;
+    font-family:var(--dp-font-family, -apple-system, Segoe UI, Roboto, sans-serif);
     border:1px solid #3a3a4a; border-radius:8px;
     z-index:9999; user-select:none;
     box-shadow:0 6px 24px rgba(0,0,0,0.5);
@@ -40,30 +41,58 @@
   .dp-title { letter-spacing:.06em; font-size:var(--dp-title-size, 13px); color:var(--dp-title-color, #e8e8f0); }
   #dpFps { flex:1 1 auto; opacity:.6; font-weight:400; font-size:10px; }
   .dp-icon-btn {
-    flex:0 0 auto; width:18px; height:18px; line-height:16px; text-align:center;
-    background:#3a3a4a; color:#e8e8f0; border:none; border-radius:3px;
+    flex:0 0 auto; width:18px; min-height:var(--dp-button-height, 18px); line-height:16px; text-align:center;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dp-accent, #3a3a4a); color:#e8e8f0; border:none; border-radius:3px;
     cursor:pointer; font-size:12px; padding:0;
+    letter-spacing:var(--dp-button-letter-spacing, 0);
   }
   .dp-body { padding:4px 8px 10px; overflow-y:auto; flex:1 1 auto; min-height:0; }
   .dp-actions { display:flex; gap:6px; padding:2px 2px 8px; }
   .dp-actions button {
-    flex:1 1 auto; background:#3a3a4a; color:#e8e8f0; border:none; border-radius:4px;
-    padding:5px 4px; font-size:11px; cursor:pointer;
+    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:var(--dp-accent, #3a3a4a); color:#e8e8f0; border:none; border-radius:4px;
+    padding:var(--dp-button-text-border, 5px) 4px; font-size:11px; cursor:pointer;
+    letter-spacing:var(--dp-button-letter-spacing, 0);
   }
-  .dp-actions button:active { background:#4a4a5e; }
+  .dp-actions button:active { filter:brightness(1.2); }
   .dp-tabs { display:flex; gap:4px; padding:6px 2px 0; }
   .dp-tab-btn {
-    flex:1 1 auto; background:#25253a; color:#9a9ab0; border:none; border-radius:4px;
-    padding:5px 4px; font-size:var(--dp-tab-size, 11px); cursor:pointer;
+    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:#25253a; color:#9a9ab0; border:none; border-radius:4px;
+    padding:var(--dp-button-text-border, 5px) 4px; font-size:var(--dp-tab-size, 11px); cursor:pointer;
+    letter-spacing:var(--dp-tab-letter-spacing, 0);
   }
-  .dp-tab-btn.active { background:#3a3a4a; color:#e8e8f0; font-weight:600; }
+  .dp-tab-btn.active { background:var(--dp-accent, #3a3a4a); color:#e8e8f0; font-weight:600; }
+  .dp-add-group-btn {
+    display:block; width:100%; margin:2px 0 8px; background:none; color:var(--dp-text-color, #c9c9d8);
+    border:1px dashed #3a3a4a; border-radius:4px; padding:5px 4px; font-size:11px; cursor:pointer;
+  }
+  .dp-add-group-btn:hover { background:#1c1c2c; border-color:var(--dp-accent, #3a3a4a); }
   .dp-group { border-top:1px solid #33333f; }
   .dp-group:first-child { border-top:none; }
   .dp-group.dp-dragging, .dp-row.dp-dragging { opacity:.4; }
+  /* Nested group (one level, §12e/template parity) -- a .dp-group-body
+     can directly contain child .dp-group elements, not just .dp-row
+     settings. Indented + left-bordered so nesting is visually obvious;
+     an empty nested group's own body still needs a visible/hittable
+     drop target at 0 rows. */
+  .dp-group-body > .dp-group {
+    margin-left:8px; padding-left:6px; border-top:none; border-left:2px solid #33333f;
+  }
+  .dp-group-body > .dp-group > .dp-group-header { font-size:calc(var(--dp-group-size, 11px) * 0.9); }
+  .dp-group-body > .dp-group > .dp-group-body:empty {
+    min-height:20px; border:1px dashed #3a3a4a; border-radius:3px; opacity:.5;
+  }
   .dp-group-header {
-    padding:7px 2px; font-weight:600; font-size:var(--dp-group-size, 11px); letter-spacing:.04em;
+    padding:7px 2px; font-weight:600; font-size:var(--dp-group-size, 11px); letter-spacing:var(--dp-group-letter-spacing, 0);
     color:var(--dp-text-color, #c9c9d8); cursor:pointer; display:flex; align-items:center; gap:6px;
   }
+  /* Capitalize toggles (§12i-adjacent, ported from TEMPLATE_DEV_PANEL.html's
+     own dev-caps-* classes) -- 4 independent categories, off by default so
+     nothing capitalizes until explicitly turned on. */
+  #devPanel.dp-caps-button-text .dp-actions button, #devPanel.dp-caps-button-text .dp-icon-btn { text-transform:uppercase; }
+  #devPanel.dp-caps-tab-text .dp-tab-btn { text-transform:uppercase; }
+  #devPanel.dp-caps-group-names .dp-group-header { text-transform:uppercase; }
+  #devPanel.dp-caps-settings-text .dp-row label { text-transform:uppercase; }
   .dp-group-header .arrow { transition:transform .15s; font-size:9px; }
   .dp-group.collapsed .arrow { transform:rotate(-90deg); }
   .dp-group.collapsed .dp-group-body { display:none; }
@@ -76,8 +105,8 @@
      to its label, it drops to its own line beneath the label instead of
      overflowing/getting cut off -- reported directly. */
   .dp-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 2px; }
-  .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); color:var(--dp-text-color, #c9c9d8); }
-  .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:#7d8cff; }
+  .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); color:var(--dp-text-color, #c9c9d8); letter-spacing:var(--dp-settings-letter-spacing, 0); }
+  .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:var(--dp-slider-color, #7d8cff); }
   .dp-num {
     flex:0 0 auto; width:52px; text-align:right; font-size:11px;
     background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
@@ -189,6 +218,7 @@
       <button type="button" id="dpSaveBtn">Save Settings</button>
       <button type="button" id="dpResetBtn">Reset</button>
     </div>
+    <button type="button" id="dpAddGroupBtn" class="dp-add-group-btn">+ Add Group</button>
     <div id="dpGroups"></div>
     <div class="dp-click-log-wrap">
       <div class="dp-click-log-header">
@@ -565,6 +595,23 @@ DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = Array.isArray(c.def
 // rather than two separate typed arrays — a prior version couldn't honor a
 // user-requested row order that interleaved slider and color rows, since
 // each array was always built as one contiguous block.
+// Accent/slider color, font family, button height/text-border, scroll
+// strength, capitalize toggles, and letter-spacing were added to bring
+// this group's own STRUCTURAL configurability in line with
+// J:\CLAUDE\PROJECTS\.claude\TEMPLATE_DEV_PANEL.html's own "Dev Panel"
+// group -- per explicit request ("implement the stylizing and visuals
+// of the tempalte"). Every new field's `def` is chosen to reproduce
+// this panel's EXISTING hardcoded look exactly (accentColor matches the
+// #3a3a4a already used for buttons/active-tab/icon-btn, sliderColor
+// matches the #7d8cff already on range inputs, fontFamily matches the
+// existing system-font stack, buttonTextBorder matches the existing
+// 5px vertical button padding, scrollStrength=1 means "native, no
+// scroll multiplier applied") -- deliberately NOT adopting the
+// template's own arbitrary starting look (blue accent, Verdana,
+// capitalized text) as this project's new default, since that would
+// silently change the panel's current appearance rather than just add
+// the capability to change it. The template's "Text Edit Mode" (inline
+// group/label renaming) was NOT ported -- out of scope, not requested.
 const PANEL_STYLE_CONTROLS = [
   { key:'titleFontSize', type:'slider', label:'Dev Panel Title Font Size',          min:9,  max:22, step:1,    def:13 },
   { key:'tabFontSize',   type:'slider', label:'Desktop/Mobile Tab Font Size',       min:8,  max:18, step:1,    def:11 },
@@ -575,6 +622,27 @@ const PANEL_STYLE_CONTROLS = [
   { key:'bodyFontSize',  type:'slider', label:'Body Text Font Size',                min:8,  max:18, step:1,    def:12 },
   { key:'bgColor',       type:'color',  label:'Dev Panel Background Color',      def:'#12121e' },
   { key:'textColor',     type:'color',  label:'Dev Panel Non-Title Text Color',  def:'#c9c9d8' },
+  { key:'accentColor',   type:'color',  label:'Dev Panel Accent Color',          def:'#3a3a4a' },
+  { key:'sliderColor',   type:'color',  label:'Dev Panel Slider Color',          def:'#7d8cff' },
+  { key:'fontFamily',    type:'dropdown', label:'Dev Panel Font (All Text)', def:'-apple-system, Segoe UI, Roboto, sans-serif', options:[
+    { value:'-apple-system, Segoe UI, Roboto, sans-serif', label:'System Default' },
+    { value:'monospace', label:'Monospace' },
+    { value:'Arial, Helvetica, sans-serif', label:'Arial' },
+    { value:'Verdana, Geneva, sans-serif', label:'Verdana' },
+    { value:"'Trebuchet MS', Arial, sans-serif", label:'Trebuchet MS' },
+    { value:'Calibri, Arial, sans-serif', label:'Calibri' },
+  ] },
+  { key:'buttonHeight',        type:'slider', label:'Dev Panel Button Height',           min:14, max:44, step:1,   def:21 },
+  { key:'buttonTextBorder',    type:'slider', label:'Dev Panel Button Text Border',       min:0,  max:16, step:1,   def:5 },
+  { key:'scrollStrength',      type:'slider', label:'Dev Panel Scroll Strength',          min:0.2,max:5,  step:0.1, def:1 },
+  { key:'capsButtonText',      type:'checkbox', label:'Capitalize Button Text',           def:false },
+  { key:'capsTabText',         type:'checkbox', label:'Capitalize Tab Text',              def:false },
+  { key:'capsGroupNames',      type:'checkbox', label:'Capitalize Group Names',           def:false },
+  { key:'capsSettingsText',    type:'checkbox', label:'Capitalize Settings Text',         def:false },
+  { key:'buttonLetterSpacing', type:'slider', label:'Dev Panel Button Letter Spacing',    min:-1, max:4,  step:0.1, def:0 },
+  { key:'tabLetterSpacing',    type:'slider', label:'Dev Panel Tab Letter Spacing',       min:-1, max:4,  step:0.1, def:0 },
+  { key:'groupLetterSpacing',  type:'slider', label:'Dev Panel Group Letter Spacing',     min:-1, max:4,  step:0.1, def:0 },
+  { key:'settingsLetterSpacing', type:'slider', label:'Dev Panel Settings Letter Spacing', min:-1, max:4, step:0.1, def:0 },
 ];
 const panelStyle = {};
 PANEL_STYLE_CONTROLS.forEach(c => panelStyle[c.key] = c.def);
@@ -585,6 +653,10 @@ function hexToRgba(hex, alpha){
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
+const PANEL_CAPS_CLASS_MAP = {
+  capsButtonText: 'dp-caps-button-text', capsTabText: 'dp-caps-tab-text',
+  capsGroupNames: 'dp-caps-group-names', capsSettingsText: 'dp-caps-settings-text',
+};
 function applyPanelStyle(){
   const panel = document.getElementById('devPanel');
   panel.style.setProperty('--dp-title-size', panelStyle.titleFontSize + 'px');
@@ -595,6 +667,35 @@ function applyPanelStyle(){
   panel.style.setProperty('--dp-bg', hexToRgba(panelStyle.bgColor, panelStyle.opacity));
   panel.style.setProperty('--dp-title-color', panelStyle.titleColor);
   panel.style.setProperty('--dp-text-color', panelStyle.textColor);
+  panel.style.setProperty('--dp-accent', panelStyle.accentColor);
+  panel.style.setProperty('--dp-slider-color', panelStyle.sliderColor);
+  panel.style.setProperty('--dp-font-family', panelStyle.fontFamily);
+  panel.style.setProperty('--dp-button-height', panelStyle.buttonHeight + 'px');
+  panel.style.setProperty('--dp-button-text-border', panelStyle.buttonTextBorder + 'px');
+  panel.style.setProperty('--dp-button-letter-spacing', panelStyle.buttonLetterSpacing + 'px');
+  panel.style.setProperty('--dp-tab-letter-spacing', panelStyle.tabLetterSpacing + 'px');
+  panel.style.setProperty('--dp-group-letter-spacing', panelStyle.groupLetterSpacing + 'px');
+  panel.style.setProperty('--dp-settings-letter-spacing', panelStyle.settingsLetterSpacing + 'px');
+  for (const [key, className] of Object.entries(PANEL_CAPS_CLASS_MAP)){
+    panel.classList.toggle(className, !!panelStyle[key]);
+  }
+}
+
+// Scroll Strength (ported from TEMPLATE_DEV_PANEL.html) -- a multiplier
+// on the panel body's own wheel-scroll delta. Default 1 = native,
+// unmodified scroll (no behavior change out of the box); a value below
+// 1 slows scrolling, above 1 speeds it up. Skipped entirely at 1 (no
+// preventDefault) so native scroll physics/momentum are untouched
+// unless the user actually changes this from its default.
+function initPanelScrollStrength(){
+  const body = document.getElementById('dpBody');
+  if (!body) return;
+  body.addEventListener('wheel', e => {
+    const strength = panelStyle.scrollStrength;
+    if (strength === 1) return;
+    e.preventDefault();
+    body.scrollTop += e.deltaY * strength;
+  }, { passive:false });
 }
 
 const panelStyleNumEls = {};
@@ -657,6 +758,24 @@ function buildPanelStyleGroup(){
       row.appendChild(copyBtn);
       row.appendChild(pasteBtn);
       panelStyleNumEls[ctrl.key] = { color };
+    } else if (ctrl.type === 'dropdown'){
+      const select = document.createElement('select');
+      select.className = 'dp-dropdown';
+      ctrl.options.forEach(opt => {
+        const optionEl = document.createElement('option');
+        optionEl.value = opt.value; optionEl.textContent = opt.label;
+        select.appendChild(optionEl);
+      });
+      select.value = panelStyle[ctrl.key];
+      select.addEventListener('change', () => { panelStyle[ctrl.key] = select.value; applyPanelStyle(); });
+      row.appendChild(select);
+      panelStyleNumEls[ctrl.key] = { select };
+    } else if (ctrl.type === 'checkbox'){
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = !!panelStyle[ctrl.key];
+      cb.addEventListener('change', () => { panelStyle[ctrl.key] = cb.checked; applyPanelStyle(); });
+      row.appendChild(cb);
+      panelStyleNumEls[ctrl.key] = { cb };
     }
     gb.appendChild(row);
   });
@@ -688,6 +807,10 @@ function applyPanelStyleValues(saved){
         el.slider.value = v; el.numInput.value = round(v, 3);
       } else if (ctrl.type === 'color'){
         el.color.value = v;
+      } else if (ctrl.type === 'dropdown'){
+        el.select.value = v;
+      } else if (ctrl.type === 'checkbox'){
+        el.cb.checked = !!v;
       }
     }
   });
@@ -704,42 +827,108 @@ const numEls = {};
 // permission prompt, no async, works identically for every color
 // control regardless of which one copied it.
 let copiedColorValue = null;
+// Shared group-DOM builder -- used both for a real DEV_GROUPS entry
+// (buildDevPanel below) and for a user-created custom group (addDevGroup,
+// and applyOrder()'s own "recreate a group that only exists in saved
+// order" fallback). Built via DOM methods rather than an innerHTML
+// string concat (unlike this function's pre-refactor form) since `name`
+// can now come from user input (see addDevGroup) instead of only a
+// hardcoded DEV_GROUPS title.
+function createGroupElement(name){
+  const g = document.createElement('div');
+  g.className = 'dp-group';
+  g.dataset.key = name;
+  const h = document.createElement('div');
+  h.className = 'dp-group-header';
+  const handle = document.createElement('span'); handle.className = 'dp-drag-handle'; handle.textContent = '⠿';
+  const arrow = document.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '▼';
+  const title = document.createElement('span'); title.textContent = name;
+  h.appendChild(handle); h.appendChild(arrow); h.appendChild(title);
+  const gb = document.createElement('div');
+  gb.className = 'dp-group-body';
+  h.addEventListener('click', e => {
+    if (e.target.closest('.dp-drag-handle')) return;
+    g.classList.toggle('collapsed');
+  });
+  g.appendChild(h); g.appendChild(gb);
+  return g;
+}
 function buildDevPanel(){
   const body = document.getElementById('dpGroups');
   DEV_GROUPS.forEach(group => {
-    const g = document.createElement('div');
-    g.className = 'dp-group';
-    g.dataset.key = group.title;
-    const h = document.createElement('div');
-    h.className = 'dp-group-header';
-    h.innerHTML = '<span class="dp-drag-handle">⠿</span><span class="arrow">▼</span><span>' + group.title + '</span>';
-    const gb = document.createElement('div');
-    gb.className = 'dp-group-body';
-    h.addEventListener('click', e => {
-      if (e.target.closest('.dp-drag-handle')) return;
-      g.classList.toggle('collapsed');
-    });
+    const g = createGroupElement(group.title);
+    const gb = g.querySelector('.dp-group-body');
     group.controls.forEach(ctrl => gb.appendChild(buildRow(ctrl)));
-    g.appendChild(h); g.appendChild(gb); body.appendChild(g);
+    body.appendChild(g);
   });
-  makeReorderable(body, 'dp-group', 'dp-drag-handle');
+  makeReorderable(body, 'dp-group', 'dp-drag-handle', groupDragTargets);
   DEV_GROUPS.forEach(group => {
     const gb = body.querySelector('.dp-group[data-key="' + CSS.escape(group.title) + '"] .dp-group-body');
     makeReorderable(gb, 'dp-row', 'dp-row-handle');
   });
 }
 
+// "+ Add Group" (§12e/template parity, per explicit request: "I also
+// wanted the function to add groups and place groups within groups").
+// A group created this way exists ONLY in the DOM + whatever gets
+// captured into saved order -- it has no DEV_GROUPS entry, so it
+// survives Reset/reload purely via applyOrder()'s own "recreate a
+// group that only exists in saved order" fallback (see that function's
+// comment). Considers every group already on the panel, top-level AND
+// nested (querySelectorAll('.dp-group') reaches both), so a new name
+// can't collide with a nested group's name either.
+function addDevGroup(){
+  const container = document.getElementById('dpGroups');
+  const existingNames = new Set(Array.from(container.querySelectorAll('.dp-group')).map(g => g.dataset.key));
+  let name = 'New Group';
+  let n = 2;
+  while (existingNames.has(name)){ name = 'New Group (' + n + ')'; n++; }
+  const g = createGroupElement(name);
+  container.appendChild(g);
+  makeReorderable(g.querySelector('.dp-group-body'), 'dp-row', 'dp-row-handle');
+  g.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+// Only top-level groups' own bodies (direct children of #dpGroups) are
+// offered as nest targets -- never a NESTED group's own body -- which is
+// what caps nesting at exactly one level (ported from
+// TEMPLATE_DEV_PANEL.html's own "one level of nesting" design, per
+// explicit request: "add groups and place groups within groups").
+// #dpGroups itself is always included too, so a nested group can be
+// dragged back out to top-level. Excludes the dragged group's own body
+// (can't nest a group inside itself).
+function groupDragTargets(draggedGroup){
+  const dpGroupsEl = document.getElementById('dpGroups');
+  const topLevelBodies = Array.from(dpGroupsEl.querySelectorAll(':scope > .dp-group > .dp-group-body'))
+    .filter(gb => gb.parentElement !== draggedGroup);
+  return [dpGroupsEl, ...topLevelBodies];
+}
+
 /* ---------------------------------------------------------------------
    Drag-to-reorder (groups, and settings within a group) — pointer-based
-   so it works the same on touch and mouse.
+   so it works the same on touch and mouse. `crossContainerFn(dragEl)`
+   (optional) lets an item cross into a DIFFERENT sibling container
+   instead of only reordering within the one it started in -- used for
+   GROUP dragging (see groupDragTargets() above) so a group can be
+   dropped either back at top-level or nested into another group's own
+   body; omitted for ROW dragging, which stays confined to its own
+   group exactly as before (moving a SETTING between groups was never
+   requested, only groups themselves).
 --------------------------------------------------------------------- */
-function makeReorderable(container, itemClass, handleClass){
+function makeReorderable(container, itemClass, handleClass, crossContainerFn){
   let dragEl = null;
   container.addEventListener('pointerdown', e => {
     const handle = e.target.closest('.' + handleClass);
     if (!handle || !container.contains(handle)) return;
     const item = handle.closest('.' + itemClass);
-    if (!item || item.parentElement !== container) return;
+    // Without crossContainerFn, an item must already be a direct child of
+    // the container this listener was registered on (original behavior,
+    // unchanged). WITH crossContainerFn, an item's current parent can
+    // legitimately vary over time (e.g. a group that was nested last
+    // drag, now living inside a different group's body) -- container.
+    // contains(handle) above (event delegation reaches the whole
+    // subtree) is enough to confirm this pointerdown is genuinely ours.
+    if (!item || (!crossContainerFn && item.parentElement !== container)) return;
     e.preventDefault();
     dragEl = item;
     dragEl.classList.add('dp-dragging');
@@ -747,15 +936,33 @@ function makeReorderable(container, itemClass, handleClass){
 
     function move(ev){
       if (!dragEl) return;
-      const siblings = Array.from(container.children).filter(c => c.classList.contains(itemClass) && c !== dragEl);
+      let targetContainer = container;
+      if (crossContainerFn){
+        const candidates = crossContainerFn(dragEl);
+        let found = candidates.find(c => {
+          const r = c.getBoundingClientRect();
+          return ev.clientY >= r.top && ev.clientY <= r.bottom;
+        });
+        if (!found){
+          let minDist = Infinity;
+          candidates.forEach(c => {
+            const r = c.getBoundingClientRect();
+            const dist = Math.abs(ev.clientY - (r.top + r.height / 2));
+            if (dist < minDist){ minDist = dist; found = c; }
+          });
+        }
+        if (found) targetContainer = found;
+      }
+      const siblings = Array.from(targetContainer.children).filter(c => c.classList.contains(itemClass) && c !== dragEl);
+      if (siblings.length === 0){ targetContainer.appendChild(dragEl); return; }
       for (const sib of siblings){
         const r = sib.getBoundingClientRect();
         const mid = r.top + r.height / 2;
         if (ev.clientY < mid){
-          container.insertBefore(dragEl, sib);
-          break;
+          targetContainer.insertBefore(dragEl, sib);
+          return;
         } else if (sib === siblings[siblings.length - 1]){
-          container.appendChild(dragEl);
+          targetContainer.appendChild(dragEl);
         }
       }
     }
@@ -1157,27 +1364,57 @@ const isMobileClass = () => window.matchMedia('(max-width: 767px)').matches;
 // device-split — only the panel's own chrome (§12c) does, per §12f's own text.
 let activeDeviceTab = isMobileClass() ? 'mobile' : 'desktop';
 
-function getPanelOrder(){
-  return Array.from(document.querySelectorAll('#dpGroups > .dp-group')).map(g => ({
+// Captures one group's own direct row keys, plus (one level deep only,
+// matching groupDragTargets()'s own one-level cap) any subgroups it
+// directly contains. `:scope`-scoped throughout so a query never reaches
+// past that one level into a nested subgroup's own rows/further nesting
+// -- there is none, since groupDragTargets() only ever offers TOP-LEVEL
+// bodies as valid nest targets, so a subgroup can never itself contain
+// another subgroup. `subgroups` is a new field (old saved data simply
+// won't have it -- applyOrder()'s own `(saved.subgroups || [])` handles
+// that as "no subgroups", not an error).
+function captureGroup(g){
+  const body = g.querySelector(':scope > .dp-group-body');
+  return {
     key: g.dataset.key,
     collapsed: g.classList.contains('collapsed'),
-    settings: Array.from(g.querySelectorAll('.dp-row')).map(r => r.dataset.key),
-  }));
+    settings: Array.from(body.querySelectorAll(':scope > .dp-row')).map(r => r.dataset.key),
+    subgroups: Array.from(body.querySelectorAll(':scope > .dp-group')).map(sub => captureGroup(sub)),
+  };
+}
+function getPanelOrder(){
+  return Array.from(document.querySelectorAll('#dpGroups > .dp-group')).map(g => captureGroup(g));
 }
 
+// Places one saved group (and, one level deep, its own saved subgroups)
+// into parentContainer -- either #dpGroups itself (top-level) or another
+// group's own .dp-group-body (nested). Recursive, only ever called 2
+// deep (matching captureGroup()'s own one-level cap). Searches the WHOLE
+// #dpGroups subtree for an existing group/row by key -- not just within
+// parentContainer -- since a row or group may currently sit somewhere
+// else in the tree (e.g. nested last save, top-level again this time).
+function placeGroup(saved, parentContainer){
+  const dpGroupsEl = document.getElementById('dpGroups');
+  let groupEl = dpGroupsEl.querySelector('.dp-group[data-key="' + CSS.escape(saved.key) + '"]');
+  if (!groupEl){
+    // Not a mistake -- this is how a CUSTOM group (see addDevGroup())
+    // survives a reload: it doesn't exist in DEV_GROUPS/the static build
+    // at all, only in saved order.
+    groupEl = createGroupElement(saved.key);
+    makeReorderable(groupEl.querySelector('.dp-group-body'), 'dp-row', 'dp-row-handle');
+  }
+  parentContainer.appendChild(groupEl);
+  groupEl.classList.toggle('collapsed', !!saved.collapsed);
+  const body = groupEl.querySelector(':scope > .dp-group-body');
+  (saved.settings || []).forEach(k => {
+    const rowEl = dpGroupsEl.querySelector('.dp-row[data-key="' + CSS.escape(k) + '"]');
+    if (rowEl) body.appendChild(rowEl);
+  });
+  (saved.subgroups || []).forEach(sub => placeGroup(sub, body));
+}
 function applyOrder(order){
   const groupsContainer = document.getElementById('dpGroups');
-  (order || []).forEach(g => {
-    const groupEl = groupsContainer.querySelector('.dp-group[data-key="' + CSS.escape(g.key) + '"]');
-    if (!groupEl) return;
-    groupsContainer.appendChild(groupEl);
-    groupEl.classList.toggle('collapsed', !!g.collapsed);
-    const groupBody = groupEl.querySelector('.dp-group-body');
-    (g.settings || []).forEach(k => {
-      const rowEl = groupBody.querySelector('.dp-row[data-key="' + CSS.escape(k) + '"]');
-      if (rowEl) groupBody.appendChild(rowEl);
-    });
-  });
+  (order || []).forEach(g => placeGroup(g, groupsContainer));
 }
 
 function applyValues(values){
@@ -6337,6 +6574,8 @@ if (DEV_MODE){
   initResizeHandles();
   initDevPanelChrome();
   initDeviceTabs();
+  initPanelScrollStrength();
+  document.getElementById('dpAddGroupBtn').addEventListener('click', addDevGroup);
 }
 // Runs regardless of DEV_MODE -- previously nested inside the block
 // above, so a real visitor (no ?dev=1, not localhost) never loaded the

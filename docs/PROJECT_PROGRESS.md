@@ -31,6 +31,20 @@ directly; the one genuine design question (no per-tab desktop/mobile
 override for individual settings, only for the panel's own chrome)
 was surfaced and the user confirmed leaving it as-is.
 
+Follow-up: ported the CONCRETE reference `J:\CLAUDE\PROJECTS\.claude\TEMPLATE_DEV_PANEL.html`'s
+own styling/grouping capabilities (beyond what §12's text alone
+specifies) -- 16 new "Dev Panel" appearance settings (accent/slider
+color, font family, button height/text-border, scroll strength, 4x
+capitalize toggles, 4x letter-spacing), all defaulted to reproduce
+the panel's EXISTING look exactly (no silent visual change); a "+ Add
+Group" button; and one-level group nesting (drag a group into another
+top-level group's own body) with recursive order capture/restore that
+lets a nested arrangement, and a purely custom group, both survive
+Reset/reload. Verified via a jsdom test of the actual capture/restore/
+target-selection logic (5/5 passing) -- see CHANGELOG.txt for the full
+account, including one test-setup mistake caught before trusting the
+result. NOT drag-tested live (Browser pane still down).
+
 This session's Browser pane has gotten WORSE, not better: beyond the
 earlier 0x0-viewport/hidden state, a fresh navigate() call is now
 being denied/failing outright too. Treat live verification as
