@@ -104,24 +104,38 @@ didn't clear it -- so neither of these got a real visual check):
   getters/setters added to `makeTipCollisionPoint()` for this). Not
   yet watched live -- same Browser pane limitation; this is the one
   most worth testing first, since it's a direct fix for a reported bug.
-- NEW: `applySelfCollisionNormalDamping()` in `resolveSelfCollision()`
-  only -- a follow-up fix for a DIFFERENT reported symptom: "a cut off
-  rope segment may bend back on itself, which is fine. but when it
-  hits the ground... it continues sliding in one direction until out
-  of frame" (pure self-collision, not piece-vs-piece). Fully cancels
-  relative NORMAL velocity after each self-collision correction
-  (mirroring the floor clamp's own already-proven pattern), unlike
-  `applyContactFriction()` which only ever damps the tangential
-  component. **Lower confidence than the other fixes here** -- 2 Node
-  simulations (a simplified 2-point case, then a more faithful 8-point
-  folded-chain-with-floor-clamp case) were built to try to reproduce
-  the drift and neither one did, with or without the fix, so the
-  underlying math was verified in isolation but the actual diagnosis
-  was never confirmed against a working repro. Shipped anyway per
-  explicit user decision (asked directly, given the honest verification
-  gap). If this doesn't actually fix the reported symptom, more repro
-  detail (piece length, Endcap settings, single vs. multiple folds,
-  which direction it slides) would help find the real cause.
+- `applySelfCollisionNormalDamping()` in `resolveSelfCollision()` --
+  fully cancels relative NORMAL velocity after each self-collision
+  correction. Shipped with an explicitly disclosed low-confidence
+  diagnosis (2 Node simulations failed to reproduce the reported
+  fold-on-floor drift, with or without the fix). **User confirmed the
+  drift was still occurring afterward** ("it only happens when a rope
+  has bent over on itself when its on the floor") -- see the NEW entry
+  below for the actual root cause and fix. This function stays in
+  place (harmless, only engages during an active overlap) but was NOT
+  the real fix for this symptom.
+- NEW, the actual fix for the fold-on-floor sliding: removed
+  `clampToFloor()`'s own horizontal-velocity damping
+  (`oldx = x-(x-oldx)*0.3`) entirely -- it now only clamps y/oldy
+  (the actual constrained direction), matching the same principle
+  already used everywhere else in this file's constraint solve.
+  Root cause, PROVEN not just hypothesized: resolveSelfCollision's own
+  correction is mathematically guaranteed momentum-conserving (a
+  simulation with all points forced to the exact same y showed exactly
+  0 drift) -- the real asymmetry came from clampToFloor damping each
+  point's horizontal velocity INDEPENDENTLY, so 2 self-colliding
+  points at even sub-pixel-different heights (inevitable for a real
+  fold) get treated unequally, breaking that symmetry. Verified via 4
+  progressively-more-faithful Node simulations, the last one using the
+  exact shipped code across 10 different jitter seeds x 2000 frames
+  each -- 0 drift in every case (previous fix reduced it ~34% but
+  never eliminated it, matching "still occurring"). Real disclosed
+  behavior change: a landed piece now keeps more horizontal momentum
+  immediately after touching the floor, decaying only via the general
+  per-frame damping instead of an instant partial cut -- expected to
+  read as more natural sliding-to-a-stop. Meaningfully higher
+  confidence than the previous attempt, given the much more thorough
+  verification, but still not live-tested (Browser pane down).
 - NEW: `PIECE_SPAWN_GRACE_RADIUS_FRAC` reduced `2 -> 0.3` -- fixes 2
   reports: "the subsequent 2 rope pieces should still have collision
   detectors" (after cutting an already-cut piece) and, more

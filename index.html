@@ -5587,13 +5587,45 @@ function update(rawDt){
     // each piece's live, possibly-decayed thickness via pieceThickness()
     // (matching pieceCollision()'s own convention) -- so the chain's real
     // rendered UNDERSIDE rests on the floor line instead of its center.
+    // Reported directly, and traced to THIS function specifically: a
+    // piece folded back on itself, resting on the floor, "continues
+    // sliding in one direction until out of frame" -- happens ONLY when
+    // folded AND on the floor (confirmed: a prior self-collision-only
+    // fix, applySelfCollisionNormalDamping, reduced but did not
+    // eliminate it). Root cause was the OLD `p.oldx = p.x -
+    // (p.x-p.oldx)*0.3` line below (now removed): applied per-POINT
+    // independently, it damped horizontal velocity to 30% for whichever
+    // points individually crossed the floor line -- but 2 self-colliding
+    // points of a fold are rarely at EXACTLY the same y (even a
+    // fraction-of-a-pixel difference is enough), so one point of a
+    // colliding pair would get this 70%-velocity-cut while the other,
+    // sitting a hair above clampY, would not. That breaks the equal-
+    // and-opposite symmetry resolveSelfCollision's own correction
+    // depends on to avoid net translation (verified: a standalone Node
+    // simulation of a folded piece resting flat, with realistic
+    // sub-pixel y-variation between its 2 strands, reproduced a clean,
+    // steady one-direction drift; removing this line's x-velocity
+    // damping entirely -- leaving only the y-clamp below, which zeroes
+    // velocity in the actual CONSTRAINED direction -- eliminated the
+    // drift completely down to 0, regardless of point ordering or the
+    // specific jitter). This matches the same principle already used
+    // everywhere else in this file's own constraint solve (boundaryConstraint,
+    // tipTarget): a constraint should only kill velocity in the
+    // direction it's actually constraining, never a different axis --
+    // the removed line was an ad-hoc floor-friction addition with no
+    // documented reason for its own 0.3 value, and was never actually
+    // consistent with that principle. Real, visible behavior change as
+    // a result: a piece now keeps more of its horizontal momentum
+    // immediately after landing (decaying only via cfg.damping's own
+    // general per-frame decay, same as everywhere else), rather than
+    // an instant partial cut the moment it touches the floor -- expected
+    // to read as slightly more natural sliding-to-a-stop, not as a bug.
     const clampToFloor = (points, thick) => {
       const half = thick / 2;
       const clampY = fY - half;
       points.forEach(p => {
         if (p.y > clampY){
           p.y = clampY;
-          p.oldx = p.x - (p.x - p.oldx) * 0.3;
           p.oldy = p.y;
         }
       });

@@ -8119,6 +8119,79 @@ the original "shoots downward fast on a coincident double-cut" issue
 has come back.
 
 ================================================================================
+2026-09-08  -  07:17 AM EDT
+
+"the sliding issue is sitll occuring. it only happens when a rope has
+bent over on itself when its on the floor" -- direct, confirmed
+negative result on the previous entry's applySelfCollisionNormalDamping
+fix, with a precise, narrowed repro condition this time (fold + floor,
+specifically). Re-investigated from scratch rather than assuming the
+prior fix's reasoning was simply incomplete.
+
+First proved something important via a synthetic test: resolveSelfCollision's
+own correction (`p.x -= nx*push; q.x += nx*push`, and both
+applyContactFriction/applySelfCollisionNormalDamping's own oldx/oldy
+adjustments) is mathematically GUARANTEED to conserve the sum of the
+pair's own x-coordinates -- an exactly-symmetric, equal-and-opposite
+correction can never by itself cause a piece's centroid to drift,
+regardless of geometry or how many pairs are involved. 2 clean
+simulations (a folded chain with all points forced to the EXACT same
+y) confirmed exactly 0 drift, proving self-collision in isolation was
+never the culprit -- meaning the fix needed to live somewhere else.
+
+Reasoned from there to clampToFloor() specifically: it damps each
+point's horizontal velocity (`oldx = x - (x-oldx)*0.3`) INDEPENDENTLY,
+based purely on whether THAT point individually crosses the floor
+line. 2 self-colliding points of a fold are essentially never at
+EXACTLY the same y in practice (even sub-pixel variation is enough)
+-- so one point of a colliding pair gets this 70%-velocity-cut while
+the other, sitting a hair above the line, doesn't. THAT breaks
+self-collision's own proven-symmetric correction, injecting a real,
+net, one-directional velocity every time it happens. Verified with a
+3rd simulation: a folded chain resting on the floor with realistic
+sub-pixel y-jitter between its 2 strands (mimicking the real,
+inevitable variation a genuine fold would have) reproduced a clean,
+steady drift -- ~17.6px over 1200 frames with NO fix, ~11.6px with
+the previous entry's fix (reduced, not eliminated -- exactly matching
+"still occurring" after that fix shipped). Tested candidate fixes
+empirically: reordering collision before the floor clamp only
+partially helped (6.3px); softening the 0.3 retention factor to 0.9
+barely helped at all (10.1px, confirming this isn't a tuning
+problem); removing the x-velocity damping ENTIRELY (leaving only the
+y-clamp, which zeroes velocity in the actual constrained direction --
+the same principle already used everywhere else in this file's own
+constraint solve, e.g. boundaryConstraint/tipTarget) eliminated the
+drift completely, down to exactly 0.
+
+Fix: removed the `oldx = x - (x-oldx)*0.3` line from clampToFloor()
+entirely -- it now only clamps y and zeroes oldy, matching the
+established "kill velocity only in the direction actually being
+constrained" pattern. No documented reason existed for the removed
+line's own 0.3 value in the first place (unlike almost every other
+constant in this file, which has a provenance comment) -- it reads as
+an undocumented ad-hoc floor-friction addition, not a considered
+design choice. Real, disclosed behavior change: a piece now keeps
+more of its horizontal momentum immediately after landing, decaying
+only via cfg.damping's own general per-frame decay instead of an
+instant partial cut on floor contact -- expected to read as slightly
+more natural post-landing sliding-to-a-stop, not as a new bug.
+applySelfCollisionNormalDamping/applyContactFriction (previous entry)
+were left in place -- harmless, only engage during an active overlap,
+and may still help other self-collision jitter even though they
+weren't the actual fix for this specific symptom.
+
+Verified via a 4th, final simulation using the EXACT shipped
+clampToFloor logic (oldx untouched) across 10 different jitter seeds,
+2000 frames each -- drift was exactly 0 in every single case, a much
+more thorough confirmation than the previous entry's inconclusive
+attempts. Full syntax check passed. No live in-game confirmation
+possible (Browser pane still down) -- given the strength of this
+verification (a definitively reproduced bug, a definitively
+eliminated one, across many seeds), confidence is meaningfully higher
+than the previous entry's fix, but still worth the user's own live
+test given no visual/gameplay check was possible.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
