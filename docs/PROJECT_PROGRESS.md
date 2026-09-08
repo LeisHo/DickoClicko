@@ -26,6 +26,13 @@ and click/hold interaction are all confirmed working; the live
 per-frame tick itself wasn't observable this session -- see "Recently
 completed" below for why).
 
+Animations 1 and 2's frames were just refreshed (user edited the source
+PNGs; the matching .webp files -- what the game actually loads -- have
+been regenerated to match, see "Recently completed" below). `sharp` is
+now available in this environment (`npm install sharp` works, ~5s) --
+prefer it over the earlier Playwright/Chromium-canvas workaround for
+any future PNG->WebP regeneration need in this project.
+
 "Shoots downward fast" / "floating" -- `ENABLE_ENDCAP_AND_MAINROPE_
 COLLISION` is back to `false` (attempt #5, the pileTopY settledness
 check, reported "no good"). Confirmed-working state is the flag OFF --

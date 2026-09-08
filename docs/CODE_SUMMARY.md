@@ -3693,7 +3693,15 @@ GOTCHAS
   there's no way to recover the original conversion tool's exact
   settings. Whoever edits these frames next needs to regenerate the
   `.webp` the same way -- there's no build step or watcher that does
-  this automatically.
+  this automatically. **Correction (later session):** `sharp` IS
+  installable in this environment after all (`npm install sharp`
+  completed in ~5s, no existing `package.json` needed, installed
+  standalone with `--no-save`) -- prefer `sharp(file).resize({width:
+  1400}).webp({quality:90}).toFile(...)` over the Playwright/Chromium-
+  canvas workaround above for any future regeneration; much simpler
+  and doesn't need a browser at all. Re-verify frame counts changed
+  since this file was written by checking the current commit's own
+  `ls` output before regenerating anything, same as always.
 - **`FLICK2_FRAME_COUNT`'s own source comment described a curated,
   hardcoded frame-number list that had silently drifted out of sync with
   the actual source folders.** The comment claimed Animation 2's 21

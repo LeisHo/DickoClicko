@@ -7356,6 +7356,67 @@ playback itself was NOT confirmed by watching it actually cycle through
 frames -- awaiting the user's own test.
 
 ================================================================================
+2026-09-08  -  01:03 AM EDT
+
+"I UPdated the frames in Ani. Update for Animations 1 and 2" -- same
+recurring gotcha this project has hit before (see the "Editing a FLICK
+animation frame means editing the .png, but the game only ever loads
+the .webp" entry from 2 sessions ago): the user's edits land on the
+.png source files, but animations 1/2 only ever load .webp, so the two
+can silently drift apart.
+
+Verified via `ls` + mtime comparison (not assumption) exactly which
+frame-number SETS exist per folder first, since that's the part that's
+drifted out of sync before: `data/FLICK/ANI/`'s own 17-frame set
+(animation 1) and `ANI/1`/`ANI/2`'s own frame-number lists (animation
+2) are UNCHANGED from the current ANI1_FRAMES/ANI2_FRAMES arrays --
+this update only touched frame CONTENT, not which frames exist. Found
+26 PNGs with a newer mtime than their matching .webp (12 in `ANI/`,
+frames 01-12; 8 in `ANI/1`, frames 01/02/03/04/07/10/11/12; 6 in
+`ANI/2`, frames 01/02/03/05/06/11) plus 1 PNG with no .webp at all yet
+(`ANI/2/FRAMES-12.png` -- not in ANI2_FRAMES, left out of the array
+since this update was about refreshing existing content, not changing
+the sequence, but generated its own .webp anyway for PNG/webp
+consistency). Also found 2 loose, non-numbered PNGs (`FRAMES-01A.png`,
+`FRAMES-01B.png` in `ANI/` root) with fresh timestamps -- don't match
+the `FRAMES-NN.png` pattern either array or the code's own loading
+logic expects, so left alone as (presumably) the user's own
+work-in-progress/comparison files, not wired into anything.
+
+Regenerated all 27 .webp files (26 stale + the 1 missing) from their
+current .png source. The prior round's own regeneration used a headless
+Playwright/Chromium page (canvas.toDataURL('image/webp', 0.9)) because
+"no cwebp/ImageMagick/sharp available in this environment" at the
+time -- re-checked this round and `npm install sharp` (no existing
+package.json in this project, installed standalone with --no-save)
+completed in ~5s, so used `sharp(file).resize({width:1400}).webp(
+{quality:90}).toFile(...)` instead -- same 1400px-wide/quality-90
+convention as the established process, just a faster/more direct tool
+now that it's actually available. 1400px width confirmed still correct
+by checking an untouched reference frame's real source dimensions
+(6869x6166, same as the edited ones) against its own existing webp
+(1400x1257) -- same ~20.38% scale ratio holds.
+
+Verified: all 27 regenerated files load as valid 1400x1257 WebP images
+(checked via the live dev server -- fetched each, drew to a canvas,
+confirmed real non-transparent pixel content and correct dimensions,
+not corrupted/blank output) and one (animation 1's own frame 1) was
+rendered and screenshotted directly, showing a clean, correctly-drawn
+hand graphic matching this project's existing art style. Reloaded the
+actual game page afterward and confirmed it still runs normally (rope
+growing, dev panel rendering, FLICK ANIMATION 3 from the immediately
+prior task still visible and correctly positioned) -- a batch of
+`loop() error` console entries initially looked alarming but turned
+out to be stale buffered messages from an EARLIER diagnostic test this
+session that had wiped `document.body.innerHTML` (removing the #dpFps
+element the loop's own FPS counter writes to) -- confirmed stale (not
+a real ongoing error) via a fresh unique console marker and a direct
+DOM check (`document.getElementById('dpFps')` exists) after the actual
+page reload, matching this session's own established "the console/
+network log tools can return buffered history — verify with a fresh
+unique marker when in doubt" lesson.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
