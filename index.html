@@ -3251,6 +3251,42 @@ function pieceSpawnGraceActive(piece, radius){
 // small enough that a real coil still gets caught.
 const MIN_SELF_COLLISION_GAP = 4;
 
+// Reported directly: a piece that's folded back on itself (self-collision
+// keeping the fold from passing through itself, "which is fine") starts
+// "sliding in one direction until out of frame" specifically once it
+// settles on the FLOOR -- not from touching another piece. Once a fold
+// is resting on the floor, the floor itself can pin the fold into a
+// configuration self-collision can never fully separate (the floor holds
+// it flat, so the "impossible to satisfy" overlap keeps re-triggering
+// every frame instead of resolving once and staying resolved, the way it
+// does while still falling/tumbling freely). applyContactFriction()
+// above only ever damps the TANGENTIAL component of a pair's relative
+// velocity -- deliberately, since the NORMAL (separating) component is
+// supposed to represent a real, legitimate push apart. But for a
+// pinned, perpetually-re-triggering overlap specifically, that NORMAL
+// velocity never actually represents real separation either -- it's the
+// same kind of unrepresented, uncancelled velocity the floor clamp
+// itself already guards against on its own axis (`oldy = y`, killing
+// 100% of clamped-direction velocity every frame a point rests on the
+// floor -- see clampToFloor's own call site). applySelfCollisionNormalDamping()
+// applies that identical "fully cancel the constrained direction's
+// relative velocity" treatment here, self-collision only (not
+// resolveChainCollision -- piece-vs-piece/mainRope-vs-piece weren't
+// reported broken, and 2 separate bodies genuinely CAN fully separate,
+// unlike 2 points on the SAME already-constrained chain). Only ever
+// engages while an overlap is actively being resolved -- once dist >=
+// minSep, this code path stops running for that pair entirely, so a
+// piece that's simply resting (not actively self-overlapping) is
+// completely unaffected.
+function applySelfCollisionNormalDamping(p, q, nx, ny){
+  const pvx = p.x - p.oldx, pvy = p.y - p.oldy;
+  const qvx = q.x - q.oldx, qvy = q.y - q.oldy;
+  const relNormal = (pvx - qvx) * nx + (pvy - qvy) * ny;
+  const impulse = relNormal * 0.5;
+  p.oldx += nx * impulse; p.oldy += ny * impulse;
+  q.oldx -= nx * impulse; q.oldy -= ny * impulse;
+}
+
 // Pushes a SINGLE chain's own far-apart points away from each other
 // wherever 2 of them (at least MIN_SELF_COLLISION_GAP indices apart) sit
 // closer than their combined (radius-inflated, seam-undershot)
@@ -3262,7 +3298,9 @@ const MIN_SELF_COLLISION_GAP = 4;
 // step, for the same reason: a tightly coiled piece has just as many
 // simultaneous self-contact pairs as 2 flush-resting pieces do, so it's
 // equally exposed to the un-converged-sweep drift applyContactFriction()
-// fixes (see that function's own comment).
+// fixes (see that function's own comment). Additionally applies
+// applySelfCollisionNormalDamping() (see its own comment) -- unlike
+// resolveChainCollision(), which does not.
 function resolveSelfCollision(data, maxPush){
   const pts = data.points, radii = data.radii;
   for (let i = 0; i < pts.length; i++){
@@ -3278,6 +3316,7 @@ function resolveSelfCollision(data, maxPush){
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
         applyContactFriction(p, q, nx, ny, maxPush);
+        applySelfCollisionNormalDamping(p, q, nx, ny);
       }
     }
   }

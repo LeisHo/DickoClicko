@@ -104,6 +104,24 @@ didn't clear it -- so neither of these got a real visual check):
   getters/setters added to `makeTipCollisionPoint()` for this). Not
   yet watched live -- same Browser pane limitation; this is the one
   most worth testing first, since it's a direct fix for a reported bug.
+- NEW: `applySelfCollisionNormalDamping()` in `resolveSelfCollision()`
+  only -- a follow-up fix for a DIFFERENT reported symptom: "a cut off
+  rope segment may bend back on itself, which is fine. but when it
+  hits the ground... it continues sliding in one direction until out
+  of frame" (pure self-collision, not piece-vs-piece). Fully cancels
+  relative NORMAL velocity after each self-collision correction
+  (mirroring the floor clamp's own already-proven pattern), unlike
+  `applyContactFriction()` which only ever damps the tangential
+  component. **Lower confidence than the other fixes here** -- 2 Node
+  simulations (a simplified 2-point case, then a more faithful 8-point
+  folded-chain-with-floor-clamp case) were built to try to reproduce
+  the drift and neither one did, with or without the fix, so the
+  underlying math was verified in isolation but the actual diagnosis
+  was never confirmed against a working repro. Shipped anyway per
+  explicit user decision (asked directly, given the honest verification
+  gap). If this doesn't actually fix the reported symptom, more repro
+  detail (piece length, Endcap settings, single vs. multiple folds,
+  which direction it slides) would help find the real cause.
 
 `ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` (attempt #6, now with
 the added midpoint proxy -- see "Recently completed" for the full

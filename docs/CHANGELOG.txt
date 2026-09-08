@@ -7999,6 +7999,65 @@ pane limitation as every recent entry; this is now the 3rd
 consecutive dev-panel change awaiting the user's own live test.
 
 ================================================================================
+2026-09-08  -  06:59 AM EDT
+
+"in regards to the frictio thing we fixed earlier. right now ive had
+situations where a cut off rope segment may bend back on itself,
+which is fine. but when it hits the ground, even if not touching
+ather rope, it continues sliding in one direction until out of
+frame." A follow-up to the piece-vs-piece contact-friction fix, but a
+genuinely different trigger -- pure SELF-collision (a folded piece
+resting alone), not piece-vs-piece, and specifically tied to touching
+the FLOOR ("which is fine" while still falling/tumbling, drift starts
+"when it hits the ground").
+
+Hypothesis: applyContactFriction() (the prior fix) only ever damps
+the TANGENTIAL component of a colliding pair's relative velocity --
+correct for a genuinely resolvable overlap, where the NORMAL
+(separating) component represents real, legitimate motion apart. But
+once a fold is resting on the floor, the floor can pin that fold into
+a configuration self-collision can never fully separate (the floor
+holds it flat) -- the same "impossible to satisfy" overlap
+re-triggers every frame instead of resolving once and staying
+resolved, injecting real NORMAL-direction velocity each time with
+nothing damping it (unlike the floor clamp's own axis, which already
+fully zeroes clamped-direction velocity every frame via `oldy = y`).
+
+Verification did NOT cleanly confirm this: 2 standalone Node
+simulations were built -- a simplified 2-point persistent-overlap
+case, then a more faithful 8-point folded chain with real distance
+constraints, gravity, and floor clamping, run 300 frames -- and
+NEITHER reproduced sustained drift, with or without a candidate fix.
+Either the synthetic fold geometry doesn't match the real pinned
+configuration that triggers this in the actual game, or the true
+cause is something not yet found. Reported this honestly rather than
+claiming false confidence, and asked directly whether to ship the
+reasoned-but-unconfirmed candidate fix anyway or gather more repro
+detail first -- user chose to ship it.
+
+Fix: new applySelfCollisionNormalDamping(p, q, nx, ny), called in
+resolveSelfCollision() only (NOT resolveChainCollision() -- piece-vs-
+piece/mainRope-vs-piece weren't reported broken, and 2 separate
+bodies genuinely CAN fully separate, unlike 2 points already
+constrained together on the SAME chain). Fully cancels (not merely
+reduces, unlike PIECE_FRICTION's 0.4 partial tangential damping) the
+relative NORMAL velocity between the pair after each correction --
+mirroring the floor clamp's own already-proven "kill the constrained
+direction's velocity entirely" pattern. Only engages while an overlap
+is actively being resolved; a piece that's simply resting (not
+actively self-overlapping) is completely unaffected. Verified the
+underlying math via a standalone Node check (a closing pair with
+velocities (4,0)/(-2,0) along the normal converged to the correct
+momentum-conserving shared velocity (1,0)/(1,0), relative normal
+velocity exactly 0 afterward) and a full syntax check. No live
+in-game confirmation possible (Browser pane still down) -- and given
+the diagnosis itself wasn't confirmed synthetically either, this fix
+carries more uncertainty than the earlier collision fixes this
+session; explicitly flagged to the user that this may not fully
+resolve the reported symptom, and further reports/repro detail would
+be genuinely useful if it doesn't.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
