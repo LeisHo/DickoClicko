@@ -7541,6 +7541,110 @@ verified loading at correct 1400x1257 dimensions via the live dev
 server, final re-scan clean.
 
 ================================================================================
+2026-09-08  -  03:50 AM EDT
+
+"Okay, um, so I want to implement the end cap collision physics again,
+but instead of doing the radius thing you did previously, what I want
+is for you to put a collision, I guess it's a circle, right? Circle
+with the radius. Circle at the tip of the end cap, where it's narrower,
+and the diameter of that circle will be the dimension of that narrow
+end. of my SVG." -- attempt #6 on endcap collision, but a genuinely
+different design this time (the user's own), not another patch on the
+a29da9c-era model.
+
+Every prior attempt (the original a29da9c design, and every fix
+attempted on top of it) approximated the WHOLE endcap as ONE circle
+CENTERED on the physics point, with radius = the endcap's full
+neck-to-tip LENGTH (later scaled down by ENDCAP_COLLISION_RADIUS_FRAC,
+0.5, since even that was a substantial overestimate of a narrow tapered
+shape's real "fatness" in every direction). Replaced entirely with a
+SMALL circle positioned at the endcap's own real narrow TIP -- offset
+past the physics point, not centered on it -- sized by the design's own
+REAL measured tip width, not a fraction of its length.
+
+Two new pieces of geometry, computed the same way ENDCAP_BOTTOM_Y
+already was (once, at startup, from the real SVG path data via a
+throwaway canvas/SVG element -- not hand-measured/hardcoded, so it
+stays correct automatically if the source SVGs ever change):
+- ENDCAP_TIP_WIDTH: each design's own real width in local SVG units,
+  sampled via canvas.isPointInPath at 1% of the design's own bbox
+  height ABOVE its exact bottom-most point (not AT it -- these shapes
+  taper to a genuinely narrow point, not necessarily a mathematical
+  cusp, and the single bottom-most row can measure a spurious near-0).
+  Checked empirically across several designs at 0.5/1/2/3/5% before
+  picking 1%: widths were stable and gradually increasing through that
+  whole range (~14-19 local units, ~25-35% of ENDCAP_ALIGNMENT.width's
+  ~54.5) with no discontinuity -- a representative sample, not a
+  razor's-edge choice.
+- endcapTipRadiusPx(designKey, widthThicknessPx): converts that local
+  width through the SAME scale drawEndcap() itself uses for its shape's
+  X axis (thickness-based, NOT heightMult, which only ever stretches Y
+  there) -- diameter = the design's own real tip width, radius = half.
+
+The harder architectural piece: the endcap's own collision circle is no
+longer at the SAME position as the physics point it's derived from --
+it needs to sit OFFSET, at the tip, which moves as the chain's own
+tangent direction changes. New makeTipCollisionPoint(owner, neighbor,
+offsetDist) returns a live proxy point (JS getters/setters) whose x/y
+are computed FRESH from owner/neighbor's CURRENT positions on every
+read (never a stale snapshot, exactly matching how drawEndcap() derives
+its own tip direction live every frame) -- and critically, a WRITE to
+this proxy (exactly what resolveChainCollision()/resolveSelfCollision()
+already do to correct an overlap: `p.x -= nx*push`) translates into
+shifting the REAL owner point by that same delta, since this project's
+verlet points have no rotational/angular state to apply a torque to
+instead -- a plain translation of the whole rigid offset is the
+correct, consistent simplification. This is what let the EXISTING,
+unmodified resolveChainCollision()/resolveSelfCollision() pairwise loop
+keep working completely unchanged -- it just iterates over
+points[]/radii[] treating every entry uniformly, with no idea some of
+them are live proxies rather than plain {x,y} objects.
+
+pieceCollisionRadii(points, thick, tipCircle, cutCircle) rewritten to
+match: ordinary points keep a plain thickness-only radius (no more
+inflating the endpoint's own radius); when a tipCircle/cutCircle
+`{offset, radius}` applies, an EXTRA proxy point + its own small radius
+is APPENDED to points[]/radii[] instead, appearing to the rest of the
+collision system as just one more (unusually positioned) point. The
+mainRope-vs-piece proximity/exclusion math (mainReach, safeDist) was
+updated to use `offset + radius` (how far the new circle's own farthest
+edge reaches from the physics point) instead of the old single inflated
+radius number, same intent, new formula. Self-collision (resolveSelfCollision)
+is UNCHANGED -- still deliberately thickness-only, per the earlier,
+already-shipped, separate fix for that specific symptom -- endcapCircle()
+is simply never passed to it. ENDCAP_COLLISION_RADIUS_FRAC removed
+entirely (no longer meaningful under the new model, not left in as dead
+code). ENABLE_ENDCAP_AND_MAINROPE_COLLISION flipped back to `true` --
+the pileTopY settledness fix from attempt #5 stays in the code
+regardless of this flag, a real standalone correctness fix independent
+of the radius question.
+
+Verified: syntax check passed. The tip-width measurement technique was
+validated live in the browser BEFORE integrating it (same isPointInPath
+approach, run standalone against the real ENDCAP_DESIGNS data, numbers
+inspected directly). The live tangent-proxy mechanism was verified via
+a standalone Node simulation (pushing the proxy by a delta moves the
+real owner point by exactly that same delta; the proxy's own offset
+distance from owner stays exactly correct afterward as the tangent
+direction is free to rotate). A full end-to-end simulation of the ACTUAL
+pieceCollisionRadii/resolveChainCollision code (copied verbatim, not
+reimplemented) with realistic numbers (2 short pieces resting near each
+other, ~18px tip offset, ~4px tip radius) confirmed: the tip circles'
+computed positions were exactly right, the resulting correction moved
+ONLY the 2 real endpoints that actually had proxies (an unrelated body
+point on the same piece stayed byte-for-byte unchanged), and the
+resolution correctly caught overlap between a tip PROXY and the
+NEIGHBORING piece's own real body point, not just proxy-vs-proxy pairs
+-- exactly the kind of interaction a real endcap poking into another
+piece's rope body should trigger. Did NOT get a live visual
+confirmation in the actual running game this round -- the Browser pane
+went into an unrecoverable 0x0-viewport/`document.hidden` state
+partway through this task (confirmed via direct DOM inspection: closing
+and reopening the tab, a full fresh navigation, and resize_window all
+failed to clear it), independent of anything in this change. Awaiting
+the user's own live test.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

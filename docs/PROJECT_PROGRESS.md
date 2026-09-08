@@ -20,59 +20,27 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
-Awaiting the user's own live confirmation that FLICK ANIMATION 3's
-playback actually animates through its frames (loading, dev-panel UI,
-and click/hold interaction are all confirmed working; the live
-per-frame tick itself wasn't observable this session -- see "Recently
-completed" below for why).
+Awaiting the user's own live confirmation on 2 fronts (this session's
+own Browser pane went into an unrecoverable 0x0-viewport/hidden state
+partway through the most recent task -- closing/reopening the tab
+didn't clear it -- so neither of these got a real visual check):
 
-Animation 3 now has its OWN hold-preview (data/FLICK/Genereated/<N>/C,
-a 1-6-4 ping-pong) independent of the shared ANI/3 one animations 1/2
-still use -- see "Recently completed" below. Also: A's own frame
-numbers are no longer identical across all 3 Genereated sets (the user
-deleted different A-frames per set) -- GENERATED_A_FRAME_NUMBERS_BY_
-SOURCE now tracks this per-source; re-verify by hand if it changes
-again, same as every other hardcoded frame list in this file.
+- FLICK ANIMATION 3's playback actually animating through its frames
+  (loading, dev-panel UI, and click/hold interaction are all confirmed
+  working via network/console logs; the live per-frame tick itself
+  hasn't been watched ticking).
+- The NEW endcap collision model (see "Recently completed" below) --
+  syntax-checked and verified end-to-end via a Node simulation of the
+  actual collision code with realistic numbers (confirms the tip
+  circle's offset/radius computation, the live tangent-following
+  proxy's translation back onto the real physics point, and correct
+  overlap detection against a neighboring piece's own body), but not
+  watched running live in the actual game.
 
-Animations 1 and 2's frames have been refreshed twice now (user edits
-land on the source PNGs; `sharp` regenerates the matching .webp --
-what the game actually loads -- each time, see "Recently completed"
-below). `sharp` is available in this environment (`npm install sharp`
-works, ~5s) -- prefer it over the earlier Playwright/Chromium-canvas
-workaround for any future PNG->WebP regeneration need in this project.
-
-The ANI/3 hold-preview gap flagged last round is resolved: it's a
-1/1a/1b/1c ping-pong (FLICK_HOLD_SEQUENCE), not a 1..N numbered range.
-
-"Shoots downward fast" / "floating" -- `ENABLE_ENDCAP_AND_MAINROPE_
-COLLISION` is back to `false` (attempt #5, the pileTopY settledness
-check, reported "no good"). Confirmed-working state is the flag OFF --
-that's where it stays until there's a genuinely different theory, not
-another patch on the same a29da9c-added design.
-
-5 attempts total this session, all real, logically-sound fixes for
-real gaps in the endcap-collision/mainRope-vs-piece code, none
-sufficient to resolve the user's actual reported symptom: (1) topplePiece()
-pivot-frame velocity bug, (2) topplePiece() growing-tip velocity bug,
-(3) self-collision-radii hypothesis (ruled out -- user reported no
-change), (4) piece-vs-piece spawn-grace (didn't help -- wrong collision
-path, per (5)'s own finding), (5) pileTopY settledness check (traced a
-real logic gap -- a piece counted as "pile" the instant it cleared its
-own age-based exclusion, regardless of whether it had landed -- but
-reported "no good" too). That (3) and (4) and (5) each targeted a
-different, independently-real problem in the SAME code without fixing
-the user-visible symptom is itself informative: either something is
-still being missed in this design, or the endcap-collision/mainRope-
-vs-piece feature is fundamentally not worth the complexity it costs to
-get right, and staying reverted (current state) is the right call
-regardless of whether the exact remaining bug ever gets found.
-
-The code for all 5 attempts remains in place, gated behind the same
-flag -- nothing has been deleted at any point this session.
-
-Separately fixed this same session: fallen pieces/mainRope rested on the
-floor at their own CENTERLINE (a real, distinct bug from the above,
-confirmed by inspection) — see "Recently completed" below.
+`ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` again (attempt #6 --
+see "Recently completed" for the full history of why it was off and
+what changed). `sharp` is available in this environment (`npm install
+sharp` works, ~5s) for any future PNG->WebP regeneration need.
 
 Note: this project has had multiple Claude sessions actively editing
 `index.html` concurrently for an extended stretch (settings-persistence
@@ -340,6 +308,26 @@ additions. Current state of each subsystem:
   fixed time window, which couldn't guarantee real separation under weak
   gravity or a heavy endcap) that a rope and its own just-cut piece never
   collide with each other.
+
+  **Superseded (attempt #6):** everything above describing the endcap's
+  own collision contribution as "one circle centered on the physics
+  point, radius = a fraction of the endcap's full length" is now
+  historical -- per explicit request/correction ("instead of doing the
+  radius thing you did previously... put a collision circle at the tip
+  of the endcap, where it's narrower, and the diameter of that circle
+  will be the dimension of that narrow end of my SVG"), replaced with a
+  SMALL circle positioned at the endcap's own real narrow tip (offset
+  past the physics point along its current tangent, via the new
+  `makeTipCollisionPoint()`), sized by the design's own real measured
+  tip width (`ENDCAP_TIP_WIDTH`/`endcapTipRadiusPx()`, computed from the
+  actual SVG path the same way `ENDCAP_BOTTOM_Y` already was) rather
+  than a judgment-call fraction of its length.
+  `ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` again with this new
+  model live -- the pileTopY settledness fix from attempt #5 stays in
+  place regardless (a real, standalone correctness fix, independent of
+  the radius question). Full mechanism details and verification in
+  docs/CHANGELOG.txt; not yet confirmed via a live visual check (the
+  Browser pane went into an unrecoverable 0x0/hidden state mid-task).
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full

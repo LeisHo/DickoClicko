@@ -2495,6 +2495,57 @@ function endcapExtensionPx(designKey, heightThicknessPx, heightMult){
   return (designBottomY - ENDCAP_ALIGNMENT.topY) * heightNormalScale * heightMult;
 }
 
+// The collision circle's own radius at the endcap's narrow TIP, in
+// world px -- ENDCAP_TIP_WIDTH (see its own comment) converted through
+// the SAME scale drawEndcap() itself uses for its shape's X axis
+// (widthThicknessPx / ENDCAP_ALIGNMENT.width, i.e. the chain's own live
+// thickness -- NOT heightMult, which only ever stretches the Y/length
+// axis there, never X). Per explicit request: "a circle with the
+// radius... at the tip of the endcap, where it's narrower, and the
+// diameter of that circle will be the dimension of that narrow end of
+// my SVG" -- diameter = the design's own real width at its tip,
+// radius = half that.
+function endcapTipRadiusPx(designKey, widthThicknessPx){
+  if (designKey === 'none') return 0;
+  const localWidth = ENDCAP_TIP_WIDTH[designKey] || 0;
+  const widthNormalScale = widthThicknessPx / ENDCAP_ALIGNMENT.width;
+  return (localWidth * widthNormalScale) / 2;
+}
+
+// A live, tangent-following collision point rigidly offset `offsetDist`
+// past `owner` (a real physics point) in the direction AWAY from
+// `neighbor` -- used to place the endcap's own tip collision circle at
+// its real rendered position (offset from the chain's last/first
+// point, not centered on it) without needing a separate physics body of
+// its own. `x`/`y` are computed FRESH from owner/neighbor's CURRENT
+// positions on every read (so this always tracks the endcap's real
+// live position/orientation, exactly like drawEndcap()'s own
+// tipDirection() does, never a stale one-time snapshot) -- and a WRITE
+// (exactly what resolveChainCollision()/resolveSelfCollision() already
+// do to correct an overlap: `p.x -= nx*push`) translates into shifting
+// `owner` by that same delta instead, since this project's verlet
+// points have no rotational/angular state to instead apply a torque
+// to -- a plain translation of the whole rigid offset is the correct,
+// consistent simplification here. Verified via direct simulation
+// before shipping: pushing the proxy by a delta moves owner by exactly
+// that same delta, and the proxy's own offset distance from owner
+// stays exactly offsetDist afterward (the tangent direction itself is
+// free to rotate as owner's position relative to the fixed `neighbor`
+// changes, same as the endcap's real rendered angle would).
+function makeTipCollisionPoint(owner, neighbor, offsetDist){
+  function dir(){
+    const dx = owner.x - neighbor.x, dy = owner.y - neighbor.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len };
+  }
+  return {
+    get x(){ return owner.x + dir().x * offsetDist; },
+    set x(v){ owner.x += v - (owner.x + dir().x * offsetDist); },
+    get y(){ return owner.y + dir().y * offsetDist; },
+    set y(v){ owner.y += v - (owner.y + dir().y * offsetDist); },
+  };
+}
+
 // Cross-PIECE collision only -- two different fallen pieces push each
 // other apart (so cut-off segments stack or shove each other around
 // instead of freely overlapping, per explicit request), but a piece
@@ -2560,87 +2611,82 @@ const PIECE_SEAM_OVERLAP_FRAC = 0.15;
 // sluggish), not a measured value.
 const COLLISION_MAX_PUSH_PER_S = 400;
 
-// See pieceCollision()'s own endcapExt closure for the full story --
-// scales the endcap's full neck-to-tip extension down before it becomes
-// a collision-circle radius, since a circle that big overestimates how
-// "fat" the real, narrow/tapered endcap shape actually is in every
-// direction. 0.5 is a judgment call.
-const ENDCAP_COLLISION_RADIUS_FRAC = 0.5;
-
-// Was reverting pieceCollision() to how it worked BEFORE `a29da9c`
-// ("Expand collision detection: endcaps, decay-proof piling,
-// mainRope-vs-piece") -- the commit immediately preceding the
-// FIRST-EVER report of "the cut off rope gets flung to the floor, far
-// faster than the normal falling speed" and cut segments "look like
-// theyre floating". 4 separate fix attempts on top of that commit's own
-// design (2 real topplePiece() velocity bugs, 1 ruled-out
-// self-collision-radii hypothesis, 1 piece-vs-piece spawn-grace fix)
-// each fixed a genuine, independently-verified bug WITHOUT resolving
-// the user's actual reported symptom -- reported "still persists"
-// every time. Per explicit request ("revert the collision system for
-// the ropes back to before the issue came up. but dont fully delete
-// the code, i may want to change it back"), this flag disabled exactly
-// what that commit added -- endcap-inflated collision radii and
-// mainRope-vs-piece collision entirely -- confirmed by the user's own
-// re-test to have actually fixed both symptoms.
+// Gates endcap-aware collision (both the endcap's own tip circle, see
+// pieceCollisionRadii()/endcapTipRadiusPx(), and mainRope-vs-piece
+// collision entirely) -- everything `a29da9c` originally added. Full
+// history of the 5 fix attempts that preceded this one (2 topplePiece()
+// velocity bugs, a ruled-out self-collision-radii hypothesis, a
+// piece-vs-piece spawn-grace fix, a pileTopY settledness fix -- each
+// real and independently verified, none sufficient on their own) lives
+// in docs/CHANGELOG.txt rather than repeated here every round; the
+// pileTopY settledness fix (PILE_SETTLED_MAX_SPEED, below) stays in
+// place regardless of this flag since it's a real, standalone
+// correctness fix independent of the radius/shape question.
 //
-// With the real cause confirmed to live somewhere in this code, traced
-// it precisely: the mainRope-vs-piece proximity gate (pileTopY, below)
-// only ever excluded a piece while its OWN mainRopeExcluded flag was
-// set -- and that flag clears the instant the piece has moved a small,
-// thickness-scaled distance from where it was cut, regardless of
-// whether it has actually LANDED. Cutting twice in quick succession
-// (exactly what both bug reports showed) let the FIRST piece clear its
-// own exclusion while still mid-fall, high up -- at which point it
-// started counting as "the pile" for gating purposes, opening
-// mainRope-vs-piece collision against a piece that was never actually
-// resting, with endcap-inflated radii and (for THIS specific, older,
-// unrelated piece) no protection at all. Fixed at the actual gate
-// (see PILE_SETTLED_MAX_SPEED below, in pieceCollision() itself) by
-// requiring genuine settledness (near-zero velocity), not just
-// "cleared its own exclusion timer" -- re-enabled here so that fix is
-// live. Flip back to false to disable this whole mechanism again
-// exactly as before if the new gating fix doesn't hold up either --
-// nothing here was deleted, only gated, per the user's own explicit
-// "may want to change it back."
-// Attempt #5 (the pileTopY settledness check, PILE_SETTLED_MAX_SPEED)
-// reported "no good" -- back to false. Whatever's actually wrong here
-// goes deeper than every mechanism tried so far (2 topplePiece()
-// velocity bugs, 1 ruled-out self-collision-radii hypothesis, 1
-// piece-vs-piece spawn-grace fix, 1 pileTopY settledness fix) -- all 5
-// were real, logically-sound fixes for real gaps in this code, and none
-// of them were sufficient. Leave false until there's a fundamentally
-// different theory, not another patch on the same design.
-const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = false;
+// Attempt #6: per explicit request, the RADIUS MODEL itself changed --
+// not another gating/timing fix, a genuinely different geometric
+// approximation. Every prior attempt (including the original a29da9c
+// design) approximated the endcap as ONE circle centered on the
+// physics point, radius = the endcap's full neck-to-tip LENGTH (later
+// scaled down by a fraction, ENDCAP_COLLISION_RADIUS_FRAC, since even
+// that was a substantial overestimate of a narrow tapered shape's real
+// "fatness"). Replaced entirely: a SMALL circle positioned at the
+// endcap's own real narrow TIP (offset past the physics point, via
+// makeTipCollisionPoint()), sized by the design's own real measured
+// tip width (endcapTipRadiusPx(), from ENDCAP_TIP_WIDTH) rather than a
+// fraction of its length. Re-enabled (true) so this new model is live;
+// flip back to false to disable the whole mechanism again exactly as
+// before if it doesn't hold up either -- nothing here was ever deleted,
+// only gated, per the user's own standing "may want to change it back."
+const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = true;
 
 // Per-chain, per-POINT collision radius -- ordinary rope points use half
-// the chain's own live thickness; the 2 ends (points[0], the cut edge
+// the chain's own live thickness. The 2 ends (points[0], the cut edge
 // for a piece / the never-capped anchor for mainRope, and points[last],
-// the free tip) get an ADDITIONAL radius on top of that when an endcap
-// actually lives there, approximating the endcap's own elongated shape
-// as a bigger circle centered on that same physics point -- not a
-// precise polygon collision against the endcap's real outline, which
-// would need a much more involved shape-collision system for a
-// decorative feature that's never the rope's own primary silhouette;
-// this is a deliberate, documented simplification that still satisfies
-// the actual request (no visible overlap) in the common case. Per
-// explicit request: "the rope endcap should also be affected by
-// collision detection... the rope start and end endcaps should not be
-// allowed to overlap other ropes, or other endcaps."
-function pieceCollisionRadii(points, thick, tipExtension, cutExtension){
+// the free tip) ADDITIONALLY get their own small extra collision circle
+// when an endcap actually lives there -- appended to points/radii as an
+// EXTRA entry (not inflating the real point's own radius) positioned at
+// the endcap's real narrow TIP (offset past the physics point, via
+// makeTipCollisionPoint(), not centered on it) with a radius sized from
+// the design's own real measured tip width (endcapTipRadiusPx()) --
+// replacing the earlier design (one big circle centered on the physics
+// point, radius = the endcap's full neck-to-tip LENGTH) per explicit
+// request/correction: "instead of doing the radius thing you did
+// previously... put a collision circle at the tip of the endcap, where
+// it's narrower, and the diameter of that circle will be the dimension
+// of that narrow end of my SVG." Still not a precise polygon collision
+// against the endcap's real outline (that would need a much more
+// involved shape-collision system for a decorative feature that's never
+// the rope's own primary silhouette) -- but a small circle at the
+// endcap's own real tip position, sized by its own real tip width, is a
+// substantially closer approximation of "narrow, tapered shape" than a
+// single oversized circle covering the endcap's ENTIRE length ever was.
+// tipCircle/cutCircle are `{offset, radius}` (from pieceCollision()'s
+// own endcapCircle() closure) or null/undefined when no endcap applies
+// at that end -- unlike the old tipExtension/cutExtension numbers, a
+// missing circle now means "no extra entry added" rather than "add 0".
+function pieceCollisionRadii(points, thick, tipCircle, cutCircle){
   const baseRadius = thick / 2;
   const n = points.length;
-  const radii = new Array(n).fill(baseRadius);
-  radii[n - 1] = baseRadius + tipExtension;
-  radii[0] = baseRadius + cutExtension;
+  const allPoints = points.slice();
+  const allRadii = new Array(n).fill(baseRadius);
   let maxRadius = baseRadius;
-  for (const r of radii) if (r > maxRadius) maxRadius = r;
+  if (tipCircle && tipCircle.radius > 0 && n >= 2){
+    allPoints.push(makeTipCollisionPoint(points[n - 1], points[n - 2], tipCircle.offset));
+    allRadii.push(tipCircle.radius);
+    if (tipCircle.radius > maxRadius) maxRadius = tipCircle.radius;
+  }
+  if (cutCircle && cutCircle.radius > 0 && n >= 2){
+    allPoints.push(makeTipCollisionPoint(points[0], points[1], cutCircle.offset));
+    allRadii.push(cutCircle.radius);
+    if (cutCircle.radius > maxRadius) maxRadius = cutCircle.radius;
+  }
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const p of points){
+  for (const p of allPoints){
     if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
     if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
   }
-  return { points, radii, maxRadius, box: { minX, maxX, minY, maxY } };
+  return { points: allPoints, radii: allRadii, maxRadius, box: { minX, maxX, minY, maxY } };
 }
 
 // Pushes 2 chains' own points apart wherever a pair sits closer than
@@ -2694,9 +2740,8 @@ function resolveChainCollision(dataA, dataB, maxPush){
 // (COLLISION_MAX_PUSH_PER_S) still applies, but at up to ~2952px/s for
 // this project's own viewport that's easily fast enough to look like
 // "shoots downward really fast" for as many frames as a real spawn-time
-// overlap takes to resolve, then settle into whatever (endcap-inflated,
-// see ENDCAP_COLLISION_RADIUS_FRAC's own comment) minSep the correction
-// stops at -- "floating". Reported directly, persisting through 2
+// overlap takes to resolve, then settle into whatever minSep the
+// correction stops at -- "floating". Reported directly, persisting through 2
 // topplePiece() velocity fixes and the already-shipped self-collision-
 // radii fix, none of which touch this gap.
 //
@@ -2781,42 +2826,29 @@ function resolveSelfCollision(data, maxPush){
   }
 }
 
-// endcapExt: given a chain's own live thickness and whichever
-// heightThicknessPx drawEndcap() would actually use for that specific
-// end, returns how far that end's endcap extends past its own point (0
-// when no endcap is selected at all, or when that particular end never
-// gets one).
 function pieceCollision(dt){
   // see ENABLE_ENDCAP_AND_MAINROPE_COLLISION's own comment -- forcing
-  // this false reverts endcapExt() below to always return 0 (thickness-
-  // only radii everywhere, matching this function's own pre-a29da9c
-  // behavior) regardless of cfg.endcapDesign.
+  // this false reverts endcapCircle() below to always return null (no
+  // extra tip/cut collision circles, thickness-only radii everywhere,
+  // matching this function's own pre-a29da9c behavior) regardless of
+  // cfg.endcapDesign.
   const hasEndcapForCollision = ENABLE_ENDCAP_AND_MAINROPE_COLLISION && cfg.endcapDesign !== 'none';
-  // endcapExt approximates the endcap's own real, elongated/tapered shape
-  // as a bigger CIRCLE for collision purposes (a documented simplification
-  // -- see endcapExtensionPx()'s own comment) -- but a circle whose radius
-  // equals the endcap's full neck-to-tip length is a substantial
-  // OVERESTIMATE of how "fat" that shape really is in every direction; the
-  // real endcap sticks out that far only along its own narrow axis, not
-  // as a uniform disc. Reported directly (with a screencap video):
-  // freshly-landed pieces resting on a pile stayed suspended at a nearly
-  // constant height for many real seconds instead of settling flush,
-  // reading as "floating" -- measured directly from the video via
-  // connected-component frame analysis (not just eyeballed): a piece's
-  // own resting position drifted only ~20px over 6+ real seconds, far
-  // slower than gravity alone would ever produce, consistent with a
-  // combined (both ends' full endcap length) minSep that's simply much
-  // larger than the pieces' own VISUAL contact point, so gravity and the
-  // collision push it back apart from stay in a near-balanced standoff
-  // for a long time before finally, slowly closing that oversized gap.
-  // ENDCAP_COLLISION_RADIUS_FRAC (0.5, a judgment call -- no measured
-  // "correct" fraction exists for approximating a tapered shape's real
-  // effective width as a circle) scales the extension down before it
-  // ever becomes a radius, shrinking the gap between "collision says
-  // separated" and "looks visually separated" without removing the
-  // endcap-vs-endcap overlap prevention the mainRope-vs-piece/piece-vs-
-  // piece collision was originally built for.
-  const endcapExt = heightThicknessPx => hasEndcapForCollision ? endcapExtensionPx(cfg.endcapDesign, heightThicknessPx, cfg.endcapHeight) * ENDCAP_COLLISION_RADIUS_FRAC : 0;
+  // endcapCircle(offsetThicknessPx, radiusThicknessPx): returns the
+  // {offset, radius} for one end's own small tip collision circle, or
+  // null when no endcap applies there at all -- see pieceCollisionRadii()
+  // and makeTipCollisionPoint()'s own comments for the full "small
+  // circle at the real tip, not one big circle at the physics point"
+  // design this replaced. 2 separate thickness params because
+  // drawEndcap() itself doesn't always use the same one for length vs
+  // width -- a fallen piece's own tip endcap LENGTH is deliberately
+  // decoupled from live decay (baseThickness, fixed at fall-time) while
+  // its WIDTH still tracks current/decaying thickness (see each call
+  // site's own comment); mainRope and any cut-edge endcap use the same
+  // single thickness for both, since neither has that decay-decoupling.
+  const endcapCircle = (offsetThicknessPx, radiusThicknessPx) => hasEndcapForCollision ? {
+    offset: endcapExtensionPx(cfg.endcapDesign, offsetThicknessPx, cfg.endcapHeight),
+    radius: endcapTipRadiusPx(cfg.endcapDesign, radiusThicknessPx),
+  } : null;
   // See COLLISION_MAX_PUSH_PER_S's own comment -- caps every correction
   // below to a fixed px/s rate (scaled by dt so it's frame-rate
   // independent) so nothing ever resolves in one violent snap.
@@ -2918,43 +2950,55 @@ function pieceCollision(dt){
     const tipY = mainRope.points[mainRope.points.length - 1].y;
     if (tipY >= pileTopY - vh(10)){
       const mainThick = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
-      const mainTipExt = endcapExt(mainThick);
-      const mainData = pieceCollisionRadii(mainRope.points, mainThick, mainTipExt, 0);
+      const mainTipCircle = endcapCircle(mainThick, mainThick);
+      const mainData = pieceCollisionRadii(mainRope.points, mainThick, mainTipCircle, null);
+      // How far mainRope's own tip-end collision presence reaches from
+      // its physics point -- either the plain body radius, or (when a
+      // tip circle exists) that circle's own farthest point (offset +
+      // its own radius), whichever is larger. Used by safeDist below;
+      // "reach" replaces the old design's single inflated radius now
+      // that the endcap contributes an OFFSET small circle instead of
+      // enlarging the body radius directly.
+      const mainReach = Math.max(mainThick / 2, mainTipCircle ? mainTipCircle.offset + mainTipCircle.radius : 0);
       fallenPieces.forEach(piece => {
         const thick = pieceThickness(piece);
-        // Tip always uses this piece's own ORIGINAL baseThickness
-        // (matching drawEndcap()'s own heightThicknessPx param there --
-        // the tip endcap's LENGTH is deliberately decoupled from live
-        // decay, see pieceThickness()'s own call site in render()); the
+        // Tip always uses this piece's own ORIGINAL baseThickness for
+        // the OFFSET (matching drawEndcap()'s own heightThicknessPx
+        // param there -- the tip endcap's LENGTH is deliberately
+        // decoupled from live decay, see pieceThickness()'s own call
+        // site in render()) but current/live thickness for the RADIUS
+        // (matching drawEndcap()'s own thicknessPx param, which DOES
+        // track live decay) -- see endcapCircle()'s own comment. The
         // cut edge (only present at all when Endcap At Cut End is on)
-        // uses the piece's current live thickness instead, matching
+        // uses the piece's current live thickness for both, matching
         // drawEndcap() not being passed a heightThicknessPx override
         // there.
-        const tipExt = endcapExt(piece.baseThickness);
-        const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
+        const tipCircle = endcapCircle(piece.baseThickness, thick);
+        const cutCircle = cfg.endcapAtCutEnd ? endcapCircle(thick, thick) : null;
         // mainRopeExcluded: an ABSOLUTE, distance-based guarantee this
         // piece never collides with mainRope until it has genuinely
         // moved away from wherever it was split off -- see that flag's
         // own comment in performMainRopeSplit() for the full story on
         // why a fixed TIME window (this function's earlier
         // MAIN_COLLISION_GRACE_AGE) couldn't guarantee real separation
-        // on its own. safeDist is the combined collision radius of
-        // mainRope's own tip and this piece's own cut edge, times 1.5 --
-        // a real, comfortable clearance rather than "just barely not
-        // overlapping" -- computed fresh each check since either
-        // radius can change live (Endcap Height, thickness decay).
-        // Cleared PERMANENTLY the first time it's satisfied, so this
-        // piece behaves exactly like any other from then on (including
-        // being eligible again if mainRope is later extended back down
-        // to a pile it happens to be part of).
+        // on its own. safeDist is the combined REACH (see mainReach's
+        // own comment) of mainRope's own tip and this piece's own cut
+        // edge, times 1.5 -- a real, comfortable clearance rather than
+        // "just barely not overlapping" -- computed fresh each check
+        // since either reach can change live (Endcap Height, thickness
+        // decay). Cleared PERMANENTLY the first time it's satisfied, so
+        // this piece behaves exactly like any other from then on
+        // (including being eligible again if mainRope is later
+        // extended back down to a pile it happens to be part of).
         if (piece.mainRopeExcluded){
           const cutPoint = piece.points[0];
           const originDist = Math.hypot(cutPoint.x - piece.mainRopeExcludeOriginX, cutPoint.y - piece.mainRopeExcludeOriginY);
-          const safeDist = (mainThick / 2 + mainTipExt + thick / 2 + cutExt) * 1.5;
+          const pieceReach = Math.max(thick / 2, cutCircle ? cutCircle.offset + cutCircle.radius : 0);
+          const safeDist = (mainReach + pieceReach) * 1.5;
           if (originDist < safeDist) return;
           piece.mainRopeExcluded = false;
         }
-        resolveChainCollision(mainData, pieceCollisionRadii(piece.points, thick, tipExt, cutExt), maxPush);
+        resolveChainCollision(mainData, pieceCollisionRadii(piece.points, thick, tipCircle, cutCircle), maxPush);
       });
     }
   }
@@ -2972,9 +3016,12 @@ function pieceCollision(dt){
   // it... the top piece stays suspended in the air."
   const pieceData = fallenPieces.map(piece => {
     const thick = pieceThickness(piece);
-    const tipExt = endcapExt(piece.baseThickness);
-    const cutExt = cfg.endcapAtCutEnd ? endcapExt(thick) : 0;
-    return pieceCollisionRadii(piece.points, thick, tipExt, cutExt);
+    // see the mainRope-vs-piece loop's own identical comment for why
+    // the tip uses baseThickness (offset) + live thick (radius) while
+    // the cut edge uses live thick for both.
+    const tipCircle = endcapCircle(piece.baseThickness, thick);
+    const cutCircle = cfg.endcapAtCutEnd ? endcapCircle(thick, thick) : null;
+    return pieceCollisionRadii(piece.points, thick, tipCircle, cutCircle);
   });
   // Self-collision: a piece's own far-apart points pushing off each
   // other -- see MIN_SELF_COLLISION_GAP's own comment for why an index
@@ -3004,7 +3051,7 @@ function pieceCollision(dt){
   // ever concerns the rope's own physical body.
   pieceData.forEach((data, i) => {
     const thick = pieceThickness(fallenPieces[i]);
-    resolveSelfCollision(pieceCollisionRadii(data.points, thick, 0, 0), maxPush);
+    resolveSelfCollision(pieceCollisionRadii(data.points, thick, null, null), maxPush);
   });
   for (let a = 0; a < fallenPieces.length; a++){
     for (let b = a + 1; b < fallenPieces.length; b++){
@@ -5296,22 +5343,59 @@ const ENDCAP_DESIGNS = {
 // swapped/updated, with zero extra maintenance (the same reasoning this
 // same computation used when it measured width instead, before End
 // Emerge's redesign to anchor-point interpolation).
-const ENDCAP_BOTTOM_Y = (function(){
+// ENDCAP_TIP_WIDTH: each design's own real width, in local SVG X units,
+// right at its narrow tip -- measured the SAME run as ENDCAP_BOTTOM_Y
+// above (same throwaway SVG element, same reasoning: computed once from
+// the real path data rather than hand-measured/hardcoded, so it stays
+// correct automatically whenever a source SVG changes). Sampled 1% of
+// the design's own bbox height ABOVE its exact bottom-most point, not
+// AT it -- these shapes taper to a genuinely narrow point, not
+// necessarily a mathematical cusp, and sampling the single bottom-most
+// row can measure a spurious 0 (or a near-0 value dominated by
+// rasterization/step noise) for a shape whose true tip has some real,
+// if small, width. Checked empirically across several designs at 0.5/
+// 1/2/3/5% before picking 1%: widths were stable and gradually
+// increasing through that whole range (~14-19 local units, roughly
+// 25-35% of ENDCAP_ALIGNMENT.width's ~54.5) with no discontinuity, so
+// 1% isn't sitting on some sensitive edge case -- a reasonable,
+// representative "at the tip" sample, not a razor's-edge choice.
+// Used by endcapTipRadiusPx() (see pieceCollision()'s own comment) to
+// size the SMALL collision circle placed at the endcap's own narrow
+// end, replacing the earlier "approximate the WHOLE endcap as one big
+// circle sized by its full LENGTH" design per explicit request ("a
+// circle with the radius... at the tip of the endcap, where it's
+// narrower, and the diameter of that circle will be the dimension of
+// that narrow end of my SVG").
+const { bottoms: ENDCAP_BOTTOM_Y, tipWidths: ENDCAP_TIP_WIDTH } = (function(){
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.style.position = 'absolute'; svg.style.width = '0'; svg.style.height = '0'; svg.style.overflow = 'hidden';
   document.body.appendChild(svg);
+  const measureCanvas = document.createElement('canvas');
+  const measureCtx = measureCanvas.getContext('2d');
   const bottoms = {};
+  const tipWidths = {};
+  const TIP_WIDTH_SAMPLE_FRAC = 0.01;
   for (const key in ENDCAP_DESIGNS){
     const p = document.createElementNS(svgNS, 'path');
     p.setAttribute('d', ENDCAP_DESIGNS[key].d);
     svg.appendChild(p);
     const bbox = p.getBBox();
-    bottoms[key] = bbox.y + bbox.height;
     svg.removeChild(p);
+    bottoms[key] = bbox.y + bbox.height;
+    const sampleY = bottoms[key] - bbox.height * TIP_WIDTH_SAMPLE_FRAC;
+    let minX = Infinity, maxX = -Infinity;
+    const step = Math.max(0.05, bbox.width / 1000);
+    for (let x = bbox.x; x <= bbox.x + bbox.width; x += step){
+      if (measureCtx.isPointInPath(ENDCAP_DESIGNS[key].path, x, sampleY)){
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
+    }
+    tipWidths[key] = (maxX > minX) ? (maxX - minX) : 0;
   }
   document.body.removeChild(svg);
-  return bottoms;
+  return { bottoms, tipWidths };
 })();
 
 // The user-supplied "tip segment" shape (data/Rope/RopeEG.svg) -- an
