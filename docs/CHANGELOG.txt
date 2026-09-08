@@ -7645,6 +7645,56 @@ failed to clear it), independent of anything in this change. Awaiting
 the user's own live test.
 
 ================================================================================
+2026-09-08  -  05:00 AM EDT
+
+Two follow-up requests in the same session as the tip-circle endcap
+collision redesign (attempt #6, previous entry):
+
+1. "what is the proxy point density in our ropes right now" -> "ok can
+you up the density to 20" -- asked to clarify since "density" was
+ambiguous (rope point count vs. endcap collision-circle count); user
+picked rope point count. POINT_COUNT changed from 14 to 20 (a rope's
+own regular verlet point count -- mainRope and every fresh piece).
+TARGET_SEG_LEN_VH auto-derives from POINT_COUNT (45vh / (POINT_COUNT-1)),
+so total rope length is unaffected -- segments just get shorter/denser.
+No other code references POINT_COUNT directly (confirmed via grep), so
+this was a safe, isolated constant change.
+
+2. "and add a proxy point. it will be the midpoint of the endcap. Its
+radius will be halfway between the endcap proxy radius and the rope
+thickness" -- a 3rd collision-circle sample per endcap end, at HALF the
+tip/cut circle's own offset (same tangent/neighbor as the existing
+proxy, via the same makeTipCollisionPoint()), radius = the average of
+the tip/cut circle's own radius and the ordinary body radius
+(thick/2). Fills the geometric gap between the neck (full body radius,
+at the physics point) and the tip (its own small measured-tip radius)
+with a linear-taper sample at the halfway point, rather than jumping
+straight from full thickness to the narrow tip in one step --
+requested directly as a refinement of attempt #6's tip-circle model,
+not a revert or a new mechanism. Applies symmetrically to both
+tipCircle and cutCircle whenever each is present (same gating as
+before: cfg.endcapDesign !== 'none' for the tip, additionally
+cfg.endcapAtCutEnd for the cut edge) -- a piece with endcaps at both
+ends can now carry up to 4 extra proxy points (tip + tip-mid + cut +
+cut-mid) on top of its regular body points, mainRope up to 2 (tip +
+tip-mid only, its anchor never has a cut-end endcap).
+
+Verified via a standalone Node.js simulation of the exact updated
+pieceCollisionRadii() logic (copied verbatim): confirmed the new
+midpoint proxy's own position lands exactly halfway between the
+physics point and the existing tip/cut proxy along the same tangent,
+confirmed its radius is exactly the arithmetic mean of the base body
+radius and the existing tip/cut circle's radius, confirmed the total
+point/radius array length is correct (3 regular + up to 4 extra), and
+confirmed maxRadius still correctly reflects whichever of the 3
+per-end values (base/mid/tip) is largest. Syntax-checked the full
+script block via `new Function()`. Did NOT get a live visual
+confirmation in the running game -- same Browser pane limitation as
+the previous entry (unrecoverable 0x0-viewport/hidden state); not
+re-attempted this round since it hadn't cleared on its own. Awaiting
+the user's own live test of both changes together.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

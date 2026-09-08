@@ -1981,7 +1981,7 @@ resizeCanvas();
    Main rope: point 0 pinned to the circle center, grown/cut at runtime.
    Fallen pieces: unpinned independent chains, inherit velocity at cut time.
 --------------------------------------------------------------------- */
-const POINT_COUNT = 14;
+const POINT_COUNT = 20;
 const HOLD_THRESHOLD_MS = 180;
 const MAX_FALLEN_PIECES = 60;
 // target segment length (as %vh, matching the default rope's own density) —
@@ -2661,6 +2661,20 @@ const ENABLE_ENDCAP_AND_MAINROPE_COLLISION = true;
 // endcap's own real tip position, sized by its own real tip width, is a
 // substantially closer approximation of "narrow, tapered shape" than a
 // single oversized circle covering the endcap's ENTIRE length ever was.
+//
+// A SECOND extra circle, at the endcap's own MIDPOINT (half the tip
+// circle's own offset, same tangent direction/neighbor -- i.e. halfway
+// between the physics point and the tip circle), fills the gap between
+// the neck (full body radius) and the tip (its own small radius) --
+// per explicit request. Its own radius is the midpoint of those 2:
+// (bodyRadius + tipRadius) / 2, i.e. a straight linear taper sampled at
+// its own halfway point rather than jumping straight from full
+// thickness to the tip's real narrow width in one step. Still just 3
+// sample circles approximating a continuously tapering shape, not a
+// true polygon collision -- but a meaningfully closer approximation
+// than the tip circle alone, especially for a piece with unusually
+// long endcap extension relative to its own body thickness.
+//
 // tipCircle/cutCircle are `{offset, radius}` (from pieceCollision()'s
 // own endcapCircle() closure) or null/undefined when no endcap applies
 // at that end -- unlike the old tipExtension/cutExtension numbers, a
@@ -2675,11 +2689,19 @@ function pieceCollisionRadii(points, thick, tipCircle, cutCircle){
     allPoints.push(makeTipCollisionPoint(points[n - 1], points[n - 2], tipCircle.offset));
     allRadii.push(tipCircle.radius);
     if (tipCircle.radius > maxRadius) maxRadius = tipCircle.radius;
+    const midRadius = (baseRadius + tipCircle.radius) / 2;
+    allPoints.push(makeTipCollisionPoint(points[n - 1], points[n - 2], tipCircle.offset / 2));
+    allRadii.push(midRadius);
+    if (midRadius > maxRadius) maxRadius = midRadius;
   }
   if (cutCircle && cutCircle.radius > 0 && n >= 2){
     allPoints.push(makeTipCollisionPoint(points[0], points[1], cutCircle.offset));
     allRadii.push(cutCircle.radius);
     if (cutCircle.radius > maxRadius) maxRadius = cutCircle.radius;
+    const midRadius = (baseRadius + cutCircle.radius) / 2;
+    allPoints.push(makeTipCollisionPoint(points[0], points[1], cutCircle.offset / 2));
+    allRadii.push(midRadius);
+    if (midRadius > maxRadius) maxRadius = midRadius;
   }
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const p of allPoints){

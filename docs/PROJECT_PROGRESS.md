@@ -29,18 +29,26 @@ didn't clear it -- so neither of these got a real visual check):
   (loading, dev-panel UI, and click/hold interaction are all confirmed
   working via network/console logs; the live per-frame tick itself
   hasn't been watched ticking).
-- The NEW endcap collision model (see "Recently completed" below) --
-  syntax-checked and verified end-to-end via a Node simulation of the
-  actual collision code with realistic numbers (confirms the tip
-  circle's offset/radius computation, the live tangent-following
-  proxy's translation back onto the real physics point, and correct
-  overlap detection against a neighboring piece's own body), but not
-  watched running live in the actual game.
+- The endcap collision model (see "Recently completed" below) -- now 3
+  collision circles per endcap end (neck-radius body point, tip proxy,
+  and a NEW midpoint proxy halfway between them) instead of just the
+  tip. Syntax-checked and verified end-to-end via Node simulations of
+  the actual collision code with realistic numbers (tip circle's
+  offset/radius computation, the midpoint proxy's own position/radius
+  math, the live tangent-following proxy's translation back onto the
+  real physics point, and correct overlap detection against a
+  neighboring piece's own body), but not watched running live in the
+  actual game.
+- Rope point density (`POINT_COUNT`) raised from 14 to 20 -- more
+  verlet points per chain, same total rope length (`TARGET_SEG_LEN_VH`
+  auto-derives from `POINT_COUNT`, so segments just get shorter/denser).
+  Not yet watched live either, same Browser pane limitation.
 
-`ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` again (attempt #6 --
-see "Recently completed" for the full history of why it was off and
-what changed). `sharp` is available in this environment (`npm install
-sharp` works, ~5s) for any future PNG->WebP regeneration need.
+`ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` (attempt #6, now with
+the added midpoint proxy -- see "Recently completed" for the full
+history of why it was off and what changed). `sharp` is available in
+this environment (`npm install sharp` works, ~5s) for any future
+PNG->WebP regeneration need.
 
 Note: this project has had multiple Claude sessions actively editing
 `index.html` concurrently for an extended stretch (settings-persistence
