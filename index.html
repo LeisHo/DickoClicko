@@ -2339,7 +2339,9 @@ const GENERATED_C_FILES_BY_SOURCE = {
   '2': ['tween_001 (3)', 'tween_002 (3)', 'tween_003 (3)', 'tween_004 (3)', 'tween_005 (3)', 'tween_006 (3)'],
   '3': ['tween_001 (9)', 'tween_002 (9)', 'tween_003 (8)', 'tween_004 (8)', 'tween_005 (8)', 'tween_006 (7)'],
   '4': ['tween_001 (6)', 'tween_002 (6)', 'tween_003 (6)', 'tween_004 (6)', 'tween_005 (6)', 'tween_006 (6)'],
-  '5': ['tween_001 (6)', 'tween_002 (6)', 'tween_003 (6)', 'tween_004 (6)', 'tween_005 (6)', 'tween_006 (6)'],
+  // Set 5's C frames were replaced with no-suffix files (re-verified
+  // via `ls`) -- the old "(6)"-suffixed set is gone from disk entirely.
+  '5': ['tween_001', 'tween_002', 'tween_003', 'tween_004', 'tween_005', 'tween_006'],
 };
 const flick3HoldFramesBySource = {};
 GENERATED_SOURCES.forEach(n => {

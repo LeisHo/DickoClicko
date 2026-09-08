@@ -8301,6 +8301,22 @@ load and play correctly for each, particularly sets 4 and 5 (new)
 and set 2 (the mixed-suffix case).
 
 ================================================================================
+2026-09-08  -  08:05 AM EDT
+
+"I updated frames in 5/C" -- a follow-up to the previous entry. The
+"(6)"-suffixed set of 6 files GENERATED_C_FILES_BY_SOURCE['5']
+referenced was replaced entirely with new no-suffix files (re-verified
+via `ls` and `git status` -- the old "(6)" files show as deleted, the
+new plain tween_NNN.png files as untracked). Updated
+GENERATED_C_FILES_BY_SOURCE['5'] to the new no-suffix names,
+regenerated all 6 webp files via sharp, verified each exists with a
+sane size and the correct 1400x665 dimensions. Full syntax check
+passed. Committed (index.html + 12 asset files: 6 new PNG + 6 new
+webp under Genereated/5/C, the old "(6)" PNG+webp pairs removed),
+pushed to origin/master. No live in-game confirmation possible
+(Browser pane still down).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
