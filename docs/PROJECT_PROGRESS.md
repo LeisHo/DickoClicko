@@ -20,6 +20,23 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
+Dev panel audited against CLAUDE.md's own §12 standard (per explicit
+request) -- already ~fully compliant (full resize/move/hide/collapse,
+Copy/Save/Reset with a real git-tracked-JSON write-through, group/row
+drag-reordering, click-to-edit sliders with auto-expanding bounds, the
+built-in appearance group, shared X/Y origin), all 111 existing
+settings across 16 groups untouched. Only real gap (button labels
+"Copy"/"Save" vs. the spec's "Copy Settings"/"Save Settings") fixed
+directly; the one genuine design question (no per-tab desktop/mobile
+override for individual settings, only for the panel's own chrome)
+was surfaced and the user confirmed leaving it as-is.
+
+This session's Browser pane has gotten WORSE, not better: beyond the
+earlier 0x0-viewport/hidden state, a fresh navigate() call is now
+being denied/failing outright too. Treat live verification as
+currently unavailable in this environment until it's confirmed
+working again -- don't keep re-attempting it per-task.
+
 Awaiting the user's own live confirmation on 2 fronts (this session's
 own Browser pane went into an unrecoverable 0x0-viewport/hidden state
 partway through the most recent task -- closing/reopening the tab

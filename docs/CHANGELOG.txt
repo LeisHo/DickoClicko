@@ -7785,6 +7785,53 @@ long pieces flush against each other and watching whether the slow
 sideways drift is gone.
 
 ================================================================================
+2026-09-08  -  05:54 AM EDT
+
+"read claude.md in Projects. update the dev panel to match the
+tempalate. make sure to retain our groups and settings etc" -- audit
+of the current dev panel (index.html lines ~12-1658, boot-wired at
+~6331) against J:\CLAUDE\PROJECTS\CLAUDE.md's own §12 dev-panel
+standard, via an Explore agent (full report, not summarized from
+memory). Finding: the panel already implements nearly the entire
+spec, down to comments citing the same §12 section numbers -- full
+8-direction resize with dynamic min-size, viewport-clamped drag-move,
+D-key hide + separate collapse button, Copy/Save/Reset with a real
+git-tracked-JSON write-through (api/save-settings.js ->
+data/processed/dev-panel-settings.json) and a file:// download
+fallback, group+row drag-reordering with order/collapse state
+persisted through Copy/Save/Reset, click-to-edit sliders with +-20%
+auto-expanding bounds, the full 9-field built-in "Dev Panel"
+appearance group, no stray descriptive text, and a documented shared
+X/Y origin convention. All 111 existing settings across 16 groups
+untouched/unaffected.
+
+Two real findings, not silently acted on:
+1. Button labels read "Copy"/"Save"/"Reset" rather than the spec's
+literal "Copy Settings"/"Save Settings"/"Reset" -- trivial, fixed
+directly (2-word text change, index.html ~188-189).
+2. No individual DEV_GROUPS setting (circle size/position, animation
+speeds) has an independent desktop-vs-mobile value -- only the
+panel's own chrome (position/size/appearance) is tab-split, per an
+existing comment explaining every functional setting is already
+%vw/%vh/vmin-based so a prior session judged per-tab overrides
+unnecessary. Presented as a real judgment call via AskUserQuestion
+rather than guessing -- user chose to leave it as-is, confirming the
+prior session's reasoning still holds.
+
+Verified the label change applied via direct DOM query
+(getElementById('dpCopyBtn').textContent === 'Copy Settings', same
+for Save) -- could NOT get a live visual/screenshot confirmation:
+same unresolved Browser pane limitation as recent entries, now
+notably worse -- window.innerWidth/innerHeight report 0/0 even
+immediately after opening a fresh tab (not just after reuse),
+resize_window's viewport-emulation-clear did not fix it, and a fresh
+navigate() call was outright denied/failed this round (a new failure
+mode beyond the earlier "stuck at 0x0" state). Not investigated
+further -- clearly environmental, not caused by this change, and
+already exhaustively diagnosed as unrecoverable via available tools
+in earlier entries this session.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
