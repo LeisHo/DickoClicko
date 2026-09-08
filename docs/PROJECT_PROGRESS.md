@@ -159,6 +159,19 @@ didn't clear it -- so neither of these got a real visual check):
   older symptom back in. Worth testing BOTH directions live: does a
   piece cut while resting on others still sink through at all, and
   has "shoots down fast on a coincident double-cut" come back.
+- NEW: 2 friction sliders in the FLOOR group, per explicit request.
+  "Floor Friction" (`cfg.floorFriction`, def 0) reintroduces the
+  per-point horizontal-velocity-removal the fold-on-floor fix above
+  just deleted, but as a live slider gated on `>0` so the default is a
+  true no-op. Real, disclosed tradeoff, not an oversight: turning it
+  up AT ALL brings back meaningful fold-on-floor sliding (verified --
+  even a mild 0.2 reproduced ~17px of drift over 1500 frames, not just
+  the old hardcoded-equivalent 0.7). "Rope Friction"
+  (`cfg.pieceFriction`, def 0.4) is the existing `PIECE_FRICTION`
+  constant made live-tunable, no default-behavior change; applies to
+  piece-vs-piece, mainRope-vs-piece, and self-collision alike (one
+  shared slider, matching the existing single-constant architecture).
+  Not yet watched live (Browser pane down).
 
 `ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` (attempt #6, now with
 the added midpoint proxy -- see "Recently completed" for the full

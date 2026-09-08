@@ -8192,6 +8192,47 @@ than the previous entry's fix, but still worth the user's own live
 test given no visual/gameplay check was possible.
 
 ================================================================================
+2026-09-08  -  07:29 AM EDT
+
+"provide me a slider to set the friction between rope and floor, as
+well as between ropes." 2 new sliders in the FLOOR group:
+
+"Floor Friction" (cfg.floorFriction, 0-1, def 0) -- reintroduces the
+per-point horizontal-velocity-removal mechanism the immediately
+preceding entry just deleted from clampToFloor(), but as a live,
+user-controlled fraction instead of a hardcoded 0.3, gated on
+`cfg.floorFriction > 0` so the default (0) is a true no-op, byte-for-
+byte matching the just-shipped fix. Explicit, disclosed tradeoff: any
+value above 0 brings back the EXACT mechanism that was just proven to
+cause a folded piece resting on the floor to slide (asymmetric
+per-point velocity damping breaking self-collision's own symmetric
+correction) -- verified directly: floorFriction=0 reproduced 0 drift
+(matching the fix), floorFriction=0.7 (the old hardcoded value's
+equivalent) reproduced ~19.4px of drift over 1500 frames, and even a
+mild floorFriction=0.2 still produced ~17.3px -- confirming this
+isn't a "safe until it gets high" slider, turning it up AT ALL
+reintroduces meaningful fold-on-floor sliding. Documented plainly in
+the control's own comment rather than silently capping/limiting it --
+the user asked for the control itself, understanding this tradeoff is
+part of using it.
+
+"Rope Friction" (cfg.pieceFriction, 0-1, def 0.4) -- the existing
+PIECE_FRICTION constant (added 2 fixes ago for the original piece-vs-
+piece drift) converted from a hardcoded value to a live slider, no
+behavior change at its default (0.4, matching the constant's own
+previous value exactly). Applies to all 3 places applyContactFriction()
+is already called: piece-vs-piece, mainRope-vs-piece, and a piece's
+own self-collision -- "between ropes" in the broadest sense already
+used throughout this project's own vocabulary, one shared slider
+rather than 3 separate ones, matching the existing single-constant
+architecture rather than adding new decomposition unprompted.
+
+Verified via a Node simulation reusing the exact shipped clampToFloor
+logic with cfg.floorFriction wired in (see above); full syntax check
+passed. No live in-game confirmation possible (Browser pane still
+down).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

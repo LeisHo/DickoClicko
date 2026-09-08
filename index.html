@@ -475,6 +475,37 @@ const DEV_GROUPS = [
     { key:'floorColor',      label:'Floor Color',      type:'color',    def:'#ffffff' },
     { key:'floorThickness',  label:'Floor Thickness',  type:'slider',   unit:'%vh', min:0.2, max:10, step:0.1, def:10 },
     { key:'floorHeight',     label:'Floor Height',     type:'slider',   unit:'%vh', min:0,   max:50, step:1,   def:6 },
+    // Per explicit request ("provide me a slider to set the friction
+    // between rope and floor, as well as between ropes"). Default 0
+    // for BOTH matches this project's own just-shipped, just-verified
+    // behavior exactly (see clampToFloor()'s and applyContactFriction()'s
+    // own comments for the full history) -- neither slider changes
+    // anything out of the box.
+    //
+    // Floor Friction: 0-1, fraction of horizontal velocity REMOVED
+    // (not retained) the instant a point touches the floor. 0 =
+    // current shipped behavior (no extra removal beyond the general
+    // per-frame damping everywhere else). Turning this up brings back
+    // the EXACT per-point-independent velocity-damping mechanism that
+    // was just found to cause a folded piece resting on the floor to
+    // slide -- see clampToFloor()'s own comment for the full
+    // root-cause account. This is a genuine, disclosed tradeoff, not
+    // an oversight: higher floor friction is more likely to
+    // reintroduce that specific symptom for a folded piece
+    // specifically (2 self-colliding points at different heights,
+    // damped unequally). Not capped/limited to avoid this
+    // automatically -- left as a real, visible tradeoff the user can
+    // feel out directly, per explicit request for the control itself.
+    { key:'floorFriction',   label:'Floor Friction',   type:'slider',   unit:'x',   min:0,   max:1,   step:0.01, def:0 },
+    // Rope Friction: 0-1, fraction of relative TANGENTIAL (sliding)
+    // velocity removed per frame between 2 contacting points --
+    // applies to piece-vs-piece, mainRope-vs-piece, AND a piece's own
+    // self-collision (all 3 share applyContactFriction(), see its own
+    // comment) -- "between ropes" in the broadest sense used
+    // throughout this project's own dev-panel/comment vocabulary.
+    // Default 0.4 matches PIECE_FRICTION's previous hardcoded value
+    // exactly (no change to current behavior at this default).
+    { key:'pieceFriction',   label:'Rope Friction',    type:'slider',   unit:'x',   min:0,   max:1,   step:0.01, def:0.4 },
   ]},
   { title:'STARTUP ANIMATION', controls:[
     { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
@@ -2986,12 +3017,13 @@ const PIECE_SEAM_OVERLAP_FRAC = 0.15;
 // applyContactFriction(p, q, nx, ny, maxPush) fixes this directly:
 // after the normal push above already separates p/q, it damps
 // whatever RELATIVE velocity remains between them along the TANGENT
-// (perpendicular to the contact normal) by PIECE_FRICTION -- pure
+// (perpendicular to the contact normal) by cfg.pieceFriction -- pure
 // friction, the normal-direction motion the push just resolved is left
-// untouched. Implemented as an oldx/oldy shift (same mechanism the
-// floor clamp already uses for its own partial velocity damping,
-// `p.oldx = p.x - (p.x-p.oldx)*0.3`), which is safe here specifically
-// because -- unlike the multi-iteration distance/bend/boundary solve --
+// untouched. Implemented as an oldx/oldy shift (the same KIND of
+// mechanism cfg.floorFriction, when turned up from its own 0 default,
+// applies to the floor clamp -- see that control's own comment,
+// including the real tradeoff of turning it up), which is safe here
+// specifically because -- unlike the multi-iteration distance/bend/boundary solve --
 // pieceCollision() only ever runs once per frame, so there's no risk of
 // the same double-counting bug that ruled out touching oldx/oldy inside
 // integrateChain's own iteration loop. Works on endcap proxy points too
@@ -3000,17 +3032,19 @@ const PIECE_SEAM_OVERLAP_FRAC = 0.15;
 // every other correction in this system is rate-capped -- a friction
 // impulse should never be able to kill more relative velocity in one
 // frame than the normal push itself is allowed to correct.
-// PIECE_FRICTION (0-1, fraction of relative tangential velocity removed
-// per frame per contact) is a judgment call, not a measured value --
-// chosen high enough to visibly stop sliding within a handful of
-// frames without reading as pieces being glued together.
-const PIECE_FRICTION = 0.4;
+// cfg.pieceFriction (0-1, fraction of relative tangential velocity
+// removed per frame per contact) -- a live dev-panel slider (FLOOR
+// group, "Rope Friction") per explicit request. Default 0.4 (see that
+// control's own def) matches this constant's original hardcoded value
+// exactly. Was a judgment call when hardcoded, chosen high enough to
+// visibly stop sliding within a handful of frames without reading as
+// pieces being glued together -- now directly user-tunable instead.
 function applyContactFriction(p, q, nx, ny, maxPush){
   const tx = -ny, ty = nx;
   const pvx = p.x - p.oldx, pvy = p.y - p.oldy;
   const qvx = q.x - q.oldx, qvy = q.y - q.oldy;
   const relTangent = (pvx - qvx) * tx + (pvy - qvy) * ty;
-  const impulse = Math.max(-maxPush, Math.min(maxPush, relTangent * PIECE_FRICTION * 0.5));
+  const impulse = Math.max(-maxPush, Math.min(maxPush, relTangent * cfg.pieceFriction * 0.5));
   p.oldx += tx * impulse; p.oldy += ty * impulse;
   q.oldx -= tx * impulse; q.oldy -= ty * impulse;
 }
@@ -5620,12 +5654,21 @@ function update(rawDt){
     // general per-frame decay, same as everywhere else), rather than
     // an instant partial cut the moment it touches the floor -- expected
     // to read as slightly more natural sliding-to-a-stop, not as a bug.
+    //
+    // cfg.floorFriction (FLOOR group's "Floor Friction" slider, per
+    // explicit follow-up request) reintroduces this exact per-point
+    // velocity removal, but as a live, user-controlled 0-1 fraction
+    // instead of a hardcoded 0.3 -- default 0 exactly matches the fix
+    // above (no removal at all). Turning it up brings back the SAME
+    // mechanism that fold-on-floor bug traced to -- a genuine, disclosed
+    // tradeoff (see that control's own comment), not an oversight.
     const clampToFloor = (points, thick) => {
       const half = thick / 2;
       const clampY = fY - half;
       points.forEach(p => {
         if (p.y > clampY){
           p.y = clampY;
+          if (cfg.floorFriction > 0) p.oldx = p.x - (p.x - p.oldx) * (1 - cfg.floorFriction);
           p.oldy = p.y;
         }
       });
