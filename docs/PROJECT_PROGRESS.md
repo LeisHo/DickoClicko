@@ -43,6 +43,24 @@ didn't clear it -- so neither of these got a real visual check):
   verlet points per chain, same total rope length (`TARGET_SEG_LEN_VH`
   auto-derives from `POINT_COUNT`, so segments just get shorter/denser).
   Not yet watched live either, same Browser pane limitation.
+- NEW: piece-vs-piece contact friction (`applyContactFriction()`,
+  `PIECE_FRICTION = 0.4`) -- fixes the reported "2 pieces resting flush
+  keep moving slightly, sometimes slowly slide apart" symptom. Root
+  cause: `resolveChainCollision()`/`resolveSelfCollision()` run a
+  single un-iterated sweep per frame (unlike the distance/bend/
+  boundary solve, which deliberately iterates to convergence), so many
+  simultaneous contact pairs leave an uncancelled tangential residual
+  that had nothing damping it (collision was normal-only, zero
+  friction) -- it became real carried velocity next frame and could
+  drift in a consistent direction. `applyContactFriction()` damps the
+  relative TANGENTIAL velocity between each contacting pair via an
+  oldx/oldy shift (same mechanism the floor clamp already uses).
+  Verified via Node simulation (exact fractional reduction confirmed,
+  symmetric/momentum-conserving impulse, correct behavior through the
+  endcap proxy's own rotating-tangent oldx/oldy passthrough -- new
+  getters/setters added to `makeTipCollisionPoint()` for this). Not
+  yet watched live -- same Browser pane limitation; this is the one
+  most worth testing first, since it's a direct fix for a reported bug.
 
 `ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` (attempt #6, now with
 the added midpoint proxy -- see "Recently completed" for the full

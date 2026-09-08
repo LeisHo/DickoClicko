@@ -2532,9 +2532,21 @@ function endcapTipRadiusPx(designKey, widthThicknessPx){
 // stays exactly offsetDist afterward (the tangent direction itself is
 // free to rotate as owner's position relative to the fixed `neighbor`
 // changes, same as the endcap's real rendered angle would).
+// oldx/oldy getters/setters mirror x/y exactly, just built from owner's/
+// neighbor's own oldx/oldy instead of x/y -- added so resolveChainCollision's
+///resolveSelfCollision's tangential-friction step (see their own comments)
+// can read/write a proxy's implied velocity (x - oldx) the SAME way it does
+// for a real point, without special-casing proxies. Writing through this
+// setter shifts owner's oldx/oldy by the same delta, exactly like the x/y
+// setters already shift owner's real x/y.
 function makeTipCollisionPoint(owner, neighbor, offsetDist){
   function dir(){
     const dx = owner.x - neighbor.x, dy = owner.y - neighbor.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len };
+  }
+  function oldDir(){
+    const dx = owner.oldx - neighbor.oldx, dy = owner.oldy - neighbor.oldy;
     const len = Math.hypot(dx, dy) || 1;
     return { x: dx / len, y: dy / len };
   }
@@ -2543,6 +2555,10 @@ function makeTipCollisionPoint(owner, neighbor, offsetDist){
     set x(v){ owner.x += v - (owner.x + dir().x * offsetDist); },
     get y(){ return owner.y + dir().y * offsetDist; },
     set y(v){ owner.y += v - (owner.y + dir().y * offsetDist); },
+    get oldx(){ return owner.oldx + oldDir().x * offsetDist; },
+    set oldx(v){ owner.oldx += v - (owner.oldx + oldDir().x * offsetDist); },
+    get oldy(){ return owner.oldy + oldDir().y * offsetDist; },
+    set oldy(v){ owner.oldy += v - (owner.oldy + oldDir().y * offsetDist); },
   };
 }
 
@@ -2585,6 +2601,58 @@ function makeTipCollisionPoint(owner, neighbor, offsetDist){
 // decayed -- 15% is the same kind of judgment call the fixed-pixel
 // version was, just expressed proportionally instead of absolutely.
 const PIECE_SEAM_OVERLAP_FRAC = 0.15;
+
+// Reported directly: 2 long pieces resting flush against each other
+// (many overlapping point pairs at once) "keep moving slightly for a
+// period," and sometimes "one piece will slowly keep sliding to one
+// side until they arent touching anymore." Root cause: the normal-only
+// push in resolveChainCollision/resolveSelfCollision below runs as a
+// single un-iterated sweep (unlike integrateChain's distance/bend/
+// boundary solve, which deliberately iterates `constraintIterations`
+// times specifically so simultaneously-active constraints can negotiate
+// a converged shape -- see boundaryConstraint's own comment). With many
+// point pairs in contact at once, that single pass leaves a small
+// residual PER-PAIR push whose direction depends on the exact line
+// between that specific pair, not the ropes' shared contact axis -- and
+// since nothing has ever damped the TANGENTIAL (sliding) component of
+// that residual, per the project's existing "leave oldx/oldy alone,
+// let next frame's implied velocity reflect whatever actually moved"
+// convention (see boundaryConstraint's own comment for why that's
+// normally correct), an un-cancelled tangential residual becomes real
+// carried velocity next frame and can compound into a slow, one-
+// directional drift over many frames if it isn't symmetric (which,
+// resting two irregular pieces together, it usually isn't).
+// applyContactFriction(p, q, nx, ny, maxPush) fixes this directly:
+// after the normal push above already separates p/q, it damps
+// whatever RELATIVE velocity remains between them along the TANGENT
+// (perpendicular to the contact normal) by PIECE_FRICTION -- pure
+// friction, the normal-direction motion the push just resolved is left
+// untouched. Implemented as an oldx/oldy shift (same mechanism the
+// floor clamp already uses for its own partial velocity damping,
+// `p.oldx = p.x - (p.x-p.oldx)*0.3`), which is safe here specifically
+// because -- unlike the multi-iteration distance/bend/boundary solve --
+// pieceCollision() only ever runs once per frame, so there's no risk of
+// the same double-counting bug that ruled out touching oldx/oldy inside
+// integrateChain's own iteration loop. Works on endcap proxy points too
+// via their own oldx/oldy passthrough (see makeTipCollisionPoint()).
+// Clamped to +-maxPush (COLLISION_MAX_PUSH_PER_S) for the same reason
+// every other correction in this system is rate-capped -- a friction
+// impulse should never be able to kill more relative velocity in one
+// frame than the normal push itself is allowed to correct.
+// PIECE_FRICTION (0-1, fraction of relative tangential velocity removed
+// per frame per contact) is a judgment call, not a measured value --
+// chosen high enough to visibly stop sliding within a handful of
+// frames without reading as pieces being glued together.
+const PIECE_FRICTION = 0.4;
+function applyContactFriction(p, q, nx, ny, maxPush){
+  const tx = -ny, ty = nx;
+  const pvx = p.x - p.oldx, pvy = p.y - p.oldy;
+  const qvx = q.x - q.oldx, qvy = q.y - q.oldy;
+  const relTangent = (pvx - qvx) * tx + (pvy - qvy) * ty;
+  const impulse = Math.max(-maxPush, Math.min(maxPush, relTangent * PIECE_FRICTION * 0.5));
+  p.oldx += tx * impulse; p.oldy += ty * impulse;
+  q.oldx -= tx * impulse; q.oldy -= ty * impulse;
+}
 
 // Reported directly after the grace period above shipped: "the rope
 // cutting jumping bug is sitll occuring" plus "the cut segments of rope
@@ -2742,6 +2810,7 @@ function resolveChainCollision(dataA, dataB, maxPush){
         const nx = dx / dist, ny = dy / dist;
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
+        applyContactFriction(p, q, nx, ny, maxPush);
       }
     }
   }
@@ -2828,7 +2897,11 @@ const MIN_SELF_COLLISION_GAP = 4;
 // is what makes this safe to run at all. Reuses the exact same
 // maxPush-capped, seam-undershot math as resolveChainCollision() (cross-
 // chain), just against one chain's own point set instead of 2 different
-// chains'.
+// chains' -- including the same applyContactFriction() tangential-damping
+// step, for the same reason: a tightly coiled piece has just as many
+// simultaneous self-contact pairs as 2 flush-resting pieces do, so it's
+// equally exposed to the un-converged-sweep drift applyContactFriction()
+// fixes (see that function's own comment).
 function resolveSelfCollision(data, maxPush){
   const pts = data.points, radii = data.radii;
   for (let i = 0; i < pts.length; i++){
@@ -2843,6 +2916,7 @@ function resolveSelfCollision(data, maxPush){
         const nx = dx / dist, ny = dy / dist;
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
+        applyContactFriction(p, q, nx, ny, maxPush);
       }
     }
   }

@@ -7695,6 +7695,96 @@ re-attempted this round since it hadn't cleared on its own. Awaiting
 the user's own live test of both changes together.
 
 ================================================================================
+2026-09-08  -  05:33 AM EDT
+
+"sometimes, when i have one long rope cut piece lying on top of
+another piece, the collision detection makes it so that the ropes
+keep moving slightly for a period. sometimes, one piece will slowly
+keep sliding to one side until they arent touching anymore." Real
+diagnostic task, not a blind fix -- traced to a genuine architectural
+gap rather than a tuning problem:
+
+Root cause: resolveChainCollision()/resolveSelfCollision() (piece
+collision) run as a SINGLE un-iterated sweep per frame, unlike
+integrateChain()'s distance/bend/boundary solve which deliberately
+iterates `constraintIterations` times so simultaneously-active
+constraints can negotiate toward one converged shape (see
+boundaryConstraint's own comment, an already-established pattern in
+this codebase). With 2 long pieces resting flush, many point pairs
+are in contact at once; each pair's own normal-direction push doesn't
+account for the others in the same sweep, leaving a small per-frame
+residual whose direction depends on that specific pair's own line,
+not the ropes' shared contact axis. Nothing has ever damped the
+TANGENTIAL component of that residual -- collision has always been
+normal-only, zero friction -- so per the project's own established
+"leave oldx/oldy alone, let next frame's implied velocity reflect
+whatever actually moved" convention (correct for a FIXED boundary,
+where it drives radial velocity to zero on its own; NOT self-
+correcting here, where both bodies are moving), an un-cancelled
+tangential residual becomes real carried velocity and can compound
+into a slow, one-directional drift over many frames when it isn't
+symmetric (which, resting 2 irregular pieces together, it usually
+isn't). Recent POINT_COUNT 14->20 and the endcap midpoint-proxy
+addition (previous entry) both increase how many point pairs can be
+in simultaneous contact, which is why this became more noticeable now
+even though the underlying gap always existed.
+
+Presented the diagnosis plus 3 fix options (friction only / iterate
+the sweep only / both) via AskUserQuestion rather than picking one
+unilaterally, since this is a real change to the collision system's
+own physics model, not a tuning constant -- user picked friction only.
+
+Fix: new applyContactFriction(p, q, nx, ny, maxPush), called right
+after the existing normal-direction push in BOTH
+resolveChainCollision() and resolveSelfCollision() (kept identical,
+per resolveSelfCollision's own existing "reuses the exact same math"
+comment). Computes each point's own implied velocity (x-oldx, y-oldy,
+same convention already used elsewhere e.g. the pileTopY settledness
+check), finds the relative velocity component along the TANGENT
+(perpendicular to the contact normal -- the normal component was
+already resolved by the push above and is left untouched), and
+removes PIECE_FRICTION (0.4, a judgment call) of it via a symmetric
+oldx/oldy shift on both points -- same mechanism the floor clamp
+already uses for its own partial velocity damping
+(`p.oldx = p.x-(p.x-p.oldx)*0.3`), safe here specifically because
+pieceCollision() only runs once per frame (no multi-iteration
+double-counting risk, unlike why touching oldx/oldy inside
+integrateChain's own iteration loop was ruled out). Clamped to
++-maxPush, same rate-limit philosophy as every other correction in
+this system.
+
+makeTipCollisionPoint() (the endcap proxy) gained oldx/oldy getters/
+setters mirroring its existing x/y ones (built from owner's/
+neighbor's own oldx/oldy instead of x/y) so applyContactFriction()
+works identically on real points and endcap proxies without special-
+casing -- a proxy's own "old" tangent direction is recomputed from the
+owner/neighbor's OLD positions, matching how its "new" position
+already recomputes the tangent from their CURRENT positions.
+
+Verified via a standalone Node.js simulation of the exact
+applyContactFriction()/makeTipCollisionPoint() code (copied verbatim):
+confirmed relative tangential velocity between 2 real points is
+reduced by exactly the PIECE_FRICTION fraction (a -10 relative
+tangential velocity became exactly -6 after one application, matching
+-10*(1-0.4)) while the impulse is applied symmetrically (momentum-
+conserving between the pair); confirmed the proxy oldx/oldy passthrough
+correctly reflects a rotating tip's own higher swing velocity (owner
+translating while the owner-neighbor tangent direction also rotates
+between frames amplifies the tip's own implied velocity vs. the
+owner's, physically consistent with how a point far from a rotating
+pivot moves faster than the pivot itself -- the same phenomenon
+topplePiece()'s own pivot-rotation code already accounts for
+elsewhere in this file) and that a friction impulse applied at the
+proxy correctly writes back through to the real owner point. Syntax-
+checked the full script block via `new Function()`. Did NOT get a
+live visual/gameplay confirmation of the actual sliding-drift fix --
+same Browser pane 0x0/hidden-viewport limitation as the last several
+entries, not re-attempted since it hadn't cleared on its own between
+tasks. Awaiting the user's own live test -- specifically, resting 2
+long pieces flush against each other and watching whether the slow
+sideways drift is gone.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
