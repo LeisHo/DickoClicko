@@ -7305,6 +7305,57 @@ problems were more or less fixed"), not new behavior needing fresh
 verification.
 
 ================================================================================
+2026-09-07  -  11:19 PM EDT
+
+New feature, unrelated to the collision investigation: "I want a 3rd
+animation. Provide the same sliders for this one. The 3rd animation
+will also have a dropdown that allows me to select frames from
+Genereated\1, 2, or 3. The animation will be as follows. Images in
+folder A in sequence, images in folder B in reverse sequence" -- with
+`data/FLICK/Genereated/{1,2,3}/{A,B}/` already populated with PNGs
+(verified via `ls`: A has frames [1,2,3,5,7,9,11,13], B has [1..15],
+identical across all 3 sets; only each set's own filename suffix --
+"(7)"/"(6)"/"(5)" -- differs).
+
+Added FLICK ANIMATION 3, reusing animation 2's own proven "folder A
+forward, folder B reversed" design (see that feature's own history)
+almost exactly -- the only real new piece is the runtime-switchable
+source dropdown, since animations 1/2 each only ever have one fixed
+source. `flickFrames3BySource` preloads all 3 sets' Image objects up
+front (23 frames each: 8 from A + 15 from B reversed) so the dropdown
+switches instantly, no fetch delay. `GENERATED_A_FRAME_NUMBERS`/
+`GENERATED_B_FRAME_NUMBERS` are shared across all 3 sets (identical
+frame-number pattern); `GENERATED_SOURCE_SUFFIX` maps each set to its
+own filename suffix since only the numbers are shared, not the actual
+filenames. Wired into every existing FLICK integration point:
+`holdingFlick` (now 1/2/3/null), the onPointerDown/onPointerUp hit-test
+and hold-then-play transitions, update()'s play-once tick, and
+render()'s draw block -- new "FLICK ANIMATION 3" dev-panel group
+(Flick3 Frame Set dropdown + X/Y/Scale/Anim Speed sliders, matching
+animation 2's own defaults).
+
+Verified: syntax check passed. All 69 frame URLs (23 x 3 sets) confirmed
+200 OK via the network log. Dev panel renders the new group and
+dropdown correctly with the right defaults. Click/hold interaction
+confirmed live via console click-logs (down:flick3 -> up:flick3-play,
+correctly ignored while already playing). Spent real debugging time
+chasing what looked like a stuck-at-frame-0 playback bug (added and
+removed temporary diagnostic logging) before finding the actual cause:
+`document.hidden`/`document.visibilityState` were both true for the
+ENTIRE session's Browser pane, confirmed even after explicitly fronting
+the existing tab and opening a brand-new foreground tab -- the pane
+itself is hidden at the host level, independent of tab selection, which
+suspends requestAnimationFrame regardless. This explains why click/hold
+state transitions (not rAF-gated) worked instantly while the actual
+frame-advancing tick (rAF-gated, same as every other animation and the
+rope physics itself) never visibly progressed -- not a bug in the new
+code. The tick logic itself is structurally identical to animation 2's
+own already-proven implementation, differing only in the frame-array
+lookup being a live dropdown read instead of a fixed reference. Live
+playback itself was NOT confirmed by watching it actually cycle through
+frames -- awaiting the user's own test.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

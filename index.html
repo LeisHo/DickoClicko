@@ -518,6 +518,18 @@ const DEV_GROUPS = [
     { key:'flick2Scale',     label:'Flick2 Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
     { key:'flick2AnimSpeed', label:'Flick2 Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:3.2 },
   ]},
+  { title:'FLICK ANIMATION 3', controls:[
+    { key:'flick3Source',    label:'Flick3 Frame Set', type:'dropdown', def:'1',
+      options:[
+        { value:'1', label:'Set 1 (Genereated/1)' },
+        { value:'2', label:'Set 2 (Genereated/2)' },
+        { value:'3', label:'Set 3 (Genereated/3)' },
+      ] },
+    { key:'flick3X',         label:'Flick3 X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
+    { key:'flick3Y',         label:'Flick3 Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:35 },
+    { key:'flick3Scale',     label:'Flick3 Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
+    { key:'flick3AnimSpeed', label:'Flick3 Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:3.2 },
+  ]},
   { title:'FLICK HOLD', controls:[
     { key:'flickHoldMaxSpeed',    label:'Flick Hold Max Speed',    type:'slider', unit:'x', min:1,   max:20,  step:0.5, def:6 },
     { key:'flickHoldMaxDuration', label:'Flick Hold Max Duration', type:'slider', unit:'s', min:0.1, max:5,   step:0.1, def:1.5 },
@@ -1768,7 +1780,7 @@ let flick2Playing = false;
 // animation's real click-triggered sequence on release -- per explicit
 // request ("when i click and hold on the animations, the animation only
 // starts at release. but while its holding, cycle throug the frames").
-// holdingFlick is 1, 2, or null -- which animation (if any) is currently
+// holdingFlick is 1, 2, 3, or null -- which animation (if any) is currently
 // being held; shared by both since only one graphic can be held at a time.
 const FLICK_HOLD_FRAME_COUNT = 3;
 const flickHoldFrames = [];
@@ -1808,6 +1820,73 @@ const flick2Rect = { x: 0, y: 0, w: 0, h: 0 };
 function isPointInFlick2(x, y){
   return x >= flick2Rect.x && x <= flick2Rect.x + flick2Rect.w &&
          y >= flick2Rect.y && y <= flick2Rect.y + flick2Rect.h;
+}
+
+// FLICK animation 3 -- same "folder A forward, folder B reversed" design
+// as animation 2 (see its own comment above), but sourced from
+// data/FLICK/Genereated/<N>/A and .../B instead of data/FLICK/ANI/1 and
+// .../2, and switchable at runtime between 3 such source sets (N = 1,
+// 2, or 3) via the Flick3 Frame Set dropdown (cfg.flick3Source) -- per
+// explicit request. All 3 sets share the exact same frame-number
+// pattern within A and B (re-verified: `ls data/FLICK/Genereated/<N>/A`
+// and `.../B` for N=1,2,3 all show identical present-number lists,
+// only the filenames' own trailing "(7)"/"(6)"/"(5)" differ, which the
+// URLs below don't need to know about since they're built from the
+// number alone) -- GENERATED_AB_FRAME_NUMBERS is therefore shared
+// across all 3 sets rather than 3 separate hardcoded arrays. As with
+// ANI1_FRAMES/ANI2_FRAMES, this is a static single-file app with no
+// server-side directory listing -- re-verify and update this ONE
+// shared array (and GENERATED_SOURCES below, if a 4th set is ever
+// added) if any set's own folder contents ever change.
+const GENERATED_A_FRAME_NUMBERS = [1, 2, 3, 5, 7, 9, 11, 13];
+const GENERATED_B_FRAME_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+const FLICK3_FRAME_COUNT = GENERATED_A_FRAME_NUMBERS.length + GENERATED_B_FRAME_NUMBERS.length;
+// Each set's own real filenames are "tween_NNN (X).png" -- a literal
+// space then a parenthesized export-batch number that differs PER SET
+// (re-verified via `ls`: set 1 is "(7)", set 2 is "(6)", set 3 is
+// "(5)") despite the frame numbers themselves (GENERATED_A/B_FRAME_
+// NUMBERS above) being identical across all 3 -- so the suffix has to
+// be looked up per source, unlike the frame-number lists.
+const GENERATED_SOURCE_SUFFIX = { '1': '(7)', '2': '(6)', '3': '(5)' };
+const GENERATED_SOURCES = ['1', '2', '3'];
+// One preloaded Image array per source set, keyed by cfg.flick3Source's
+// own string values -- built once at load (same eager-preload
+// convention as flickFrames/flickFrames2) rather than lazily per
+// dropdown change, so switching sets mid-session never has to wait on
+// a fresh network fetch. encodeURIComponent on the whole filename
+// (not just the space) -- the parentheses are valid in a URL path
+// unescaped, but encoding them too is harmless and one call is simpler
+// than escaping only the space.
+const flickFrames3BySource = {};
+GENERATED_SOURCES.forEach(n => {
+  const suffix = GENERATED_SOURCE_SUFFIX[n];
+  const fileFor = i => encodeURIComponent(`tween_${String(i).padStart(3, '0')} ${suffix}.png`);
+  flickFrames3BySource[n] = ([]).concat(
+    GENERATED_A_FRAME_NUMBERS.map(i => `data/FLICK/Genereated/${n}/A/${fileFor(i)}`),
+    [...GENERATED_B_FRAME_NUMBERS].reverse().map(i => `data/FLICK/Genereated/${n}/B/${fileFor(i)}`),
+  ).map(src => {
+    const img = new Image();
+    img.src = src;
+    return img;
+  });
+});
+let flick3AnimTime = 0;
+let flick3Playing = false;
+
+function flick3FrameIndex(){
+  if (!flick3Playing) return 0;
+  const cyclePos = flick3AnimTime * FLICK_BASE_FPS * cfg.flick3AnimSpeed;
+  return Math.floor(((cyclePos % FLICK3_FRAME_COUNT) + FLICK3_FRAME_COUNT) % FLICK3_FRAME_COUNT);
+}
+// Current source set's own frame array -- read fresh each time (never
+// cached in a local), since cfg.flick3Source can change live via the
+// dropdown at any point, including mid-hold or mid-play.
+function flick3Frames(){ return flickFrames3BySource[cfg.flick3Source]; }
+
+const flick3Rect = { x: 0, y: 0, w: 0, h: 0 };
+function isPointInFlick3(x, y){
+  return x >= flick3Rect.x && x <= flick3Rect.x + flick3Rect.w &&
+         y >= flick3Rect.y && y <= flick3Rect.y + flick3Rect.h;
 }
 
 /* ---------------------------------------------------------------------
@@ -4030,6 +4109,15 @@ function onPointerDown(e){
   // already-in-progress sequence simply does nothing, letting it finish
   // on its own; a new press only starts holding once that animation is
   // idle again.
+  if (isPointInFlick3(e.clientX, e.clientY)){
+    if (!flick3Playing){
+      holdingFlick = 3; flickHoldTime = 0; flickHoldCyclePos = 0;
+      logClick('down:flick3', { x: e.clientX, y: e.clientY });
+    } else {
+      logClick('down:flick3-ignored-playing', { x: e.clientX, y: e.clientY });
+    }
+    return;
+  }
   if (isPointInFlick2(e.clientX, e.clientY)){
     if (!flick2Playing){
       holdingFlick = 2; flickHoldTime = 0; flickHoldCyclePos = 0;
@@ -4140,6 +4228,13 @@ function onPointerUp(e){
   // animation's real sequence -- checked first, independent of downInfo
   // (a flick hold never sets it), same reasoning as onPointerDown's own
   // flick check running before the rope/circle logic below.
+  if (holdingFlick === 3){
+    holdingFlick = null;
+    flick3Playing = true;
+    flick3AnimTime = 0;
+    logClick('up:flick3-play', { x: e.clientX, y: e.clientY, heldMs: Math.round(flickHoldTime * 1000) });
+    return;
+  }
   if (holdingFlick === 2){
     holdingFlick = null;
     flick2Playing = true;
@@ -4387,6 +4482,15 @@ function update(rawDt){
       if (flick2AnimTime * FLICK_BASE_FPS * cfg.flick2AnimSpeed >= FLICK2_FRAME_COUNT){
         flick2Playing = false;
         flick2AnimTime = 0;
+      }
+    }
+  }
+  if (flick3Playing){
+    if (!isFrameBlocking(flick3Frames()[flick3FrameIndex()])){
+      flick3AnimTime += rawDt;
+      if (flick3AnimTime * FLICK_BASE_FPS * cfg.flick3AnimSpeed >= FLICK3_FRAME_COUNT){
+        flick3Playing = false;
+        flick3AnimTime = 0;
       }
     }
   }
@@ -5879,6 +5983,16 @@ function render(){
     const flick2Img = holdingFlick === 2 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames2[flick2FrameIndex()];
     if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
       ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, flick2W, flick2H);
+    }
+    const flick3RefImg = flick3Frames()[0];
+    const flick3Aspect = (flick3RefImg && flick3RefImg.naturalWidth > 0) ? (flick3RefImg.naturalHeight / flick3RefImg.naturalWidth) : 1;
+    const flick3W = vmin(cfg.flick3Scale);
+    const flick3H = flick3W * flick3Aspect;
+    flick3Rect.x = vw(cfg.flick3X) - flick3W / 2; flick3Rect.y = vh(cfg.flick3Y) - flick3H / 2;
+    flick3Rect.w = flick3W; flick3Rect.h = flick3H;
+    const flick3Img = holdingFlick === 3 ? flickHoldFrames[flickHoldFrameIndex()] : flick3Frames()[flick3FrameIndex()];
+    if (flick3Img && flick3Img.complete && flick3Img.naturalWidth > 0){
+      ctx.drawImage(flick3Img, flick3Rect.x, flick3Rect.y, flick3W, flick3H);
     }
   }
 }

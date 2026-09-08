@@ -20,6 +20,12 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
+Awaiting the user's own live confirmation that FLICK ANIMATION 3's
+playback actually animates through its frames (loading, dev-panel UI,
+and click/hold interaction are all confirmed working; the live
+per-frame tick itself wasn't observable this session -- see "Recently
+completed" below for why).
+
 "Shoots downward fast" / "floating" -- `ENABLE_ENDCAP_AND_MAINROPE_
 COLLISION` is back to `false` (attempt #5, the pileTopY settledness
 check, reported "no good"). Confirmed-working state is the flag OFF --
@@ -395,8 +401,8 @@ additions. Current state of each subsystem:
   visitor silently ran on hardcoded code defaults while `?dev=1` on the
   exact same deployment showed the real tuned config -- see CODE_SUMMARY
   gotchas.
-- **FLICK animations**: two small, independent WebP overlays, each with its
-  own X/Y/Scale/Speed dev-panel group. Both are hold-to-preview,
+- **FLICK animations**: 3 small, independent overlays, each with its own
+  X/Y/Scale/Speed dev-panel group. All 3 are hold-to-preview,
   click-to-trigger: press-and-hold cycles 3 preview frames (as of this
   writing -- check `FLICK_HOLD_FRAME_COUNT` in index.html for the
   current count, reduced from 4 this session)
@@ -410,7 +416,18 @@ additions. Current state of each subsystem:
   index.html for the current frame-number lists, and re-verify them by
   hand (`ls` both folders) any time either one's contents change --
   placed above animation 1 by default) plays one forward pass (1->N).
-  Both Anim Speed
+  Animation 3 (added this session, PNGs not WebP) is the SAME "folder A
+  forward then folder B reversed" design as animation 2, but sourced
+  from `data/FLICK/Genereated/<N>/A` and `.../B` where N is switchable
+  at runtime via a new Flick3 Frame Set dropdown (values 1/2/3, per
+  explicit request) -- `flickFrames3BySource` preloads all 3 sets'
+  worth of Image objects up front so switching the dropdown never waits
+  on a fresh fetch. All 3 sets share the same frame-number pattern
+  (`GENERATED_A_FRAME_NUMBERS`/`GENERATED_B_FRAME_NUMBERS` in index.html,
+  8 + 15 = 23 frames each) but differ in their filenames' own trailing
+  `(7)`/`(6)`/`(5)` batch-number suffix (`GENERATED_SOURCE_SUFFIX`) --
+  re-verify both by hand (`ls` each of the 6 folders) if any set's own
+  contents ever change. All 3 animations' Anim Speed
   defaults are 3.2x (live values have since moved further via direct
   tuning). Hit-test rects are computed every frame independent of image
   load state, so a click works immediately on page load. A press while
@@ -421,6 +438,16 @@ additions. Current state of each subsystem:
   as elapsed hold time approaches Flick Hold Max Duration, then holding
   flat at max past that point. A playing sequence pauses on whichever
   frame isn't loaded yet instead of racing past it on a real-time clock.
+  Animation 3's own playback tick was NOT confirmed via live frame-by-
+  frame observation -- the Browser pane was hidden at the host level for
+  this whole task (`document.hidden`/`visibilityState` both confirmed
+  `true` even after explicitly fronting the tab), which suspends
+  requestAnimationFrame entirely regardless of which tab is selected;
+  everything NOT gated on rAF (frame loading -- all 23x3 URLs confirmed
+  200 OK; dev-panel rendering; click/hold state transitions, confirmed
+  live via console click-logs) checked out fine, and the tick logic
+  itself is structurally identical to animation 2's own already-proven
+  code.
   All 42 frames across the 3 folders were originally 6870x6166px PNGs
   (up to 760KB each) despite rendering at only 50% vmin on screen --
   fine on the local dev server's cache but on the deployed Vercel site

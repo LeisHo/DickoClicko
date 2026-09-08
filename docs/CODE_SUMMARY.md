@@ -4369,3 +4369,47 @@ GOTCHAS
   only fix this session verified against direct frame-by-frame
   measurement of real footage rather than Node simulation or pure code
   tracing.
+- **Note (later same session):** the endcap-collision/mainRope-vs-piece
+  design above went through 3 more rounds after this entry -- a
+  piece-vs-piece spawn-grace fix, a `pileTopY` settledness fix, and
+  finally a full revert (`ENABLE_ENDCAP_AND_MAINROPE_COLLISION = false`,
+  everything `a29da9c` added, gated not deleted) after both fixes still
+  didn't resolve the user's reported symptoms. See `docs/CHANGELOG.txt`
+  for the full blow-by-blow; this file wasn't kept current through that
+  stretch and is catching up here rather than rewriting the entries
+  above.
+- **Added FLICK ANIMATION 3** (`flickFrames3BySource`, `flick3FrameIndex()`,
+  `flick3Frames()`, `isPointInFlick3`, `flick3Rect`) -- a 3rd overlay,
+  same "folder A forward then folder B reversed" design as animation 2
+  (see its own entry above) but sourced from
+  `data/FLICK/Genereated/<N>/A` and `.../B` (PNGs, not WebP) where N is
+  switchable at runtime via a new `flick3Source` dropdown (values '1',
+  '2', '3', per explicit request). All 3 source sets' worth of frames
+  are preloaded up front (`GENERATED_SOURCES.forEach(...)`) so switching
+  the dropdown never waits on a fetch. Frame numbers within A/B are
+  identical across all 3 sets (`GENERATED_A_FRAME_NUMBERS` = [1,2,3,5,7,
+  9,11,13], `GENERATED_B_FRAME_NUMBERS` = [1..15], 23 total) but the
+  real filenames' own trailing batch-number suffix differs per set
+  ("tween_NNN (7/6/5).png" for sets 1/2/3 respectively --
+  `GENERATED_SOURCE_SUFFIX`) -- re-verify both constants by hand (`ls`
+  each of the 6 `Genereated/<N>/{A,B}` folders) if any set's contents
+  ever change, same convention as `ANI1_FRAMES`/`ANI2_FRAMES`. Wired
+  into every place animations 1/2 already touch: `holdingFlick` (now 1,
+  2, 3, or null), `onPointerDown`/`onPointerUp`'s hit-test and hold/play
+  transitions, `update()`'s play-once tick (shares `isFrameBlocking()`),
+  and `render()`'s draw block. New "FLICK ANIMATION 3" dev-panel group:
+  Flick3 Frame Set (dropdown), X/Y Pos, Scale, Anim Speed (default 3.2x,
+  matching 1/2). Verified: all 23x3 frame URLs return 200 OK (network
+  log), dev-panel renders the new group and dropdown correctly, and
+  click/hold state transitions fire correctly (confirmed via console
+  click-logs: `down:flick3` -> `up:flick3-play` -> ignored while
+  already playing). NOT verified: the actual per-frame playback tick
+  live, since `document.hidden`/`visibilityState` were both `true` for
+  the Browser pane this entire task (confirmed even after explicitly
+  fronting the tab and opening a brand-new foreground tab -- the pane
+  itself was hidden at the host level, independent of tab selection),
+  which suspends `requestAnimationFrame` regardless of which tab is
+  active. The tick logic itself is structurally identical to animation
+  2's own already-proven code, differing only in the source-array
+  lookup being a live dropdown read (`flick3Frames()`) instead of a
+  fixed array reference.
