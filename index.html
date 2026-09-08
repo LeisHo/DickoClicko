@@ -3224,6 +3224,7 @@ function resolveChainCollision(dataA, dataB, maxPush){
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
         applyContactFriction(p, q, nx, ny, maxPush);
+        applyContactNormalDamping(p, q, nx, ny);
       }
     }
   }
@@ -3351,17 +3352,35 @@ const MIN_SELF_COLLISION_GAP = 4;
 // same kind of unrepresented, uncancelled velocity the floor clamp
 // itself already guards against on its own axis (`oldy = y`, killing
 // 100% of clamped-direction velocity every frame a point rests on the
-// floor -- see clampToFloor's own call site). applySelfCollisionNormalDamping()
+// floor -- see clampToFloor's own call site). applyContactNormalDamping()
 // applies that identical "fully cancel the constrained direction's
-// relative velocity" treatment here, self-collision only (not
-// resolveChainCollision -- piece-vs-piece/mainRope-vs-piece weren't
-// reported broken, and 2 separate bodies genuinely CAN fully separate,
-// unlike 2 points on the SAME already-constrained chain). Only ever
-// engages while an overlap is actively being resolved -- once dist >=
-// minSep, this code path stops running for that pair entirely, so a
-// piece that's simply resting (not actively self-overlapping) is
-// completely unaffected.
-function applySelfCollisionNormalDamping(p, q, nx, ny){
+// relative velocity" treatment here. Only ever engages while an overlap
+// is actively being resolved -- once dist >= minSep, this code path
+// stops running for that pair entirely, so a piece that's simply
+// resting (not actively overlapping) is completely unaffected.
+//
+// Originally self-collision only (applySelfCollisionNormalDamping, on
+// the theory that "2 separate bodies genuinely CAN fully separate,
+// unlike 2 points on the SAME already-constrained chain") -- reported
+// directly that the fold-on-floor sliding was STILL occurring after
+// that fix shipped, with new evidence this time: a piece landing on
+// TOP of an already-resting, unrelated piece caused BOTH to start
+// jittering/sliding, the already-resting one included -- exactly the
+// piece-vs-piece case the original reasoning assumed was safe. That
+// reasoning was wrong: 2 DIFFERENT pieces resting against each other
+// under constant gravity are JUST as exposed to a persistently-
+// re-triggering overlap as a self-fold is (gravity keeps pushing them
+// back together every frame regardless of how many separate chains are
+// involved) -- verified directly via a 2-chain Node simulation (one
+// piece already resting flat, a second landing on/beside it): WITHOUT
+// this fix on resolveChainCollision, the pair drifted ~48px apart over
+// 1500 frames (worse than the self-collision-only case, matching the
+// report that the piece-vs-piece test slid faster); WITH it, drift
+// dropped to a ~1px one-time settling nudge that then stayed flat for
+// 6000 frames straight (not ongoing drift). Renamed accordingly and
+// now called from BOTH resolveSelfCollision() below AND
+// resolveChainCollision() above.
+function applyContactNormalDamping(p, q, nx, ny){
   const pvx = p.x - p.oldx, pvy = p.y - p.oldy;
   const qvx = q.x - q.oldx, qvy = q.y - q.oldy;
   const relNormal = (pvx - qvx) * nx + (pvy - qvy) * ny;
@@ -3378,12 +3397,9 @@ function applySelfCollisionNormalDamping(p, q, nx, ny){
 // maxPush-capped, seam-undershot math as resolveChainCollision() (cross-
 // chain), just against one chain's own point set instead of 2 different
 // chains' -- including the same applyContactFriction() tangential-damping
-// step, for the same reason: a tightly coiled piece has just as many
-// simultaneous self-contact pairs as 2 flush-resting pieces do, so it's
-// equally exposed to the un-converged-sweep drift applyContactFriction()
-// fixes (see that function's own comment). Additionally applies
-// applySelfCollisionNormalDamping() (see its own comment) -- unlike
-// resolveChainCollision(), which does not.
+// AND applyContactNormalDamping() normal-damping steps (see each one's
+// own comment) -- both now shared identically between this function and
+// resolveChainCollision(), not self-collision-specific.
 function resolveSelfCollision(data, maxPush){
   const pts = data.points, radii = data.radii;
   for (let i = 0; i < pts.length; i++){
@@ -3399,7 +3415,7 @@ function resolveSelfCollision(data, maxPush){
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
         applyContactFriction(p, q, nx, ny, maxPush);
-        applySelfCollisionNormalDamping(p, q, nx, ny);
+        applyContactNormalDamping(p, q, nx, ny);
       }
     }
   }

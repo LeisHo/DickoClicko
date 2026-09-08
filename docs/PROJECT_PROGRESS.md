@@ -104,38 +104,37 @@ didn't clear it -- so neither of these got a real visual check):
   getters/setters added to `makeTipCollisionPoint()` for this). Not
   yet watched live -- same Browser pane limitation; this is the one
   most worth testing first, since it's a direct fix for a reported bug.
-- `applySelfCollisionNormalDamping()` in `resolveSelfCollision()` --
-  fully cancels relative NORMAL velocity after each self-collision
-  correction. Shipped with an explicitly disclosed low-confidence
-  diagnosis (2 Node simulations failed to reproduce the reported
-  fold-on-floor drift, with or without the fix). **User confirmed the
-  drift was still occurring afterward** ("it only happens when a rope
-  has bent over on itself when its on the floor") -- see the NEW entry
-  below for the actual root cause and fix. This function stays in
-  place (harmless, only engages during an active overlap) but was NOT
-  the real fix for this symptom.
-- NEW, the actual fix for the fold-on-floor sliding: removed
-  `clampToFloor()`'s own horizontal-velocity damping
-  (`oldx = x-(x-oldx)*0.3`) entirely -- it now only clamps y/oldy
-  (the actual constrained direction), matching the same principle
-  already used everywhere else in this file's constraint solve.
-  Root cause, PROVEN not just hypothesized: resolveSelfCollision's own
-  correction is mathematically guaranteed momentum-conserving (a
-  simulation with all points forced to the exact same y showed exactly
-  0 drift) -- the real asymmetry came from clampToFloor damping each
-  point's horizontal velocity INDEPENDENTLY, so 2 self-colliding
-  points at even sub-pixel-different heights (inevitable for a real
-  fold) get treated unequally, breaking that symmetry. Verified via 4
-  progressively-more-faithful Node simulations, the last one using the
-  exact shipped code across 10 different jitter seeds x 2000 frames
-  each -- 0 drift in every case (previous fix reduced it ~34% but
-  never eliminated it, matching "still occurring"). Real disclosed
-  behavior change: a landed piece now keeps more horizontal momentum
-  immediately after touching the floor, decaying only via the general
-  per-frame damping instead of an instant partial cut -- expected to
-  read as more natural sliding-to-a-stop. Meaningfully higher
-  confidence than the previous attempt, given the much more thorough
-  verification, but still not live-tested (Browser pane down).
+- Piece-collision drift fix, 3 rounds, CONSOLIDATED here to reflect
+  current state (full history in CHANGELOG.txt): reported as a folded
+  piece sliding once resting on the floor. Round 1
+  (`applySelfCollisionNormalDamping()` in `resolveSelfCollision()`
+  only) shipped with an explicitly disclosed low-confidence diagnosis
+  and did NOT fix it. Round 2 (removing `clampToFloor()`'s own
+  horizontal-velocity damping entirely -- it now only clamps y/oldy,
+  the actual constrained direction) was PROVEN via simulation (0 drift
+  across 10 seeds x 2000 frames) but the user confirmed the sliding
+  was STILL occurring, this time with a screen recording showing 2
+  detailed tests -- including a previously-undisturbed, UNRELATED
+  piece starting to jitter when a falling piece landed on it, which
+  directly implicated piece-vs-piece collision, not just
+  self-collision. Round 3 (current): found `resolveChainCollision()`
+  (piece-vs-piece AND mainRope-vs-piece) never got the same
+  normal-velocity-damping treatment self-collision did -- the function
+  was renamed `applyContactNormalDamping()` and wired into BOTH
+  `resolveChainCollision()` and `resolveSelfCollision()`. Verified via
+  a 2-chain simulation (one resting piece, one landing on/beside it):
+  without this fix, drift was ~48px/1500 frames across every seed
+  (worse than the self-collision-only case, matching "test 2 slid
+  faster"); with it, drift dropped to a small one-time settling nudge
+  that stayed exactly flat for 6000+ frames afterward (checkpointed
+  frame-by-frame, not just before/after). A combined fold+resting-piece
+  simulation across 8 seeds up to 8000 frames showed the same pattern
+  -- bounded settling, never ongoing drift, even in the largest-shift
+  seed. Meaningfully higher confidence than either previous round
+  given how directly the new evidence (piece-vs-piece jitter) matched
+  a concrete, findable code asymmetry -- still not live-tested
+  (Browser pane down), and this is the 3rd attempt at this bug class,
+  so a live confirmation matters more than usual here.
 - NEW: `PIECE_SPAWN_GRACE_RADIUS_FRAC` reduced `2 -> 0.3` -- fixes 2
   reports: "the subsequent 2 rope pieces should still have collision
   detectors" (after cutting an already-cut piece) and, more

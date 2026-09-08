@@ -8317,6 +8317,73 @@ pushed to origin/master. No live in-game confirmation possible
 (Browser pane still down).
 
 ================================================================================
+2026-09-08  -  10:27 AM EDT
+
+Direct, detailed follow-up confirming the previous 2 sliding-fix
+entries did NOT resolve the issue -- with a saved screencap and
+precise timestamped description: a fully-cut piece folds over itself,
+falls right, and "continues to slide slowly rightwards on the floor,"
+with the piece's own 2 ends visibly jittering starting at 15s; a
+second test falls left and slides left FASTER, and additionally hits
+an already-resting, UNRELATED piece on landing, causing THAT piece to
+also start jittering (35-39s). This last detail was new and decisive
+-- it directly implicates piece-vs-piece collision, not just
+self-collision.
+
+Re-verified the previous clampToFloor fix was still genuinely active
+(cfg.floorFriction defaults to 0, gate intact) before looking further
+-- confirmed clean, ruling out "the fix regressed" as the explanation.
+
+Found the real remaining gap directly in the code: applySelfCollisionNormalDamping()
+(added 2 entries ago) was wired into resolveSelfCollision() ONLY, per
+an explicit assumption at the time that "2 separate bodies genuinely
+CAN fully separate" -- resolveChainCollision() (piece-vs-piece AND
+mainRope-vs-piece) never got the same treatment, only the existing
+tangential-only applyContactFriction(). That assumption was wrong: 2
+DIFFERENT pieces resting against each other under constant gravity are
+JUST as exposed to a persistently-re-triggering overlap as a self-fold
+is -- gravity keeps pushing them back together every frame regardless
+of how many separate chains are involved.
+
+Verified directly via a 2-chain Node simulation (one piece resting
+flat, a second landing on/beside it) BEFORE touching the real code:
+WITHOUT normal damping on resolveChainCollision, the pair drifted
+~48px apart over 1500 frames across every seed tested (WORSE than the
+self-collision-only case, matching the report that test 2 -- the one
+involving another piece -- slid faster); WITH it, drift dropped to a
+small one-time settling nudge (~1px in the simple case) that then
+stayed completely flat for 6000 frames straight -- confirmed via
+checkpointed frame-by-frame readings, not just a before/after
+snapshot, to rule out slow ongoing drift disguised as a smaller
+number. A 3rd, more realistic simulation combining BOTH a folded piece
+(self-collision) AND an unrelated resting piece (piece-vs-piece)
+together, across 8 seeds up to 8000 frames, showed the same pattern
+-- one seed produced a much larger initial settling shift (~46.5px,
+plausible for a heavy folded piece landing squarely on another) but
+checkpointed readings confirmed it plateaus after ~800 frames (~13s)
+and never grows further afterward, for any seed tested. This actually
+matches the report's own description well -- the observed jittering
+was in a BOUNDED window (15s mark, 35-39s), not indefinite; the
+SUSTAINED sliding is what this fix targets, and a brief settling
+transient during actual impact is expected, physically real behavior,
+not a bug to eliminate.
+
+Fix: renamed applySelfCollisionNormalDamping() to
+applyContactNormalDamping() (no longer self-collision-specific) and
+wired it into resolveChainCollision() too, alongside the existing
+applyContactFriction() tangential damping -- both functions now share
+identical friction+normal-damping treatment. Full syntax check passed.
+Updated CHANGELOG.txt and PROJECT_PROGRESS.md (rewriting the prior
+low/medium-confidence entries' own framing now that this is confirmed
+broader and fixed more thoroughly). No live in-game confirmation
+possible (Browser pane still down) -- this is the 3rd attempt at this
+bug class; given the strength of this round's evidence (a concrete
+code asymmetry directly matching new, specific user-reported symptoms,
+verified via simulations closely matching the actual reported
+scenario) confidence is meaningfully higher than either previous
+attempt, but a live test remains the real confirmation.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
