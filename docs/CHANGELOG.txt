@@ -7516,6 +7516,21 @@ avoiding errors by accident). Game reloaded and confirmed running
 normally afterward.
 
 ================================================================================
+2026-09-08  -  02:54 AM EDT
+
+"i also updated png 15 for animation 1 and 2. fix and update" -- 4th
+round of the same recurring PNG-vs-webp gotcha. A full re-scan (not
+just the named frame) also caught frame 09 stale in ANI/ root
+(animation 1's own 17-frame set; not used by animation 2 at all, so
+easy to miss if only checking the 2 folders the request named).
+Regenerated all 4 (FRAMES-15 x3 folders, FRAMES-09 x1) via sharp.
+
+Verified: all 4 confirmed loading at correct 1400x1257 dimensions via
+the live dev server; a final full re-scan across all 4 ANI subfolders
+confirmed nothing else stale. Pulled a concurrent, unrelated Save
+Settings commit (dev-panel-settings.json) before pushing.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
