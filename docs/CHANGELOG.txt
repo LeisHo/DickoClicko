@@ -8058,6 +8058,67 @@ resolve the reported symptom, and further reports/repro detail would
 be genuinely useful if it doesn't.
 
 ================================================================================
+2026-09-08  -  07:09 AM EDT
+
+2 reports, same session, same root cause: "when i cut an already cut
+rope segment, the subsequent 2 rope pieces should still have
+collision detectors," then, more concretely, "right now, when i cut a
+rope piece lying n top of rope pieces, atleast oneo f the cut pieces
+will fall through the ropes they are resting on."
+
+Traced performPieceSplit() and the full pieceCollision() pipeline --
+structurally nothing excludes a re-split piece's 2 halves from
+mainRope/piece-vs-piece/self collision; both remain ordinary
+fallenPieces entries. The real cause: setPieceSpawnGrace()/
+pieceSpawnGraceActive(), called on every freshly-created piece
+(performPieceSplit's newPiece, performMainRopeSplit's piece,
+detachEntireRopeAndRestartIntro's piece), doesn't just skip a
+one-time spawn-overlap check -- while active, it disables piece-vs-
+piece collision for the graced piece against EVERY other piece,
+entirely. That includes the continuous, every-frame counter-gravity
+correction a piece resting on another piece fundamentally depends on
+(verlet + explicit gravity pulls every point down every frame;
+collision pushing back is the only thing holding a resting piece up).
+A piece that spawns already resting on other ropes (exactly the
+reported scenario -- cutting a piece that was itself lying on top of
+others) has nothing holding it up until grace clears -- it falls
+straight through, unopposed, for the whole window. The old threshold
+(`radius * 2`) gave gravity easily enough unopposed time to carry a
+resting piece all the way through before clearing.
+
+This is high-confidence, logically-derived (not merely hypothesized
+like the immediately preceding self-collision entry) -- the mechanism
+is a direct, demonstrable consequence of the code as written, not a
+"might explain it." But the BEST fix carries a real tradeoff: this
+grace mechanism was added specifically because COLLISION_MAX_PUSH_PER_S
+alone (added later, generically rate-limits any large correction) was
+found insufficient for the ORIGINAL concern spawn grace addresses (2
+cuts landing close together in time, a piece spawning violently deep
+inside an unrelated one -- "shoots downward really fast... floating",
+see this project's own git history) -- so removing grace entirely
+risks reintroducing THAT already-fixed complaint in exchange for
+fixing this new one.
+
+Fix: new PIECE_SPAWN_GRACE_RADIUS_FRAC constant, reduced from the
+previous inline `* 2` to `0.3` -- still enough to filter out the
+original coincident-deep-overlap case, but short enough that ordinary
+gravity-driven sinking clears grace almost immediately (verified via
+a standalone Node check: the new threshold clears after ~3px of
+fall for a radius-10 piece, vs ~20px under the old one -- roughly
+6.7x less unopposed free-fall distance) before it can carry a piece
+all the way through whatever it should be resting on. Explicitly
+described as a mitigation via a smaller judgment-call constant, not a
+mathematically guaranteed fix -- an even shorter window would reduce
+the fall-through risk further but weaken protection against the
+original coincident-overlap case; no measured "correct" value exists
+for either extreme. Syntax-checked the full script. No live in-game
+confirmation possible (Browser pane still down) -- worth testing
+specifically: cut a piece resting on top of others and watch whether
+it still sinks through at all, even briefly, and separately whether
+the original "shoots downward fast on a coincident double-cut" issue
+has come back.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

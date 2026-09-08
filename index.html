@@ -3208,10 +3208,41 @@ function resolveChainCollision(dataA, dataB, maxPush){
 // (already computed by pieceCollisionRadii()) -- self-contained, based
 // only on this piece's own geometry, since (unlike mainRopeExcluded,
 // which always pairs against mainRope specifically) piece-vs-piece can't
-// know in advance which other piece(s) it needs clearance from. `* 2` is
-// a judgment call, same kind as mainRopeExcluded's own `* 1.5` -- no
-// measured "correct" multiplier exists for either. Clears PERMANENTLY
-// the first time it's satisfied, same convention as mainRopeExcluded.
+// know in advance which other piece(s) it needs clearance from. Clears
+// PERMANENTLY the first time it's satisfied, same convention as
+// mainRopeExcluded.
+//
+// PIECE_SPAWN_GRACE_RADIUS_FRAC: reported directly, 2 ways -- "when i
+// cut an already cut rope segment, the subsequent 2 rope pieces should
+// still have collision detectors" and "when i cut a rope piece lying
+// on top of rope pieces, atleast one of the cut pieces will fall
+// through the ropes they are resting on." Root cause: this grace
+// window doesn't just skip a ONE-TIME overlap check -- while active,
+// it disables piece-vs-piece collision for the graced piece against
+// EVERY other piece, entirely, including the continuous, every-frame
+// counter-gravity correction a piece resting on another piece
+// fundamentally depends on to stay up (verlet + explicit gravity means
+// every point is pulled down every frame; collision pushing back is
+// the ONLY thing holding a resting piece in place). A piece that
+// spawns already resting on other ropes (splitting a piece that was
+// itself lying on top of others) has nothing holding it up for the
+// piece's own gravity to be caught by until grace clears -- it falls
+// straight through, unopposed, for the whole window. The previous
+// value (`* 2`, i.e. the grace radius was 2x the piece's own maxRadius)
+// gave gravity easily enough unopposed time to carry a resting piece
+// all the way through before clearing. Reduced to `* 0.3` -- still
+// enough to filter out the ORIGINAL concern this mechanism was added
+// for (2 cuts landing close together in time, a piece spawning
+// violently deep inside an unrelated one, a case COLLISION_MAX_PUSH_PER_S
+// alone was found insufficient for -- see this section's own git
+// history), but short enough that ordinary gravity-driven sinking
+// clears grace almost immediately, before it can carry a piece all the
+// way through whatever it should be resting on. Still a judgment call.
+// mitigation, not a mathematically guaranteed fix -- an even shorter
+// window reduces the fall-through risk further but weakens protection
+// against the original coincident-deep-overlap case; no measured
+// "correct" value exists for either extreme.
+const PIECE_SPAWN_GRACE_RADIUS_FRAC = 0.3;
 function setPieceSpawnGrace(piece){
   const p0 = piece.points[0];
   piece.spawnGraceOriginX = p0.x;
@@ -3222,7 +3253,7 @@ function pieceSpawnGraceActive(piece, radius){
   if (!piece.spawnGrace) return false;
   const p0 = piece.points[0];
   const dist = Math.hypot(p0.x - piece.spawnGraceOriginX, p0.y - piece.spawnGraceOriginY);
-  if (dist < radius * 2) return true;
+  if (dist < radius * PIECE_SPAWN_GRACE_RADIUS_FRAC) return true;
   piece.spawnGrace = false;
   return false;
 }

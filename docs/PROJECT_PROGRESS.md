@@ -122,6 +122,29 @@ didn't clear it -- so neither of these got a real visual check):
   gap). If this doesn't actually fix the reported symptom, more repro
   detail (piece length, Endcap settings, single vs. multiple folds,
   which direction it slides) would help find the real cause.
+- NEW: `PIECE_SPAWN_GRACE_RADIUS_FRAC` reduced `2 -> 0.3` -- fixes 2
+  reports: "the subsequent 2 rope pieces should still have collision
+  detectors" (after cutting an already-cut piece) and, more
+  concretely, "when i cut a rope piece lying on top of rope pieces,
+  atleast one of the cut pieces will fall through the ropes they are
+  resting on." Root cause (HIGH confidence, logically derived, not
+  just hypothesized): the spawn-grace window doesn't just skip a
+  one-time overlap check -- it disables ALL piece-vs-piece collision
+  for a freshly-created piece, including the continuous every-frame
+  counter-gravity correction a resting piece depends on, for the
+  whole window. A piece that spawns already resting on other ropes
+  (cutting a piece that was itself lying on top of others) has
+  nothing holding it up until grace clears -- it falls straight
+  through, unopposed. Real tradeoff: this mechanism exists because
+  `COLLISION_MAX_PUSH_PER_S` alone was found insufficient for the
+  ORIGINAL concern it protects against (a piece spawning violently
+  deep inside an unrelated one, "shoots downward fast... floating") --
+  so a shorter window is a mitigation, not a guarantee; verified via
+  Node that it clears ~6.7x sooner (~3px of fall vs. ~20px, radius-10
+  example) but an overly short window could theoretically let that
+  older symptom back in. Worth testing BOTH directions live: does a
+  piece cut while resting on others still sink through at all, and
+  has "shoots down fast on a coincident double-cut" come back.
 
 `ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` (attempt #6, now with
 the added midpoint proxy -- see "Recently completed" for the full
