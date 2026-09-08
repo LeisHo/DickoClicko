@@ -7458,6 +7458,64 @@ unique console marker + direct DOM check, same as the immediately
 preceding round) -- not a real regression.
 
 ================================================================================
+2026-09-08  -  02:46 AM EDT
+
+"in the subfolders here, I added a subfolder C. Those frames will be
+used for the click and hold animation sequeunce. So you will animate
+the frames in sequence, then in reverse (skip the 1st frame), then
+loop (without the first frame). ammend to animation 3" -- then, mid-
+task, "i also deleted frames from subfolder A in all 3 folders. so
+incorporate that."
+
+Gave animation 3 its own independent hold-preview, sourced from
+data/FLICK/Genereated/<N>/C (6 frames per set, switchable via the same
+Flick3 Frame Set dropdown as its main A/B sequence) instead of sharing
+the ANI/3 hold-preview animations 1/2 still use -- explicit "ammend to
+animation 3" scoped this to animation 3 only. Cycle: forward through
+all 6 frames, reverse through only the 4 INTERIOR frames (skips
+replaying the one just shown at the top, and skips frame 1 since
+that's where the next loop already starts), then loops -- same shape
+as the ANI/3 ping-pong from 2 entries ago (FLICK_HOLD_SEQUENCE),
+generalized from 4 frames to 6 (new FLICK3_HOLD_SEQUENCE =
+[0,1,2,3,4,5,4,3,2,1]) -- verified the wraparound algebraically before
+shipping. The C frames turned out to be a genuinely different aspect
+ratio than A/B (1400x665 vs 1400x1257 -- a wide/short crop, not the
+same pose) -- drawing them into the box sized for A/B's own aspect
+would have visibly squashed them, so the hold-preview now computes its
+own box from its own frame's real aspect ratio rather than reusing
+flick3W/flick3H.
+
+Mid-task, re-scanned all 3 sets' own A folders per the follow-up and
+found the user's own deletions weren't uniform: set 1 kept frames
+1,3,5,7,11,13 (dropped 2 and 9 from the original 1,2,3,5,7,9,11,13);
+sets 2 and 3 both kept 1,2,5,7,11,13 (dropped 3 and 9) -- same COUNT,
+6, across all 3, but a genuinely different number list for set 1 than
+2/3. This broke the single shared GENERATED_A_FRAME_NUMBERS array's own
+core assumption (documented explicitly when it was written: "all 3
+sets share the exact same frame-number pattern") -- replaced with
+GENERATED_A_FRAME_NUMBERS_BY_SOURCE, one list per set. Generalized
+FLICK3_FRAME_COUNT (a single shared constant, 21, that happened to
+still be correct by COUNT even after this change) into flick3FrameCount()
+reading the live per-source array's own length instead, so a future
+edit that changes the per-source COUNT too -- not just which numbers --
+doesn't silently break playback again the same way.
+
+Generated .webp for the 18 new C-folder PNGs (6 x 3 sets) via sharp,
+same procedure as every round this session. C's own filenames have a
+DIFFERENT export-batch suffix per FILE within a set (not one per set
+the way A/B do, e.g. set 1 is (6),(6),(5),(5),(5),(4) across its own 6
+files) -- listed as literal full filenames per source rather than
+derived from a shared number+suffix formula, unlike A/B.
+
+Verified: syntax check passed. Confirmed via the live dev server's
+network log that every one of the game's own preloaded URLs (A, B, and
+C across all 3 sets -- 69 total) returns 200 OK, and separately
+confirmed 2 of set 1's and set 2's own now-deleted A-numbers correctly
+404 (proving the per-source arrays match the real deletions, not just
+avoiding errors by accident). Game reloaded and confirmed running
+normally afterward.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

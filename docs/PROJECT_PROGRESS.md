@@ -26,6 +26,14 @@ and click/hold interaction are all confirmed working; the live
 per-frame tick itself wasn't observable this session -- see "Recently
 completed" below for why).
 
+Animation 3 now has its OWN hold-preview (data/FLICK/Genereated/<N>/C,
+a 1-6-4 ping-pong) independent of the shared ANI/3 one animations 1/2
+still use -- see "Recently completed" below. Also: A's own frame
+numbers are no longer identical across all 3 Genereated sets (the user
+deleted different A-frames per set) -- GENERATED_A_FRAME_NUMBERS_BY_
+SOURCE now tracks this per-source; re-verify by hand if it changes
+again, same as every other hardcoded frame list in this file.
+
 Animations 1 and 2's frames have been refreshed twice now (user edits
 land on the source PNGs; `sharp` regenerates the matching .webp --
 what the game actually loads -- each time, see "Recently completed"

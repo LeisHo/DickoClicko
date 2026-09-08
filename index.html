@@ -1843,26 +1843,28 @@ function isPointInFlick2(x, y){
 // data/FLICK/Genereated/<N>/A and .../B instead of data/FLICK/ANI/1 and
 // .../2, and switchable at runtime between 3 such source sets (N = 1,
 // 2, or 3) via the Flick3 Frame Set dropdown (cfg.flick3Source) -- per
-// explicit request. All 3 sets share the exact same frame-number
-// pattern within A and B (re-verified: `ls data/FLICK/Genereated/<N>/A`
-// and `.../B` for N=1,2,3 all show identical present-number lists,
-// only the filenames' own trailing "(7)"/"(6)"/"(5)" differ, which the
-// URLs below don't need to know about since they're built from the
-// number alone) -- GENERATED_AB_FRAME_NUMBERS is therefore shared
-// across all 3 sets rather than 3 separate hardcoded arrays. As with
-// ANI1_FRAMES/ANI2_FRAMES, this is a static single-file app with no
-// server-side directory listing -- re-verify and update this ONE
-// shared array (and GENERATED_SOURCES below, if a 4th set is ever
-// added) if any set's own folder contents ever change.
-const GENERATED_A_FRAME_NUMBERS = [1, 2, 3, 5, 7, 9, 11, 13];
+// explicit request. Originally all 3 sets shared one frame-number list
+// for A (and still do for B) -- the user later deleted some of A's own
+// frames PER SET, and NOT the same ones in each (re-verified via `ls`:
+// set 1 kept 1,3,5,7,11,13; sets 2 and 3 both kept 1,2,5,7,11,13 --
+// same COUNT, 6, but a genuinely different number list for set 1 than
+// 2/3), so A's frame numbers can no longer be one shared array the way
+// B's still can. As with ANI1_FRAMES/ANI2_FRAMES, this is a static
+// single-file app with no server-side directory listing -- re-verify
+// and update GENERATED_A_FRAME_NUMBERS_BY_SOURCE (and GENERATED_B_
+// FRAME_NUMBERS/GENERATED_SOURCES if those ever change too) by hand
+// any time any set's own folder contents change.
+const GENERATED_A_FRAME_NUMBERS_BY_SOURCE = {
+  '1': [1, 3, 5, 7, 11, 13],
+  '2': [1, 2, 5, 7, 11, 13],
+  '3': [1, 2, 5, 7, 11, 13],
+};
 const GENERATED_B_FRAME_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-const FLICK3_FRAME_COUNT = GENERATED_A_FRAME_NUMBERS.length + GENERATED_B_FRAME_NUMBERS.length;
 // Each set's own real filenames are "tween_NNN (X).png" -- a literal
 // space then a parenthesized export-batch number that differs PER SET
 // (re-verified via `ls`: set 1 is "(7)", set 2 is "(6)", set 3 is
-// "(5)") despite the frame numbers themselves (GENERATED_A/B_FRAME_
-// NUMBERS above) being identical across all 3 -- so the suffix has to
-// be looked up per source, unlike the frame-number lists.
+// "(5)") -- so the suffix has to be looked up per source, unlike B's
+// own frame-number list.
 const GENERATED_SOURCE_SUFFIX = { '1': '(7)', '2': '(6)', '3': '(5)' };
 const GENERATED_SOURCES = ['1', '2', '3'];
 // One preloaded Image array per source set, keyed by cfg.flick3Source's
@@ -1878,7 +1880,7 @@ GENERATED_SOURCES.forEach(n => {
   const suffix = GENERATED_SOURCE_SUFFIX[n];
   const fileFor = i => encodeURIComponent(`tween_${String(i).padStart(3, '0')} ${suffix}.png`);
   flickFrames3BySource[n] = ([]).concat(
-    GENERATED_A_FRAME_NUMBERS.map(i => `data/FLICK/Genereated/${n}/A/${fileFor(i)}`),
+    GENERATED_A_FRAME_NUMBERS_BY_SOURCE[n].map(i => `data/FLICK/Genereated/${n}/A/${fileFor(i)}`),
     [...GENERATED_B_FRAME_NUMBERS].reverse().map(i => `data/FLICK/Genereated/${n}/B/${fileFor(i)}`),
   ).map(src => {
     const img = new Image();
@@ -1889,15 +1891,63 @@ GENERATED_SOURCES.forEach(n => {
 let flick3AnimTime = 0;
 let flick3Playing = false;
 
+// Current source set's own frame COUNT -- A's own per-set divergence
+// (see above) means this can no longer be one shared constant computed
+// once; read fresh from the live array's own length instead, same
+// "never cached, cfg.flick3Source can change any time" reasoning as
+// flick3Frames() below. Currently 21 for all 3 sets (6 + 15) since
+// only WHICH 6 A-numbers differs, not the count -- but nothing here
+// assumes that stays true.
+function flick3FrameCount(){ return flick3Frames().length; }
 function flick3FrameIndex(){
   if (!flick3Playing) return 0;
+  const count = flick3FrameCount();
   const cyclePos = flick3AnimTime * FLICK_BASE_FPS * cfg.flick3AnimSpeed;
-  return Math.floor(((cyclePos % FLICK3_FRAME_COUNT) + FLICK3_FRAME_COUNT) % FLICK3_FRAME_COUNT);
+  return Math.floor(((cyclePos % count) + count) % count);
 }
 // Current source set's own frame array -- read fresh each time (never
 // cached in a local), since cfg.flick3Source can change live via the
 // dropdown at any point, including mid-hold or mid-play.
 function flick3Frames(){ return flickFrames3BySource[cfg.flick3Source]; }
+
+// Animation 3's OWN hold-preview (data/FLICK/Genereated/<N>/C), same
+// switchable-per-dropdown-source design as its main A/B sequence above
+// -- independent of the shared flickHoldFrames (data/FLICK/ANI/3/...)
+// animations 1 and 2 still use, per explicit request ("ammend to
+// animation 3" specifically). Each set's own 6 C-frames have a
+// DIFFERENT export-batch suffix per FILE, not one per set the way A/B
+// do (re-verified via `ls`: set 1 is (6),(6),(5),(5),(5),(4) across
+// its own 6 files) -- so these are listed as full literal filenames
+// per source rather than derived from a shared number+suffix formula.
+// Cycled as "in sequence, then in reverse (skip the 1st frame), then
+// loop (without the first frame)" per explicit request -- the same
+// "forward shows every frame, reverse shows only the INTERIOR frames"
+// ping-pong shape as FLICK_HOLD_SEQUENCE above, generalized from 4
+// frames to 6: forward 0..5, reverse 4..1 (skips replaying index 5,
+// just shown, AND skips index 0, which is where the next loop already
+// starts) -- verified the wraparound algebraically before shipping
+// (step 9 -> index 1, step 10 wraps to step 0 -> index 0, i.e. loops
+// cleanly back to frame 1 with no stutter or skipped step).
+const GENERATED_C_FILES_BY_SOURCE = {
+  '1': ['tween_001 (6)', 'tween_002 (6)', 'tween_003 (5)', 'tween_004 (5)', 'tween_005 (5)', 'tween_006 (4)'],
+  '2': ['tween_001 (7)', 'tween_002 (7)', 'tween_003 (6)', 'tween_004 (6)', 'tween_005 (6)', 'tween_006 (5)'],
+  '3': ['tween_001 (8)', 'tween_002 (8)', 'tween_003 (7)', 'tween_004 (7)', 'tween_005 (7)', 'tween_006 (6)'],
+};
+const flick3HoldFramesBySource = {};
+GENERATED_SOURCES.forEach(n => {
+  flick3HoldFramesBySource[n] = GENERATED_C_FILES_BY_SOURCE[n].map(name => {
+    const img = new Image();
+    img.src = `data/FLICK/Genereated/${n}/C/${encodeURIComponent(name + '.webp')}`;
+    return img;
+  });
+});
+const FLICK3_HOLD_SEQUENCE = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1];
+function flick3HoldFrames(){ return flick3HoldFramesBySource[cfg.flick3Source]; }
+function flick3HoldFrameIndex(){
+  const len = FLICK3_HOLD_SEQUENCE.length;
+  const step = Math.floor(((flickHoldCyclePos % len) + len) % len);
+  return FLICK3_HOLD_SEQUENCE[step];
+}
 
 const flick3Rect = { x: 0, y: 0, w: 0, h: 0 };
 function isPointInFlick3(x, y){
@@ -4504,7 +4554,7 @@ function update(rawDt){
   if (flick3Playing){
     if (!isFrameBlocking(flick3Frames()[flick3FrameIndex()])){
       flick3AnimTime += rawDt;
-      if (flick3AnimTime * FLICK_BASE_FPS * cfg.flick3AnimSpeed >= FLICK3_FRAME_COUNT){
+      if (flick3AnimTime * FLICK_BASE_FPS * cfg.flick3AnimSpeed >= flick3FrameCount()){
         flick3Playing = false;
         flick3AnimTime = 0;
       }
@@ -6004,11 +6054,34 @@ function render(){
     const flick3Aspect = (flick3RefImg && flick3RefImg.naturalWidth > 0) ? (flick3RefImg.naturalHeight / flick3RefImg.naturalWidth) : 1;
     const flick3W = vmin(cfg.flick3Scale);
     const flick3H = flick3W * flick3Aspect;
+    // Hit-test rect always reflects the idle/play sequence's own box
+    // (A/B, 1400x1257-ish) regardless of whether the hold-preview is
+    // currently showing -- a fresh press is what starts a NEW hold, and
+    // by definition that can only happen while NOT already holding, so
+    // the rect never actually needs to describe the hold-preview's own
+    // (differently-shaped) box.
     flick3Rect.x = vw(cfg.flick3X) - flick3W / 2; flick3Rect.y = vh(cfg.flick3Y) - flick3H / 2;
     flick3Rect.w = flick3W; flick3Rect.h = flick3H;
-    const flick3Img = holdingFlick === 3 ? flickHoldFrames[flickHoldFrameIndex()] : flick3Frames()[flick3FrameIndex()];
-    if (flick3Img && flick3Img.complete && flick3Img.naturalWidth > 0){
-      ctx.drawImage(flick3Img, flick3Rect.x, flick3Rect.y, flick3W, flick3H);
+    if (holdingFlick === 3){
+      // The C-folder hold-preview frames are a genuinely different
+      // shape from A/B (1400x665 vs 1400x1257 -- a wide/short crop, not
+      // the same tall pose) -- drawing them into flick3W/flick3H
+      // (sized for A/B's own aspect) would visibly squash them, so
+      // this box is computed fresh from the ACTUAL hold-preview frame's
+      // own aspect instead, same width scale (Flick3 Scale) but its
+      // own real height, centered on the same X/Y position.
+      const holdImg = flick3HoldFrames()[flick3HoldFrameIndex()];
+      const holdAspect = (holdImg && holdImg.naturalWidth > 0) ? (holdImg.naturalHeight / holdImg.naturalWidth) : flick3Aspect;
+      const holdW = flick3W, holdH = holdW * holdAspect;
+      const holdX = vw(cfg.flick3X) - holdW / 2, holdY = vh(cfg.flick3Y) - holdH / 2;
+      if (holdImg && holdImg.complete && holdImg.naturalWidth > 0){
+        ctx.drawImage(holdImg, holdX, holdY, holdW, holdH);
+      }
+    } else {
+      const flick3Img = flick3Frames()[flick3FrameIndex()];
+      if (flick3Img && flick3Img.complete && flick3Img.naturalWidth > 0){
+        ctx.drawImage(flick3Img, flick3Rect.x, flick3Rect.y, flick3W, flick3H);
+      }
     }
   }
 }
