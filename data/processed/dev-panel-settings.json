@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.012192605788249,
+    "ropeLength": 15.0616341328112,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -130,6 +130,8 @@
     "floorColor": "#ffffff",
     "floorThickness": 10,
     "floorHeight": 6,
+    "floorFriction": 0.72,
+    "pieceFriction": 0.71,
     "introEnabled": true,
     "introWaitDuration": 1.5,
     "introRiseSpeed": 5.5,
@@ -166,19 +168,19 @@
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
-    "flickX": 14,
-    "flickY": 80,
-    "flickScale": 57,
+    "flickX": 17,
+    "flickY": 48,
+    "flickScale": 24,
     "flickAnimSpeed": 4.5,
-    "flick2X": 31,
-    "flick2Y": 60,
-    "flick2Scale": 60,
+    "flick2X": 19,
+    "flick2Y": 23,
+    "flick2Scale": 26,
     "flick2AnimSpeed": 4.4,
-    "flick3Source": "3",
+    "flick3Source": "5",
     "flick3X": 9,
     "flick3Y": 22,
     "flick3Scale": 120,
-    "flick3AnimSpeed": 4.1,
+    "flick3AnimSpeed": 4.9,
     "flickHoldMaxSpeed": 4,
     "flickHoldMaxDuration": 2.9,
     "ropeAttractionIntensity": 0.06,
@@ -195,17 +197,19 @@
         "flick3Y",
         "flick3Scale",
         "flick3AnimSpeed"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "FLICK ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flickX",
         "flickY",
         "flickScale",
         "flickAnimSpeed"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "FLICK ANIMATION 2",
@@ -215,7 +219,8 @@
         "flick2Y",
         "flick2Scale",
         "flick2AnimSpeed"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "RIGHT CLICK",
@@ -224,12 +229,28 @@
         "ropeAttractionIntensity",
         "ropeAttractionSpeed",
         "ropeAttractionMaxReach"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "DEV PANEL",
       "collapsed": true,
       "settings": [
+        "accentColor",
+        "sliderColor",
+        "fontFamily",
+        "buttonHeight",
+        "buttonTextBorder",
+        "scrollStrength",
+        "capsButtonText",
+        "capsTabText",
+        "capsGroupNames",
+        "capsSettingsText",
+        "buttonLetterSpacing",
+        "tabLetterSpacing",
+        "groupLetterSpacing",
+        "settingsLetterSpacing",
+        "textEditMode",
         "titleFontSize",
         "tabFontSize",
         "groupFontSize",
@@ -239,15 +260,17 @@
         "bodyFontSize",
         "bgColor",
         "textColor"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "FLICK HOLD",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flickHoldMaxSpeed",
         "flickHoldMaxDuration"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "STARTUP ANIMATION",
@@ -276,14 +299,16 @@
         "detachTipStartScale",
         "detachTipGrowDuration",
         "detachThicknessMultiplier"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "UI",
       "collapsed": true,
       "settings": [
         "backgroundColor"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "CIRCLE",
@@ -293,7 +318,8 @@
         "circleX",
         "circleY",
         "circleColor"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "ANCHOR PHYSICS",
@@ -301,7 +327,8 @@
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "ROPE CUT",
@@ -319,7 +346,8 @@
         "pieceDecaySpeed",
         "pieceMinThickness",
         "minRopeLength"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "ROPE",
@@ -345,18 +373,20 @@
         "ropeEndCurveArc",
         "ropeTopCurveArc",
         "tipSegmentShapeEnabled"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
         "damping",
         "constraintIterations",
         "bendStiffness"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "CLICK",
@@ -364,7 +394,8 @@
       "settings": [
         "clickIntensity",
         "holdDistance"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "ROPE GROWTH",
@@ -373,11 +404,12 @@
         "ropeGrowthRate",
         "clickHoldMaxDuration",
         "intensityCeiling"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "END EMERGE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "endcapStartingScaleWidth",
         "pieceEndEmergeSpeed",
@@ -387,20 +419,56 @@
         "endEmergeSpeed",
         "endEmergeEasingStrength",
         "endEmergeTweening"
-      ]
+      ],
+      "subgroups": []
     },
     {
       "key": "FLOOR",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
+        "floorFriction",
+        "pieceFriction",
         "floorEnabled",
         "floorColor",
         "floorThickness",
         "floorHeight"
-      ]
+      ],
+      "subgroups": []
     }
   ],
   "panelGeometry": {
+    "desktop": {
+      "left": 1286.4375,
+      "top": 17.912500381469727,
+      "width": 249.5500030517578,
+      "height": 570.0250244140625,
+      "style": {
+        "titleFontSize": 13,
+        "tabFontSize": 11,
+        "groupFontSize": 11,
+        "labelFontSize": 11,
+        "opacity": 0.94,
+        "titleColor": "#e8e8f0",
+        "bodyFontSize": 12,
+        "bgColor": "#12121e",
+        "textColor": "#c9c9d8",
+        "accentColor": "#5b85c8",
+        "sliderColor": "#5b85c8",
+        "fontFamily": "Verdana, Geneva, sans-serif",
+        "buttonHeight": 21,
+        "buttonTextBorder": 0,
+        "scrollStrength": 0.2,
+        "capsButtonText": true,
+        "capsTabText": true,
+        "capsGroupNames": true,
+        "capsSettingsText": false,
+        "buttonLetterSpacing": 0,
+        "tabLetterSpacing": 0,
+        "groupLetterSpacing": 0,
+        "settingsLetterSpacing": 0,
+        "textEditMode": false
+      }
+    },
     "mobile": {
       "left": 182,
       "top": 262.9761962890625,
@@ -417,23 +485,7 @@
         "bgColor": "#12121e",
         "textColor": "#c9c9d8"
       }
-    },
-    "desktop": {
-      "left": 1286.4375,
-      "top": 17.912500381469727,
-      "width": 249.5500030517578,
-      "height": 570.0250244140625,
-      "style": {
-        "titleFontSize": 13,
-        "tabFontSize": 11,
-        "groupFontSize": 11,
-        "labelFontSize": 11,
-        "opacity": 0.94,
-        "titleColor": "#e8e8f0",
-        "bodyFontSize": 12,
-        "bgColor": "#12121e",
-        "textColor": "#c9c9d8"
-      }
     }
-  }
+  },
+  "textOverrides": {}
 }
