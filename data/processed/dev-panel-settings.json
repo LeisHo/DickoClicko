@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.012192605788242,
+    "ropeLength": 15.012192605788249,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -169,18 +169,18 @@
     "flickX": 14,
     "flickY": 80,
     "flickScale": 57,
-    "flickAnimSpeed": 0.8,
+    "flickAnimSpeed": 4.5,
     "flick2X": 31,
     "flick2Y": 60,
     "flick2Scale": 60,
-    "flick2AnimSpeed": 0.2,
+    "flick2AnimSpeed": 4.4,
     "flick3Source": "3",
     "flick3X": 9,
     "flick3Y": 22,
     "flick3Scale": 120,
     "flick3AnimSpeed": 4.1,
-    "flickHoldMaxSpeed": 2.5,
-    "flickHoldMaxDuration": 3.3,
+    "flickHoldMaxSpeed": 4,
+    "flickHoldMaxDuration": 2.9,
     "ropeAttractionIntensity": 0.06,
     "ropeAttractionSpeed": 23,
     "ropeAttractionMaxReach": 64
@@ -188,7 +188,7 @@
   "order": [
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick3Source",
         "flick3X",
@@ -199,7 +199,7 @@
     },
     {
       "key": "FLICK ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flickX",
         "flickY",
@@ -209,7 +209,7 @@
     },
     {
       "key": "FLICK ANIMATION 2",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick2X",
         "flick2Y",
@@ -243,7 +243,7 @@
     },
     {
       "key": "FLICK HOLD",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flickHoldMaxSpeed",
         "flickHoldMaxDuration"
@@ -401,11 +401,11 @@
     }
   ],
   "panelGeometry": {
-    "desktop": {
-      "left": 1286.4375,
-      "top": 17.912500381469727,
-      "width": 249.5500030517578,
-      "height": 570.0250244140625,
+    "mobile": {
+      "left": 182,
+      "top": 262.9761962890625,
+      "width": 229,
+      "height": 374.7857360839844,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -418,11 +418,11 @@
         "textColor": "#c9c9d8"
       }
     },
-    "mobile": {
-      "left": 182,
-      "top": 262.9761962890625,
-      "width": 229,
-      "height": 374.7857360839844,
+    "desktop": {
+      "left": 1286.4375,
+      "top": 17.912500381469727,
+      "width": 249.5500030517578,
+      "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
