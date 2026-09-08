@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 19.812192605788244,
+    "ropeLength": 15.012192605788242,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -166,7 +166,7 @@
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
-    "flickX": 23,
+    "flickX": 14,
     "flickY": 80,
     "flickScale": 57,
     "flickAnimSpeed": 0.8,
@@ -174,6 +174,11 @@
     "flick2Y": 60,
     "flick2Scale": 60,
     "flick2AnimSpeed": 0.2,
+    "flick3Source": "3",
+    "flick3X": 9,
+    "flick3Y": 22,
+    "flick3Scale": 120,
+    "flick3AnimSpeed": 4.1,
     "flickHoldMaxSpeed": 2.5,
     "flickHoldMaxDuration": 3.3,
     "ropeAttractionIntensity": 0.06,
@@ -182,8 +187,39 @@
   },
   "order": [
     {
-      "key": "RIGHT CLICK",
+      "key": "FLICK ANIMATION 3",
       "collapsed": false,
+      "settings": [
+        "flick3Source",
+        "flick3X",
+        "flick3Y",
+        "flick3Scale",
+        "flick3AnimSpeed"
+      ]
+    },
+    {
+      "key": "FLICK ANIMATION",
+      "collapsed": false,
+      "settings": [
+        "flickX",
+        "flickY",
+        "flickScale",
+        "flickAnimSpeed"
+      ]
+    },
+    {
+      "key": "FLICK ANIMATION 2",
+      "collapsed": false,
+      "settings": [
+        "flick2X",
+        "flick2Y",
+        "flick2Scale",
+        "flick2AnimSpeed"
+      ]
+    },
+    {
+      "key": "RIGHT CLICK",
+      "collapsed": true,
       "settings": [
         "ropeAttractionIntensity",
         "ropeAttractionSpeed",
@@ -211,26 +247,6 @@
       "settings": [
         "flickHoldMaxSpeed",
         "flickHoldMaxDuration"
-      ]
-    },
-    {
-      "key": "FLICK ANIMATION 2",
-      "collapsed": true,
-      "settings": [
-        "flick2X",
-        "flick2Y",
-        "flick2Scale",
-        "flick2AnimSpeed"
-      ]
-    },
-    {
-      "key": "FLICK ANIMATION",
-      "collapsed": true,
-      "settings": [
-        "flickX",
-        "flickY",
-        "flickScale",
-        "flickAnimSpeed"
       ]
     },
     {
