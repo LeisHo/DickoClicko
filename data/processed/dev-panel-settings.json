@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.0616341328112,
+    "ropeLength": 36.06163413281128,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -130,8 +130,8 @@
     "floorColor": "#ffffff",
     "floorThickness": 10,
     "floorHeight": 6,
-    "floorFriction": 0.36,
-    "pieceFriction": 0.63,
+    "floorFriction": 0.72,
+    "pieceFriction": 0.71,
     "introEnabled": true,
     "introWaitDuration": 1.5,
     "introRiseSpeed": 5.5,
@@ -180,7 +180,7 @@
     "flick3X": 9,
     "flick3Y": 22,
     "flick3Scale": 120,
-    "flick3AnimSpeed": 4.1,
+    "flick3AnimSpeed": 4.9,
     "flickHoldMaxSpeed": 4,
     "flickHoldMaxDuration": 2.9,
     "ropeAttractionIntensity": 0.06,
@@ -190,7 +190,7 @@
   "order": [
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick3Source",
         "flick3X",
@@ -351,7 +351,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "pieceGradientEnabled",
         "pieceGradientColors",
