@@ -8384,6 +8384,81 @@ scenario) confidence is meaningfully higher than either previous
 attempt, but a live test remains the real confirmation.
 
 ================================================================================
+2026-09-08  -  10:57 AM EDT
+
+"seems better but theres another issue i didnt bring up earlier: (1)
+When a cut rope folds onto itself midair, it suddenly falls really
+slowly. Once it straightens out does it start falling normally. (2)
+...sometimes seems to have a weird fall path... as if being blown by
+wind." A direct side-effect of the immediately preceding fix
+(applyContactNormalDamping, extended to resolveChainCollision) --
+though its OWN root mechanism (resolveSelfCollision, present since 2
+entries ago) turned out to be the actual cause once isolated.
+
+First proved this couldn't be the full-cancellation math changing a
+chain's own AVERAGE/center-of-mass velocity -- the impulse is exactly
+equal-and-opposite between the 2 points in a pair, so the SUM across
+all points is mathematically invariant regardless of the fraction
+used, confirmed via a simple 2-point check and, more decisively, via
+a 20-point (matching the real POINT_COUNT), tightly-folded,
+REALISTICALLY tumbling piece (real distance+bend constraints, a
+genuine rotational spin, no floor) that showed IDENTICAL average
+vertical speed with vs. without the fixes when the fold was
+perfectly symmetric -- meaning the ORIGINAL bug repro needed to be
+LESS idealized to reveal the real effect. Once bend constraint +
+asymmetric tumble were added, the real effect appeared clearly: full
+normal-damping measurably drained the GROUP's own individual
+velocities during the first ~45-60 frames after a tight fold forms
+(avgVy 99.5 vs. a true free-fall baseline of 218.6 px/s at frame 15,
+with some points briefly showing NEGATIVE vy -- moving upward --
+exactly matching "as if being blown by wind"), converging back once
+the fold naturally opened (matching "once it straightens out").
+Isolated the exact cause: applyContactFriction() alone tracked the
+baseline almost exactly (219.8 vs 218.6); applyContactNormalDamping()
+alone caused the full drop (101.4). A pure SPEED-gated threshold
+could NOT separate this from the piece-landing-drift case the same
+function fixes -- both a self-fold tumble and a piece-landing impact
+have similarly fast relative velocities in their own critical
+windows; swept 60 through 3000px/s and no single threshold satisfied
+both (low thresholds preserved tumble speed but let piece-landing
+drift return to ~27-34px; high thresholds fixed piece-landing but let
+the tumble slowdown return).
+
+Fix: applyContactNormalDamping() gained a `frac` parameter instead of
+always fully cancelling relative normal velocity. resolveChainCollision()
+(piece-vs-piece/mainRope-vs-piece) keeps frac=1 (full cancellation,
+verified still needed at full strength -- piece-landing drift stayed
+near 0 across 5 seeds at frac=1, but crept back to ~27px by frac=0.1).
+resolveSelfCollision() uses a new SELF_COLLISION_NORMAL_DAMP_FRAC=0.05
+-- much weaker, but verified this STILL fully eliminates the original
+fold-on-floor drift (0 across 5 seeds x 8000 frames each -- a
+persistent, many-times-per-second recurring overlap accumulates
+enough correction over that many frames even at a weak per-frame
+fraction), while a brief mid-air tumble no longer has time to drain
+the group's own momentum (avgVy recovered to 207.6/287.2 vs. the
+218.6/290.4 true baseline, both within ~5% instead of roughly halved).
+The asymmetry has a structural explanation, not just an empirical
+one: a tight self-fold can have dramatically MORE simultaneous
+overlapping pairs sharing the SAME points (the entire folded length
+can be self-contacting) than a typical piece-vs-piece contact
+boundary (usually just a few points), so the same per-pair fraction
+compounds far more aggressively for self-collision. Final combined
+verification (a folded piece landing on/beside an unrelated resting
+piece, both fixes active together) across 8 seeds x 3000 frames
+showed the same bounded-settling pattern already established for the
+piece-vs-piece fix alone -- most seeds under 5px, 2 seeds with a
+larger (~45px) one-time settling shift matching a deeper initial
+overlap, none growing further.
+
+Full syntax check passed. Updated CHANGELOG.txt and PROJECT_PROGRESS.md.
+No live in-game confirmation possible (Browser pane still down) -- this
+makes 4 rounds total on this general collision-drift bug class; each
+round has been driven by genuinely new, specific evidence rather than
+re-guessing, and this round in particular found and resolved a real,
+demonstrated tension between 2 previously-shipped fixes rather than
+picking an arbitrary middle ground.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

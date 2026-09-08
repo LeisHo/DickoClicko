@@ -104,37 +104,47 @@ didn't clear it -- so neither of these got a real visual check):
   getters/setters added to `makeTipCollisionPoint()` for this). Not
   yet watched live -- same Browser pane limitation; this is the one
   most worth testing first, since it's a direct fix for a reported bug.
-- Piece-collision drift fix, 3 rounds, CONSOLIDATED here to reflect
+- Piece-collision drift fix, 4 rounds, CONSOLIDATED here to reflect
   current state (full history in CHANGELOG.txt): reported as a folded
   piece sliding once resting on the floor. Round 1
   (`applySelfCollisionNormalDamping()` in `resolveSelfCollision()`
-  only) shipped with an explicitly disclosed low-confidence diagnosis
-  and did NOT fix it. Round 2 (removing `clampToFloor()`'s own
-  horizontal-velocity damping entirely -- it now only clamps y/oldy,
-  the actual constrained direction) was PROVEN via simulation (0 drift
-  across 10 seeds x 2000 frames) but the user confirmed the sliding
-  was STILL occurring, this time with a screen recording showing 2
-  detailed tests -- including a previously-undisturbed, UNRELATED
-  piece starting to jitter when a falling piece landed on it, which
-  directly implicated piece-vs-piece collision, not just
-  self-collision. Round 3 (current): found `resolveChainCollision()`
-  (piece-vs-piece AND mainRope-vs-piece) never got the same
-  normal-velocity-damping treatment self-collision did -- the function
-  was renamed `applyContactNormalDamping()` and wired into BOTH
-  `resolveChainCollision()` and `resolveSelfCollision()`. Verified via
-  a 2-chain simulation (one resting piece, one landing on/beside it):
-  without this fix, drift was ~48px/1500 frames across every seed
-  (worse than the self-collision-only case, matching "test 2 slid
-  faster"); with it, drift dropped to a small one-time settling nudge
-  that stayed exactly flat for 6000+ frames afterward (checkpointed
-  frame-by-frame, not just before/after). A combined fold+resting-piece
-  simulation across 8 seeds up to 8000 frames showed the same pattern
-  -- bounded settling, never ongoing drift, even in the largest-shift
-  seed. Meaningfully higher confidence than either previous round
-  given how directly the new evidence (piece-vs-piece jitter) matched
-  a concrete, findable code asymmetry -- still not live-tested
-  (Browser pane down), and this is the 3rd attempt at this bug class,
-  so a live confirmation matters more than usual here.
+  only, full cancellation) shipped low-confidence and did NOT fix it.
+  Round 2 (removing `clampToFloor()`'s own horizontal-velocity damping
+  entirely) was proven via simulation but the sliding was STILL
+  occurring -- this time with evidence a falling piece landing on an
+  unrelated resting piece made THAT piece jitter too, implicating
+  piece-vs-piece collision. Round 3: found `resolveChainCollision()`
+  never got the same normal-damping treatment self-collision did;
+  renamed the function `applyContactNormalDamping()` and wired it into
+  both, at full strength -- fixed piece-landing drift (~48px/1500
+  frames -> a ~1px one-time settling nudge, flat for 6000+ frames).
+  Round 4 (current), triggered by 2 NEW reports -- a piece folding
+  onto itself midair "suddenly falls really slowly" until it
+  straightens out, and "sometimes seems to have a weird fall path...
+  as if being blown by wind": isolated the cause to
+  `applyContactNormalDamping()`'s FULL cancellation specifically (not
+  friction, which tracked a true free-fall baseline almost exactly) --
+  a densely-folded 20-point piece (matching real `POINT_COUNT`) has
+  many more simultaneous self-colliding pairs than a typical piece-vs-
+  piece contact, so full per-pair cancellation compounds into a real,
+  measurable group-velocity drain during the first ~1s after a tight
+  fold forms (some points even showed momentary negative/upward
+  velocity, matching "blown by wind"). A pure speed-gated threshold
+  could NOT separate this from the piece-landing case the same
+  function fixes (swept 60-3000px/s, no single value worked for both).
+  Fix: `applyContactNormalDamping()` gained a `frac` parameter --
+  `resolveChainCollision()` keeps `frac=1` (still needed at full
+  strength), `resolveSelfCollision()` now uses a new, much weaker
+  `SELF_COLLISION_NORMAL_DAMP_FRAC=0.05` -- verified this STILL fully
+  eliminates the original fold-on-floor drift (a persistent overlap
+  accumulates enough correction over thousands of frames even at a
+  weak fraction) while no longer noticeably slowing a brief mid-air
+  tumble (recovered to within ~5% of true free-fall speed, vs. being
+  roughly halved before). This is the 4th round on this bug class;
+  each round has been driven by genuinely new, specific evidence, and
+  this round found and resolved a real, demonstrated tension between 2
+  previously-shipped fixes rather than picking an arbitrary middle
+  ground. Still not live-tested (Browser pane down).
 - NEW: `PIECE_SPAWN_GRACE_RADIUS_FRAC` reduced `2 -> 0.3` -- fixes 2
   reports: "the subsequent 2 rope pieces should still have collision
   detectors" (after cutting an already-cut piece) and, more

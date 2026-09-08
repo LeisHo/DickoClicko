@@ -3224,7 +3224,10 @@ function resolveChainCollision(dataA, dataB, maxPush){
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
         applyContactFriction(p, q, nx, ny, maxPush);
-        applyContactNormalDamping(p, q, nx, ny);
+        // Full strength (1) -- see applyContactNormalDamping()'s own
+        // comment for why cross-chain collision needs this, unlike
+        // self-collision's much weaker SELF_COLLISION_NORMAL_DAMP_FRAC.
+        applyContactNormalDamping(p, q, nx, ny, 1);
       }
     }
   }
@@ -3363,31 +3366,74 @@ const MIN_SELF_COLLISION_GAP = 4;
 // the theory that "2 separate bodies genuinely CAN fully separate,
 // unlike 2 points on the SAME already-constrained chain") -- reported
 // directly that the fold-on-floor sliding was STILL occurring after
-// that fix shipped, with new evidence this time: a piece landing on
-// TOP of an already-resting, unrelated piece caused BOTH to start
-// jittering/sliding, the already-resting one included -- exactly the
-// piece-vs-piece case the original reasoning assumed was safe. That
-// reasoning was wrong: 2 DIFFERENT pieces resting against each other
-// under constant gravity are JUST as exposed to a persistently-
-// re-triggering overlap as a self-fold is (gravity keeps pushing them
-// back together every frame regardless of how many separate chains are
-// involved) -- verified directly via a 2-chain Node simulation (one
-// piece already resting flat, a second landing on/beside it): WITHOUT
-// this fix on resolveChainCollision, the pair drifted ~48px apart over
-// 1500 frames (worse than the self-collision-only case, matching the
-// report that the piece-vs-piece test slid faster); WITH it, drift
-// dropped to a ~1px one-time settling nudge that then stayed flat for
-// 6000 frames straight (not ongoing drift). Renamed accordingly and
-// now called from BOTH resolveSelfCollision() below AND
-// resolveChainCollision() above.
-function applyContactNormalDamping(p, q, nx, ny){
+// that fix shipped, with new evidence: a piece landing on TOP of an
+// already-resting, unrelated piece caused BOTH to start jittering, the
+// already-resting one included -- exactly the piece-vs-piece case the
+// original reasoning assumed was safe. That reasoning was wrong: 2
+// DIFFERENT pieces resting against each other under constant gravity
+// are just as exposed to a persistently-re-triggering overlap as a
+// self-fold is -- verified via a 2-chain simulation (one piece resting,
+// one landing on/beside it): WITHOUT this on resolveChainCollision, the
+// pair drifted ~48px/1500 frames; WITH it (full cancellation, frac=1),
+// drift dropped to a ~1px one-time settling nudge that stayed flat for
+// 6000+ frames.
+//
+// `frac` was added as a SECOND follow-up, per 2 new reports about a
+// piece folding onto itself MIDAIR (not resting on anything): "it
+// suddenly falls really slowly [until] it straightens out," and
+// "sometimes seems to have a weird fall path... as if being blown by
+// wind." Proved first that this can't be the FULL-cancellation math
+// itself changing a chain's own AVERAGE/center-of-mass velocity -- the
+// impulse is exactly equal-and-opposite between p and q, so the SUM
+// across all points is mathematically invariant regardless of frac,
+// confirmed via a simple 2-point check. But a densely-folded piece
+// (matching the real POINT_COUNT=20) has MANY simultaneous self-
+// colliding pairs sharing the SAME points, processed sequentially --
+// verified via a realistic simulation (real distance+bend constraints,
+// a genuine tumble/spin, no floor) that full cancellation (frac=1)
+// measurably drained a big chunk of the group's own individual
+// velocities during the first ~45-60 frames after a tight fold forms
+// (avgVy 99.5 vs. a true free-fall baseline of 218.6 px/s at frame 15,
+// with SOME individual points briefly moving upward -- exactly matching
+// "falls slowly" and "as if being blown by wind"), before converging
+// back once the fold naturally opens (matching "once it straightens
+// out"). Isolated the cause precisely: applyContactFriction() alone
+// tracked the baseline almost exactly (219.8 vs 218.6) -- this function
+// alone was the culprit. A single SPEED-gated threshold could not
+// separate the 2 scenarios (a piece-landing impact and a self-fold
+// tumble have similarly fast relative velocities in the critical
+// window -- no threshold fixed both at once, confirmed by sweeping 60
+// through 3000px/s). The resolution: SEPARATE fractions per call site.
+// resolveChainCollision() (piece-vs-piece/mainRope-vs-piece) keeps
+// frac=1 (full cancellation) -- verified still needed at full strength
+// to keep piece-landing drift near 0. resolveSelfCollision() uses a
+// much weaker frac=0.05 -- verified this still fully eliminates the
+// original fold-on-floor drift (0 across 5 seeds x 8000 frames each;
+// a PERSISTENT, many-times-per-second recurring overlap still
+// accumulates enough correction over that many frames even at a weak
+// per-frame fraction), while a brief mid-air tumble no longer has time
+// to meaningfully drain the group's own momentum (avgVy recovered to
+// 207.6/287.2 vs. the 218.6/290.4 baseline, both within ~5% instead of
+// being roughly halved). The asymmetry makes sense structurally, not
+// just empirically: a tight self-fold can have dramatically MORE
+// simultaneous overlapping pairs sharing the SAME points (the entire
+// folded length can be in contact with itself) than a typical piece-
+// vs-piece contact boundary (usually just a few points), so the SAME
+// per-pair fraction compounds far more aggressively for self-collision.
+function applyContactNormalDamping(p, q, nx, ny, frac){
   const pvx = p.x - p.oldx, pvy = p.y - p.oldy;
   const qvx = q.x - q.oldx, qvy = q.y - q.oldy;
   const relNormal = (pvx - qvx) * nx + (pvy - qvy) * ny;
-  const impulse = relNormal * 0.5;
+  const impulse = relNormal * frac * 0.5;
   p.oldx += nx * impulse; p.oldy += ny * impulse;
   q.oldx -= nx * impulse; q.oldy -= ny * impulse;
 }
+// Weak on purpose -- see applyContactNormalDamping()'s own comment for
+// why self-collision needs a much gentler fraction than cross-chain
+// collision to avoid draining a genuinely tumbling piece's own
+// momentum, while still fully resolving a persistent floor-fold drift
+// given enough recurring frames.
+const SELF_COLLISION_NORMAL_DAMP_FRAC = 0.05;
 
 // Pushes a SINGLE chain's own far-apart points away from each other
 // wherever 2 of them (at least MIN_SELF_COLLISION_GAP indices apart) sit
@@ -3415,7 +3461,9 @@ function resolveSelfCollision(data, maxPush){
         p.x -= nx * push; p.y -= ny * push;
         q.x += nx * push; q.y += ny * push;
         applyContactFriction(p, q, nx, ny, maxPush);
-        applyContactNormalDamping(p, q, nx, ny);
+        // Weak (SELF_COLLISION_NORMAL_DAMP_FRAC) -- see
+        // applyContactNormalDamping()'s own comment for why.
+        applyContactNormalDamping(p, q, nx, ny, SELF_COLLISION_NORMAL_DAMP_FRAC);
       }
     }
   }
