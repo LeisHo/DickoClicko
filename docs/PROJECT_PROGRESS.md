@@ -172,6 +172,34 @@ didn't clear it -- so neither of these got a real visual check):
   piece-vs-piece, mainRope-vs-piece, and self-collision alike (one
   shared slider, matching the existing single-constant architecture).
   Not yet watched live (Browser pane down).
+- NEW: FLICK ANIMATION 3's frame-source data model rebuilt.
+  "i updated animation 3's grames" turned out to mean the export-batch
+  suffix convention itself had changed (source 1 "(7)"->"(1)" plus a
+  dropped frame; source 2 now mixes 2 different suffixes within one
+  source; source 3 dropped its suffix entirely, with stale duplicate
+  files left behind in B) AND that 2 brand-new frame sets (4, 5) had
+  been added needing full dropdown integration. Per direct
+  clarification (2 AskUserQuestion rounds -- source 3/B's duplicate
+  resolved by file mtime, set 4's known gaps -- missing frame 15, a
+  frame-10 duplicate, unsorted loose root files -- accepted as-is, not
+  bugs): `GENERATED_A_FRAME_NUMBERS_BY_SOURCE`/`GENERATED_SOURCE_SUFFIX`/
+  `GENERATED_B_FRAME_NUMBERS` (number lists + a derived per-source
+  suffix) replaced with `GENERATED_A_FILES_BY_SOURCE`/
+  `GENERATED_B_FILES_BY_SOURCE` -- literal per-source filename arrays,
+  generalizing the pattern the C-folder hold-preview already used
+  rather than 2 different lookup strategies. `GENERATED_SOURCES`
+  extended to `['1','2','3','4','5']`; both frame-loading loops already
+  iterated it generically, so the 2 new sets needed no other code
+  changes beyond the new data + a "Set 4"/"Set 5" dropdown option each.
+  All 133 hardcoded filenames across A/B/C x 5 sources verified to
+  actually exist on disk via a Node script before trusting them -- 0
+  missing. Regenerated all 30 C-folder `.webp` files (A/B load PNG
+  directly, confirmed via the existing code -- no conversion needed
+  there). Frame counts now genuinely differ per source (20/21/21/20/21,
+  previously a uniform 21) -- `flick3FrameCount()` already read this
+  live, no change needed. Not yet watched live (Browser pane down) --
+  worth testing all 5 dropdown entries specifically, especially 4/5
+  (new) and 2 (the mixed-suffix case).
 
 `ENABLE_ENDCAP_AND_MAINROPE_COLLISION` is `true` (attempt #6, now with
 the added midpoint proxy -- see "Recently completed" for the full

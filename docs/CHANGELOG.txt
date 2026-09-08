@@ -8233,6 +8233,74 @@ passed. No live in-game confirmation possible (Browser pane still
 down).
 
 ================================================================================
+2026-09-08  -  07:55 AM EDT
+
+"i updated animation 3's grames. update and push" -- turned out to be
+much bigger than a routine PNG->WebP round. A broad rescan of every
+Genereated/{1,2,3}/{A,B,C} folder (not just what the user named) found
+the export-batch SUFFIX convention itself had changed, not just frame
+content: source 1's A/B moved from suffix "(7)" to "(1)" (and A lost
+frame 13, now only 5 numbers); source 2's A/B now mix 2 DIFFERENT
+suffixes within the same source ("(4)" for some frame numbers, "(2)"
+for others); source 3's A/B dropped the suffix entirely, with B
+additionally carrying 2 full sets of files per number (a no-suffix
+set and a stale "(5)"-suffixed set sitting side by side). Also found,
+mid-task: the user had added 2 entirely NEW frame sets, 4 and 5
+(Genereated/4, Genereated/5), needing full integration into the
+Flick3 Frame Set dropdown, not just a data refresh.
+
+Given the genuine ambiguity (which of source 3/B's 2 file sets is
+current; how to represent source 2's mixed-suffix reality in code;
+whether set 4 -- missing frame 15, a duplicate at frame 10, unsorted
+loose files at its own folder root -- was actually ready to ship),
+asked directly via AskUserQuestion twice rather than guessing:
+resolved source 3/B via file mtime (the no-suffix set is a full day
+newer); resolved set 4's gaps as accepted, not bugs, per direct
+confirmation ("thats fine"); and got direct instruction to stop
+tracking suffixes as a per-source concept at all ("ignore suffixes.
+just look at the frame number").
+
+Architecture change: GENERATED_A_FRAME_NUMBERS_BY_SOURCE + GENERATED_
+SOURCE_SUFFIX + GENERATED_B_FRAME_NUMBERS (number lists + one derived
+suffix per source) replaced with GENERATED_A_FILES_BY_SOURCE and
+GENERATED_B_FILES_BY_SOURCE -- literal per-source filename arrays,
+generalizing the pattern GENERATED_C_FILES_BY_SOURCE already used for
+the hold-preview, rather than maintaining 2 different lookup
+strategies across A/B vs. C. GENERATED_SOURCES extended to
+['1','2','3','4','5']; the Flick3 Frame Set dropdown gained "Set 4"
+and "Set 5" options; flickFrames3BySource's own construction loop and
+flick3HoldFramesBySource both already iterated GENERATED_SOURCES
+generically, so both picked up the 2 new sets with no further changes
+needed beyond the new data. flick3FrameCount()'s own comment updated
+-- frame counts now genuinely differ per source (20/21/21/20/21) where
+they used to be uniformly 21.
+
+Every one of the 133 literal filenames now hardcoded across A/B/C for
+all 5 sources was verified to actually exist on disk via a Node
+script (fs.existsSync over the exact same data structures used in the
+shipped code) before trusting them -- 0 missing. Where a folder had 2
+files for the same frame number, kept the newer one by mtime (source
+3/B, source 4/B's frame 10) per the user's own resolution.
+
+Regenerated all 30 C-folder .webp files (6 frames x 5 sources) via
+sharp (reinstalled ad hoc again this session, npm's --no-save installs
+apparently don't coexist -- installing sharp evicted the jsdom tree
+from 2 tasks ago, unimportant since nothing needed it further this
+round) -- A/B load their PNGs directly at runtime (confirmed by
+reading fileFor()'s own old implementation before assuming a webp
+step was needed there too), so no conversion needed for those 2
+folders, only C. Verified all 30 outputs exist, none suspiciously
+small, and spot-checked 3 across different sources for correct
+1400x665 dimensions via sharp's own metadata read.
+
+Full syntax check passed. No live in-game confirmation possible
+(Browser pane still down) -- worth the user's own test especially
+given the scale of this change: switching through all 5 dropdown
+sets and confirming both the main A/B sequence and the C hold-preview
+load and play correctly for each, particularly sets 4 and 5 (new)
+and set 2 (the mixed-suffix case).
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

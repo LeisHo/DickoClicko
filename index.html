@@ -585,6 +585,8 @@ const DEV_GROUPS = [
         { value:'1', label:'Set 1 (Genereated/1)' },
         { value:'2', label:'Set 2 (Genereated/2)' },
         { value:'3', label:'Set 3 (Genereated/3)' },
+        { value:'4', label:'Set 4 (Genereated/4)' },
+        { value:'5', label:'Set 5 (Genereated/5)' },
       ] },
     { key:'flick3X',         label:'Flick3 X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
     { key:'flick3Y',         label:'Flick3 Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:35 },
@@ -2233,32 +2235,45 @@ function isPointInFlick2(x, y){
 // FLICK animation 3 -- same "folder A forward, folder B reversed" design
 // as animation 2 (see its own comment above), but sourced from
 // data/FLICK/Genereated/<N>/A and .../B instead of data/FLICK/ANI/1 and
-// .../2, and switchable at runtime between 3 such source sets (N = 1,
-// 2, or 3) via the Flick3 Frame Set dropdown (cfg.flick3Source) -- per
-// explicit request. Originally all 3 sets shared one frame-number list
-// for A (and still do for B) -- the user later deleted some of A's own
-// frames PER SET, and NOT the same ones in each (re-verified via `ls`:
-// set 1 kept 1,3,5,7,11,13; sets 2 and 3 both kept 1,2,5,7,11,13 --
-// same COUNT, 6, but a genuinely different number list for set 1 than
-// 2/3), so A's frame numbers can no longer be one shared array the way
-// B's still can. As with ANI1_FRAMES/ANI2_FRAMES, this is a static
-// single-file app with no server-side directory listing -- re-verify
-// and update GENERATED_A_FRAME_NUMBERS_BY_SOURCE (and GENERATED_B_
-// FRAME_NUMBERS/GENERATED_SOURCES if those ever change too) by hand
-// any time any set's own folder contents change.
-const GENERATED_A_FRAME_NUMBERS_BY_SOURCE = {
-  '1': [1, 3, 5, 7, 11, 13],
-  '2': [1, 2, 5, 7, 11, 13],
-  '3': [1, 2, 5, 7, 11, 13],
+// .../2, and switchable at runtime between several such source sets via
+// the Flick3 Frame Set dropdown (cfg.flick3Source) -- per explicit
+// request. As with ANI1_FRAMES/ANI2_FRAMES, this is a static single-file
+// app with no server-side directory listing -- re-verify and update
+// these lists by hand any time any set's own folder contents change.
+//
+// A/B's real filenames were originally derivable as a shared per-source
+// "export-batch suffix" (tween_NNN (X).png, one X per whole source) --
+// that broke down once source 2 showed genuinely DIFFERENT suffixes
+// mixed within the SAME source (frames 1-6 as "(4)", 7-15 as "(2)"),
+// and source 3 dropped the suffix to nothing at all. Per explicit
+// request ("ignore suffixes. just look at the frame number"), A/B now
+// list each source's own real literal filenames directly -- the same
+// pattern C already used below, generalized to all 3 folders rather
+// than mixing 2 different lookup strategies. Where a folder had 2 files
+// for the same frame number (an old export left alongside a new one),
+// the NEWER file (by mtime) was kept -- confirmed once directly (source
+// 3/B's no-suffix files vs. its old "(5)"-suffixed ones, the newer set
+// a full day more recent) and applied the same way elsewhere a
+// duplicate turned up (source 4/B's frame 10). Source 4/B is
+// deliberately only 14 frames (1-14, no 15) and source 4's own root
+// folder still has several unsorted loose files outside A/B/C --
+// confirmed directly as an accepted, if unfinished, state rather than
+// a mistake to fix here.
+const GENERATED_A_FILES_BY_SOURCE = {
+  '1': ['tween_001 (1)', 'tween_003 (1)', 'tween_005 (1)', 'tween_007 (1)', 'tween_011 (1)'],
+  '2': ['tween_001 (4)', 'tween_002 (4)', 'tween_003 (4)', 'tween_005 (4)', 'tween_007 (2)', 'tween_013 (2)'],
+  '3': ['tween_001', 'tween_002', 'tween_005', 'tween_007', 'tween_011', 'tween_013'],
+  '4': ['tween_001 (5)', 'tween_003 (5)', 'tween_005 (5)', 'tween_007 (3)', 'tween_011 (3)', 'tween_013 (3)'],
+  '5': ['tween_001 (1)', 'tween_003 (1)', 'tween_005 (1)', 'tween_007', 'tween_011', 'tween_013'],
 };
-const GENERATED_B_FRAME_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-// Each set's own real filenames are "tween_NNN (X).png" -- a literal
-// space then a parenthesized export-batch number that differs PER SET
-// (re-verified via `ls`: set 1 is "(7)", set 2 is "(6)", set 3 is
-// "(5)") -- so the suffix has to be looked up per source, unlike B's
-// own frame-number list.
-const GENERATED_SOURCE_SUFFIX = { '1': '(7)', '2': '(6)', '3': '(5)' };
-const GENERATED_SOURCES = ['1', '2', '3'];
+const GENERATED_B_FILES_BY_SOURCE = {
+  '1': ['tween_001 (1)', 'tween_002 (1)', 'tween_003 (1)', 'tween_004 (1)', 'tween_005 (1)', 'tween_006 (1)', 'tween_007 (1)', 'tween_008 (1)', 'tween_009 (1)', 'tween_010 (1)', 'tween_011 (1)', 'tween_012 (1)', 'tween_013 (1)', 'tween_014 (1)', 'tween_015 (1)'],
+  '2': ['tween_001 (4)', 'tween_002 (4)', 'tween_003 (4)', 'tween_004 (4)', 'tween_005 (4)', 'tween_006 (4)', 'tween_007 (2)', 'tween_008 (2)', 'tween_009 (2)', 'tween_010 (2)', 'tween_011 (2)', 'tween_012 (2)', 'tween_013 (2)', 'tween_014 (2)', 'tween_015 (2)'],
+  '3': ['tween_001', 'tween_002', 'tween_003', 'tween_004', 'tween_005', 'tween_006', 'tween_007', 'tween_008', 'tween_009', 'tween_010', 'tween_011', 'tween_012', 'tween_013', 'tween_014', 'tween_015'],
+  '4': ['tween_001 (5)', 'tween_002 (5)', 'tween_003 (5)', 'tween_004 (5)', 'tween_005 (5)', 'tween_006 (5)', 'tween_007 (3)', 'tween_008 (3)', 'tween_009 (3)', 'tween_010 (3)', 'tween_011 (3)', 'tween_012 (3)', 'tween_013 (3)', 'tween_014 (3)'],
+  '5': ['tween_001 (1)', 'tween_002 (1)', 'tween_003 (1)', 'tween_004 (1)', 'tween_005 (1)', 'tween_006 (1)', 'tween_007', 'tween_008', 'tween_009', 'tween_010', 'tween_011', 'tween_012', 'tween_013', 'tween_014', 'tween_015'],
+};
+const GENERATED_SOURCES = ['1', '2', '3', '4', '5'];
 // One preloaded Image array per source set, keyed by cfg.flick3Source's
 // own string values -- built once at load (same eager-preload
 // convention as flickFrames/flickFrames2) rather than lazily per
@@ -2269,11 +2284,9 @@ const GENERATED_SOURCES = ['1', '2', '3'];
 // than escaping only the space.
 const flickFrames3BySource = {};
 GENERATED_SOURCES.forEach(n => {
-  const suffix = GENERATED_SOURCE_SUFFIX[n];
-  const fileFor = i => encodeURIComponent(`tween_${String(i).padStart(3, '0')} ${suffix}.png`);
   flickFrames3BySource[n] = ([]).concat(
-    GENERATED_A_FRAME_NUMBERS_BY_SOURCE[n].map(i => `data/FLICK/Genereated/${n}/A/${fileFor(i)}`),
-    [...GENERATED_B_FRAME_NUMBERS].reverse().map(i => `data/FLICK/Genereated/${n}/B/${fileFor(i)}`),
+    GENERATED_A_FILES_BY_SOURCE[n].map(name => `data/FLICK/Genereated/${n}/A/${encodeURIComponent(name + '.png')}`),
+    [...GENERATED_B_FILES_BY_SOURCE[n]].reverse().map(name => `data/FLICK/Genereated/${n}/B/${encodeURIComponent(name + '.png')}`),
   ).map(src => {
     const img = new Image();
     img.src = src;
@@ -2283,13 +2296,13 @@ GENERATED_SOURCES.forEach(n => {
 let flick3AnimTime = 0;
 let flick3Playing = false;
 
-// Current source set's own frame COUNT -- A's own per-set divergence
+// Current source set's own frame COUNT -- A/B's own per-set divergence
 // (see above) means this can no longer be one shared constant computed
 // once; read fresh from the live array's own length instead, same
 // "never cached, cfg.flick3Source can change any time" reasoning as
-// flick3Frames() below. Currently 21 for all 3 sets (6 + 15) since
-// only WHICH 6 A-numbers differs, not the count -- but nothing here
-// assumes that stays true.
+// flick3Frames() below. Genuinely differs per source now (source 1:
+// 5+15=20, source 4: 6+14=20, sources 2/3/5: 6+15=21) -- nothing here
+// assumes a shared count.
 function flick3FrameCount(){ return flick3Frames().length; }
 function flick3FrameIndex(){
   if (!flick3Playing) return 0;
@@ -2306,11 +2319,12 @@ function flick3Frames(){ return flickFrames3BySource[cfg.flick3Source]; }
 // switchable-per-dropdown-source design as its main A/B sequence above
 // -- independent of the shared flickHoldFrames (data/FLICK/ANI/3/...)
 // animations 1 and 2 still use, per explicit request ("ammend to
-// animation 3" specifically). Each set's own 6 C-frames have a
-// DIFFERENT export-batch suffix per FILE, not one per set the way A/B
-// do (re-verified via `ls`: set 1 is (6),(6),(5),(5),(5),(4) across
-// its own 6 files) -- so these are listed as full literal filenames
-// per source rather than derived from a shared number+suffix formula.
+// animation 3" specifically). Each set's own 6 C-frames are listed as
+// full literal filenames per source (re-verified via `ls` for all 5
+// sources -- suffixes vary per file within a set here too, not just
+// per set, same "ignore suffixes, just look at the frame number"
+// reasoning as A/B above; sources 4 and 5 both use a uniform "(6)"
+// suffix across all 6 files, sources 1/2/3 don't).
 // Cycled as "in sequence, then in reverse (skip the 1st frame), then
 // loop (without the first frame)" per explicit request -- the same
 // "forward shows every frame, reverse shows only the INTERIOR frames"
@@ -2321,9 +2335,11 @@ function flick3Frames(){ return flickFrames3BySource[cfg.flick3Source]; }
 // (step 9 -> index 1, step 10 wraps to step 0 -> index 0, i.e. loops
 // cleanly back to frame 1 with no stutter or skipped step).
 const GENERATED_C_FILES_BY_SOURCE = {
-  '1': ['tween_001 (6)', 'tween_002 (6)', 'tween_003 (5)', 'tween_004 (5)', 'tween_005 (5)', 'tween_006 (4)'],
-  '2': ['tween_001 (7)', 'tween_002 (7)', 'tween_003 (6)', 'tween_004 (6)', 'tween_005 (6)', 'tween_006 (5)'],
-  '3': ['tween_001 (8)', 'tween_002 (8)', 'tween_003 (7)', 'tween_004 (7)', 'tween_005 (7)', 'tween_006 (6)'],
+  '1': ['tween_001 (2)', 'tween_002 (2)', 'tween_003 (2)', 'tween_004 (2)', 'tween_005 (2)', 'tween_006 (2)'],
+  '2': ['tween_001 (3)', 'tween_002 (3)', 'tween_003 (3)', 'tween_004 (3)', 'tween_005 (3)', 'tween_006 (3)'],
+  '3': ['tween_001 (9)', 'tween_002 (9)', 'tween_003 (8)', 'tween_004 (8)', 'tween_005 (8)', 'tween_006 (7)'],
+  '4': ['tween_001 (6)', 'tween_002 (6)', 'tween_003 (6)', 'tween_004 (6)', 'tween_005 (6)', 'tween_006 (6)'],
+  '5': ['tween_001 (6)', 'tween_002 (6)', 'tween_003 (6)', 'tween_004 (6)', 'tween_005 (6)', 'tween_006 (6)'],
 };
 const flick3HoldFramesBySource = {};
 GENERATED_SOURCES.forEach(n => {
