@@ -179,7 +179,7 @@
     "flick3Source": "5",
     "flick3X": 9,
     "flick3Y": 22,
-    "flick3Scale": 120,
+    "flick3Scale": 57,
     "flick3AnimSpeed": 4.9,
     "flickHoldMaxSpeed": 4,
     "flickHoldMaxDuration": 2.9,
@@ -190,7 +190,7 @@
   "order": [
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flick3Source",
         "flick3X",
@@ -437,6 +437,38 @@
     }
   ],
   "panelGeometry": {
+    "mobile": {
+      "left": 182,
+      "top": 42.28571319580078,
+      "width": 229,
+      "height": 374.7857360839844,
+      "style": {
+        "titleFontSize": 13,
+        "tabFontSize": 11,
+        "groupFontSize": 11,
+        "labelFontSize": 11,
+        "opacity": 0.94,
+        "titleColor": "#e8e8f0",
+        "bodyFontSize": 12,
+        "bgColor": "#12121e",
+        "textColor": "#c9c9d8",
+        "accentColor": "#5b85c8",
+        "sliderColor": "#5b85c8",
+        "fontFamily": "Verdana, Geneva, sans-serif",
+        "buttonHeight": 21,
+        "buttonTextBorder": 0,
+        "scrollStrength": 0.2,
+        "capsButtonText": true,
+        "capsTabText": true,
+        "capsGroupNames": true,
+        "capsSettingsText": false,
+        "buttonLetterSpacing": 0,
+        "tabLetterSpacing": 0,
+        "groupLetterSpacing": 0,
+        "settingsLetterSpacing": 0,
+        "textEditMode": false
+      }
+    },
     "desktop": {
       "left": 1286.4375,
       "top": 17.912500381469727,
@@ -467,23 +499,6 @@
         "groupLetterSpacing": 0,
         "settingsLetterSpacing": 0,
         "textEditMode": false
-      }
-    },
-    "mobile": {
-      "left": 182,
-      "top": 262.9761962890625,
-      "width": 229,
-      "height": 374.7857360839844,
-      "style": {
-        "titleFontSize": 13,
-        "tabFontSize": 11,
-        "groupFontSize": 11,
-        "labelFontSize": 11,
-        "opacity": 0.94,
-        "titleColor": "#e8e8f0",
-        "bodyFontSize": 12,
-        "bgColor": "#12121e",
-        "textColor": "#c9c9d8"
       }
     }
   },
