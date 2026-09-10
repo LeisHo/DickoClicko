@@ -423,3 +423,18 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   (e.g. `old.toLowerCase() === new.toLowerCase() && old !== new`) across
   every affected folder, and for any hit, `git rm --cached` the old-case
   path then re-`git add` so the tracked path matches the real filename.
+- SNAP's freeze-at-42 mechanic (`mfSnapFrozen` in the update() mouse-flick
+  block) hardcodes `mfFrozenFrames.length > 41 && mfIdx >= 41` -- a magic
+  number derived from the SNAP frame set being 45 CONTIGUOUS frames at
+  the time it was built, where index 41 meant "the 42nd frame" per the
+  original spec's own wording ("stop the sequence at frame 42"). A later
+  SNAP frame trim (45->38 frames, 2026-09-10) silently broke this: with
+  `length` now 38, `length > 41` can never be true, so right-click-hold
+  no longer freezes at all, for any direction -- confirmed via live
+  testing (held `mfRightDown` for 300+ ticks, sequence ran straight to
+  `idle`). NOT fixed as part of that same trim -- there is no
+  unambiguous mapping from "position 42 of 45" onto a differently-sized
+  non-contiguous set, and guessing would risk shipping the wrong
+  interpretation silently. If SNAP's frame count changes again, check
+  this guard's `41` against the CURRENT `SNAP_A_FRAME_NUMBERS.length`
+  before assuming the freeze still works -- it currently does not.

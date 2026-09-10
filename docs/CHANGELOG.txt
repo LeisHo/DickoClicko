@@ -9663,3 +9663,99 @@ already-documented net::ERR_CONNECTION_RESET/404 noise).
 
 Committed/pushed (99e1eaf) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-10  -  07:47 PM EDT
+
+"I updated SCISS and SNAP frames update" -- another routine
+FLICK MOUSE frame-data sync, the same well-established shape as
+several earlier rounds this session (enumerate every direction,
+verify no case collisions, scope staging to the exact A subfolder,
+live-verify, commit/push code+assets then docs).
+
+Enumerated all 8 directions for both SCISS and SNAP via
+`git status --porcelain` scoped to each `.../A/` subfolder and found
+the same shape as this session's earlier base-frame trims: pure
+removals (no renames, no new untracked files, confirmed via a
+targeted grep for anything other than a leading ` D`), identical
+frame numbers removed across all 8 directions for each variant --
+SCISS lost 002/004/006 (45->42 frames); SNAP lost
+015/017/019/031/032/034/036 (45->38 frames). No case-collision risk
+since prefixes didn't change (the scanner from the earlier round only
+applies to renames).
+
+Added two new shared arrays, `SCISS_A_FRAME_NUMBERS` (42 numbers) and
+`SNAP_A_FRAME_NUMBERS` (38 numbers), generated programmatically (not
+hand-transcribed, to avoid a transposition error) and wired into all
+16 `sciss:`/`snap:` entries in `MOUSE_FLICK_DIRECTIONS`, replacing
+`count:45` with `nums:` -- same shared-array pattern already
+established for `BASE_A_FRAME_NUMBERS`/`BASE_A_FRAME_NUMBERS_8`, no
+new architecture needed since the `nums`-array loader support already
+exists from an earlier round. No WebP conversion needed (remaining
+frames' webp already exist on disk from the prior 45-frame round;
+the now-orphaned webp for removed frame numbers left in place per
+this workspace's "nothing deleted by default" convention).
+
+Verified with a Node script cross-checking the new code against the
+real files on disk in both directions: every frame number in the new
+`nums` arrays exists as both .png and .webp on disk (0 missing -- 0
+risk of a production 404), AND every .png file actually present on
+disk is accounted for by the new arrays (0 unreferenced/orphaned
+source files, confirming the trim was clean with no stray leftovers).
+`node -e` with `new Function(...)` also confirmed the edited script
+block parses with no syntax errors.
+
+Live browser verification hit this project's own documented
+pre-existing gotcha (the plain python static test server's
+concurrent-load fragility) in an unusually severe form this round --
+repeated `net::ERR_CONNECTION_RESET` truncating the served
+`index.html` mid-script, even via a direct `curl` outside the
+browser (confirmed: a `curl` fetch of the exact same URL returned a
+genuinely truncated 456960-byte body against the file's real 478232
+bytes on one attempt, then a full clean 478232 on the very next
+retry -- proving the failure is the local test server itself, not
+this session's own network path or the code being served). Once past
+that, a SEPARATE trap surfaced: the browser tab was caching the
+truncated response, so simply retrying the same URL kept re-serving
+the same broken body from cache; a cache-busting query param
+(`&cb=2`) finally forced a fresh fetch and got a genuinely complete
+load. From there, a temporary debug hook (grep-confirmed removed
+before finishing) confirmed all 8 directions report the expected 42
+SCISS / 38 SNAP frame counts with 0 broken images, and that a full
+SCISS sequence plays start (`mode:'sciss'`) to a clean finish
+(`mode:'idle'`) on the new 42-frame set.
+
+**Real regression discovered and NOT silently fixed:** the same debug
+hook, used to specifically re-test the SNAP freeze-at-42 mechanic
+built earlier this same day against the NEW 38-frame SNAP data, found
+it no longer freezes at all -- held `mfRightDown` true for 300+ ticks
+(far more than enough to have reached and frozen at what used to be
+frame 42) and the sequence ran straight through to `mode:'idle'`
+instead. Root cause: the freeze guard
+(`mfFrozenFrames.length > 41 && mfIdx >= 41`) was written against the
+old 45-frame contiguous SNAP set, where index 41 meant "the 42nd
+frame in the sequence" per the user's own original spec ("stop the
+sequence at frame 42... complete with the last 3 frames"); with SNAP
+now only 38 frames long, `length > 41` can never be true again, for
+any direction. Deliberately NOT patched as part of this asset-sync
+task -- there's no unambiguous mapping from "position 42 of 45" onto
+a 38-frame set (a proportional position? "freeze 3 frames before the
+end" to preserve the "last 3 frames" framing? a literal frame NUMBER
+if one still exists in that neighborhood of the new non-contiguous
+set?), and guessing wrong would ship an incorrect interpretation
+silently, the same class of risk as the case-collision bug from the
+earlier SCISS/SNAP round. Documented in PROJECT_PROGRESS.md and
+flagged directly to the user for a decision.
+
+Staged with the exact A-subfolder-scoped pathspecs this session's own
+prior rounds established (avoiding the bare-folder-name trap that
+sweeps in unrelated pre-existing deletions living under the same
+folder names) -- 81 files total (1 code + 24 SCISS + 56 SNAP
+deletions), confirmed via `git status --porcelain` count before and
+after staging that none of the ~530 other pending, unrelated changes
+already sitting in this working tree (a mix of stale pre-existing
+folder deletions and other in-flight work) were touched.
+
+Committed/pushed code+assets (8273ba2) -- fetch confirmed no
+divergence -- then this doc pass as a separate follow-up, per the
+standing instruction.

@@ -156,6 +156,31 @@ rename on this project should re-run that same case-collision check
 before committing, not just a plain existence check (which, being
 case-insensitive on Windows too, would NOT have caught this).
 
+**Updated (2026-09-10): SCISS/SNAP frames trimmed to non-contiguous
+sets, and this SILENTLY BROKE the SNAP freeze-at-42 mechanic.** SCISS
+went from 45 contiguous frames to 42 (frames 2/4/6 removed); SNAP went
+from 45 to 38 (frames 15/17/19/31/32/34/36 removed) -- identically
+across all 8 directions, confirmed via direct enumeration and a
+disk-vs-code cross-check (0 missing, 0 unreferenced files on either
+pass). Handled with the same shared-`nums`-array pattern as the base
+frame set (`SCISS_A_FRAME_NUMBERS`/`SNAP_A_FRAME_NUMBERS`), no
+architecture change needed. **Consequence:** the freeze-at-42 mechanic
+built earlier this same day (see above) checks
+`mfFrozenFrames.length > 41` before freezing -- with SNAP now only 38
+frames long, that guard can never be true, so right-click-hold now
+plays SNAP straight through to completion and never freezes, for every
+direction. Confirmed live (not just read): held `mfRightDown` for 300+
+ticks against the new 38-frame SNAP set and it ran to `idle` without
+ever pausing. This is a real, silent regression of a feature this
+project's own spec explicitly asked for, caused purely by this asset
+trim -- not fixed here, since "freeze at 42" has no unambiguous
+equivalent against a 38-frame non-contiguous set (proportional
+position? last-N-frames? a literal frame number if one still exists in
+range?) and guessing would risk shipping the WRONG interpretation
+silently, same class of mistake as the case-collision bug above.
+Flagged to the user directly; needs an explicit decision before the
+freeze mechanic is restored.
+
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
 from `resetSettings()`'s own async settings fetch, which resolves
