@@ -573,6 +573,7 @@ const DEV_GROUPS = [
     { key:'detachThicknessMultiplier', label:'Detach Thickness Multiplier', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1.1 },
   ]},
   { title:'FLICK ANIMATION', controls:[
+    { key:'flickEnabled',   label:'Flick Enabled', type:'checkbox', def:true },
     { key:'flickSource',    label:'Flick Frame Set', type:'dropdown', def:'above',
       options:[
         { value:'above',       label:'Above' },
@@ -588,12 +589,14 @@ const DEV_GROUPS = [
     { key:'flickAnimSpeed', label:'Flick Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:3.2 },
   ]},
   { title:'FLICK ANIMATION 2', controls:[
+    { key:'flick2Enabled',   label:'Flick2 Enabled', type:'checkbox', def:true },
     { key:'flick2X',         label:'Flick2 X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
     { key:'flick2Y',         label:'Flick2 Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:60 },
     { key:'flick2Scale',     label:'Flick2 Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
     { key:'flick2AnimSpeed', label:'Flick2 Anim Speed', type:'slider', unit:'x',   min:0.1, max:5,   step:0.1, def:3.2 },
   ]},
   { title:'FLICK ANIMATION 3', controls:[
+    { key:'flick3Enabled',   label:'Flick3 Enabled', type:'checkbox', def:true },
     { key:'flick3Source',    label:'Flick3 Frame Set', type:'dropdown', def:'above',
       options:[
         { value:'above',       label:'Above' },
@@ -602,6 +605,9 @@ const DEV_GROUPS = [
         { value:'side-pinky',  label:'Side Pinky' },
         { value:'side-pinky-2', label:'Side Pinky 2' },
         { value:'side-thumb',  label:'Side Thumb' },
+        { value:'above-scissor',      label:'Above Scissor' },
+        { value:'side-pinky-scissor', label:'Side Pinky Scissor' },
+        { value:'side-thumb-scissor', label:'Side Thumb Scissor' },
       ] },
     { key:'flick3X',         label:'Flick3 X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
     { key:'flick3Y',         label:'Flick3 Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:35 },
@@ -2466,6 +2472,35 @@ function twotonedFrameUrl(key, sub, num, chargeSuffix){
   const prefix = chargeSuffix ? set.cPrefix : set.abPrefix;
   return `data/FLICK/2TONED/${encodeURIComponent(set.folder)}/${sub}/${encodeURIComponent(prefix + '_' + String(num).padStart(3, '0') + '.webp')}`;
 }
+// "Scissor" sets -- 3 more 2TONED sets added later (2026-09-10), each
+// with ONLY an A subfolder (no B, no C at all). Per explicit request:
+// click plays A forward then A in REVERSE (the same source array played
+// both directions, not a separate A+B pair like every other 2TONED set)
+// -- genuinely different data shape from TWOTONED_SETS, so kept as its
+// own separate SCISSOR_SETS/SCISSOR_A_FRAMES rather than shoehorned into
+// the existing per-set objects. Click-and-hold instead reuses an ALREADY-
+// EXISTING set's own C entirely (per explicit mapping: `holdKey`) --
+// there's no C folder here to borrow from otherwise. Frame numbers are
+// genuinely different from every other 2TONED set too ([1,3,5,6,7,11-20],
+// confirmed via `ls`, not assumed to match the usual [1,3,7,9,11,13,14]
+// pattern) -- one shared array reference is fine since all 3 sets happen
+// to share this exact list, re-verify if that ever changes for only 1.
+const SCISSOR_SETS = {
+  'above-scissor':      { folder: 'ABOVE - SCISSOR',      abPrefix: '2T -FlatAbove - CUT', holdKey: 'above' },
+  'side-pinky-scissor': { folder: 'SIDE PINKY - SCISSOR', abPrefix: '2T - SidePinky - CUT', holdKey: 'side-pinky-2' },
+  'side-thumb-scissor': { folder: 'SIDE THUMB - SCISSOR', abPrefix: '2T -SideThub - CUT',   holdKey: 'side-thumb' },
+};
+const SCISSOR_KEYS = Object.keys(SCISSOR_SETS);
+const SCISSOR_A_FRAME_NUMBERS = [1, 3, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+const SCISSOR_A_FRAMES = {
+  'above-scissor': SCISSOR_A_FRAME_NUMBERS,
+  'side-pinky-scissor': SCISSOR_A_FRAME_NUMBERS,
+  'side-thumb-scissor': SCISSOR_A_FRAME_NUMBERS,
+};
+function scissorFrameUrl(key, num){
+  const set = SCISSOR_SETS[key];
+  return `data/FLICK/2TONED/${encodeURIComponent(set.folder)}/A/${encodeURIComponent(set.abPrefix + '_' + String(num).padStart(3, '0') + '.webp')}`;
+}
 // One preloaded Image array per source set, keyed by cfg.flick3Source's
 // own string values -- built once at load (same eager-preload
 // convention as flickFrames/flickFrames2) rather than lazily per
@@ -2483,6 +2518,21 @@ TWOTONED_KEYS.forEach(key => {
     img.src = src;
     return img;
   });
+});
+// Scissor sets: A forward, then A in reverse -- the SAME Image objects
+// reused for both directions (not re-fetched), excluding the very last
+// forward frame from the reverse pass so the peak isn't shown twice in a
+// row (it's the exact same file both times, unlike the A-then-B sets
+// above where a duplicated-looking frame at the seam was never a risk
+// since A and B are always different images).
+SCISSOR_KEYS.forEach(key => {
+  const forward = SCISSOR_A_FRAMES[key].map(n => {
+    const img = new Image();
+    img.src = scissorFrameUrl(key, n);
+    return img;
+  });
+  const backward = forward.slice(0, -1).reverse();
+  flickFrames3BySource[key] = forward.concat(backward);
 });
 let flick3AnimTime = 0;
 let flick3Playing = false;
@@ -2536,6 +2586,15 @@ TWOTONED_KEYS.forEach(key => {
     img.src = twotonedFrameUrl(key, 'C', n, true);
     return img;
   });
+});
+// Scissor sets have no C folder of their own -- click-and-hold instead
+// reuses an ALREADY-EXISTING set's own hold frames entirely (per
+// explicit mapping, SCISSOR_SETS[key].holdKey), not a copy -- both keys
+// share the exact same Image array/objects, so there's nothing extra to
+// preload here. Must run after the TWOTONED_KEYS loop above, since it
+// reads from what that loop just populated.
+SCISSOR_KEYS.forEach(key => {
+  flick3HoldFramesBySource[key] = flick3HoldFramesBySource[SCISSOR_SETS[key].holdKey];
 });
 function flick3HoldFrames(){ return flick3HoldFramesBySource[cfg.flick3Source] || flick3HoldFramesBySource[TWOTONED_KEYS[0]]; }
 function flick3HoldFrameIndex(){
@@ -7023,75 +7082,93 @@ function render(){
   // guards the actual DRAW (nothing to draw until that specific frame is
   // ready), just no longer the hit-test rect itself.
   if (DEV_MODE){
-    const flickRefImg = flickFrames()[0];
-    const flickAspect = (flickRefImg && flickRefImg.naturalWidth > 0) ? (flickRefImg.naturalHeight / flickRefImg.naturalWidth) : 1;
-    const flickW = vmin(cfg.flickScale);
-    const flickH = flickW * flickAspect;
-    // Hit-test rect always reflects the idle/play (A/B) box, same
-    // reasoning as flick3Rect below -- a fresh press can only start while
-    // not already holding.
-    flickRect.x = vw(cfg.flickX) - flickW / 2; flickRect.y = vh(cfg.flickY) - flickH / 2;
-    flickRect.w = flickW; flickRect.h = flickH;
-    if (holdingFlick === 1){
-      // C's own frames are a different shape from A/B (same reasoning as
-      // flick3's own hold box below) -- sized from the hold frame's own
-      // real aspect, same width scale (Flick Scale), centered on the
-      // same X/Y.
-      const holdImg = flick1HoldFrames()[flick1HoldFrameIndex()];
-      const holdAspect = (holdImg && holdImg.naturalWidth > 0) ? (holdImg.naturalHeight / holdImg.naturalWidth) : flickAspect;
-      const holdW = flickW, holdH = holdW * holdAspect;
-      const holdX = vw(cfg.flickX) - holdW / 2, holdY = vh(cfg.flickY) - holdH / 2;
-      if (holdImg && holdImg.complete && holdImg.naturalWidth > 0){
-        ctx.drawImage(holdImg, holdX, holdY, holdW, holdH);
+    // Each animation's own Enabled checkbox (Flick/Flick2/Flick3
+    // Enabled) hides it exactly like the outer DEV_MODE gate already
+    // does for ALL 3 -- zero the rect instead of just skipping the draw,
+    // same reasoning as the comment above: a zero-sized rect means
+    // isPointInFlick/2/3() never matches a click on a hidden animation
+    // either, not just visually hides it.
+    if (cfg.flickEnabled){
+      const flickRefImg = flickFrames()[0];
+      const flickAspect = (flickRefImg && flickRefImg.naturalWidth > 0) ? (flickRefImg.naturalHeight / flickRefImg.naturalWidth) : 1;
+      const flickW = vmin(cfg.flickScale);
+      const flickH = flickW * flickAspect;
+      // Hit-test rect always reflects the idle/play (A/B) box, same
+      // reasoning as flick3Rect below -- a fresh press can only start while
+      // not already holding.
+      flickRect.x = vw(cfg.flickX) - flickW / 2; flickRect.y = vh(cfg.flickY) - flickH / 2;
+      flickRect.w = flickW; flickRect.h = flickH;
+      if (holdingFlick === 1){
+        // C's own frames are a different shape from A/B (same reasoning as
+        // flick3's own hold box below) -- sized from the hold frame's own
+        // real aspect, same width scale (Flick Scale), centered on the
+        // same X/Y.
+        const holdImg = flick1HoldFrames()[flick1HoldFrameIndex()];
+        const holdAspect = (holdImg && holdImg.naturalWidth > 0) ? (holdImg.naturalHeight / holdImg.naturalWidth) : flickAspect;
+        const holdW = flickW, holdH = holdW * holdAspect;
+        const holdX = vw(cfg.flickX) - holdW / 2, holdY = vh(cfg.flickY) - holdH / 2;
+        if (holdImg && holdImg.complete && holdImg.naturalWidth > 0){
+          ctx.drawImage(holdImg, holdX, holdY, holdW, holdH);
+        }
+      } else {
+        const flickImg = flickFrames()[flickFrameIndex()];
+        if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
+          ctx.drawImage(flickImg, flickRect.x, flickRect.y, flickW, flickH);
+        }
       }
     } else {
-      const flickImg = flickFrames()[flickFrameIndex()];
-      if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
-        ctx.drawImage(flickImg, flickRect.x, flickRect.y, flickW, flickH);
-      }
+      flickRect.w = 0; flickRect.h = 0;
     }
-    const flick2RefImg = flickFrames2[0];
-    const flick2Aspect = (flick2RefImg && flick2RefImg.naturalWidth > 0) ? (flick2RefImg.naturalHeight / flick2RefImg.naturalWidth) : 1;
-    const flick2W = vmin(cfg.flick2Scale);
-    const flick2H = flick2W * flick2Aspect;
-    flick2Rect.x = vw(cfg.flick2X) - flick2W / 2; flick2Rect.y = vh(cfg.flick2Y) - flick2H / 2;
-    flick2Rect.w = flick2W; flick2Rect.h = flick2H;
-    const flick2Img = holdingFlick === 2 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames2[flick2FrameIndex()];
-    if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
-      ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, flick2W, flick2H);
-    }
-    const flick3RefImg = flick3Frames()[0];
-    const flick3Aspect = (flick3RefImg && flick3RefImg.naturalWidth > 0) ? (flick3RefImg.naturalHeight / flick3RefImg.naturalWidth) : 1;
-    const flick3W = vmin(cfg.flick3Scale);
-    const flick3H = flick3W * flick3Aspect;
-    // Hit-test rect always reflects the idle/play sequence's own box
-    // (A/B, 1400x1257-ish) regardless of whether the hold-preview is
-    // currently showing -- a fresh press is what starts a NEW hold, and
-    // by definition that can only happen while NOT already holding, so
-    // the rect never actually needs to describe the hold-preview's own
-    // (differently-shaped) box.
-    flick3Rect.x = vw(cfg.flick3X) - flick3W / 2; flick3Rect.y = vh(cfg.flick3Y) - flick3H / 2;
-    flick3Rect.w = flick3W; flick3Rect.h = flick3H;
-    if (holdingFlick === 3){
-      // The C-folder hold-preview frames are a genuinely different
-      // shape from A/B (1400x665 vs 1400x1257 -- a wide/short crop, not
-      // the same tall pose) -- drawing them into flick3W/flick3H
-      // (sized for A/B's own aspect) would visibly squash them, so
-      // this box is computed fresh from the ACTUAL hold-preview frame's
-      // own aspect instead, same width scale (Flick3 Scale) but its
-      // own real height, centered on the same X/Y position.
-      const holdImg = flick3HoldFrames()[flick3HoldFrameIndex()];
-      const holdAspect = (holdImg && holdImg.naturalWidth > 0) ? (holdImg.naturalHeight / holdImg.naturalWidth) : flick3Aspect;
-      const holdW = flick3W, holdH = holdW * holdAspect;
-      const holdX = vw(cfg.flick3X) - holdW / 2, holdY = vh(cfg.flick3Y) - holdH / 2;
-      if (holdImg && holdImg.complete && holdImg.naturalWidth > 0){
-        ctx.drawImage(holdImg, holdX, holdY, holdW, holdH);
+    if (cfg.flick2Enabled){
+      const flick2RefImg = flickFrames2[0];
+      const flick2Aspect = (flick2RefImg && flick2RefImg.naturalWidth > 0) ? (flick2RefImg.naturalHeight / flick2RefImg.naturalWidth) : 1;
+      const flick2W = vmin(cfg.flick2Scale);
+      const flick2H = flick2W * flick2Aspect;
+      flick2Rect.x = vw(cfg.flick2X) - flick2W / 2; flick2Rect.y = vh(cfg.flick2Y) - flick2H / 2;
+      flick2Rect.w = flick2W; flick2Rect.h = flick2H;
+      const flick2Img = holdingFlick === 2 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames2[flick2FrameIndex()];
+      if (flick2Img && flick2Img.complete && flick2Img.naturalWidth > 0){
+        ctx.drawImage(flick2Img, flick2Rect.x, flick2Rect.y, flick2W, flick2H);
       }
     } else {
-      const flick3Img = flick3Frames()[flick3FrameIndex()];
-      if (flick3Img && flick3Img.complete && flick3Img.naturalWidth > 0){
-        ctx.drawImage(flick3Img, flick3Rect.x, flick3Rect.y, flick3W, flick3H);
+      flick2Rect.w = 0; flick2Rect.h = 0;
+    }
+    if (cfg.flick3Enabled){
+      const flick3RefImg = flick3Frames()[0];
+      const flick3Aspect = (flick3RefImg && flick3RefImg.naturalWidth > 0) ? (flick3RefImg.naturalHeight / flick3RefImg.naturalWidth) : 1;
+      const flick3W = vmin(cfg.flick3Scale);
+      const flick3H = flick3W * flick3Aspect;
+      // Hit-test rect always reflects the idle/play sequence's own box
+      // (A/B, 1400x1257-ish) regardless of whether the hold-preview is
+      // currently showing -- a fresh press is what starts a NEW hold, and
+      // by definition that can only happen while NOT already holding, so
+      // the rect never actually needs to describe the hold-preview's own
+      // (differently-shaped) box.
+      flick3Rect.x = vw(cfg.flick3X) - flick3W / 2; flick3Rect.y = vh(cfg.flick3Y) - flick3H / 2;
+      flick3Rect.w = flick3W; flick3Rect.h = flick3H;
+      if (holdingFlick === 3){
+        // The C-folder hold-preview frames are a genuinely different
+        // shape from A/B (1400x665 vs 1400x1257 -- a wide/short crop, not
+        // the same tall pose) -- drawing them into flick3W/flick3H
+        // (sized for A/B's own aspect) would visibly squash them, so
+        // this box is computed fresh from the ACTUAL hold-preview frame's
+        // own aspect instead, same width scale (Flick3 Scale) but its
+        // own real height, centered on the same X/Y position.
+        const holdImg = flick3HoldFrames()[flick3HoldFrameIndex()];
+        const holdAspect = (holdImg && holdImg.naturalWidth > 0) ? (holdImg.naturalHeight / holdImg.naturalWidth) : flick3Aspect;
+        const holdW = flick3W, holdH = holdW * holdAspect;
+        const holdX = vw(cfg.flick3X) - holdW / 2, holdY = vh(cfg.flick3Y) - holdH / 2;
+        if (holdImg && holdImg.complete && holdImg.naturalWidth > 0){
+          ctx.drawImage(holdImg, holdX, holdY, holdW, holdH);
+        }
+      } else {
+        const flick3Img = flick3Frames()[flick3FrameIndex()];
+        if (flick3Img && flick3Img.complete && flick3Img.naturalWidth > 0){
+          ctx.drawImage(flick3Img, flick3Rect.x, flick3Rect.y, flick3W, flick3H);
+        }
       }
+    } else {
+      flick3Rect.w = 0; flick3Rect.h = 0;
     }
   }
 }
