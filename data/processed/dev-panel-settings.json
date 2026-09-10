@@ -180,7 +180,7 @@
     "flick2Scale": 39.5,
     "flick2AnimSpeed": 4.4,
     "flick3Enabled": true,
-    "flick3Source": "side-thumb-scissor",
+    "flick3Source": "side-pinky-scissor",
     "flick3X": 79,
     "flick3Y": 67,
     "flick3Scale": 120,
@@ -458,10 +458,10 @@
   ],
   "panelGeometry": {
     "mobile": {
-      "left": 155.17857360839844,
-      "top": 467.9940490722656,
+      "left": 182,
+      "top": 23.297618865966797,
       "width": 229,
-      "height": 272.3809509277344,
+      "height": 565.2083740234375,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
