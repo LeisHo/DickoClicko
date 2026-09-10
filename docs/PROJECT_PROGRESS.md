@@ -52,7 +52,22 @@ first attempt to act on this exact "SNAP frames" report found NOTHING
 changed on disk (confirmed via `git status` and file mtimes all
 predating the prior commit) -- the user's file copy hadn't landed yet
 when they sent the message; re-checking after being told "check
-again" found the new files present. New "FLICK MOUSE" dev-panel group
+again" found the new files present. The `base` (click-sequence) frames
+were updated next (same 2026-09-10, "I updated the non charge, sciss,
+snap frames") -- this round removed 6 mid-sequence frames (even
+numbers 2-12) from 6 of the 8 directions rather than renaming/
+expanding, leaving those 6 with a non-contiguous set (odds 1-11 plus a
+contiguous 13-20 tail, 14 frames total); BEHIND PINKY and BEHIND THUMB
+were untouched, still the full contiguous 1-20. This broke the base
+loader's implicit "always contiguous 1..count" assumption (still true
+for charge/sciss/snap) -- `MOUSE_FLICK_DIRECTIONS`'s `base` variant now
+accepts an explicit `nums` array (a shared `BASE_A_FRAME_NUMBERS`
+constant for the 6 changed directions), falling back to the existing
+`count`-based range for the 2 unchanged ones, mirroring the
+`TWOTONED_A_FRAMES`-style pattern already used elsewhere in this file
+for non-contiguous 2TONED sets. Click sequence length is now 27
+(14+13) for the 6 changed directions, still 39 (20+19) for the other
+2 -- verified live via debug hook, 0 broken images. New "FLICK MOUSE" dev-panel group
 (Enabled/Scale/Anim Speed/Position & Rotation Smoothing/Angle
 Offset/Hold Max Speed &
 Duration). Gesture listeners are fully independent of the rope's own

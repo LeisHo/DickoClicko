@@ -9431,3 +9431,74 @@ to idle.
 Committed/pushed code+assets (cdfb0f0) -- fetch confirmed no
 divergence -- then this doc pass as a separate follow-up, per the
 standing instruction.
+
+================================================================================
+2026-09-10  -  05:24 PM EDT
+
+"I updated the non charge, sciss, snap frames. update" -- i.e. the
+`base` variant (used for the click A-forward+reverse sequence), the
+4th and last of the mouse-flick feature's 4 variant types to get an
+update this session.
+
+Enumerated all 8 directions' base folders before touching code, same
+discipline as every round: found something genuinely different from
+every prior round -- prefixes were UNCHANGED (all 8 still match
+exactly what's already in index.html), but the FRAME NUMBERS
+themselves changed for 6 of the 8 directions. Frames at even numbers
+2,4,6,8,10,12 were removed (not replaced -- their PNGs are simply
+gone, confirmed via `git status` showing only deletions, zero
+untracked/modified files in those 6 folders), leaving a non-contiguous
+set: odds 1-11 plus a contiguous 13-20 tail (14 frames total, down
+from 20). BEHIND PINKY and BEHIND THUMB were left untouched, still the
+full contiguous 1-20 -- confirmed this wasn't an oversight by checking
+their own git status (zero changes) separately.
+
+This broke a real assumption baked into the mouse-flick loader since
+it first shipped: `load(variant)` iterated `1..variant.count`,
+implicitly assuming every variant's frames are contiguous. That was
+true for base at the time (and remains true for charge/sciss/snap as
+of this writing), but no longer holds for 6 of the 8 base sets.
+Extended `load()` to check for an explicit `variant.nums` array first,
+falling back to the count-based range when absent -- mirrors the
+`TWOTONED_A_FRAMES`/etc. pattern this file already uses elsewhere for
+genuinely non-contiguous 2TONED sets, rather than inventing a new
+shape. Added a shared `BASE_A_FRAME_NUMBERS = [1,3,5,7,9,11,13..20]`
+constant (one array reference, matching the "shared array when
+multiple sets happen to use the identical list" convention already
+established for `SCISSOR_A_FRAME_NUMBERS`) and pointed the 6 changed
+directions' `base.nums` at it, leaving the 2 unchanged directions on
+their existing `count:20`.
+
+Staging required the same care as recent rounds, for a different
+reason this time: `git status`/`git add` scoped to the bare folder
+name (e.g. "data/FLICK/2TONED/SIDE THUMB/") ALSO swept in the
+pre-existing, deliberately-untouched old Animation 1/3 B/C-subfolder
+deletions living under those exact same folder names (the
+already-flagged "Animation 1/3's original assets are gone from disk"
+issue from the mouse-flick feature's own first round) -- caught before
+staging by comparing an unscoped status (128 D) against one scoped to
+just the "A" subfolder specifically (36 D, the real number) and
+using the SCOPED path in `git add`, never the bare folder name, for
+any of these 8 directions going forward.
+
+No WebP conversion needed this round -- the remaining (odd-numbered +
+13-20) frames' WebP files already exist from earlier rounds; the 6
+removed-per-direction frames' own WebP counterparts are now orphaned
+(unreferenced, since `nums` no longer includes those numbers) but
+deliberately left in place, not deleted, per this project's own
+"nothing gets deleted by default" convention -- harmless, minor
+repo bloat, not something to clean up unless asked.
+
+Ran the established case-collision scanner regardless (0 hits, as
+expected since prefixes didn't change this round). Verified live via
+a temporary debug hook (grep-confirmed removed, node --check clean):
+click sequence length now correctly reports 27 (14+13, excluding the
+duplicated peak frame on the reverse pass) for the 6 changed
+directions and unchanged 39 (20+19) for the other 2, 0 broken images
+across all 8, and a real click playback for a changed direction
+(`behind`) correctly plays through the new non-contiguous sequence
+and returns to idle.
+
+Committed/pushed code+assets (a20b56b) -- fetch confirmed no
+divergence -- then this doc pass as a separate follow-up, per the
+standing instruction.
