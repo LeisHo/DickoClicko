@@ -2840,6 +2840,17 @@ function mouseFlickNearestIndex(numbers, target){
   });
   return bestIdx;
 }
+// SNAP's freeze-at-42 mechanic (see the mfSnapFrozen call site) targets
+// this INDEX, not a hardcoded number -- computed via the same nearest-
+// number lookup used for mid-sequence switching, so a future SNAP frame
+// trim that removes 41 itself still resolves to the closest surviving
+// number rather than going silently stale the way the old hardcoded
+// `41` did when SNAP went from 45 contiguous frames to 38 non-
+// contiguous ones (2026-09-10 regression -- see CLAUDE.md gotchas).
+// Assumes SNAP_A_FRAME_NUMBERS is shared across all 8 directions, true
+// as of this writing (re-verify if SNAP ever goes per-direction like
+// base/click already has).
+const SNAP_FREEZE_INDEX = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 41);
 // Mid-sequence direction switch for click/sciss/snap (charge needs no
 // equivalent -- see its own comment at the mfMode==='charge' direction-
 // switch call site for why). Per explicit spec: continue the sequence
@@ -6486,16 +6497,24 @@ function update(rawDt){
       const mfIdx = Math.min(Math.floor(mfFrameAccum), mfFrozenFrames.length - 1);
       if (!isFrameBlocking(mfFrozenFrames[mfIdx])){
         // SNAP freeze: per explicit spec, if the right button is STILL
-        // held once playback reaches frame 42 (1-indexed -- array index
-        // 41), pause there instead of continuing to natural completion.
-        // Releasing simply stops this condition from being true, so the
-        // very next tick resumes advancing mfFrameAccum from right where
-        // it was pinned, playing out whatever frames remain (43,44,45 as
-        // of this writing) to a normal finish -- no separate "resume"
-        // code path needed. Guarded on the frame actually existing, so a
-        // direction/variant with 42 or fewer frames just plays through
-        // normally instead of freezing on nothing.
-        const mfSnapFrozen = mfMode === 'snap' && mfRightDown && mfFrozenFrames.length > 41 && mfIdx >= 41;
+        // held once playback reaches frame 42, pause there instead of
+        // continuing to natural completion. Releasing simply stops this
+        // condition from being true, so the very next tick resumes
+        // advancing mfFrameAccum from right where it was pinned, playing
+        // out whatever frames remain to a normal finish -- no separate
+        // "resume" code path needed. Guarded on the frame actually
+        // existing, so a direction/variant shorter than the freeze point
+        // just plays through normally instead of freezing on nothing.
+        // Re-fixed 2026-09-10: was hardcoded to array index 41 (correct
+        // only while SNAP was 45 contiguous frames, where index 41 meant
+        // "frame 42"); a later trim to 38 non-contiguous frames silently
+        // broke it (length > 41 could never be true again). Now targets
+        // SNAP_FREEZE_INDEX -- the CURRENT position of frame number 41
+        // (the closest available number to the original spec's "42"),
+        // computed once above via the same nearest-number lookup used
+        // for mid-sequence switching, so it stays correct across future
+        // frame trims instead of needing another manual re-derivation.
+        const mfSnapFrozen = mfMode === 'snap' && mfRightDown && mfFrozenFrames.length > SNAP_FREEZE_INDEX && mfIdx >= SNAP_FREEZE_INDEX;
         if (!mfSnapFrozen){
           mfFrameAccum += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
           if (Math.floor(mfFrameAccum) >= mfFrozenFrames.length){
