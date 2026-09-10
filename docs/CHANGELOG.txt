@@ -8963,3 +8963,40 @@ APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
 old one in place.
+
+================================================================================
+2026-09-10  -  05:05 AM EDT
+
+"provide me checkboxes to hide animation 1,2, and 3" -- added an
+Enabled checkbox to each of the 3 existing FLICK ANIMATION dev-panel
+groups (flickEnabled / flick2Enabled / flick3Enabled, all default
+true, matching the *Enabled checkbox convention already used
+elsewhere in DEV_GROUPS). Unchecking one hides that animation's draw
+call for the current frame AND zeroes its own hit-test rect
+(flickRect/flick2Rect/flick3Rect .w/.h = 0), reusing the exact same
+"zero-rect = unclickable" technique this file's own comments already
+document for the outer DEV_MODE gate -- so a hidden animation isn't
+left as an invisible dead-click-zone, and the 2 still-visible
+animations are completely unaffected by another one's toggle.
+
+Verified live, not just read: this sandbox's local file:// preview
+only renders as a static, non-interactive snapshot for a file outside
+the current project folder, so stood up a throwaway local static
+server to actually drive the dev panel. Toggled each of the 3 new
+checkboxes independently (screenshot before/after each) and confirmed
+only that animation's own hand graphic disappears/reappears, the
+other 2 staying untouched every time. 0 console errors throughout;
+node --check clean.
+
+Bundled-changes disclosure (per CLAUDE.md §5/§9's multi-session
+discipline): by the time this change was committed, a concurrent
+session had independently landed real, uncommitted work in this same
+index.html -- a new "Scissor" FLICK Animation 3 frame-set feature
+(SCISSOR_SETS, 3 new Flick3 Frame Set dropdown options, scissor frame
+URL/preload/hold-frame-reuse logic) -- which necessarily rode along in
+the same commit since git has no per-session view of one shared file.
+That work is NOT authored by this change and was left completely
+untouched; confirmed the file was still syntactically valid (node
+--check) with both changes present together before committing.
+Committed and pushed (46eb830..7ce807b) -- git fetch/log confirmed
+clean, no divergence from origin/master before pushing.

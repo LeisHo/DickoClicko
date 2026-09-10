@@ -631,7 +631,12 @@ additions. Current state of each subsystem:
   exact same deployment showed the real tuned config -- see CODE_SUMMARY
   gotchas.
 - **FLICK animations**: 3 small, independent overlays, each with its own
-  X/Y/Scale/Speed dev-panel group. Animation 2 (loaded directly from
+  X/Y/Scale/Speed dev-panel group, plus its own Enabled checkbox
+  (Flick/Flick2/Flick3 Enabled, all default true, per explicit request
+  "provide me checkboxes to hide animation 1,2, and 3") -- unchecking
+  one hides that animation's draw AND zeroes its own hit-test rect
+  (same "zero-rect = unclickable" technique the DEV_MODE gate already
+  used), independent of the other 2. Animation 2 (loaded directly from
   `data/FLICK/ANI/1` in sequence then `data/FLICK/ANI/2` in reverse -- 20
   frames as of this writing (11 + 9); no intermediate `ANI2` folder
   anymore, see CODE_SUMMARY gotchas for why that was removed -- check the
