@@ -739,7 +739,17 @@ additions. Current state of each subsystem:
   All 3 animations' Anim Speed defaults are 3.2x (live values have since
   moved further via direct tuning). Hit-test rects are computed every
   frame independent of image load state, so a click works immediately on
-  page load. A press while that animation is already playing is ignored
+  page load. **Clicking inside that rect is no longer sufficient by
+  itself** (2026-09-10, per direct report: "it is triggered when i click
+  very far from it") -- the source PNGs have real transparent margin
+  around their visible content, so all 3 `isPointInFlick*()` now also
+  run a per-pixel alpha check (`isPixelVisible()`, a shared 1x1 offscreen-
+  canvas sample against the currently-idle frame) before accepting a
+  click, rejecting anything inside the rect but outside the actually-
+  visible pose. Verified directly against all 4 corners of each
+  animation's own live rect (all correctly rejected) and the center
+  (correctly accepted), plus a real dispatched-click end-to-end check.
+  A press while that animation is already playing is ignored
   (not re-armed into holding) so repeated impatient clicking can't
   interrupt/restart an in-progress sequence. All 3 animations' hold-cycle
   speed still ramps the longer it's held (linearly from 1x up to Flick

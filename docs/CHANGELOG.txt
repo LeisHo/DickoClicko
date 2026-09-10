@@ -8916,6 +8916,49 @@ Updated docs/PROJECT_PROGRESS.md (targeted rewrite of the relevant
 paragraphs) and this file.
 
 ================================================================================
+2026-09-10  -  04:41 AM EDT
+
+"FOr the click/ click and hold triggers, make sure it only triggers
+when i click within the visible parts of the pngs. Right now, it is
+triggered when i click very far from it." Root cause was immediately
+clear from reading isPointInFlick()/isPointInFlick2()/isPointInFlick3()
+directly: all 3 ever checked was the bounding RECT (matching the
+image's own drawn width/height at its current scale), never whether
+the clicked pixel was actually opaque -- a click anywhere in a source
+PNG's own transparent margin, as long as it fell inside that rect,
+registered as a real hit.
+
+Added a single shared isPixelVisible(img, rectX, rectY, rectW, rectH,
+x, y) helper used by all 3 isPointInFlick*() functions: maps the click
+coordinate into the image's own natural pixel space, draws just that 1
+source pixel into a shared 1x1 offscreen canvas (created once, reused
+every call), and reads its alpha channel back via getImageData --
+returns true only if alpha exceeds a small threshold (10/255, so a
+barely-visible anti-aliased edge pixel still counts as a real hit, not
+just fully-opaque). The rect check stays in place as a cheap first
+reject before ever touching the canvas -- the 2 checks are
+complementary, not redundant. Each isPointInFlick*() now tests against
+that animation's own currently-idle frame (flickFrames()[0]/
+flickFrames2[0]/flick3Frames()[0]) -- the only frame that can actually
+be on screen at the moment a NEW press is being evaluated, since a
+press only starts a hold when that animation isn't already playing.
+
+Verified via a temporary debug hook (grep-confirmed removed before
+finishing): queried isPointInFlick/2/3 directly at all 4 corners of
+each animation's own live bounding rect (720x354px for animations 1
+and 3 at their current live scale -- a real, substantial transparent
+margin around a much smaller visible hand pose) -- all 12 corner
+checks (3 animations x 4 corners) correctly returned false, while each
+animation's own center point correctly returned true. Then verified
+the full integration end-to-end via real dispatched PointerEvents
+through the actual production onPointerDown/onPointerUp code (not just
+the isPointInFlick*() functions in isolation): a click at a rect
+corner produced zero log entries (no interaction fired at all, exactly
+the reported bug, now fixed); the identical dispatch at the visible
+center still correctly logged "down:flick3" -> "up:flick3-play
+heldMs:0". node --check clean throughout.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
