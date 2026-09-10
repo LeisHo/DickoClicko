@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.0616341328112,
+    "ropeLength": 27.442105263157828,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -97,7 +97,7 @@
     ],
     "arcSeamOverlapPx": 2.8,
     "clickIntensity": 1.1,
-    "holdDistance": 22,
+    "holdDistance": 22.5,
     "bendStiffness": 0.01,
     "ropeAnimSpeed": 1.2,
     "gravityStrength": 1.7,
@@ -105,10 +105,10 @@
     "constraintIterations": 9,
     "ropeGrowthRate": 12,
     "clickHoldMaxDuration": 800,
-    "intensityCeiling": 10,
+    "intensityCeiling": 8.4,
     "minRopeLength": 2.6,
-    "clickDistance": 11.4,
-    "doubleClickDistance": 11.4,
+    "clickDistance": 15,
+    "doubleClickDistance": 15,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.1,
@@ -250,7 +250,7 @@
     },
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick3Enabled",
         "flick3Source",
@@ -371,7 +371,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "pieceGradientEnabled",
         "pieceGradientColors",
@@ -398,7 +398,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
@@ -410,7 +410,7 @@
     },
     {
       "key": "CLICK",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "clickIntensity",
         "holdDistance"
@@ -419,7 +419,7 @@
     },
     {
       "key": "ROPE GROWTH",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "ropeGrowthRate",
         "clickHoldMaxDuration",
@@ -444,7 +444,7 @@
     },
     {
       "key": "FLOOR",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "floorFriction",
         "pieceFriction",
@@ -458,10 +458,10 @@
   ],
   "panelGeometry": {
     "mobile": {
-      "left": 182,
-      "top": 42.28571319580078,
+      "left": 155.17857360839844,
+      "top": 467.9940490722656,
       "width": 229,
-      "height": 374.7857360839844,
+      "height": 272.3809509277344,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
