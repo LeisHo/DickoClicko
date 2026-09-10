@@ -8669,6 +8669,99 @@ alone; only the actual changed/new/deleted ANI files plus index.html
 were staged.
 
 ================================================================================
+2026-09-10  -  04:02 AM EDT
+
+"I want you to replace the Animation 3 frames with the ones in these
+subfolders - data/FLICK/2TONED. So on click, you play frames in A in
+sequence, then B in reverse sequence. On click and hold, you play
+frames in C in sequence, then continue looping, but WITHOUT the first
+frame in C. implement and push. There should be 5 animation types
+available in the dropdown."
+
+Explored data/FLICK/2TONED first rather than assuming its shape: 5
+named subfolders (ABOVE, SIDE BEHIND, SIDE FRONT, SIDE PINKY, SIDE
+THUMB), each with its own A/B/C, matching "5 animation types" exactly
+-- this is a straight source-and-behavior replacement of Animation 3's
+PRIOR Genereated/<N> system (5 numbered sets), not an addition.
+Enumerated every set's A/B/C folder precisely via a Node script rather
+than eyeballing `ls` output: B and C are genuinely uniform across all 5
+sets (B: 1-15, C: 1-8), but A is NOT -- 4 sets have 7 frames
+([1,3,7,9,11,13,14]), SIDE BEHIND alone has 8 (adds frame 15) -- caught
+by scripted enumeration, not by assuming uniformity from the other 4.
+Converted all 151 source PNGs (2400px wide) to WebP via sharp (1400px
+wide, quality 90, same convention as every other FLICK animation) --
+9.5MB -> 1.6MB.
+
+Replaced GENERATED_A/B/C_FILES_BY_SOURCE and GENERATED_SOURCES entirely
+with TWOTONED_SETS (maps each dropdown value to its real folder name,
+which has a space, e.g. "SIDE BEHIND", and its own filename prefix,
+which doesn't, e.g. "SideBehind") plus TWOTONED_A/B/C_FRAMES
+(frame-number lists, explicit per set per this file's own established
+discipline, not collapsed into 1 shared array despite B/C's uniformity
+-- SIDE BEHIND's own A-folder exception is exactly why). Updated the
+Flick3 Frame Set dropdown's 5 options to the new named values ('above',
+'side-behind', etc.) with human labels ("Above", "Side Behind", etc.),
+default 'above'. Click behavior (A forward + B reversed) reuses the
+same flickFrames3BySource construction animation 2 already established,
+just against the new data.
+
+Hold behavior required real new logic, not just new data: per explicit
+request ("play frames in C in sequence, then continue looping, but
+WITHOUT the first frame"), this is forward-only (no ping-pong) --
+flick3HoldFrameIndex() now returns pos directly while pos < frameCount
+(the one-time full pass), then 1 + ((pos - frameCount) % (frameCount -
+1)) after that (the permanent tail-only loop) -- verified this exact
+sequence in isolation via Node before wiring it in
+(0,1,2,...,7,1,2,...,7,1,2,...). This also meant Animation 3's "click"
+and "click-and-hold" needed to become 2 separate, complete outcomes
+rather than the OLD design (hold always previews, EVERY release plays
+A/B regardless of hold duration) -- onPointerUp's holdingFlick===3
+branch now checks flickHoldTime against HOLD_THRESHOLD_MS (reusing the
+same click-vs-hold cutoff the rope/circle gesture already uses): a
+quick release still plays A/B exactly like before, but a genuine hold
+just ends the C-loop on release, with no A/B afterward. This
+interaction-design choice was inferred from the request's own parallel
+"on click, X. On click and hold, Y." phrasing, not confirmed explicitly
+-- flagged to the user as an assumption worth correcting if wrong, per
+this project's own "surface interpretation choices rather than
+silently guess" precedent.
+
+Found and fixed a real bug during live verification, not anticipated up
+front: a fresh page load threw "Cannot read properties of undefined"
+every frame, traced to the visitor's own already-saved settings
+(git-tracked JSON) still carrying an OLD numeric flick3Source value
+('5') that no longer matches any key in the new TWOTONED_SETS-keyed
+data. Fixed 2 ways -- flick3Frames()/flick3HoldFrames() now fall back
+to the first real set (TWOTONED_KEYS[0]) whenever cfg.flick3Source
+doesn't match, AND the actual saved
+data/processed/dev-panel-settings.json was corrected to a valid value
+directly, so the dev panel's own dropdown doesn't show a stale/blank
+selection either.
+
+Verification: node --check clean; all 151 /2TONED/ webp requests (2
+full page loads' worth, 302 total) came back 200 OK, zero 404s; the
+dropdown's 5 options and default were confirmed via an
+accessibility-tree readback, and switching between 2 of them (Above,
+Side Behind) was confirmed to trigger new, correctly-loading image
+requests; a real dispatched click through the actual production
+event-handling code (not a reimplementation) correctly logged
+"up:flick3-play heldMs:0", confirming the quick-click path end-to-end
+including the new threshold logic. The genuine-HOLD path's own
+animation completion was NOT confirmed live -- this session's Browser
+pane reported itself "hidden" again (the same
+document.hidden/requestAnimationFrame-suspension limitation this
+file's own history already documents), so a dispatched
+500ms-hold-then-release never actually observed the C sequence advance
+in the time available; ruled out a render-crash explanation instead
+via a live console.error capture (zero new errors across 2 separate
+fresh listening windows), and independently verified the
+forward-then-loop-tail frame-index math correct in isolation via Node.
+Worth a real play-test to confirm the hold animation completes/loops
+as intended. Updated docs/PROJECT_PROGRESS.md (rewrote the Animation 3
+section in place, since most of what it described was now stale,
+rather than appending a patch note under it) and this file.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

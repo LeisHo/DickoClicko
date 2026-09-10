@@ -648,38 +648,83 @@ additions. Current state of each subsystem:
   index.html for the current frame-number lists, and re-verify them by
   hand (`ls` both folders) any time either one's contents change --
   placed above animation 1 by default) plays one forward pass (1->N).
-  Animation 3 (added this session, PNGs not WebP) is the SAME "folder A
-  forward then folder B reversed" design as animation 2, but sourced
-  from `data/FLICK/Genereated/<N>/A` and `.../B` where N is switchable
-  at runtime via a new Flick3 Frame Set dropdown (values 1/2/3, per
-  explicit request) -- `flickFrames3BySource` preloads all 3 sets'
-  worth of Image objects up front so switching the dropdown never waits
-  on a fresh fetch. All 3 sets share the same frame-number pattern
-  (`GENERATED_A_FRAME_NUMBERS`/`GENERATED_B_FRAME_NUMBERS` in index.html,
-  8 + 15 = 23 frames each) but differ in their filenames' own trailing
-  `(7)`/`(6)`/`(5)` batch-number suffix (`GENERATED_SOURCE_SUFFIX`) --
-  re-verify both by hand (`ls` each of the 6 folders) if any set's own
-  contents ever change. All 3 animations' Anim Speed
-  defaults are 3.2x (live values have since moved further via direct
-  tuning). Hit-test rects are computed every frame independent of image
-  load state, so a click works immediately on page load. A press while
-  that animation is already playing is ignored (not re-armed into
-  holding) so repeated impatient clicking can't interrupt/restart an
-  in-progress sequence. The hold-preview cycle itself now speeds up the
-  longer it's held, ramping linearly from 1x up to Flick Hold Max Speed
-  as elapsed hold time approaches Flick Hold Max Duration, then holding
-  flat at max past that point. A playing sequence pauses on whichever
-  frame isn't loaded yet instead of racing past it on a real-time clock.
-  Animation 3's own playback tick was NOT confirmed via live frame-by-
-  frame observation -- the Browser pane was hidden at the host level for
-  this whole task (`document.hidden`/`visibilityState` both confirmed
-  `true` even after explicitly fronting the tab), which suspends
-  requestAnimationFrame entirely regardless of which tab is selected;
-  everything NOT gated on rAF (frame loading -- all 23x3 URLs confirmed
-  200 OK; dev-panel rendering; click/hold state transitions, confirmed
-  live via console click-logs) checked out fine, and the tick logic
-  itself is structurally identical to animation 2's own already-proven
-  code.
+  Animation 3's own frame source has been fully REPLACED (2026-09-10,
+  per explicit request) -- no longer `data/FLICK/Genereated/<N>/A+B/C`
+  (5 numbered sets), now `data/FLICK/2TONED/<SET>/A+B/C` where SET is
+  one of 5 NAMED folders (ABOVE, SIDE BEHIND, SIDE FRONT, SIDE PINKY,
+  SIDE THUMB -- `TWOTONED_SETS` in index.html maps each dropdown value
+  to its real folder name and its own filename prefix, e.g. `SIDE
+  BEHIND` -> `SideBehind_NNN.png`/`SideBehind-Charge_NNN.png`). Click
+  still plays the same "folder A forward, folder B reversed" design as
+  animation 2. B and C are genuinely uniform across all 5 sets (B:
+  1-15, C: 1-8) but A is NOT -- 4 of the 5 sets have 7 frames
+  ([1,3,7,9,11,13,14]), SIDE BEHIND alone has 8 (adds 15) -- re-verify
+  by hand (`ls` each set's A/B/C folder) and update
+  `TWOTONED_A_FRAMES`/`TWOTONED_B_FRAMES`/`TWOTONED_C_FRAMES` if any
+  set's own contents ever change. All 151 source PNGs (2400px wide)
+  were resized to 1400px and re-encoded as WebP via `sharp`, same
+  convention as every other FLICK animation (9.5MB PNG -> 1.6MB WebP).
+
+  Hold behavior is a genuinely NEW pattern, not the ping-pong animations
+  1/2 (and Animation 3's own PRIOR version) use: per explicit request
+  ("on click and hold, you play frames in C in sequence, then continue
+  looping, but WITHOUT the first frame in C"), `flick3HoldFrameIndex()`
+  plays C forward once in full (0..N-1), then loops just the TAIL
+  (1..N-1) for as long as the press is held -- frame 0 is shown exactly
+  once, ever, per hold. "Click" and "click-and-hold" are now 2 SEPARATE,
+  complete behaviors rather than one (hold-preview) leading into the
+  other (click's own A/B sequence on every release, regardless of hold
+  duration) the way animations 1/2 and Animation 3's own prior version
+  worked: `onPointerUp` now reuses `HOLD_THRESHOLD_MS` (the same
+  click-vs-hold cutoff the rope/circle gesture already uses) to tell a
+  genuine hold (release just ends the C loop, no A/B afterward) from a
+  quick click (plays A/B, exactly like before). This interaction-design
+  choice (hold and click as independent outcomes, not hold-previews-
+  then-click-confirms) was inferred from the request's own parallel
+  phrasing ("on click, X. On click and hold, Y.") rather than confirmed
+  explicitly -- worth flagging to the user if it doesn't match intent.
+
+  Found and fixed one real bug during verification: a visitor's already-
+  saved settings (git-tracked JSON or localStorage) can still carry one
+  of the OLD numeric `flick3Source` values ('1'-'5'), which no longer
+  matches any entry in the new `TWOTONED_SETS`-keyed data -- reproduced
+  live (threw "Cannot read properties of undefined" every frame on a
+  fresh load with the old saved value) and fixed 2 ways: `flick3Frames()`/
+  `flick3HoldFrames()` now fall back to the first real set when
+  `cfg.flick3Source` doesn't match, and the actual saved
+  `data/processed/dev-panel-settings.json` was updated to a valid value
+  directly (its `flick3Source` had drifted to `"5"` from earlier testing).
+
+  Verified: all 151 `/2TONED/` network requests (2 full page loads'
+  worth) came back 200 OK, zero 404s; the dropdown shows and correctly
+  switches between exactly the 5 new named options (confirmed via
+  accessibility-tree readback); a real dispatched click through the
+  actual production code (not a reimplementation) correctly logged
+  `up:flick3-play heldMs:0`, confirming the quick-click path end-to-end.
+  The genuine-HOLD path's own animation completion was NOT confirmed
+  live -- this session's Browser pane reported itself `hidden` again
+  (same `document.hidden`/rAF-suspension limitation noted in this file's
+  own history above), so a dispatched 500ms hold never actually advanced
+  past frame 0 in the time available; a live capture of `console.error`
+  found zero NEW errors over multiple fresh windows (ruling out the
+  render-crash hypothesis), and the forward-then-loop-tail frame-index
+  math was verified correct in isolation via Node. Worth a real play-test
+  to confirm the hold animation actually completes/loops as intended.
+  All 3 animations' Anim Speed defaults are 3.2x (live values have since
+  moved further via direct tuning). Hit-test rects are computed every
+  frame independent of image load state, so a click works immediately on
+  page load. A press while that animation is already playing is ignored
+  (not re-armed into holding) so repeated impatient clicking can't
+  interrupt/restart an in-progress sequence. Animations 1/2's own
+  hold-preview cycle still speeds up the longer it's held, ramping
+  linearly from 1x up to Flick Hold Max Speed as elapsed hold time
+  approaches Flick Hold Max Duration, then holding flat at max past that
+  point -- Animation 3's own hold no longer uses this ramping constant
+  for its SEQUENCE shape (forward-then-loop-tail is fixed), but still
+  shares the same underlying `flickHoldCyclePos` accumulator, so the
+  ramp still governs how FAST it advances through that sequence. A
+  playing sequence pauses on whichever frame isn't loaded yet instead of
+  racing past it on a real-time clock.
   All 42 frames across the 3 folders were originally 6870x6166px PNGs
   (up to 760KB each) despite rendering at only 50% vmin on screen --
   fine on the local dev server's cache but on the deployed Vercel site
