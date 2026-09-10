@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 27.442105263157828,
+    "ropeLength": 15.0616341328112,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -97,7 +97,7 @@
     ],
     "arcSeamOverlapPx": 2.8,
     "clickIntensity": 1.1,
-    "holdDistance": 22.5,
+    "holdDistance": 28.5,
     "bendStiffness": 0.01,
     "ropeAnimSpeed": 1.2,
     "gravityStrength": 1.7,
@@ -107,8 +107,8 @@
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 8.4,
     "minRopeLength": 2.6,
-    "clickDistance": 15,
-    "doubleClickDistance": 15,
+    "clickDistance": 20,
+    "doubleClickDistance": 20,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.1,
@@ -169,7 +169,7 @@
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
     "flickEnabled": true,
-    "flickSource": "side-pinky-2",
+    "flickSource": "above",
     "flickX": 28,
     "flickY": 67,
     "flickScale": 120,
@@ -180,7 +180,7 @@
     "flick2Scale": 39.5,
     "flick2AnimSpeed": 4.4,
     "flick3Enabled": true,
-    "flick3Source": "side-thumb-scissor",
+    "flick3Source": "side-thumb",
     "flick3X": 79,
     "flick3Y": 67,
     "flick3Scale": 120,
@@ -231,7 +231,7 @@
     },
     {
       "key": "New Group",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [],
       "subgroups": []
     },
@@ -250,7 +250,7 @@
     },
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flick3Enabled",
         "flick3Source",
@@ -352,7 +352,7 @@
     },
     {
       "key": "ROPE CUT",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "doubleClickDistance",
         "clickDistance",
@@ -371,7 +371,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "pieceGradientEnabled",
         "pieceGradientColors",
@@ -398,7 +398,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
@@ -410,7 +410,7 @@
     },
     {
       "key": "CLICK",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "clickIntensity",
         "holdDistance"
@@ -419,7 +419,7 @@
     },
     {
       "key": "ROPE GROWTH",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "ropeGrowthRate",
         "clickHoldMaxDuration",
@@ -458,10 +458,10 @@
   ],
   "panelGeometry": {
     "mobile": {
-      "left": 155.17857360839844,
-      "top": 467.9940490722656,
+      "left": 182,
+      "top": 155.13690185546875,
       "width": 229,
-      "height": 272.3809509277344,
+      "height": 448.2083435058594,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
