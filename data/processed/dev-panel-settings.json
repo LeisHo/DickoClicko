@@ -190,51 +190,6 @@
   },
   "order": [
     {
-      "key": "FLICK ANIMATION 3",
-      "collapsed": false,
-      "settings": [
-        "flick3Source",
-        "flick3X",
-        "flick3Y",
-        "flick3Scale",
-        "flick3AnimSpeed"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "FLICK ANIMATION",
-      "collapsed": false,
-      "settings": [
-        "flickSource",
-        "flickX",
-        "flickY",
-        "flickScale",
-        "flickAnimSpeed"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "FLICK ANIMATION 2",
-      "collapsed": true,
-      "settings": [
-        "flick2X",
-        "flick2Y",
-        "flick2Scale",
-        "flick2AnimSpeed"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "RIGHT CLICK",
-      "collapsed": true,
-      "settings": [
-        "ropeAttractionIntensity",
-        "ropeAttractionSpeed",
-        "ropeAttractionMaxReach"
-      ],
-      "subgroups": []
-    },
-    {
       "key": "DEV PANEL",
       "collapsed": true,
       "settings": [
@@ -262,6 +217,57 @@
         "bodyFontSize",
         "bgColor",
         "textColor"
+      ],
+      "subgroups": []
+    },
+    {
+      "key": "New Group",
+      "collapsed": false,
+      "settings": [],
+      "subgroups": []
+    },
+    {
+      "key": "FLICK ANIMATION 3",
+      "collapsed": true,
+      "settings": [
+        "flick3Source",
+        "flick3X",
+        "flick3Y",
+        "flick3Scale",
+        "flick3AnimSpeed"
+      ],
+      "subgroups": []
+    },
+    {
+      "key": "FLICK ANIMATION",
+      "collapsed": true,
+      "settings": [
+        "flickSource",
+        "flickX",
+        "flickY",
+        "flickScale",
+        "flickAnimSpeed"
+      ],
+      "subgroups": []
+    },
+    {
+      "key": "FLICK ANIMATION 2",
+      "collapsed": true,
+      "settings": [
+        "flick2X",
+        "flick2Y",
+        "flick2Scale",
+        "flick2AnimSpeed"
+      ],
+      "subgroups": []
+    },
+    {
+      "key": "RIGHT CLICK",
+      "collapsed": true,
+      "settings": [
+        "ropeAttractionIntensity",
+        "ropeAttractionSpeed",
+        "ropeAttractionMaxReach"
       ],
       "subgroups": []
     },
@@ -504,5 +510,7 @@
       }
     }
   },
-  "textOverrides": {}
+  "textOverrides": {
+    "group:New Group": "FLICK ANIMATIONS"
+  }
 }
