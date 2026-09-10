@@ -2239,12 +2239,45 @@ function flick1HoldFrameIndex(){
   return 1 + ((pos - n) % (n - 1));
 }
 
+// Per-pixel alpha hit-test, shared by all 3 FLICK animations' own
+// isPointInFlick*() below -- reported directly: "make sure it only
+// triggers when i click within the visible parts of the pngs... right
+// now it is triggered when i click very far from it." Every prior
+// isPointInFlick*() only ever checked the bounding RECT (matching the
+// image's own drawn width/height), never whether the clicked pixel was
+// actually opaque -- a source PNG with real transparent margin around
+// its visible content (common for these hand-pose frames, none of which
+// were cropped tight) let a click anywhere in that invisible margin
+// still register as a hit. Draws just the 1 relevant source pixel into a
+// shared 1x1 offscreen canvas and reads its alpha back rather than
+// precomputing/caching a full per-image alpha map -- cheap enough to run
+// on every pointerdown (a rare, human-paced event, not a per-frame cost).
+const hitTestCanvas = document.createElement('canvas');
+hitTestCanvas.width = 1; hitTestCanvas.height = 1;
+const hitTestCtx = hitTestCanvas.getContext('2d', { willReadFrequently: true });
+const ALPHA_HIT_THRESHOLD = 10; // out of 255 -- lets a barely-visible anti-aliased edge pixel still count as a real hit, not just fully-opaque
+function isPixelVisible(img, rectX, rectY, rectW, rectH, x, y){
+  if (!img || !img.complete || img.naturalWidth === 0 || rectW <= 0 || rectH <= 0) return false;
+  if (x < rectX || x > rectX + rectW || y < rectY || y > rectY + rectH) return false;
+  const nx = Math.min(img.naturalWidth - 1, Math.max(0, Math.floor((x - rectX) / rectW * img.naturalWidth)));
+  const ny = Math.min(img.naturalHeight - 1, Math.max(0, Math.floor((y - rectY) / rectH * img.naturalHeight)));
+  hitTestCtx.clearRect(0, 0, 1, 1);
+  hitTestCtx.drawImage(img, nx, ny, 1, 1, 0, 0, 1, 1);
+  return hitTestCtx.getImageData(0, 0, 1, 1).data[3] > ALPHA_HIT_THRESHOLD;
+}
+
 // The rect drawn in render(), kept in sync there each frame -- same
-// pattern as flick2Rect/isPointInFlick2 below.
+// pattern as flick2Rect/isPointInFlick2 below. Still the first, cheap
+// reject isPixelVisible() itself also checks -- the rect and the pixel
+// check are complementary, not redundant: the rect alone (old behavior)
+// was too PERMISSIVE (any point inside the box, including transparent
+// margin, counted); pixel-alpha alone with no rect pre-check would still
+// work correctly but the rect keeps the common case (a click nowhere
+// near the graphic at all) a simple bounds compare instead of always
+// touching the canvas.
 const flickRect = { x: 0, y: 0, w: 0, h: 0 };
 function isPointInFlick(x, y){
-  return x >= flickRect.x && x <= flickRect.x + flickRect.w &&
-         y >= flickRect.y && y <= flickRect.y + flickRect.h;
+  return isPixelVisible(flickFrames()[0], flickRect.x, flickRect.y, flickRect.w, flickRect.h, x, y);
 }
 
 // FLICK animation 2 -- a second, independent graphic, placed above the
@@ -2353,8 +2386,7 @@ function flick2FrameIndex(){
 // live Flick2 X/Y/Scale slider values.
 const flick2Rect = { x: 0, y: 0, w: 0, h: 0 };
 function isPointInFlick2(x, y){
-  return x >= flick2Rect.x && x <= flick2Rect.x + flick2Rect.w &&
-         y >= flick2Rect.y && y <= flick2Rect.y + flick2Rect.h;
+  return isPixelVisible(flickFrames2[0], flick2Rect.x, flick2Rect.y, flick2Rect.w, flick2Rect.h, x, y);
 }
 
 // FLICK animation 3 -- same "folder A forward, folder B reversed" design
@@ -2516,8 +2548,7 @@ function flick3HoldFrameIndex(){
 
 const flick3Rect = { x: 0, y: 0, w: 0, h: 0 };
 function isPointInFlick3(x, y){
-  return x >= flick3Rect.x && x <= flick3Rect.x + flick3Rect.w &&
-         y >= flick3Rect.y && y <= flick3Rect.y + flick3Rect.h;
+  return isPixelVisible(flick3Frames()[0], flick3Rect.x, flick3Rect.y, flick3Rect.w, flick3Rect.h, x, y);
 }
 
 /* ---------------------------------------------------------------------
