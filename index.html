@@ -84,7 +84,20 @@
     margin-left:8px; padding-left:6px; border-top:none; border-left:2px solid #33333f;
   }
   .dp-group-body > .dp-group > .dp-group-header { font-size:calc(var(--dp-group-size, 11px) * 0.9); }
-  .dp-group-body > .dp-group > .dp-group-body:empty {
+  /* An empty group's own body needs a visible/hittable drop target at 0
+     rows -- previously scoped to `.dp-group-body > .dp-group > ...`,
+     which only ever matches an ALREADY-NESTED empty group (its own
+     ancestor chain requires an outer .dp-group-body). A TOP-LEVEL empty
+     group (e.g. freshly created via "+ Add Group", which appends
+     directly under #dpGroups) never matched that selector, so its body
+     collapsed to a real 0px-height rect with no visual affordance --
+     confirmed as the actual reported bug ("still can't nest existing
+     groups into an empty group"): dragging another group onto a
+     TOP-LEVEL empty one had no visible drop zone to aim at. Broadened
+     to plain `.dp-group-body:empty` (same specificity, no ancestor
+     requirement) so both nested and top-level empty groups get the
+     same dashed 20px drop zone. */
+  .dp-group-body:empty {
     min-height:20px; border:1px dashed #3a3a4a; border-radius:3px; opacity:.5;
   }
   .dp-group-header {
