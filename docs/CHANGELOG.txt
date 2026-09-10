@@ -9502,3 +9502,50 @@ and returns to idle.
 Committed/pushed code+assets (a20b56b) -- fetch confirmed no
 divergence -- then this doc pass as a separate follow-up, per the
 standing instruction.
+
+================================================================================
+2026-09-10  -  06:01 PM EDT
+
+"i updated the base frames again. update and push" -- a follow-up
+round to the previous base-frame trim. Enumerated all 8 directions'
+current PNG lists before touching code (the now-standing discipline
+for every round): found ALL 8 directions changed this time (the
+previous round's 2 untouched directions, BEHIND PINKY and BEHIND
+THUMB, are no longer exempt), each a further SUBSET of its own
+previous round's frame set -- confirmed both by direct number
+comparison and by `git status` showing pure deletions with zero
+untracked/modified files across every one of the 8 "A" subfolders.
+
+2 distinct new patterns emerged (not a single uniform trim across all
+8): BEHIND and BEHIND PINKY share an 8-frame set [1,5,9,13,15,17,19,
+20]; the other 6 directions (BEHIND THUMB, SIDE THUMB, FRONT THUMB,
+FRONT, FRONT PINKY, SIDE PINKY) share a 9-frame set [1,5,9,11,13,15,
+17,19,20] -- one number apart (11) from the first group's set, a real
+difference, not a rounding/typo. Prefixes unchanged for all 8 both
+rounds now, purely a frame-count reduction each time.
+
+Updated the existing `BASE_A_FRAME_NUMBERS` constant in place to the
+new 9-number list (now used by 6 directions, up from its prior 6 --
+BEHIND THUMB joined, BEHIND left), and added a second shared constant
+`BASE_A_FRAME_NUMBERS_8` for the 2-direction 8-number set -- same
+"shared array reference when multiple sets share an identical list"
+convention already established for `SCISSOR_A_FRAME_NUMBERS` earlier
+in this file. Verified 0 missing across 70 expected PNG paths (2x8 +
+6x9), 0 case collisions via the established scanner (run against the
+immediately-previous commit 0482acb).
+
+Staged scoped to each direction's own "A" subfolder specifically, not
+the bare folder name -- confirmed once more that a bare-folder-name
+pathspec (e.g. "data/FLICK/2TONED/SIDE THUMB/") still sweeps in the
+pre-existing, deliberately-untouched old Animation 1/3 B/C-subfolder
+deletions living under these same 8 folder names (this project's own
+now-documented trap from the previous base-frame round). Verified live
+via a temporary debug hook (grep-confirmed removed, node --check
+clean): click sequence length now correctly 15 (8+7) for BEHIND/
+BEHIND PINKY and 17 (9+8) for the other 6, 0 broken images across all
+8, and a real click playback (behind-pinky) correctly plays through
+its new 8-frame-based sequence and returns to idle.
+
+Committed/pushed code+assets (f4166cc) -- fetch confirmed no
+divergence -- then this doc pass as a separate follow-up, per the
+standing instruction.

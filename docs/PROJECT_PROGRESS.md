@@ -61,13 +61,27 @@ contiguous 13-20 tail, 14 frames total); BEHIND PINKY and BEHIND THUMB
 were untouched, still the full contiguous 1-20. This broke the base
 loader's implicit "always contiguous 1..count" assumption (still true
 for charge/sciss/snap) -- `MOUSE_FLICK_DIRECTIONS`'s `base` variant now
-accepts an explicit `nums` array (a shared `BASE_A_FRAME_NUMBERS`
-constant for the 6 changed directions), falling back to the existing
-`count`-based range for the 2 unchanged ones, mirroring the
-`TWOTONED_A_FRAMES`-style pattern already used elsewhere in this file
-for non-contiguous 2TONED sets. Click sequence length is now 27
-(14+13) for the 6 changed directions, still 39 (20+19) for the other
-2 -- verified live via debug hook, 0 broken images. New "FLICK MOUSE" dev-panel group
+accepts an explicit `nums` array, falling back to the existing
+`count`-based range when absent, mirroring the `TWOTONED_A_FRAMES`-
+style pattern already used elsewhere in this file for non-contiguous
+2TONED sets. **Trimmed further in a follow-up round** (same
+2026-09-10, "i updated the base frames again") -- this time ALL 8
+directions changed (BEHIND PINKY/BEHIND THUMB no longer exempt), each
+a further SUBSET of its own previous frame set, in 2 distinct
+patterns: BEHIND + BEHIND PINKY share an 8-frame set
+(`BASE_A_FRAME_NUMBERS_8 = [1,5,9,13,15,17,19,20]`), the other 6 share
+a 9-frame set (`BASE_A_FRAME_NUMBERS`, updated in place to
+`[1,5,9,11,13,15,17,19,20]`) -- prefixes unchanged both times, purely
+a frame-count reduction. Click sequence length is now 15 (8+7) for
+BEHIND/BEHIND PINKY and 17 (9+8) for the other 6 -- verified live via
+debug hook both rounds, 0 broken images each time. Staging both
+rounds required scoping `git add` to each direction's own `A`
+subfolder specifically (never the bare folder name), since "SIDE
+THUMB"/"SIDE PINKY" (and by extension any of these 8 folder names)
+still hold the pre-existing, deliberately-untouched old Animation 1/3
+B/C-subfolder deletions from this feature's own first round -- a bare
+folder-name pathspec sweeps those in too (128 D vs. the real 36 D,
+confirmed the first time this was hit). New "FLICK MOUSE" dev-panel group
 (Enabled/Scale/Anim Speed/Position & Rotation Smoothing/Angle
 Offset/Hold Max Speed &
 Duration). Gesture listeners are fully independent of the rope's own
