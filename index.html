@@ -2186,8 +2186,8 @@ function isPointInFlick(x, y){
 // data/FLICK/ANI/2`) and update these 2 arrays any time either folder's
 // own contents change; nothing here derives them automatically (this is
 // a static single-file app with no server-side directory listing).
-const ANI1_FRAMES = [1, 2, 3, 4, 7, 10, 11, 12, 13, 15, 16];
-const ANI2_FRAMES = [1, 2, 3, 5, 6, 11, 13, 15, 16];
+const ANI1_FRAMES = [1, 2, 3, 4, 7, 10, 11, 13, 15, 16];
+const ANI2_FRAMES = [1, 2, 3, 4, 7, 10, 11, 13, 15, 16];
 // Rests on frame 1 (not auto-playing) until clicked, per explicit
 // request -- flick2Playing gates whether flick2AnimTime advances at all
 // (see update() and the pointerdown hit-test below); once started it

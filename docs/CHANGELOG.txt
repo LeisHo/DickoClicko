@@ -8620,6 +8620,55 @@ flat near the floor, not sliding off-frame) in addition to the numeric
 centroid tracking above. Updated CHANGELOG.txt and PROJECT_PROGRESS.md.
 
 ================================================================================
+2026-09-10  -  02:39 AM EDT
+
+"ive updated animation frames for Animation 1 and 2" -- same recurring
+gotcha as 4 prior rounds (git log: 1aeea16, d567563, 39d2649, 6b4572f):
+the user edits the source PNGs in data/FLICK/ANI/, ANI/1/, and ANI/2/,
+the game only ever loads the matching .webp, so the two drift apart
+until the webp is regenerated. Checked via `git status` against the
+tracked baseline (more reliable than eyeballing mtimes) rather than
+assuming this was another pure content-refresh round:
+
+- ANI/ (Animation 1's own 17-frame sequence): 7 frames modified in place
+  (04, 07, 10, 11, 13, 15, 16) -- content refresh only, all 17 numbered
+  slots still present, FLICK_FRAME_COUNT stays 17.
+- ANI/1 (Animation 2's forward pass): same 7 frames modified, PLUS
+  FRAMES-12.png deleted -- a real sequence change, not just content.
+- ANI/2 (Animation 2's reverse pass): FRAMES-05/06 deleted entirely
+  (both formats), FRAMES-12 deleted, and 3 BRAND NEW frames added
+  (04, 07, 10, previously not part of this folder at all) alongside
+  content edits to 11/13/15/16.
+
+Net result: ANI/1 and ANI/2 now hold the exact SAME frame-number set --
+[1, 2, 3, 4, 7, 10, 11, 13, 15, 16], 10 frames each (previously 11 and
+9 respectively, with different numbers). Updated ANI1_FRAMES/ANI2_FRAMES
+in index.html to match exactly (both arrays now identical, which is a
+real fact about the current source folders, not a copy-paste mistake --
+double-checked via a clean `ls ... | grep '\.png$'` on both folders
+independently before writing the code change). Deleted the orphaned
+ANI/1/FRAMES-12.webp too (git rm) since its PNG source is gone and the
+frame is no longer referenced -- unlike the general "keep old source
+PNGs around" convention, this is a derived artifact with nothing left
+to derive it from.
+
+Regenerated all 21 stale/missing .webp files (7 in ANI/, 7 in ANI/1, 7
+in ANI/2 -- the 3 new ANI/2 frames had no .webp at all yet) via `sharp`
+(installed fresh, ~4s; resize to 1400px wide, quality 90 -- same
+convention as every prior round). Verified end-to-end via the actual
+running page rather than just checking files exist: read every real
+network request the page made for `/ANI/` paths -- all 41 (17 + 10 +
+10 + 4 for animation 3's own untouched preview assets) came back
+200 OK, with the exact 10 frame numbers requested from both ANI/1 and
+ANI/2 matching the new arrays precisely (no request for the deleted
+5/6/12, a real request for the new 4/7/10). Full syntax check passed
+(node --check on the extracted inline script). Not committed via a
+broad `git add -A` -- node_modules (sharp, just installed) and this
+project's usual pile of unrelated untracked FLICK assets were left
+alone; only the actual changed/new/deleted ANI files plus index.html
+were staged.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
