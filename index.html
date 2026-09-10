@@ -2789,6 +2789,10 @@ let mfFrozenFrames = null; // the click/sciss/snap frame array captured at trigg
 let mfHoldCyclePos = 0, mfHoldTime = 0;
 let mfHoldTimer = null;
 let mfPendingClick = null; // {time, timer} -- same setTimeout-pairing technique as the rope's own double-click-to-cut (see CLAUDE.md gotchas)
+// Live right-button-down state (distinct from the one-shot SNAP trigger
+// on pointerdown) -- needed for the SNAP freeze-at-frame-42 mechanic
+// (see the pointerup listener and update()'s own SNAP-freeze comment).
+let mfRightDown = false;
 
 function mouseFlickDirection(){ return MOUSE_FLICK_DIRECTIONS.find(d => d.key === mfDirectionKey) || MOUSE_FLICK_DIRECTIONS[0]; }
 // "Up" (0°) = directly above viewport center, angle increases clockwise
@@ -2811,6 +2815,66 @@ function mouseFlickAngleLerp(current, target, factor){
 function mouseFlickExpSmoothFactor(smoothing, dt){
   if (smoothing >= 1) return 1;
   return 1 - Math.pow(1 - smoothing, dt * 60);
+}
+// The real frame-NUMBER array a variant's forward-ordered frames
+// correspond to (not array index) -- variant.nums when present
+// (non-contiguous sets, e.g. base's own trimmed sets), else the
+// implied contiguous 1..count range. Used by mouseFlickRemapSequence()
+// below to preserve "same frame number, nearest if missing" across a
+// mid-sequence direction switch (explicit spec, point 3).
+function mouseFlickVariantNumbers(variant){
+  return variant.nums || Array.from({ length: variant.count }, (_, i) => i + 1);
+}
+function mouseFlickNearestIndex(numbers, target){
+  let bestIdx = 0, bestDiff = Infinity;
+  numbers.forEach((n, i) => {
+    const diff = Math.abs(n - target);
+    if (diff < bestDiff){ bestDiff = diff; bestIdx = i; }
+  });
+  return bestIdx;
+}
+// Mid-sequence direction switch for click/sciss/snap (charge needs no
+// equivalent -- see its own comment at the mfMode==='charge' direction-
+// switch call site for why). Per explicit spec: continue the sequence
+// in the new direction "from the same frame number; if that exact
+// frame number does not exist...use the next closest frame number,"
+// and this applies even mid-sequence, not just while idle.
+//
+// click's own forward-then-mirrored-reverse shape needs to know which
+// half of the sequence the current position falls in (so the NEW
+// position mirrors correctly too); sciss/snap are plain forward-only,
+// no mirroring. Preserves the sub-frame fractional part of
+// mfFrameAccum so playback speed doesn't visibly stutter at the switch
+// instant.
+function mouseFlickRemapSequence(newKey){
+  const oldDir = mouseFlickDirection();
+  const newDir = MOUSE_FLICK_DIRECTIONS.find(d => d.key === newKey);
+  if (!newDir) return;
+  const variantKey = mfMode === 'click' ? 'base' : mfMode;
+  const oldNumbers = mouseFlickVariantNumbers(oldDir[variantKey]);
+  const newNumbers = mouseFlickVariantNumbers(newDir[variantKey]);
+  const newFrames = mouseFlickFramesByDirection[newKey] && mouseFlickFramesByDirection[newKey][mfMode];
+  if (!newFrames || !newFrames.length || !oldNumbers.length || !newNumbers.length) return;
+  const p = Math.floor(mfFrameAccum);
+  const frac = mfFrameAccum - p;
+  let currentNumber, forwardHalf = true;
+  if (mfMode === 'click'){
+    const n = oldNumbers.length;
+    if (p < n){ currentNumber = oldNumbers[p]; forwardHalf = true; }
+    else { currentNumber = oldNumbers[Math.max(0, Math.min(n - 1, 2 * n - 2 - p))]; forwardHalf = false; }
+  } else {
+    currentNumber = oldNumbers[Math.max(0, Math.min(oldNumbers.length - 1, p))];
+  }
+  const newIdx = mouseFlickNearestIndex(newNumbers, currentNumber);
+  let newPos;
+  if (mfMode === 'click' && !forwardHalf){
+    const n2 = newNumbers.length;
+    newPos = Math.max(0, 2 * n2 - 2 - newIdx);
+  } else {
+    newPos = newIdx;
+  }
+  mfFrameAccum = newPos + frac;
+  mfFrozenFrames = newFrames;
 }
 // Starts a fresh click/sciss/snap play (forward, or forward+reverse for
 // click) -- ignored if a mode is already active, same "in-progress
@@ -5663,9 +5727,11 @@ window.addEventListener('pointermove', e => {
 canvas.addEventListener('pointerdown', e => {
   if (!cfg.mouseFlickEnabled) return;
   if (e.button === 2){
-    // Right click OR right-click-hold: per explicit request, both play
-    // the SAME thing (SNAP, forward once) -- nothing to distinguish by
-    // duration, so this fires once per press, ignored while busy.
+    // Right click OR right-click-hold: per explicit request, both TRIGGER
+    // the same way (fires once per press, ignored while busy) -- what
+    // happens WHILE held is governed by mfRightDown below (see the SNAP
+    // freeze-at-frame-42 comment in update()).
+    mfRightDown = true;
     mouseFlickStartPlay('snap');
     return;
   }
@@ -5678,7 +5744,16 @@ canvas.addEventListener('pointerdown', e => {
   mfHoldTimer = setTimeout(() => { mouseFlickStartCharge(); }, cfg.doubleClickThreshold);
 });
 window.addEventListener('pointerup', e => {
-  if (!cfg.mouseFlickEnabled || e.button !== 0) return;
+  if (!cfg.mouseFlickEnabled) return;
+  if (e.button === 2){
+    // Release of a held right-click -- if SNAP is currently frozen at
+    // frame 42 (see update()'s own comment), this is what lets it
+    // resume and play out its last remaining frames. Nothing further
+    // to do here: the freeze condition itself just stops being true.
+    mfRightDown = false;
+    return;
+  }
+  if (e.button !== 0) return;
   clearTimeout(mfHoldTimer);
   if (mfMode === 'charge'){
     mouseFlickEndCharge();
@@ -5703,7 +5778,7 @@ window.addEventListener('pointerup', e => {
     }, cfg.doubleClickThreshold),
   };
 });
-window.addEventListener('pointercancel', () => { clearTimeout(mfHoldTimer); if (mfMode === 'charge') mouseFlickEndCharge(); });
+window.addEventListener('pointercancel', () => { clearTimeout(mfHoldTimer); mfRightDown = false; if (mfMode === 'charge') mouseFlickEndCharge(); });
 
 /* ---------------------------------------------------------------------
    Update / render loop
@@ -6366,14 +6441,30 @@ function update(rawDt){
     const mfTargetAngle = mouseFlickAngleFromCenter(mfX, mfY, mfCx, mfCy);
     const mfRotFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickRotationSmoothing, rawDt);
     mfEntityAngleDeg = mouseFlickAngleLerp(mfEntityAngleDeg, mfTargetAngle, mfRotFactor);
-    // Direction bucket only switches while idle -- an in-progress
-    // click/sciss/snap/charge sequence keeps playing its already-frozen
-    // frame set to completion even if the mouse crosses a sector
-    // boundary mid-play (same "frozen sequence" design as DotFlicko's
-    // own playSequenceFrozen), while rotation above still follows the
-    // mouse live throughout.
-    if (mfMode === 'idle'){
-      mfDirectionKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfTargetAngle)].key;
+    // Direction bucket switches EVERY frame now, even mid-sequence/hold
+    // (per explicit spec, point 3: "angle thresholds apply even during
+    // mid animation sequence") -- no longer idle-only. While idle, this
+    // is a plain reassignment (nothing else to preserve). While a
+    // click/sciss/snap sequence is playing, mouseFlickRemapSequence()
+    // re-targets mfFrozenFrames/mfFrameAccum onto the new direction's
+    // own array at the SAME REAL FRAME NUMBER (nearest available if
+    // that exact number doesn't exist there -- point 3's own spec),
+    // preserving the sub-frame fraction so playback speed doesn't
+    // visibly stutter at the switch instant. charge needs no equivalent
+    // remap call: charge frame counts are uniform (8, contiguous) across
+    // every direction as of this writing, so simply swapping which
+    // direction's array mfHoldCyclePos indexes into already preserves
+    // position AND already satisfies "never repeat frame 0" for free --
+    // the existing chargeIdx formula below only ever resolves to 0
+    // during the very first fractional frame of the WHOLE hold
+    // (mfHoldCyclePos in [0,1)), which is direction-independent by
+    // construction, not something a mid-hold switch could re-trigger.
+    const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfTargetAngle)].key;
+    if (mfTargetDirKey !== mfDirectionKey){
+      if (mfMode === 'click' || mfMode === 'sciss' || mfMode === 'snap'){
+        mouseFlickRemapSequence(mfTargetDirKey);
+      }
+      mfDirectionKey = mfTargetDirKey;
     }
     if (mfMode === 'charge'){
       mfHoldTime += rawDt;
@@ -6387,11 +6478,24 @@ function update(rawDt){
       // shouldn't silently truncate the sequence's visible frame count.
       const mfIdx = Math.min(Math.floor(mfFrameAccum), mfFrozenFrames.length - 1);
       if (!isFrameBlocking(mfFrozenFrames[mfIdx])){
-        mfFrameAccum += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
-        if (Math.floor(mfFrameAccum) >= mfFrozenFrames.length){
-          mfMode = 'idle';
-          mfFrozenFrames = null;
-          mfFrameAccum = 0;
+        // SNAP freeze: per explicit spec, if the right button is STILL
+        // held once playback reaches frame 42 (1-indexed -- array index
+        // 41), pause there instead of continuing to natural completion.
+        // Releasing simply stops this condition from being true, so the
+        // very next tick resumes advancing mfFrameAccum from right where
+        // it was pinned, playing out whatever frames remain (43,44,45 as
+        // of this writing) to a normal finish -- no separate "resume"
+        // code path needed. Guarded on the frame actually existing, so a
+        // direction/variant with 42 or fewer frames just plays through
+        // normally instead of freezing on nothing.
+        const mfSnapFrozen = mfMode === 'snap' && mfRightDown && mfFrozenFrames.length > 41 && mfIdx >= 41;
+        if (!mfSnapFrozen){
+          mfFrameAccum += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
+          if (Math.floor(mfFrameAccum) >= mfFrozenFrames.length){
+            mfMode = 'idle';
+            mfFrozenFrames = null;
+            mfFrameAccum = 0;
+          }
         }
       }
     }
