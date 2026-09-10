@@ -9337,3 +9337,60 @@ Per the standing "push before updating project docs" instruction,
 committed and pushed the code/asset commit (133dbd2) first -- fetch
 confirmed no divergence from origin/master -- THEN made this doc pass
 as a separate follow-up.
+
+================================================================================
+2026-09-10  -  04:14 PM EDT
+
+"Dev panel dissappears in the first seconds of startup in dev mode."
+A genuinely different bug from the earlier "dev panel no longer
+shows" report (which turned out to be a transient Vercel deploy-
+propagation delay, resolved on its own) -- this one is real and
+reproducible, distinguished by its specific timing ("first seconds").
+
+Investigated by reading the actual panel-positioning code rather than
+guessing: `applyPanelGeometry(geom)` sets `panel.style.left`/`top`
+directly from a saved geometry object, with NO viewport clamping at
+all. This function is called from `resetSettings()`'s own async
+settings fetch (`readSettingsViaApi()`, a real network request that
+resolves several seconds after the page's initial synchronous boot),
+so the panel starts at its safe default CSS position, then jumps to
+the SAVED position once that fetch resolves. `initPanelDrag()`
+already had a `clampToViewport()` function built for exactly this
+class of problem ("a saved geometry from a wider device, loaded fresh
+on a narrower one" -- added for an earlier, already-fixed "resize my
+browser to phone size" report), but it only ran ONCE synchronously at
+boot time (before the async geometry had landed, so nothing to clamp
+yet) and again on a real browser `resize` event -- which never fires
+for a user who doesn't actually resize their window after load. The
+live git-tracked settings file's own current desktop-tab geometry
+(`left: 1552.4375`) makes this concretely reproducible on any
+viewport narrower than ~1800px: the panel would land almost entirely
+off-screen to the right a few seconds after boot, exactly matching
+"disappears in the first seconds."
+
+Fix: extracted the clamp logic into a shared top-level
+`clampPanelToViewport()` (same formula, now referencing
+`document.getElementById('devPanel')` directly instead of closing
+over a local `panel` variable), and added the one call site that was
+actually missing it -- `applyPanelGeometry()` itself, immediately
+after it applies a loaded geom. `initPanelDrag()`'s own boot-time call
+and `resize` listener now both call the shared function too (no
+behavior change there, pure refactor). Verified live: manually loaded
+the exact reported-problematic geometry area by switching to the
+Desktop device tab (`initDeviceTabs()`'s own click handler also calls
+`applyPanelGeometry()`) on a 1280px-wide test viewport -- confirmed
+via `getBoundingClientRect()` that the panel's right edge now lands
+EXACTLY at `innerWidth` (flush against the viewport edge) instead of
+extending to the unclamped `1552+249=1801`. node --check clean
+throughout; no debug hook needed this round since the fix was
+verified through the panel's own real, already-exposed UI (device tab
+switching), not internal state. Confirmed no regression in the
+drag-to-move handler, which the fix left completely untouched (only
+the boot/resize-triggered clamp was refactored, not the pointermove-
+driven drag clamp, which has its own separate, already-correct inline
+formula).
+
+Per the standing "push before updating project docs" instruction,
+committed and pushed the code fix (f99e2c7) first -- fetch confirmed
+no divergence from origin/master -- THEN made this doc pass as a
+separate follow-up.

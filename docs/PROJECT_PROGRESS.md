@@ -85,6 +85,28 @@ rename on this project should re-run that same case-collision check
 before committing, not just a plain existence check (which, being
 case-insensitive on Windows too, would NOT have caught this).
 
+**Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
+startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
+from `resetSettings()`'s own async settings fetch, which resolves
+several seconds AFTER boot -- set the panel's saved `left`/`top` with
+NO viewport clamping. `initPanelDrag()` already had a
+`clampToViewport()` built specifically for "a saved geometry from a
+wider device, loaded fresh on a narrower one" (added for an earlier
+"resize my browser to phone size" report), but it only ran once
+synchronously at boot (before the async geometry landed) and on a
+real `resize` event -- which never fires for a user who doesn't
+actually resize their window. Net effect: the panel rendered fine at
+its safe default position for the first couple of seconds, then
+silently jumped to the unclamped saved position (e.g. `left:1552` on
+the live desktop-tab geometry) the moment the async fetch resolved --
+exactly matching the reported timing. Extracted the clamp into a
+shared `clampPanelToViewport()` and added the one call site that was
+actually missing it: `applyPanelGeometry()` itself, right after it
+applies a loaded geom. Verified live: switching device tabs (which
+also calls `applyPanelGeometry()`) with a saved position wider than
+the current viewport now correctly lands the panel flush against the
+viewport edge instead of off-screen.
+
 Dev panel audited against CLAUDE.md's own §12 standard (per explicit
 request) -- already ~fully compliant (full resize/move/hide/collapse,
 Copy/Save/Reset with a real git-tracked-JSON write-through, group/row
