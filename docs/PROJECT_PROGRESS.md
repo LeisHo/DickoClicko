@@ -631,100 +631,112 @@ additions. Current state of each subsystem:
   exact same deployment showed the real tuned config -- see CODE_SUMMARY
   gotchas.
 - **FLICK animations**: 3 small, independent overlays, each with its own
-  X/Y/Scale/Speed dev-panel group. All 3 are hold-to-preview,
-  click-to-trigger: press-and-hold cycles a shared preview
-  (`data/FLICK/ANI/3/FRAMES-01/01A/01B/01c`) as a 6-step ping-pong
-  (1,1a,1b,1c,1b,1a, loop -- `FLICK_HOLD_SEQUENCE` in index.html holds
-  the index-into-`flickHoldFrames` for each step; NOT a plain 1..N
-  numbered range despite `FLICK_HOLD_FRAME_COUNT`'s name -- that
-  constant is the SEQUENCE's length now, 6, not the distinct-image
-  count, 4) for as long as it's held, release plays exactly
-  one sequence then stops until pressed again. Animation 1
-  (`data/FLICK/ANI/`, 17 frames) plays one full ping-pong (1->17->1);
-  animation 2 (loaded directly from `data/FLICK/ANI/1` in sequence then
-  `data/FLICK/ANI/2` in reverse -- 20 frames as of this writing (11 + 9);
-  no intermediate `ANI2` folder anymore, see CODE_SUMMARY gotchas for why
-  that was removed -- check the `ANI1_FRAMES`/`ANI2_FRAMES` arrays in
-  index.html for the current frame-number lists, and re-verify them by
-  hand (`ls` both folders) any time either one's contents change --
-  placed above animation 1 by default) plays one forward pass (1->N).
-  Animation 3's own frame source has been fully REPLACED (2026-09-10,
-  per explicit request) -- no longer `data/FLICK/Genereated/<N>/A+B/C`
-  (5 numbered sets), now `data/FLICK/2TONED/<SET>/A+B/C` where SET is
-  one of 5 NAMED folders (ABOVE, SIDE BEHIND, SIDE FRONT, SIDE PINKY,
-  SIDE THUMB -- `TWOTONED_SETS` in index.html maps each dropdown value
-  to its real folder name and its own filename prefix, e.g. `SIDE
-  BEHIND` -> `SideBehind_NNN.png`/`SideBehind-Charge_NNN.png`). Click
-  still plays the same "folder A forward, folder B reversed" design as
-  animation 2. B and C are genuinely uniform across all 5 sets (B:
-  1-15, C: 1-8) but A is NOT -- 4 of the 5 sets have 7 frames
-  ([1,3,7,9,11,13,14]), SIDE BEHIND alone has 8 (adds 15) -- re-verify
-  by hand (`ls` each set's A/B/C folder) and update
-  `TWOTONED_A_FRAMES`/`TWOTONED_B_FRAMES`/`TWOTONED_C_FRAMES` if any
-  set's own contents ever change. All 151 source PNGs (2400px wide)
-  were resized to 1400px and re-encoded as WebP via `sharp`, same
-  convention as every other FLICK animation (9.5MB PNG -> 1.6MB WebP).
+  X/Y/Scale/Speed dev-panel group. Animation 2 (loaded directly from
+  `data/FLICK/ANI/1` in sequence then `data/FLICK/ANI/2` in reverse -- 20
+  frames as of this writing (11 + 9); no intermediate `ANI2` folder
+  anymore, see CODE_SUMMARY gotchas for why that was removed -- check the
+  `ANI1_FRAMES`/`ANI2_FRAMES` arrays in index.html for the current
+  frame-number lists, and re-verify them by hand (`ls` both folders) any
+  time either one's contents change) is the one animation still on the
+  ORIGINAL design: press-and-hold cycles the shared preview
+  (`data/FLICK/ANI/3/FRAMES-01/01A/01B/01c`) as a 6-step ping-pong for as
+  long as it's held, release ALWAYS plays one A-forward pass (1->N) then
+  stops, regardless of hold duration.
 
-  Hold behavior is a genuinely NEW pattern, not the ping-pong animations
-  1/2 (and Animation 3's own PRIOR version) use: per explicit request
-  ("on click and hold, you play frames in C in sequence, then continue
-  looping, but WITHOUT the first frame in C"), `flick3HoldFrameIndex()`
-  plays C forward once in full (0..N-1), then loops just the TAIL
-  (1..N-1) for as long as the press is held -- frame 0 is shown exactly
-  once, ever, per hold. "Click" and "click-and-hold" are now 2 SEPARATE,
-  complete behaviors rather than one (hold-preview) leading into the
-  other (click's own A/B sequence on every release, regardless of hold
-  duration) the way animations 1/2 and Animation 3's own prior version
-  worked: `onPointerUp` now reuses `HOLD_THRESHOLD_MS` (the same
-  click-vs-hold cutoff the rope/circle gesture already uses) to tell a
-  genuine hold (release just ends the C loop, no A/B afterward) from a
-  quick click (plays A/B, exactly like before). This interaction-design
-  choice (hold and click as independent outcomes, not hold-previews-
-  then-click-confirms) was inferred from the request's own parallel
-  phrasing ("on click, X. On click and hold, Y.") rather than confirmed
-  explicitly -- worth flagging to the user if it doesn't match intent.
+  Animations 1 and 3 have both been fully REPLACED (2026-09-10, per
+  explicit request) with the SAME "5 named sets, each its own A/B/C,
+  switchable via a dropdown" design -- Animation 3 sources from
+  `data/FLICK/2TONED/<SET>/A+B/C` (previously `data/FLICK/Genereated/<N>`,
+  5 numbered sets), Animation 1 mirrors it from
+  `data/FLICK/3TONED/<SET>/A+B/C` (previously a plain 17-frame ping-pong
+  loaded from `data/FLICK/ANI/`). SET is one of 5 named folders (ABOVE,
+  SIDE BEHIND, SIDE FRONT, SIDE PINKY, SIDE THUMB) for both -- each has
+  its own "Flick Frame Set"/"Flick3 Frame Set" dropdown (`cfg.flickSource`/
+  `cfg.flick3Source`), `TWOTONED_SETS`/`THREETONED_SETS` in index.html
+  map each dropdown value to its real folder name and filename prefix(es).
+  2TONED's filenames are clean/uniform (one prefix per set for A/B,
+  another for C); 3TONED's are NOT -- confirmed via `ls`, not assumed:
+  C's prefix has a space before "-CHARGE" for 3 of the 5 sets but not the
+  other 2, and SIDE THUMB's own A/B prefix is misspelled ("SideThub")
+  while its C prefix isn't ("SideThumb") -- `THREETONED_SETS` lists
+  `abPrefix`/`cPrefix` separately per set rather than deriving them from
+  one shared pattern. A's own frame numbers are non-contiguous
+  ([1,3,7,9,11,13,14]) and uniform across all 5 sets in 3TONED, but NOT
+  in 2TONED (SIDE BEHIND alone has an extra frame 15 there) -- re-verify
+  by hand (`ls` each set's A/B/C folder) and update the relevant
+  `TWOTONED_*`/`THREETONED_*` frame-number objects if any set's own
+  contents ever change. B and C are genuinely uniform (B: 1-15, C: 1-8)
+  across all 5 sets in BOTH 2TONED and 3TONED. All 301 source PNGs
+  (2400px wide, 151 + 150) were resized to 1400px and re-encoded as WebP
+  via `sharp`, same convention as every other FLICK animation (19.2MB
+  PNG -> ~3.2MB WebP combined).
+
+  Click plays A forward + B reversed for both (same design animation 2
+  already used). Hold is a genuinely NEW pattern for animations 1 and 3,
+  not the ping-pong animation 2 still uses: per explicit request ("on
+  click and hold, you play frames in C in sequence, then continue
+  looping, but WITHOUT the first frame in C"), `flick3HoldFrameIndex()`/
+  `flick1HoldFrameIndex()` play C forward once in full (0..N-1), then
+  loop just the TAIL (1..N-1) for as long as the press is held -- frame 0
+  is shown exactly once, ever, per hold. **Release always plays the A/B
+  click sequence afterward, regardless of hold duration** -- an initial
+  round shipped this as 2 separate, non-chaining outcomes (a guess at the
+  original request's intent), corrected directly by the user ("Oh i
+  forgot to say... on release of the hold, you play through the regular
+  click sequence") back to the same unconditional release-always-plays
+  behavior animation 2 and every animation's own prior version already
+  used; only the HOLD animation's own shape (forward-then-loop-tail
+  instead of ping-pong) is actually new. Animation 1 got its own
+  independent hold-frame pool (`flick1HoldFramesBySource`) rather than
+  sharing animation 2's `flickHoldFrames` -- animation 2 is untouched and
+  still uses the shared ping-pong pool.
 
   Found and fixed one real bug during verification: a visitor's already-
-  saved settings (git-tracked JSON or localStorage) can still carry one
-  of the OLD numeric `flick3Source` values ('1'-'5'), which no longer
-  matches any entry in the new `TWOTONED_SETS`-keyed data -- reproduced
-  live (threw "Cannot read properties of undefined" every frame on a
-  fresh load with the old saved value) and fixed 2 ways: `flick3Frames()`/
-  `flick3HoldFrames()` now fall back to the first real set when
+  saved settings (git-tracked JSON) can still carry an OLD numeric
+  `flick3Source` value ('1'-'5') with no match in the new
+  `TWOTONED_SETS`-keyed data -- reproduced live (threw "Cannot read
+  properties of undefined" every frame on a fresh load) and fixed 2 ways:
+  `flick3Frames()`/`flick3HoldFrames()`/`flickFrames()`/`flick1HoldFrames()`
+  all fall back to the first real set when `cfg.flickSource`/
   `cfg.flick3Source` doesn't match, and the actual saved
-  `data/processed/dev-panel-settings.json` was updated to a valid value
-  directly (its `flick3Source` had drifted to `"5"` from earlier testing).
+  `data/processed/dev-panel-settings.json` was corrected directly (its
+  `flick3Source` had drifted to `"5"`) -- merged cleanly against 2
+  concurrent live "Save Settings" commits from the user's own real
+  dev-panel tuning that landed during this same work.
 
-  Verified: all 151 `/2TONED/` network requests (2 full page loads'
-  worth) came back 200 OK, zero 404s; the dropdown shows and correctly
-  switches between exactly the 5 new named options (confirmed via
-  accessibility-tree readback); a real dispatched click through the
-  actual production code (not a reimplementation) correctly logged
-  `up:flick3-play heldMs:0`, confirming the quick-click path end-to-end.
-  The genuine-HOLD path's own animation completion was NOT confirmed
-  live -- this session's Browser pane reported itself `hidden` again
-  (same `document.hidden`/rAF-suspension limitation noted in this file's
-  own history above), so a dispatched 500ms hold never actually advanced
-  past frame 0 in the time available; a live capture of `console.error`
-  found zero NEW errors over multiple fresh windows (ruling out the
-  render-crash hypothesis), and the forward-then-loop-tail frame-index
-  math was verified correct in isolation via Node. Worth a real play-test
-  to confirm the hold animation actually completes/loops as intended.
+  Verified: all 301 `/2TONED/`+`/3TONED/` network requests came back 200
+  OK, zero 404s (this caught 3TONED's own inconsistent-prefix filenames
+  resolving correctly); both dropdowns show and correctly switch between
+  their 5 named options; real dispatched clicks through the actual
+  production code (not a reimplementation) correctly logged
+  `up:flick-play`/`up:flick3-play` with `heldMs:0` for both animations,
+  confirming the quick-click path end-to-end. The HOLD path's own
+  animation completion was NOT confirmed frame-by-frame live -- this
+  session's Browser pane repeatedly reported itself hidden/backgrounded,
+  which this session also newly confirmed suppresses synthetic
+  PointerEvent delivery entirely (not just requestAnimationFrame, the
+  previously-known limitation) unless the tab is explicitly re-fronted
+  immediately before each dispatch -- a live `console.error` capture
+  found zero new errors across multiple fresh windows (ruling out a
+  render-crash), and the forward-then-loop-tail frame-index math was
+  verified correct in isolation via Node for both animations. Worth a
+  real play-test on both to confirm the hold animation completes/loops
+  and the release-chains-into-click-play fix reads correctly.
+
   All 3 animations' Anim Speed defaults are 3.2x (live values have since
   moved further via direct tuning). Hit-test rects are computed every
   frame independent of image load state, so a click works immediately on
   page load. A press while that animation is already playing is ignored
   (not re-armed into holding) so repeated impatient clicking can't
-  interrupt/restart an in-progress sequence. Animations 1/2's own
-  hold-preview cycle still speeds up the longer it's held, ramping
-  linearly from 1x up to Flick Hold Max Speed as elapsed hold time
-  approaches Flick Hold Max Duration, then holding flat at max past that
-  point -- Animation 3's own hold no longer uses this ramping constant
-  for its SEQUENCE shape (forward-then-loop-tail is fixed), but still
-  shares the same underlying `flickHoldCyclePos` accumulator, so the
-  ramp still governs how FAST it advances through that sequence. A
-  playing sequence pauses on whichever frame isn't loaded yet instead of
-  racing past it on a real-time clock.
+  interrupt/restart an in-progress sequence. All 3 animations' hold-cycle
+  speed still ramps the longer it's held (linearly from 1x up to Flick
+  Hold Max Speed as elapsed hold time approaches Flick Hold Max
+  Duration, flat at max past that point) via the same shared
+  `flickHoldCyclePos` accumulator -- animations 1/3's own hold no longer
+  uses this to pick a ping-pong step, but still uses it to pace how fast
+  the forward-then-loop-tail sequence advances. A playing sequence pauses
+  on whichever frame isn't loaded yet instead of racing past it on a
+  real-time clock.
   All 42 frames across the 3 folders were originally 6870x6166px PNGs
   (up to 760KB each) despite rendering at only 50% vmin on screen --
   fine on the local dev server's cache but on the deployed Vercel site

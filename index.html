@@ -573,6 +573,14 @@ const DEV_GROUPS = [
     { key:'detachThicknessMultiplier', label:'Detach Thickness Multiplier', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1.1 },
   ]},
   { title:'FLICK ANIMATION', controls:[
+    { key:'flickSource',    label:'Flick Frame Set', type:'dropdown', def:'above',
+      options:[
+        { value:'above',       label:'Above' },
+        { value:'side-behind', label:'Side Behind' },
+        { value:'side-front',  label:'Side Front' },
+        { value:'side-pinky',  label:'Side Pinky' },
+        { value:'side-thumb',  label:'Side Thumb' },
+      ] },
     { key:'flickX',         label:'Flick X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
     { key:'flickY',         label:'Flick Y Pos',    type:'slider', unit:'%vh',   min:0,   max:100, step:1,   def:85 },
     { key:'flickScale',     label:'Flick Scale',    type:'slider', unit:'%vmin', min:1,   max:60,  step:0.5, def:50 },
@@ -2119,37 +2127,103 @@ const vh = pct => viewportH() * pct / 100;
 const vmin = pct => Math.min(viewportW(), viewportH()) * pct / 100;
 
 /* ---------------------------------------------------------------------
-   FLICK animation -- a small looping frame-sequence graphic, independent
-   of the rope's own physics. Ping-pongs across 17 PNG frames (1->17->1,
-   a boomerang, not a cut-back-to-1 loop) at a speed set by the dev panel.
+   FLICK animation -- a small frame-sequence graphic, independent of the
+   rope's own physics. Per explicit request ("replace with the frames in
+   data/FLICK/3TONED... it mirrors Animation 3 frames, so also provide a
+   dropdown"), this is now the SAME "5 named sets, each its own A/B/C,
+   switchable via a dropdown" design as animation 3 -- previously a plain
+   17-frame ping-pong loaded from data/FLICK/ANI/.
 --------------------------------------------------------------------- */
-const FLICK_FRAME_COUNT = 17;
 const FLICK_BASE_FPS = 12; // playback rate at Flick Anim Speed = 1x
-const flickFrames = [];
-for (let i = 1; i <= FLICK_FRAME_COUNT; i++){
-  const img = new Image();
-  img.src = `data/FLICK/ANI/FRAMES-${String(i).padStart(2, '0')}.webp`;
-  flickFrames.push(img);
+// THREETONED_SETS mirrors TWOTONED_SETS below -- maps each dropdown
+// value to its real on-disk FOLDER name (has a space, e.g. "SIDE
+// BEHIND") and its own filename prefix(es). Unlike 2TONED, 3TONED's own
+// filenames are NOT uniform across A/B vs. C, or even across sets --
+// confirmed via `ls`, not assumed: A/B share one prefix per set
+// ("3T - SideAbove_NNN.png"), but C uses a DIFFERENT prefix per set,
+// sometimes with a space before "-CHARGE" (Above/Behind/Front), sometimes
+// without (Pinky/Thumb), and SIDE THUMB's own A/B prefix is literally
+// misspelled ("SideThub") while its C prefix spells it correctly
+// ("SideThumb") -- so abPrefix/cPrefix are listed separately per set
+// rather than derived from one shared pattern.
+const THREETONED_SETS = {
+  'above':       { folder: 'ABOVE',       abPrefix: '3T - SideAbove',  cPrefix: '3T - SideAbove -CHARGE' },
+  'side-behind': { folder: 'SIDE BEHIND', abPrefix: '3T - SideBehind', cPrefix: '3T - SideBehind -CHARGE' },
+  'side-front':  { folder: 'SIDE FRONT',  abPrefix: '3T - SideFront',  cPrefix: '3T - SideFront -CHARGE' },
+  'side-pinky':  { folder: 'SIDE PINKY',  abPrefix: '3T - SidePinky',  cPrefix: '3T - SidePinky-CHARGE' },
+  'side-thumb':  { folder: 'SIDE THUMB',  abPrefix: '3T - SideThub',   cPrefix: '3T - SideThumb-CHARGE' },
+};
+const THREETONED_KEYS = Object.keys(THREETONED_SETS);
+// A/B/C are all genuinely uniform across every set here (unlike 2TONED's
+// own SIDE BEHIND/A exception) -- confirmed via `ls` for all 5 sets --
+// but still listed per-set rather than 1 shared array, same "a future
+// edit to only 1 set shouldn't silently affect the other 4" reasoning.
+const THREETONED_A_FRAMES = {
+  'above': [1, 3, 7, 9, 11, 13, 14], 'side-behind': [1, 3, 7, 9, 11, 13, 14],
+  'side-front': [1, 3, 7, 9, 11, 13, 14], 'side-pinky': [1, 3, 7, 9, 11, 13, 14],
+  'side-thumb': [1, 3, 7, 9, 11, 13, 14],
+};
+const THREETONED_B_FRAMES = {
+  'above': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], 'side-behind': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+  'side-front': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], 'side-pinky': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+  'side-thumb': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+};
+const THREETONED_C_FRAMES = {
+  'above': [1,2,3,4,5,6,7,8], 'side-behind': [1,2,3,4,5,6,7,8],
+  'side-front': [1,2,3,4,5,6,7,8], 'side-pinky': [1,2,3,4,5,6,7,8],
+  'side-thumb': [1,2,3,4,5,6,7,8],
+};
+function threetonedFrameUrl(key, sub, num, charge){
+  const set = THREETONED_SETS[key];
+  const prefix = charge ? set.cPrefix : set.abPrefix;
+  return `data/FLICK/3TONED/${encodeURIComponent(set.folder)}/${sub}/${encodeURIComponent(prefix + '_' + String(num).padStart(3, '0') + '.webp')}`;
 }
+// Click plays A forward + B reversed, same design as animations 2/3.
+const flickFramesBySource = {};
+THREETONED_KEYS.forEach(key => {
+  flickFramesBySource[key] = ([]).concat(
+    THREETONED_A_FRAMES[key].map(n => threetonedFrameUrl(key, 'A', n, false)),
+    [...THREETONED_B_FRAMES[key]].reverse().map(n => threetonedFrameUrl(key, 'B', n, false)),
+  ).map(src => {
+    const img = new Image();
+    img.src = src;
+    return img;
+  });
+});
 let flickAnimTime = 0;
 // Rests on frame 1 until clicked, same click-to-trigger convention as
-// animation 2 (see flick2Playing below) -- per explicit request ("apply
-// the clicking function to animation 1 as well"). Previously always
-// auto-played continuously; update() now only advances flickAnimTime while
-// this is true, and stops it (one full ping-pong period, not a partial
-// one) once the sequence completes -- see update()'s own completion check.
+// animations 2/3. Falls back to the first real set whenever
+// cfg.flickSource doesn't match a real key (same reproduced-live gap as
+// flick3Frames() below -- a visitor's already-saved settings can carry a
+// value from before this dropdown existed at all).
+function flickFrames(){ return flickFramesBySource[cfg.flickSource] || flickFramesBySource[THREETONED_KEYS[0]]; }
+function flickFrameCount(){ return flickFrames().length; }
 let flickPlaying = false;
-
-// Triangle wave over a continuously-advancing time accumulator -- e.g.
-// frame position 0, 1, 2 ... 16, 15, 14 ... 0, 1 ... -- rather than
-// resetting to 0 every cycle, which would show 1->17 then SNAP back to 1
-// instead of animating back down through 17->1.
 function flickFrameIndex(){
   if (!flickPlaying) return 0;
+  const count = flickFrameCount();
   const cyclePos = flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed;
-  const period = (FLICK_FRAME_COUNT - 1) * 2;
-  const t = ((cyclePos % period) + period) % period;
-  return Math.round(t <= (FLICK_FRAME_COUNT - 1) ? t : period - t);
+  return Math.floor(((cyclePos % count) + count) % count);
+}
+// Animation 1's OWN hold sequence (data/FLICK/3TONED/<set>/C) -- same
+// forward-then-loop-tail shape as animation 3's (see
+// flick3HoldFrameIndex()'s own comment for the full reasoning), no
+// longer the shared ping-pong flickHoldFrames animation 2 still uses.
+const flick1HoldFramesBySource = {};
+THREETONED_KEYS.forEach(key => {
+  flick1HoldFramesBySource[key] = THREETONED_C_FRAMES[key].map(n => {
+    const img = new Image();
+    img.src = threetonedFrameUrl(key, 'C', n, true);
+    return img;
+  });
+});
+function flick1HoldFrames(){ return flick1HoldFramesBySource[cfg.flickSource] || flick1HoldFramesBySource[THREETONED_KEYS[0]]; }
+function flick1HoldFrameIndex(){
+  const frames = flick1HoldFrames();
+  const n = frames.length;
+  const pos = Math.max(0, Math.floor(flickHoldCyclePos));
+  if (pos < n) return pos;
+  return 1 + ((pos - n) % (n - 1));
 }
 
 // The rect drawn in render(), kept in sync there each frame -- same
@@ -5075,26 +5149,20 @@ function onPointerUp(e){
   // animation's real sequence -- checked first, independent of downInfo
   // (a flick hold never sets it), same reasoning as onPointerDown's own
   // flick check running before the rope/circle logic below.
-  // Animation 3's hold-preview is no longer just a preview that always
-  // hands off to the click sequence on release (see flick3HoldFrameIndex()'s
-  // own comment) -- per explicit request, "click" (A forward + B reversed)
-  // and "click and hold" (C forward then looping its own tail) are 2
-  // separate, complete behaviors now, not one leading into the other.
-  // Reusing HOLD_THRESHOLD_MS -- the same click-vs-hold cutoff the
-  // rope/circle gesture already uses -- as the distinguishing line: a
-  // release quicker than that is a genuine "click" (plays A/B, exactly
-  // like before); anything held past it was a genuine "hold," and release
-  // just ends the loop (returns to the idle A/B rest frame) without also
-  // triggering A/B afterward.
+  // Corrected directly ("Oh i forgot to say... on release of the hold,
+  // you play through the regular click sequence") after an initial round
+  // guessed release-after-a-genuine-hold should be a separate, complete
+  // outcome with no A/B afterward -- that guess was wrong. Release ALWAYS
+  // plays the click (A/B) sequence, exactly like animations 1/2 and this
+  // animation's own prior version -- only the HOLD animation's own shape
+  // changed (forward-then-loop-tail instead of ping-pong, see
+  // flick3HoldFrameIndex()'s own comment), not whether release chains
+  // into A/B afterward.
   if (holdingFlick === 3){
     holdingFlick = null;
-    if (flickHoldTime * 1000 < HOLD_THRESHOLD_MS){
-      flick3Playing = true;
-      flick3AnimTime = 0;
-      logClick('up:flick3-play', { x: e.clientX, y: e.clientY, heldMs: Math.round(flickHoldTime * 1000) });
-    } else {
-      logClick('up:flick3-hold-end', { x: e.clientX, y: e.clientY, heldMs: Math.round(flickHoldTime * 1000) });
-    }
+    flick3Playing = true;
+    flick3AnimTime = 0;
+    logClick('up:flick3-play', { x: e.clientX, y: e.clientY, heldMs: Math.round(flickHoldTime * 1000) });
     return;
   }
   if (holdingFlick === 2){
@@ -5329,10 +5397,9 @@ function update(rawDt){
     return !!img && !img.complete;
   }
   if (flickPlaying){
-    if (!isFrameBlocking(flickFrames[flickFrameIndex()])){
+    if (!isFrameBlocking(flickFrames()[flickFrameIndex()])){
       flickAnimTime += rawDt;
-      const flickPeriod = (FLICK_FRAME_COUNT - 1) * 2;
-      if (flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed >= flickPeriod){
+      if (flickAnimTime * FLICK_BASE_FPS * cfg.flickAnimSpeed >= flickFrameCount()){
         flickPlaying = false;
         flickAnimTime = 0;
       }
@@ -6902,17 +6969,32 @@ function render(){
   // guards the actual DRAW (nothing to draw until that specific frame is
   // ready), just no longer the hit-test rect itself.
   if (DEV_MODE){
-    const flickRefImg = flickFrames[0];
+    const flickRefImg = flickFrames()[0];
     const flickAspect = (flickRefImg && flickRefImg.naturalWidth > 0) ? (flickRefImg.naturalHeight / flickRefImg.naturalWidth) : 1;
     const flickW = vmin(cfg.flickScale);
     const flickH = flickW * flickAspect;
+    // Hit-test rect always reflects the idle/play (A/B) box, same
+    // reasoning as flick3Rect below -- a fresh press can only start while
+    // not already holding.
     flickRect.x = vw(cfg.flickX) - flickW / 2; flickRect.y = vh(cfg.flickY) - flickH / 2;
     flickRect.w = flickW; flickRect.h = flickH;
-    // holdingFlick 1 swaps in the hold-preview cycle (see onPointerDown) in
-    // place of the normal idle/playing frame, at the same rect.
-    const flickImg = holdingFlick === 1 ? flickHoldFrames[flickHoldFrameIndex()] : flickFrames[flickFrameIndex()];
-    if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
-      ctx.drawImage(flickImg, flickRect.x, flickRect.y, flickW, flickH);
+    if (holdingFlick === 1){
+      // C's own frames are a different shape from A/B (same reasoning as
+      // flick3's own hold box below) -- sized from the hold frame's own
+      // real aspect, same width scale (Flick Scale), centered on the
+      // same X/Y.
+      const holdImg = flick1HoldFrames()[flick1HoldFrameIndex()];
+      const holdAspect = (holdImg && holdImg.naturalWidth > 0) ? (holdImg.naturalHeight / holdImg.naturalWidth) : flickAspect;
+      const holdW = flickW, holdH = holdW * holdAspect;
+      const holdX = vw(cfg.flickX) - holdW / 2, holdY = vh(cfg.flickY) - holdH / 2;
+      if (holdImg && holdImg.complete && holdImg.naturalWidth > 0){
+        ctx.drawImage(holdImg, holdX, holdY, holdW, holdH);
+      }
+    } else {
+      const flickImg = flickFrames()[flickFrameIndex()];
+      if (flickImg && flickImg.complete && flickImg.naturalWidth > 0){
+        ctx.drawImage(flickImg, flickRect.x, flickRect.y, flickW, flickH);
+      }
     }
     const flick2RefImg = flickFrames2[0];
     const flick2Aspect = (flick2RefImg && flick2RefImg.naturalWidth > 0) ? (flick2RefImg.naturalHeight / flick2RefImg.naturalWidth) : 1;
