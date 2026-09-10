@@ -424,17 +424,22 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   every affected folder, and for any hit, `git rm --cached` the old-case
   path then re-`git add` so the tracked path matches the real filename.
 - SNAP's freeze-at-42 mechanic (`mfSnapFrozen` in the update() mouse-flick
-  block) hardcodes `mfFrozenFrames.length > 41 && mfIdx >= 41` -- a magic
-  number derived from the SNAP frame set being 45 CONTIGUOUS frames at
-  the time it was built, where index 41 meant "the 42nd frame" per the
-  original spec's own wording ("stop the sequence at frame 42"). A later
-  SNAP frame trim (45->38 frames, 2026-09-10) silently broke this: with
-  `length` now 38, `length > 41` can never be true, so right-click-hold
-  no longer freezes at all, for any direction -- confirmed via live
-  testing (held `mfRightDown` for 300+ ticks, sequence ran straight to
-  `idle`). NOT fixed as part of that same trim -- there is no
-  unambiguous mapping from "position 42 of 45" onto a differently-sized
-  non-contiguous set, and guessing would risk shipping the wrong
-  interpretation silently. If SNAP's frame count changes again, check
-  this guard's `41` against the CURRENT `SNAP_A_FRAME_NUMBERS.length`
-  before assuming the freeze still works -- it currently does not.
+  block) used to hardcode `mfFrozenFrames.length > 41 && mfIdx >= 41` --
+  a magic number derived from the SNAP frame set being 45 CONTIGUOUS
+  frames at the time it was built, where index 41 meant "the 42nd frame"
+  per the original spec's own wording ("stop the sequence at frame 42").
+  A SNAP frame trim (45->38 frames, 2026-09-10) silently broke this:
+  with `length` now 38, `length > 41` could never be true, so
+  right-click-hold stopped freezing entirely, for any direction --
+  confirmed via live testing (held `mfRightDown` for 300+ ticks,
+  sequence ran straight to `idle`). Fixed the same day, per explicit
+  user resolution ("count which number the frame with the number '41'
+  in it is"): the guard now targets `SNAP_FREEZE_INDEX =
+  mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 41)` -- frame NUMBER
+  41's CURRENT position in the array (computed once at load, reusing
+  the nearest-number helper already built for mid-sequence direction
+  switching), not a hardcoded index. **If SNAP's frame set changes
+  again, this now self-corrects automatically** (it re-resolves to
+  wherever 41 sits, or the nearest surviving number if 41 itself gets
+  removed) -- don't reintroduce a hardcoded index here even if a future
+  trim seems to "just need one more number adjusted."

@@ -9759,3 +9759,60 @@ folder deletions and other in-flight work) were touched.
 Committed/pushed code+assets (8273ba2) -- fetch confirmed no
 divergence -- then this doc pass as a separate follow-up, per the
 standing instruction.
+
+================================================================================
+2026-09-10  -  07:55 PM EDT
+
+Follow-up to the SNAP freeze-at-42 regression flagged in the previous
+entry. User's reply, verbatim: "well, just count which number the
+frame with the number '41' in it is." A deliberately concrete
+resolution to the ambiguity from the previous entry (proportional
+position? last-N-frames? a literal frame number?) -- rather than debate
+which interpretation of "frame 42" was most faithful to the original
+spec, use frame NUMBER 41 specifically (still present in the trimmed
+38-frame set, unlike several other numbers that got removed) and
+freeze wherever it now sits in the sequence.
+
+Computed by hand first for a sanity baseline:
+`SNAP_A_FRAME_NUMBERS.indexOf(41) === 33` (0-indexed) -- frame 41 is
+now the 34th frame in the sequence, down from the 42nd it used to be
+in the old 45-frame contiguous set.
+
+Implemented as a NEW named constant, `SNAP_FREEZE_INDEX =
+mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 41)`, computed once at
+load time right after the frame-number arrays are defined -- reusing
+the EXISTING `mouseFlickNearestIndex()` helper (already built for
+mid-sequence direction switching, per the original 3-point spec's own
+"if the exact frame number doesn't exist, use the next closest"
+clause) rather than a fresh lookup or a hardcoded `33`. This was a
+deliberate choice over just hardcoding 33 directly: since 41 IS
+present in the current array, `mouseFlickNearestIndex` resolves to an
+exact match today, but if some FUTURE SNAP trim removes 41 itself,
+this now automatically falls back to whichever number is closest
+instead of needing yet another manual fix -- directly addressing the
+root cause class from the previous entry (a magic number silently
+going stale when the underlying data changes) rather than just
+patching today's specific number. Both occurrences of the old
+hardcoded `41` in the freeze guard (`mfFrozenFrames.length > 41` and
+`mfIdx >= 41`) were replaced with `SNAP_FREEZE_INDEX`.
+
+Verified live via a temporary debug hook (grep-confirmed removed
+before finishing, node --check clean throughout) -- this round's own
+browser-loading flakiness (documented in the previous entry) recurred
+identically: the test server truncated the served script 2 more
+times before a cache-busting query param (`&cb=N`, incrementing each
+retry) forced a clean fetch. Once loaded: `SNAP_FREEZE_INDEX` reads
+33, confirming the computed constant matches the hand calculation.
+Held `mfRightDown` true for 200 ticks and confirmed `mfFrameAccum`
+landed at exactly 33.28 (mode still `'snap'`) -- the sequence froze at
+the new correct index instead of running through to idle as it had
+before this fix. Held 50 MORE ticks and confirmed it stayed pinned at
+33.28 (didn't creep forward). Released and confirmed it immediately
+resumed (33.28->33.92 after 1 tick), then ran 20 more ticks and
+confirmed a clean natural completion to `mode:'idle'`/`frameAccum:0`
+-- the full freeze/hold/resume/complete cycle now working correctly
+against the new 38-frame data, matching the exact behavior this
+mechanic had against the old 45-frame data before the asset trim.
+
+Committed/pushed (727c0df) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.

@@ -165,21 +165,41 @@ disk-vs-code cross-check (0 missing, 0 unreferenced files on either
 pass). Handled with the same shared-`nums`-array pattern as the base
 frame set (`SCISS_A_FRAME_NUMBERS`/`SNAP_A_FRAME_NUMBERS`), no
 architecture change needed. **Consequence:** the freeze-at-42 mechanic
-built earlier this same day (see above) checks
+built earlier this same day (see above) checked
 `mfFrozenFrames.length > 41` before freezing -- with SNAP now only 38
-frames long, that guard can never be true, so right-click-hold now
-plays SNAP straight through to completion and never freezes, for every
+frames long, that guard could never be true, so right-click-hold
+played SNAP straight through to completion and never froze, for every
 direction. Confirmed live (not just read): held `mfRightDown` for 300+
 ticks against the new 38-frame SNAP set and it ran to `idle` without
-ever pausing. This is a real, silent regression of a feature this
+ever pausing. This was a real, silent regression of a feature this
 project's own spec explicitly asked for, caused purely by this asset
-trim -- not fixed here, since "freeze at 42" has no unambiguous
-equivalent against a 38-frame non-contiguous set (proportional
-position? last-N-frames? a literal frame number if one still exists in
-range?) and guessing would risk shipping the WRONG interpretation
-silently, same class of mistake as the case-collision bug above.
-Flagged to the user directly; needs an explicit decision before the
-freeze mechanic is restored.
+trim -- not fixed in the same commit, since "freeze at 42" had no
+unambiguous equivalent against a 38-frame non-contiguous set and
+guessing would risk shipping the WRONG interpretation silently, same
+class of mistake as the case-collision bug above. Flagged to the user
+directly.
+
+**Fixed (2026-09-10, same day): user resolved the ambiguity --
+"count which number the frame with the number '41' in it is."**
+Rather than debate whether 42 or some proportional position was the
+"right" successor to the old spec's "frame 42," the user picked a
+concrete, simple resolution: use frame NUMBER 41 (still present in
+the trimmed set, unlike some removed numbers) and freeze wherever
+IT now sits. Added `SNAP_FREEZE_INDEX = mouseFlickNearestIndex(
+SNAP_A_FRAME_NUMBERS, 41)` (computed once at load, reusing the exact
+same nearest-number helper already built for mid-sequence direction
+switching) and replaced both hardcoded `41`s in the freeze guard with
+it. Verified by hand first (`SNAP_A_FRAME_NUMBERS.indexOf(41) === 33`,
+the 34th frame in the new sequence) then live via a temporary debug
+hook (grep-confirmed removed): held right-click for 200+ ticks and
+confirmed the sequence froze exactly at `mfFrameAccum` 33.28 (index
+33) and stayed pinned there for 50 more held ticks, then on release
+advanced immediately (33.28->33.92) and ran to a clean `idle`
+completion. Deliberately computed via `mouseFlickNearestIndex` rather
+than hardcoding the resulting index `33` directly, so a FUTURE SNAP
+frame trim that also removes 41 itself would fall back to the nearest
+surviving number automatically instead of silently going stale again
+the same way the original hardcoded `41` did.
 
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
