@@ -168,16 +168,19 @@
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
+    "flickEnabled": true,
     "flickSource": "side-thumb",
     "flickX": 37,
     "flickY": 67,
     "flickScale": 100,
     "flickAnimSpeed": 4,
+    "flick2Enabled": true,
     "flick2X": 19,
     "flick2Y": 23,
     "flick2Scale": 39.5,
     "flick2AnimSpeed": 4.4,
-    "flick3Source": "side-thumb",
+    "flick3Enabled": true,
+    "flick3Source": "side-pinky-scissor",
     "flick3X": 66,
     "flick3Y": 67,
     "flick3Scale": 100,
@@ -221,27 +224,22 @@
       "subgroups": []
     },
     {
+      "key": "New Group (2)",
+      "collapsed": true,
+      "settings": [],
+      "subgroups": []
+    },
+    {
       "key": "New Group",
       "collapsed": false,
       "settings": [],
       "subgroups": []
     },
     {
-      "key": "FLICK ANIMATION 3",
-      "collapsed": true,
-      "settings": [
-        "flick3Source",
-        "flick3X",
-        "flick3Y",
-        "flick3Scale",
-        "flick3AnimSpeed"
-      ],
-      "subgroups": []
-    },
-    {
       "key": "FLICK ANIMATION",
       "collapsed": true,
       "settings": [
+        "flickEnabled",
         "flickSource",
         "flickX",
         "flickY",
@@ -251,9 +249,23 @@
       "subgroups": []
     },
     {
+      "key": "FLICK ANIMATION 3",
+      "collapsed": false,
+      "settings": [
+        "flick3Enabled",
+        "flick3Source",
+        "flick3X",
+        "flick3Y",
+        "flick3Scale",
+        "flick3AnimSpeed"
+      ],
+      "subgroups": []
+    },
+    {
       "key": "FLICK ANIMATION 2",
       "collapsed": true,
       "settings": [
+        "flick2Enabled",
         "flick2X",
         "flick2Y",
         "flick2Scale",
