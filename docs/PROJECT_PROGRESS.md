@@ -41,8 +41,20 @@ frames each** shortly after shipping (2026-09-10, "I updated SCISS and
 SNAP frames") -- the user replaced all 16 variant folders' source PNGs
 with a bigger set and new per-folder prefixes; `MOUSE_FLICK_DIRECTIONS`
 updated to match, re-verified against disk (0 missing across 720
-expected PNG paths). New "FLICK MOUSE" dev-panel group (Enabled/Scale/
-Anim Speed/Position & Rotation Smoothing/Angle Offset/Hold Max Speed &
+expected PNG paths). SNAP's own prefix was replaced AGAIN shortly
+after that (same 2026-09-10, "i updated the SNAP frames") -- frame
+count unchanged at 45, only the 8 per-folder prefix strings changed
+(e.g. BEHIND's "2T Behind-SNAP" -> "2T BEHIND - SNAP"); this round
+found 0 case-only collisions via the scanner script written after the
+previous round's real bug (see CLAUDE.md gotchas), so no special
+handling was needed this time. Worth noting for future rounds: the
+first attempt to act on this exact "SNAP frames" report found NOTHING
+changed on disk (confirmed via `git status` and file mtimes all
+predating the prior commit) -- the user's file copy hadn't landed yet
+when they sent the message; re-checking after being told "check
+again" found the new files present. New "FLICK MOUSE" dev-panel group
+(Enabled/Scale/Anim Speed/Position & Rotation Smoothing/Angle
+Offset/Hold Max Speed &
 Duration). Gesture listeners are fully independent of the rope's own
 onPointerDown/onPointerUp (not merged in), so this coexists cleanly
 with existing right-click Rope Attraction and double-click rope-

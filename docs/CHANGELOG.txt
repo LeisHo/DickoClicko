@@ -9394,3 +9394,40 @@ Per the standing "push before updating project docs" instruction,
 committed and pushed the code fix (f99e2c7) first -- fetch confirmed
 no divergence from origin/master -- THEN made this doc pass as a
 separate follow-up.
+
+================================================================================
+2026-09-10  -  04:48 PM EDT
+
+"i updated the SNAP frames. updated" -- a follow-up round to the
+already-shipped SCISS/SNAP 45-frame update. First response to this
+report found NOTHING had actually changed: `git status` showed zero
+pending changes in any `- SNAP/` folder, and every file's mtime
+predated the previous commit (133dbd2) -- the user's own file copy
+apparently hadn't landed on disk yet when the message was sent.
+Reported this honestly rather than guessing or running a no-op
+conversion pass, and asked the user to confirm. User replied "check
+again" -- a fresh `find -mmin -60` this time found all 360 SNAP PNGs
+(8 directions) genuinely modified within the last hour, confirming
+the copy had landed since the first check.
+
+Enumerated the new prefix for all 8 directions (frame count unchanged
+at 45; only the prefix string changed again, e.g. BEHIND's "2T
+Behind-SNAP" -> "2T BEHIND - SNAP", now matching SCISS's own all-caps
+"- " convention rather than the previous dash-no-space style). Updated
+all 8 `snap.prefix` fields in `MOUSE_FLICK_DIRECTIONS`, verified 0
+missing across 360 expected PNG paths. Ran the case-collision scanner
+(written after the LAST round's real "BEHIND THUMB - SCISS" bug)
+against the previous commit's tracked paths BEFORE touching git this
+time, as standing practice going forward -- 0 collisions found; every
+one of the 8 renames changes more than just case (dash-vs-" - "
+structure differs in all 8, unlike the one case-only collision last
+round). Converted all 360 new PNGs to WebP via the established sharp
+pipeline (backgrounded, completed cleanly). Verified live via a
+temporary debug hook (grep-confirmed removed, node --check clean):
+all 8 directions report 45 SNAP frames each, 0 broken images, and a
+real SNAP playback correctly plays through all 45 frames and returns
+to idle.
+
+Committed/pushed code+assets (cdfb0f0) -- fetch confirmed no
+divergence -- then this doc pass as a separate follow-up, per the
+standing instruction.
