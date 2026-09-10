@@ -66,6 +66,26 @@ including one test-setup mistake caught before trusting a result. NOT
 drag/rename-tested live (Browser pane still down) -- this is now the
 3rd consecutive dev-panel change awaiting the user's own live test.
 
+**Corrected 2026-09-10 (real bug found in the nesting feature above):**
+"I still cant seem to nest existing groups into an empty group" --
+the drop-zone CSS giving an empty group's body a visible/hittable 20px
+target was scoped to `.dp-group-body > .dp-group > .dp-group-body:empty`,
+which only ever matches an ALREADY-NESTED empty group (its own ancestor
+chain requires an outer `.dp-group-body`). A TOP-LEVEL empty group (the
+common case -- e.g. any group freshly created via "+ Add Group", which
+appends directly under `#dpGroups`) never matched, so its body
+collapsed to a real 0px-height rect with no visible or reliably-
+hittable drop target. Broadened to plain `.dp-group-body:empty` (same
+CSS specificity, no ancestor requirement) so both cases get the same
+treatment. Verified live via real drag gestures (not synthetic events):
+dragging an existing group onto a fresh top-level empty group now
+nests it correctly (confirmed via DOM inspection and a screenshot --
+previously did nothing); regression-checked that dragging into an
+already-nested empty group (the original, narrower case) still works
+at depth 2. This closes out the nesting feature's own live-
+verification gap noted below -- the empty-group-specific case is now
+confirmed working, not just the general reorder/nest mechanics.
+
 **Corrected 2026-09-10 (new session): the Browser pane works again.**
 The 0x0-viewport/navigate-failure state described below was specific
 to the PRIOR session's own Browser pane instance -- a fresh session

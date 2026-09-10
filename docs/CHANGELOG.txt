@@ -9069,3 +9069,68 @@ by the time this session resumed, but the 3 new source asset folders
 just the asset folders (977dd0d) first -- clean fast-forward, no
 divergence from origin/master -- then made this doc pass as a
 separate follow-up.
+
+================================================================================
+2026-09-10  -  05:24 AM EDT
+
+"I still cant seem to nest existing groups into an empty group. Fix
+that." -- a real bug in the dev panel's group-nesting drag-and-drop
+feature (see the 2026-09-08/09 entries for its own history: capped at
+one level, then a hit-test-ordering bug found and fixed, extending it
+to unlimited depth).
+
+Root cause, found by reading the CSS directly (no live reproduction
+needed first): the rule giving an empty group's own body a visible,
+hittable drop target --
+`.dp-group-body > .dp-group > .dp-group-body:empty { min-height:20px;
+border:1px dashed ...; }` -- only matches a group whose OWN ancestor
+chain includes an outer `.dp-group-body`, i.e. an ALREADY-NESTED empty
+group. A TOP-LEVEL empty group (the common case: any group freshly
+created via "+ Add Group", which `addDevGroup()` appends directly
+under `#dpGroups`, not under another group's body) never matches that
+selector -- its body has zero children, zero padding, and no
+min-height, so it collapses to a genuine 0px-height rect. The JS
+hit-test itself (`groupDragTargets()`/`makeReorderable()`'s own
+nearest-candidate fallback) can still mathematically resolve a 0-height
+rect as the nearest drop target by distance-to-center, but with no
+visible affordance and (for anything other than a mouse landing near
+that literal 0px seam) an unreliable-in-practice target, this reads as
+"just doesn't work" exactly as reported.
+
+Fix: broadened the selector to plain `.dp-group-body:empty` (drops the
+`.dp-group-body > .dp-group >` ancestor requirement entirely, same CSS
+specificity -- both selectors have 2 class-equivalent simple
+selectors, so this is a strict superset with no conflict) so BOTH a
+top-level and a nested empty group get the identical dashed 20px drop
+zone.
+
+Verified live via real (non-synthetic) drag gestures, not just a code
+read: opened the actual running page (`?dev=1`), created a fresh
+top-level empty group via "+ Add Group", confirmed via
+getBoundingClientRect() that its body now measures a real 20px height
+with the dashed border applied (was 0px before this fix -- confirmed
+by inspecting the exact same selector logic pre-edit), then performed
+a real `left_click_drag` from an existing group's own drag handle
+(FLOOR) onto that empty group's body and confirmed via DOM inspection
+AND a screenshot that FLOOR now renders nested/indented inside it.
+Regression-checked the ORIGINAL narrower case (nesting into an
+already-nested empty group) still works: created a second fresh group,
+nested IT into the first (making it itself an empty NESTED group, i.e.
+depth 1), confirmed its body still gets the 20px target, then dragged
+a third existing group (END EMERGE) onto it and confirmed it nested
+correctly at depth 2. `node --check` on the extracted script content
+clean throughout (the change is CSS-only, no JS touched). Zero new
+console errors (only the pre-existing, already-documented
+net::ERR_CONNECTION_RESET noise). Confirmed the live drag test did NOT
+persist to the git-tracked settings file (`git status`/`git diff`
+clean on `data/processed/dev-panel-settings.json` afterward) -- Save
+Settings was never invoked, this was pure in-memory DOM state.
+
+Per the standing "push before updating project docs" instruction,
+committed and pushed the code fix (420789f) first -- fetch found 3
+concurrent "Save Settings" commits from the user's own live dev-panel
+tuning (a695506..49e84c1, touching only
+data/processed/dev-panel-settings.json, no overlap with index.html),
+merged cleanly via `git pull --no-rebase` (no conflicts, different
+files), pushed (701b3e5) -- THEN made this doc pass as a separate
+follow-up.
