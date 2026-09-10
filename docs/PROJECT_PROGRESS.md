@@ -31,15 +31,19 @@ behind-pinky) based on the mouse's angle from center -- angle math and
 the forward+reverse click sequence both ported directly from
 DotFlicko's own `mouseAngleFromCenter()`/`directionIndexForAngle()`/
 `ensureDirectionLoaded()`. 4 interaction modes, each its own 2TONED
-variant folder (8 directions x 4 variants, 608 new source frames):
-click (A forward+reverse), right-click/right-click-hold (SNAP
-forward-once, no duration distinction per explicit spec), double-click
-(SCISS forward-once), click-and-hold (CHARGE forward-once then
-loop-tail excluding frame 0, release always plays the click sequence
--- same convention Animations 1/3's own hold already uses). New
-"FLICK MOUSE" dev-panel group (Enabled/Scale/Anim Speed/Position &
-Rotation Smoothing/Angle Offset/Hold Max Speed & Duration). Gesture
-listeners are fully independent of the rope's own
+variant folder: click (A forward+reverse, 20 frames), right-click/
+right-click-hold (SNAP forward-once, no duration distinction per
+explicit spec), double-click (SCISS forward-once), click-and-hold
+(CHARGE forward-once then loop-tail excluding frame 0, release always
+plays the click sequence -- same convention Animations 1/3's own hold
+already uses). SNAP and SCISS were both expanded from 24 to **45
+frames each** shortly after shipping (2026-09-10, "I updated SCISS and
+SNAP frames") -- the user replaced all 16 variant folders' source PNGs
+with a bigger set and new per-folder prefixes; `MOUSE_FLICK_DIRECTIONS`
+updated to match, re-verified against disk (0 missing across 720
+expected PNG paths). New "FLICK MOUSE" dev-panel group (Enabled/Scale/
+Anim Speed/Position & Rotation Smoothing/Angle Offset/Hold Max Speed &
+Duration). Gesture listeners are fully independent of the rope's own
 onPointerDown/onPointerUp (not merged in), so this coexists cleanly
 with existing right-click Rope Attraction and double-click rope-
 cutting. Collision physics from DotFlicko's own bouncing-ball demo
@@ -55,14 +59,31 @@ gesture modes confirmed end-to-end through real dispatched
 PointerEvents (fronting the tab via `tabs_select` immediately before
 dispatch, the same fix this project's history already established for
 synthetic-event delivery): click's 39-frame forward+reverse sequence,
-right-click's 24-frame SNAP, double-click's 24-frame SCISS, and
+SNAP and SCISS's (now 45-frame each) forward-once sequences, and
 charge's exact loop-tail sequence (`[...,6,7,7,1,1,2,2,3,3,...]` --
 forward through all 8 frames once, then permanently loops 1-7,
 verified never revisiting 0) followed by a correct release-into-click
-transition. 608/608 new frames confirmed loading with zero broken
-images. See "Open questions / blockers" below for a critical,
-unrelated discovery made while verifying this feature (Animations
-1/3's own original assets are gone from disk).
+transition. 608 original + 720 SCISS/SNAP-update frames all confirmed
+loading with zero broken images. See "Open questions / blockers"
+below for a critical, unrelated discovery made while verifying this
+feature (Animations 1/3's own original assets are gone from disk).
+
+**Real cross-platform bug caught during the SCISS/SNAP update (worth
+remembering for any future frame-prefix rename on this project):**
+`BEHIND THUMB - SCISS`'s old prefix ("BehindThumb") and new prefix
+("BEHINDTHUMB") differ ONLY by case. Windows' case-insensitive
+filesystem silently overwrote the old files in place, so `git status`
+initially reported this as a same-path modification rather than a
+delete+add -- which would have kept the OLD-case path tracked in the
+repo while index.html requests the NEW-case path: invisible locally
+(Windows resolves both the same), but a guaranteed 404 on Vercel's
+case-sensitive Linux filesystem. Fixed via `git rm --cached` + re-add
+so the tracked path matches the real new-case filename; confirmed via
+a systematic scan against the previous commit's tracked paths that
+this was the only one of 16 folders affected. Any future prefix
+rename on this project should re-run that same case-collision check
+before committing, not just a plain existence check (which, being
+case-insensitive on Windows too, would NOT have caught this).
 
 Dev panel audited against CLAUDE.md's own §12 standard (per explicit
 request) -- already ~fully compliant (full resize/move/hide/collapse,

@@ -9278,3 +9278,62 @@ concurrent "Save Settings" commits from the user's own live tuning
 (touching only data/processed/dev-panel-settings.json), merged
 cleanly via `git pull --no-rebase`, pushed (131db77) -- THEN made this
 doc pass as a separate follow-up.
+
+================================================================================
+2026-09-10  -  01:01 PM EDT
+
+"I updated SCISS and SNAP frames. update and push." Enumerated all 16
+affected folders (8 directions x {SCISS, SNAP}) via a Node script
+before touching code, same discipline as every prior frame-update
+round: found the user had both expanded the frame count (24 -> 45 per
+folder) AND renamed every folder's own prefix (e.g. BEHIND's SCISS
+prefix "2T -Behind - SCISS" -> "2T BEHIND - SCISS", SNAP prefix "2T
+-Blabehind - SNAP" -> "2T Behind-SNAP") -- confirmed via direct
+enumeration that all 16 folders now hold cleanly contiguous 1-45 PNGs,
+each with its own genuinely different prefix (no 2 folders share a
+convention, consistent with every prior round). Updated all 16
+sciss/snap `{prefix, count}` pairs in `MOUSE_FLICK_DIRECTIONS`,
+verified 0 missing across 720 expected PNG paths, converted all 720
+new PNGs to WebP via the established sharp pipeline.
+
+Caught a real, previously-undiscovered class of bug for this project
+before committing: `BEHIND THUMB - SCISS`'s old prefix ("BehindThumb")
+and new prefix ("BEHINDTHUMB") differ ONLY by case. Windows' own
+case-insensitive filesystem silently overwrote the old files in place
+when the user's new content was copied in, so `git status` reported
+this specific folder's 24 old frames as a same-path MODIFICATION
+rather than a clean delete+add -- which would have committed the OLD
+case ("BehindThumb") as the tracked path while index.html requests
+the NEW case ("BEHINDTHUMB"). This is invisible locally (both Windows
+and this project's own `fs.existsSync()`-based verification scripts
+resolve paths case-insensitively on Windows, so the standard "0
+missing" check would NOT have caught it) but a guaranteed 404 on
+Vercel's case-sensitive Linux filesystem -- the exact same class of
+"works locally, breaks on deploy" issue as the recently-resolved "dev
+panel no longer shows" report, just from a different root cause this
+time. Wrote a systematic scanner comparing every one of the 16
+folders' OLD tracked paths (at the last pushed commit, 95fde6c)
+against the NEW expected filenames case-insensitively, confirming
+`BEHIND THUMB - SCISS` was the ONLY folder affected (not just
+assumed from the one instance found by chance). Fixed via `git rm
+--cached` on the 48 old-case paths (24 frames x 2 formats) followed by
+a fresh `git add` of the whole folder, so the tracked path now
+correctly matches the real new-case filename for all 45 frames.
+Documented this gotcha in both `docs/PROJECT_PROGRESS.md` and
+`CLAUDE.md`'s own Gotchas section for future prefix-rename rounds,
+since a plain existence check alone provably cannot catch this class
+of bug on this specific Windows dev machine.
+
+Verified live via a temporary debug hook (grep-confirmed removed
+before finishing, node --check clean throughout): all 16 folders
+report sciss/snap frame counts of exactly 45, zero broken images
+across all 720 new frames, and both a SCISS and a SNAP playback
+(driven via `mouseFlickStartPlay()` + manual `update(FIXED_DT)` ticks,
+the same rAF-bypass technique established for this feature's own
+prior verification round) correctly play through their full 45 frames
+and return to `mfMode: 'idle'`.
+
+Per the standing "push before updating project docs" instruction,
+committed and pushed the code/asset commit (133dbd2) first -- fetch
+confirmed no divergence from origin/master -- THEN made this doc pass
+as a separate follow-up.

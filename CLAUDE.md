@@ -406,3 +406,20 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   objects and the dropdown's `options` list both need updating together;
   `ENDCAP_BOTTOM_Y` needs no manual update, it iterates `ENDCAP_DESIGNS`
   automatically.
+- When a FLICK frame-set prefix gets renamed (a recurring event on this
+  project), diff the new prefix against the OLD one for a CASE-ONLY
+  difference before trusting a plain existence check. Windows is
+  case-insensitive, so a rename like "BehindThumb" -> "BEHINDTHUMB"
+  silently overwrites the old file in place on disk -- `git status`
+  reports it as a same-path modification (not delete+add), which keeps
+  the OLD-case path tracked in the repo. `fs.existsSync()`-based
+  verification (used throughout this file's own asset-checking scripts)
+  is ALSO case-insensitive on Windows and will NOT catch this -- it
+  happily reports 0 missing even when the tracked path's case doesn't
+  match what the code actually requests. This is invisible locally but
+  a guaranteed 404 on Vercel's case-sensitive Linux filesystem. Real,
+  found-in-the-wild bug (`BEHIND THUMB - SCISS`, 2026-09-10) -- before
+  committing a prefix rename, diff old vs. new prefixes case-sensitively
+  (e.g. `old.toLowerCase() === new.toLowerCase() && old !== new`) across
+  every affected folder, and for any hit, `git rm --cached` the old-case
+  path then re-`git add` so the tracked path matches the real filename.
