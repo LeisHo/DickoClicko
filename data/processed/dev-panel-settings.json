@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.06163413281121,
+    "ropeLength": 15.0616341328112,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -168,19 +168,22 @@
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
-    "flickSource": "side-thumb",
-    "flickX": 37,
+    "flickEnabled": true,
+    "flickSource": "side-pinky-2",
+    "flickX": 28,
     "flickY": 67,
-    "flickScale": 100,
+    "flickScale": 120,
     "flickAnimSpeed": 4,
+    "flick2Enabled": false,
     "flick2X": 19,
     "flick2Y": 23,
     "flick2Scale": 39.5,
     "flick2AnimSpeed": 4.4,
-    "flick3Source": "side-thumb",
-    "flick3X": 66,
+    "flick3Enabled": true,
+    "flick3Source": "side-thumb-scissor",
+    "flick3X": 79,
     "flick3Y": 67,
-    "flick3Scale": 100,
+    "flick3Scale": 120,
     "flick3AnimSpeed": 4,
     "flickHoldMaxSpeed": 4,
     "flickHoldMaxDuration": 2.9,
@@ -221,27 +224,22 @@
       "subgroups": []
     },
     {
+      "key": "New Group (2)",
+      "collapsed": true,
+      "settings": [],
+      "subgroups": []
+    },
+    {
       "key": "New Group",
       "collapsed": false,
       "settings": [],
       "subgroups": []
     },
     {
-      "key": "FLICK ANIMATION 3",
-      "collapsed": true,
-      "settings": [
-        "flick3Source",
-        "flick3X",
-        "flick3Y",
-        "flick3Scale",
-        "flick3AnimSpeed"
-      ],
-      "subgroups": []
-    },
-    {
       "key": "FLICK ANIMATION",
       "collapsed": true,
       "settings": [
+        "flickEnabled",
         "flickSource",
         "flickX",
         "flickY",
@@ -251,9 +249,23 @@
       "subgroups": []
     },
     {
+      "key": "FLICK ANIMATION 3",
+      "collapsed": false,
+      "settings": [
+        "flick3Enabled",
+        "flick3Source",
+        "flick3X",
+        "flick3Y",
+        "flick3Scale",
+        "flick3AnimSpeed"
+      ],
+      "subgroups": []
+    },
+    {
       "key": "FLICK ANIMATION 2",
       "collapsed": true,
       "settings": [
+        "flick2Enabled",
         "flick2X",
         "flick2Y",
         "flick2Scale",
@@ -445,11 +457,11 @@
     }
   ],
   "panelGeometry": {
-    "desktop": {
-      "left": 1552.4375,
-      "top": 62.90625,
-      "width": 249.546875,
-      "height": 570.015625,
+    "mobile": {
+      "left": 182,
+      "top": 42.28571319580078,
+      "width": 229,
+      "height": 374.7857360839844,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -477,11 +489,11 @@
         "textEditMode": false
       }
     },
-    "mobile": {
-      "left": 182,
-      "top": 42.28571319580078,
-      "width": 229,
-      "height": 374.7857360839844,
+    "desktop": {
+      "left": 1552.4375,
+      "top": 62.90625,
+      "width": 249.546875,
+      "height": 570.015625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
