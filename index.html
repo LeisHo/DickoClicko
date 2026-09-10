@@ -2668,14 +2668,24 @@ function isPointInFlick3(x, y){
 // (base/charge/sciss/snap) -- confirmed via direct enumeration, not
 // assumed: every folder has its own idiosyncratic filename prefix (same
 // "no 2 sets share a naming convention" pattern every other 2TONED round
-// this project has hit), though frame numbers are cleanly contiguous
-// 1..count within each folder here (unlike the older non-scissor 2TONED
-// sets' own non-contiguous numbering). Order/keys match DotFlicko's own
-// DIRECTIONS array exactly (8 sectors of 45°, starting at 0°=up and
-// going clockwise) so the adopted angle math maps to the same buckets.
+// this project has hit). charge/sciss/snap stayed cleanly contiguous
+// 1..count as of this writing, but `base` is NOT -- 6 of the 8
+// directions' own frame NUMBERS were changed (2026-09-10, "I updated the
+// non charge, sciss, snap frames") to a non-contiguous set (odds 1-11
+// plus a contiguous 13-20 tail), matching the older non-scissor 2TONED
+// sets' own long-established non-contiguous-numbering convention that
+// this mouse-flick feature had NOT inherited until now. `base` therefore
+// uses an explicit `nums` array (see BASE_A_FRAME_NUMBERS below) instead
+// of a bare `count`, same pattern TWOTONED_A_FRAMES/etc. already use
+// elsewhere in this file -- re-verify by direct enumeration (never
+// assume) if any direction's own base frames change again. Order/keys
+// match DotFlicko's own DIRECTIONS array exactly (8 sectors of 45°,
+// starting at 0°=up and going clockwise) so the adopted angle math maps
+// to the same buckets.
+const BASE_A_FRAME_NUMBERS = [1, 3, 5, 7, 9, 11, 13, 14, 15, 16, 17, 18, 19, 20];
 const MOUSE_FLICK_DIRECTIONS = [
   { key:'behind',
-    base:{   folder:'BEHIND',           prefix:'2T -Flabbehind',       count:20 },
+    base:{   folder:'BEHIND',           prefix:'2T -Flabbehind',       nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'BEHIND - CHARGE',  prefix:'2T Behind-CHARGE',     count:8 },
     sciss:{  folder:'BEHIND - SCISS',   prefix:'2T BEHIND - SCISS',   count:45 },
     snap:{   folder:'BEHIND - SNAP',    prefix:'2T BEHIND - SNAP', count:45 } },
@@ -2685,27 +2695,27 @@ const MOUSE_FLICK_DIRECTIONS = [
     sciss:{  folder:'BEHIND THUMB - SCISS',   prefix:'2T BEHINDTHUMB - SCISS', count:45 },
     snap:{   folder:'BEHIND THUMB - SNAP',    prefix:'2T BEHINDTHUB - SNAP', count:45 } },
   { key:'side-thumb',
-    base:{   folder:'SIDE THUMB',           prefix:'2T -DirectThumb',       count:20 },
+    base:{   folder:'SIDE THUMB',           prefix:'2T -DirectThumb',       nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'SIDE THUMB - CHARGE',  prefix:'2T DirectThumb-CHARGE', count:8 },
     sciss:{  folder:'SIDE THUMB - SCISS',   prefix:'2TDIRECTTHUMB - SCISS', count:45 },
     snap:{   folder:'SIDE THUMB - SNAP',    prefix:'2T DIRECTTHUB - SNAP',  count:45 } },
   { key:'front-thumb',
-    base:{   folder:'FRONT THUMB',           prefix:'2T -SideThub',           count:20 },
+    base:{   folder:'FRONT THUMB',           prefix:'2T -SideThub',           nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'FRONT THUMB - CHARGE',  prefix:'2T FrontThumb-CHARGE',   count:8 },
     sciss:{  folder:'FRONT THUMB - SCISS',   prefix:'2T FRONTTHUMB - SCISS', count:45 },
     snap:{   folder:'FRONT THUMB - SNAP',    prefix:'2T FRONTTHUB - SNAP', count:45 } },
   { key:'front',
-    base:{   folder:'FRONT',           prefix:'2T -Flabove',       count:20 },
+    base:{   folder:'FRONT',           prefix:'2T -Flabove',       nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'FRONT - CHARGE',  prefix:'2T Front-CHARGE',   count:8 },
     sciss:{  folder:'FRONT - SCISS',   prefix:'2T FRONT - SCISS', count:45 },
     snap:{   folder:'FRONT - SNAP',    prefix:'2T FRONT - SNAP', count:45 } },
   { key:'front-pinky',
-    base:{   folder:'FRONT PINKY',           prefix:'2T -SidePink',           count:20 },
+    base:{   folder:'FRONT PINKY',           prefix:'2T -SidePink',           nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'FRONT PINKY -CHARGE',   prefix:'2T FrontPink-CHARGE',    count:8 },
     sciss:{  folder:'FRONT PINKY - SCISS',   prefix:'2T FRONTPINK - SCISS',  count:45 },
     snap:{   folder:'FRONT PINKY - SNAP',    prefix:'2T FRONTPINK - SNAP',  count:45 } },
   { key:'side-pinky',
-    base:{   folder:'SIDE PINKY',           prefix:'2T -DirectPink',        count:20 },
+    base:{   folder:'SIDE PINKY',           prefix:'2T -DirectPink',        nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'SIDE PINKY - CHARGE',  prefix:'2T DirectPink-CHARGE',  count:8 },
     sciss:{  folder:'SIDE PINKY - SCISS',   prefix:'2T DIRECTPINK - SCISS', count:45 },
     snap:{   folder:'SIDE PINKY - SNAP',    prefix:'2T DIRECTPINK - SNAP', count:45 } },
@@ -2729,14 +2739,19 @@ function mouseFlickFrameUrl(variant, n){
 // as flick3HoldFrameIndex() above, not baked into a fixed sequence).
 const mouseFlickFramesByDirection = {};
 MOUSE_FLICK_DIRECTIONS.forEach(dir => {
+  // variant.nums (explicit frame-number array) takes priority over
+  // variant.count (implied contiguous 1..count) when both could apply --
+  // added when 6 of 8 base sets' frame NUMBERS themselves changed to a
+  // non-contiguous set (odds 1-11 plus a contiguous 13-20 tail), not just
+  // a prefix/count rename like every earlier round. sciss/snap/charge
+  // stay count-based (still genuinely contiguous as of this writing).
   const load = (variant) => {
-    const forward = [];
-    for (let n = 1; n <= variant.count; n++){
+    const numbers = variant.nums || Array.from({ length: variant.count }, (_, i) => i + 1);
+    return numbers.map(n => {
       const img = new Image();
       img.src = mouseFlickFrameUrl(variant, n);
-      forward.push(img);
-    }
-    return forward;
+      return img;
+    });
   };
   const baseForward = load(dir.base);
   mouseFlickFramesByDirection[dir.key] = {
