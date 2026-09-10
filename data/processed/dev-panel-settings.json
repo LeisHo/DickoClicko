@@ -97,7 +97,7 @@
     ],
     "arcSeamOverlapPx": 2.8,
     "clickIntensity": 1.1,
-    "holdDistance": 22.5,
+    "holdDistance": 28.5,
     "bendStiffness": 0.01,
     "ropeAnimSpeed": 1.2,
     "gravityStrength": 1.7,
@@ -107,8 +107,8 @@
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 8.4,
     "minRopeLength": 2.6,
-    "clickDistance": 15,
-    "doubleClickDistance": 15,
+    "clickDistance": 18,
+    "doubleClickDistance": 18,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.1,
@@ -343,7 +343,7 @@
     },
     {
       "key": "ANCHOR PHYSICS",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "circleBoundaryOffset",
         "anchorWeight"
@@ -352,7 +352,7 @@
     },
     {
       "key": "ROPE CUT",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "doubleClickDistance",
         "clickDistance",
@@ -371,7 +371,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "pieceGradientEnabled",
         "pieceGradientColors",
@@ -398,7 +398,7 @@
     },
     {
       "key": "ROPE ANIMATION",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "ropeAnimSpeed",
         "gravityStrength",
