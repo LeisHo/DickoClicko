@@ -9000,3 +9000,72 @@ untouched; confirmed the file was still syntactically valid (node
 --check) with both changes present together before committing.
 Committed and pushed (46eb830..7ce807b) -- git fetch/log confirmed
 clean, no divergence from origin/master before pushing.
+
+================================================================================
+2026-09-10  -  05:13 AM EDT
+
+Continuation of the Scissor-set feature whose CODE landed (disclosed
+as bundled, not authored) in the prior entry's 7ce807b commit: "I
+added 3 new folers to the 2Toned. I want yuo to integrate the new
+frames into Animation 3. In these 3 folders there is only a subfolder
+A. When Clicked, You will animate the frames in sequence, then in
+reverse. Click and hold will remain as the apprpriate C folder. So
+for Side Pinky Scissor, you wll use C in Side Pinky 2, For Above
+Scissor, you will use C in Above, and for Side thumb scissor, you
+will use C in Side Thumb."
+
+Enumerated the 3 new source folders (`ABOVE - SCISSOR`, `SIDE PINKY -
+SCISSOR`, `SIDE THUMB - SCISSOR`, each with only an `A` subfolder) via
+a Node script rather than assuming a naming convention -- every prior
+round this session revealed a genuinely different convention per set,
+and this round was no exception: `ABOVE - SCISSOR` and `SIDE THUMB -
+SCISSOR` use an unusual missing-space prefix ("2T -FlatAbove - CUT",
+"2T -SideThub - CUT") vs. `SIDE PINKY - SCISSOR`'s "2T - SidePinky -
+CUT" (space after "2T"). 15 PNGs per folder (numbers 1,3,5,6,7,11-20),
+45 total.
+
+Added `SCISSOR_SETS` (folder/abPrefix/holdKey per key), `SCISSOR_KEYS`,
+`SCISSOR_A_FRAME_NUMBERS`/`SCISSOR_A_FRAMES`, and `scissorFrameUrl()`
+to index.html, plus 3 new options on the existing "Flick3 Frame Set"
+dropdown only (Animation 3, not Animation 1 -- the user's request was
+scoped to Animation 3 specifically): Above Scissor, Side Pinky
+Scissor, Side Thumb Scissor (9 total options now). Two genuinely new
+patterns not used by any existing FLICK set:
+
+- Click plays the A folder forward, then REVERSES ITSELF (not a
+  different B folder -- there is no B here) with the shared peak
+  frame excluded from the reverse pass (`forward.slice(0, -1).reverse()`)
+  to avoid a visible double-frame stutter at the turnaround. Verified
+  via a standalone Node calculation before wiring into the real code.
+- Click-and-hold BORROWS an existing, unrelated set's own C-folder
+  hold frames rather than loading its own: `holdKey` on each
+  `SCISSOR_SETS` entry points at the TWOTONED_SETS key whose hold
+  animation applies (above-scissor -> above, side-pinky-scissor ->
+  side-pinky-2, side-thumb-scissor -> side-thumb), and
+  `flick3HoldFramesBySource[key]` is assigned the SAME array reference
+  the borrowed key already built -- no duplicate loading. Verified via
+  JSON.stringify equality that all 3 cross-references are byte-
+  identical to their borrowed set's own hold-frames array.
+
+Converted all 45 new PNGs to WebP via sharp (same resize-1400px-wide +
+quality-90 pipeline as every other FLICK asset).
+
+Verified via a temporary debug hook (grep-confirmed removed, node
+--check clean afterward): frame counts (29 for both tested scissor
+sets, matching 15 forward + 14 reverse), all 3 hold-frame cross-
+references confirmed byte-identical to their borrowed sets, all 45 new
+network requests returned 200 OK, the dropdown correctly lists all 9
+options, and a real dispatched click on an actual visible (non-
+transparent) pixel of "above-scissor" correctly logged
+"down:flick3 ... up:flick3-play ... heldMs:0" end-to-end through the
+real production code.
+
+This session picked up mid-task after a context-window compaction --
+the code above was already committed (bundled into 7ce807b by a
+different concurrent session, per that commit's own disclosure note)
+by the time this session resumed, but the 3 new source asset folders
+(45 PNG + 45 WebP, 90 files) were still untracked. Per the standing
+"push before updating project docs" instruction, committed and pushed
+just the asset folders (977dd0d) first -- clean fast-forward, no
+divergence from origin/master -- then made this doc pass as a
+separate follow-up.

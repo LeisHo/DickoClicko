@@ -765,7 +765,28 @@ additions. Current state of each subsystem:
   the forward-then-loop-tail sequence advances. A playing sequence pauses
   on whichever frame isn't loaded yet instead of racing past it on a
   real-time clock.
-  All 42 frames across the 3 folders were originally 6870x6166px PNGs
+  Animation 3's 2TONED data further extended (2026-09-10) with a
+  "Scissor" variant on 3 of the existing sets, per explicit request:
+  `ABOVE - SCISSOR`, `SIDE PINKY - SCISSOR`, `SIDE THUMB - SCISSOR`
+  each have only an `A` subfolder (15 frames each, non-contiguous
+  numbers 1,3,5,6,7,11-20) plus their own click-triggered prefix (yet
+  another distinct naming convention -- see `SCISSOR_SETS` in
+  index.html). 3 new options added to the Flick3 Frame Set dropdown
+  only (9 total; Animation 1's dropdown untouched, scoped by the
+  request). Two new patterns not used elsewhere in FLICK: click plays
+  the A folder forward then reverses itself (no separate B folder,
+  shared peak frame excluded from the reverse pass to avoid a
+  stutter), and click-and-hold BORROWS an existing set's own C-folder
+  hold frames via a `holdKey` field (above-scissor->above,
+  side-pinky-scissor->side-pinky-2, side-thumb-scissor->side-thumb) --
+  the same Image array reference, no duplicate loading. Verified via a
+  temporary debug hook: frame counts, byte-identical hold-frame
+  cross-references (JSON equality), all 45 new network requests 200
+  OK, and a real dispatched click end-to-end. Code landed bundled into
+  a concurrent session's commit (7ce807b, disclosed there); this
+  session's own asset folders (45 PNG + 45 WebP) committed/pushed
+  separately (977dd0d) after a context-compaction resume.
+- All 42 frames across the 3 folders were originally 6870x6166px PNGs
   (up to 760KB each) despite rendering at only 50% vmin on screen --
   fine on the local dev server's cache but on the deployed Vercel site
   the ~40 concurrent oversized requests fired on every page load
