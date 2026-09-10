@@ -579,6 +579,7 @@ const DEV_GROUPS = [
         { value:'side-behind', label:'Side Behind' },
         { value:'side-front',  label:'Side Front' },
         { value:'side-pinky',  label:'Side Pinky' },
+        { value:'side-pinky-2', label:'Side Pinky 2' },
         { value:'side-thumb',  label:'Side Thumb' },
       ] },
     { key:'flickX',         label:'Flick X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
@@ -599,6 +600,7 @@ const DEV_GROUPS = [
         { value:'side-behind', label:'Side Behind' },
         { value:'side-front',  label:'Side Front' },
         { value:'side-pinky',  label:'Side Pinky' },
+        { value:'side-pinky-2', label:'Side Pinky 2' },
         { value:'side-thumb',  label:'Side Thumb' },
       ] },
     { key:'flick3X',         label:'Flick3 X Pos',    type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:15 },
@@ -2146,31 +2148,42 @@ const FLICK_BASE_FPS = 12; // playback rate at Flick Anim Speed = 1x
 // misspelled ("SideThub") while its C prefix spells it correctly
 // ("SideThumb") -- so abPrefix/cPrefix are listed separately per set
 // rather than derived from one shared pattern.
+// ABOVE's own frames were replaced (2026-09-10, same round as 2TONED's
+// own ABOVE replacement) with yet another naming convention ("3T -
+// FlatAbove_NNN.png" / "3T - FlatAbove-CHARGE_NNN.png") -- confirmed via
+// `ls`, not assumed to match the OLD "3T - SideAbove" convention just
+// because it's the same set. A new SIDE PINKY - 2 set was also added,
+// using this same newer "Flat"-era convention's C-suffix style (no space
+// before CHARGE).
 const THREETONED_SETS = {
-  'above':       { folder: 'ABOVE',       abPrefix: '3T - SideAbove',  cPrefix: '3T - SideAbove -CHARGE' },
-  'side-behind': { folder: 'SIDE BEHIND', abPrefix: '3T - SideBehind', cPrefix: '3T - SideBehind -CHARGE' },
-  'side-front':  { folder: 'SIDE FRONT',  abPrefix: '3T - SideFront',  cPrefix: '3T - SideFront -CHARGE' },
-  'side-pinky':  { folder: 'SIDE PINKY',  abPrefix: '3T - SidePinky',  cPrefix: '3T - SidePinky-CHARGE' },
-  'side-thumb':  { folder: 'SIDE THUMB',  abPrefix: '3T - SideThub',   cPrefix: '3T - SideThumb-CHARGE' },
+  'above':        { folder: 'ABOVE',          abPrefix: '3T - FlatAbove',  cPrefix: '3T - FlatAbove-CHARGE' },
+  'side-behind':  { folder: 'SIDE BEHIND',     abPrefix: '3T - SideBehind', cPrefix: '3T - SideBehind -CHARGE' },
+  'side-front':   { folder: 'SIDE FRONT',      abPrefix: '3T - SideFront',  cPrefix: '3T - SideFront -CHARGE' },
+  'side-pinky':   { folder: 'SIDE PINKY',      abPrefix: '3T - SidePinky',  cPrefix: '3T - SidePinky-CHARGE' },
+  'side-pinky-2': { folder: 'SIDE PINKY - 2',  abPrefix: '3T - SidePinky2', cPrefix: '3T - SidePinky2-CHARGE' },
+  'side-thumb':   { folder: 'SIDE THUMB',      abPrefix: '3T - SideThub',   cPrefix: '3T - SideThumb-CHARGE' },
 };
 const THREETONED_KEYS = Object.keys(THREETONED_SETS);
 // A/B/C are all genuinely uniform across every set here (unlike 2TONED's
-// own SIDE BEHIND/A exception) -- confirmed via `ls` for all 5 sets --
+// own SIDE BEHIND/A exception) -- confirmed via `ls` for every set --
 // but still listed per-set rather than 1 shared array, same "a future
-// edit to only 1 set shouldn't silently affect the other 4" reasoning.
+// edit to only 1 set shouldn't silently affect the others" reasoning.
 const THREETONED_A_FRAMES = {
   'above': [1, 3, 7, 9, 11, 13, 14], 'side-behind': [1, 3, 7, 9, 11, 13, 14],
   'side-front': [1, 3, 7, 9, 11, 13, 14], 'side-pinky': [1, 3, 7, 9, 11, 13, 14],
+  'side-pinky-2': [1, 3, 7, 9, 11, 13, 14],
   'side-thumb': [1, 3, 7, 9, 11, 13, 14],
 };
 const THREETONED_B_FRAMES = {
   'above': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], 'side-behind': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
   'side-front': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], 'side-pinky': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+  'side-pinky-2': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
   'side-thumb': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
 };
 const THREETONED_C_FRAMES = {
   'above': [1,2,3,4,5,6,7,8], 'side-behind': [1,2,3,4,5,6,7,8],
   'side-front': [1,2,3,4,5,6,7,8], 'side-pinky': [1,2,3,4,5,6,7,8],
+  'side-pinky-2': [1,2,3,4,5,6,7,8],
   'side-thumb': [1,2,3,4,5,6,7,8],
 };
 function threetonedFrameUrl(key, sub, num, charge){
@@ -2361,35 +2374,43 @@ function isPointInFlick2(x, y){
 // own folder contents change.
 //
 // TWOTONED_SETS maps each dropdown value to its real on-disk FOLDER name
-// (has a space, e.g. "SIDE BEHIND") and its own FILENAME prefix (no
-// space, e.g. "SideBehind" -- confirmed via `ls`, matches the folder
-// name with spaces stripped for every set). C's own filenames use a
-// "<prefix>-Charge_NNN.png" pattern, distinct from A/B's own
-// "<prefix>_NNN.png".
+// (has a space, e.g. "SIDE BEHIND") and its own FILENAME prefix(es).
+// Originally every set shared 1 clean prefix (e.g. "SideBehind" for A/B,
+// "SideBehind-Charge" for C) -- that broke down once ABOVE's own frames
+// were replaced (2026-09-10) with a genuinely different naming
+// convention ("2T - FlatAbove_NNN.png" / "2T - FlatAbove - CHARGE_NNN.png",
+// note the spaces around the dash and the all-caps CHARGE, both absent
+// from the original convention) and a brand-new SIDE PINKY - 2 set was
+// added using that SAME newer convention -- so abPrefix/cPrefix are now
+// listed separately per set (mirroring THREETONED_SETS' own already-
+// established pattern for this exact reason), not derived from 1 shared
+// formula.
 const TWOTONED_SETS = {
-  'above':       { folder: 'ABOVE',       prefix: 'Above' },
-  'side-behind': { folder: 'SIDE BEHIND', prefix: 'SideBehind' },
-  'side-front':  { folder: 'SIDE FRONT',  prefix: 'SideFront' },
-  'side-pinky':  { folder: 'SIDE PINKY',  prefix: 'SidePinky' },
-  'side-thumb':  { folder: 'SIDE THUMB',  prefix: 'SideThumb' },
+  'above':         { folder: 'ABOVE',           abPrefix: '2T - FlatAbove',  cPrefix: '2T - FlatAbove - CHARGE' },
+  'side-behind':   { folder: 'SIDE BEHIND',      abPrefix: 'SideBehind',     cPrefix: 'SideBehind-Charge' },
+  'side-front':    { folder: 'SIDE FRONT',       abPrefix: 'SideFront',      cPrefix: 'SideFront-Charge' },
+  'side-pinky':    { folder: 'SIDE PINKY',       abPrefix: 'SidePinky',      cPrefix: 'SidePinky-Charge' },
+  'side-pinky-2':  { folder: 'SIDE PINKY - 2',   abPrefix: '2T - SidePinky2', cPrefix: '2T - SidePinky2 - CHARGE' },
+  'side-thumb':    { folder: 'SIDE THUMB',       abPrefix: 'SideThumb',      cPrefix: 'SideThumb-Charge' },
 };
 const TWOTONED_KEYS = Object.keys(TWOTONED_SETS);
 // A's frame numbers are non-contiguous (a sparser sampling than B/C) --
-// identical across 4 of the 5 sets, but SIDE BEHIND's own A folder has 1
-// extra frame (15) the other 4 don't -- confirmed via `ls`, listed
+// identical across all sets except SIDE BEHIND, whose own A folder has 1
+// extra frame (15) the others don't -- confirmed via `ls`, listed
 // explicitly per set rather than assumed uniform, same discipline this
 // file already applies everywhere else a per-set frame list exists (see
 // GENERATED_A_FILES_BY_SOURCE's own history above for why "assumed
 // uniform" has bitten this exact class of data before). B and C ARE
-// genuinely uniform across all 5 sets (B: 1-15 full range; C: 1-8 full
+// genuinely uniform across every set (B: 1-15 full range; C: 1-8 full
 // range) -- still listed per-set rather than collapsed into 1 shared
 // array, so a future edit that breaks that uniformity for only 1 set
-// doesn't silently affect the other 4.
+// doesn't silently affect the others.
 const TWOTONED_A_FRAMES = {
   'above':       [1, 3, 7, 9, 11, 13, 14],
   'side-behind': [1, 3, 7, 9, 11, 13, 14, 15],
   'side-front':  [1, 3, 7, 9, 11, 13, 14],
   'side-pinky':  [1, 3, 7, 9, 11, 13, 14],
+  'side-pinky-2': [1, 3, 7, 9, 11, 13, 14],
   'side-thumb':  [1, 3, 7, 9, 11, 13, 14],
 };
 const TWOTONED_B_FRAMES = {
@@ -2397,6 +2418,7 @@ const TWOTONED_B_FRAMES = {
   'side-behind': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   'side-front':  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   'side-pinky':  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  'side-pinky-2': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   'side-thumb':  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
 };
 const TWOTONED_C_FRAMES = {
@@ -2404,12 +2426,13 @@ const TWOTONED_C_FRAMES = {
   'side-behind': [1, 2, 3, 4, 5, 6, 7, 8],
   'side-front':  [1, 2, 3, 4, 5, 6, 7, 8],
   'side-pinky':  [1, 2, 3, 4, 5, 6, 7, 8],
+  'side-pinky-2': [1, 2, 3, 4, 5, 6, 7, 8],
   'side-thumb':  [1, 2, 3, 4, 5, 6, 7, 8],
 };
 function twotonedFrameUrl(key, sub, num, chargeSuffix){
   const set = TWOTONED_SETS[key];
-  const name = chargeSuffix ? `${set.prefix}-Charge_${String(num).padStart(3, '0')}` : `${set.prefix}_${String(num).padStart(3, '0')}`;
-  return `data/FLICK/2TONED/${encodeURIComponent(set.folder)}/${sub}/${name}.webp`;
+  const prefix = chargeSuffix ? set.cPrefix : set.abPrefix;
+  return `data/FLICK/2TONED/${encodeURIComponent(set.folder)}/${sub}/${encodeURIComponent(prefix + '_' + String(num).padStart(3, '0') + '.webp')}`;
 }
 // One preloaded Image array per source set, keyed by cfg.flick3Source's
 // own string values -- built once at load (same eager-preload
