@@ -8459,6 +8459,84 @@ demonstrated tension between 2 previously-shipped fixes rather than
 picking an arbitrary middle ground.
 
 ================================================================================
+2026-09-10  -  12:31 AM EDT
+
+"check the dev panel template again and implement the new material" --
+TEMPLATE_DEV_PANEL.html had been updated (mtime 2026-09-10 00:13, ~10
+min before this session; +133 lines) since the last port. Diffed by
+reading the file fresh rather than assuming a small change: added a
+Table of Contents comment block with [CSS-N]/[JS-N] section tags
+(navigation only, nothing to port), and one genuine functional change
+-- group nesting went from "one level only" to UNLIMITED depth, via a
+new devGroupNestingDepth() helper that sorts drag-target candidates
+DEEPEST-first at the 2 setupDragReorder() call sites (group dragging
+and row dragging), with the tab root always listed LAST as the
+top-level fallback.
+
+Cross-referencing this against DICKOCLICKO's own existing port
+revealed something more important than a missing feature: the
+earlier one-level nesting design here had a REAL, undetected bug, not
+just a deliberate cap. groupDragTargets() listed #dpGroups FIRST in
+its returned candidate list; since #dpGroups' own bounding rect
+always geometrically CONTAINS every group body's rect (it's the
+scrollable container housing them all), makeReorderable()'s own
+`candidates.find(c => pointerY within c's own rect)` hit-test would
+match #dpGroups FIRST for ANY pointer position anywhere in the panel
+-- meaning a drop could never actually register as "into THIS
+specific group," 100% of the time, regardless of pointer precision.
+The one-level nesting feature shipped 2 entries ago was therefore
+likely never actually reachable via drag at all (only via
+applyOrder()'s own JSON-restore path, which is how the earlier
+verification's jsdom tests happened to pass -- they built ALREADY-
+nested structures directly and tested capture/restore, never actually
+simulating a live drag-and-drop hit-test sequence through the real
+find()-based algorithm). This was missed at the time because that
+round's own jsdom test checked groupDragTargets()'s RETURNED
+CANDIDATE LIST for correct membership/exclusions, but never simulated
+the order-dependent find() resolution against that list -- exactly
+where the bug lived.
+
+Fixed by folding the template's own fix back in: groupDragTargets()
+now collects ALL .dp-group-body elements anywhere in the tree (not
+just top-level), via a new groupNestingDepth() helper sorts them
+DEEPEST-first, and appends #dpGroups LAST as the fallback -- so
+find() always prefers the most specific match, only falling through
+to a shallower one when the pointer is genuinely outside every deeper
+candidate. Still excludes the dragged group's own body AND every one
+of its descendants' bodies (draggedGroup.contains(gb)). captureGroup()/
+placeGroup() needed NO code changes -- both were already genuinely
+recursive with no depth cap in the actual logic, only their own
+comments claimed "one level deep" (describing the old drag
+limitation, not a real code constraint) -- updated those comments for
+accuracy. The CSS nesting-indent rules also needed no changes -- the
+selectors were never depth-limited either (margin-left/border-left
+naturally compound at each level via normal CSS cascade), only the
+comment described "one level."
+
+Verified this round with a genuinely stronger test than before:
+a jsdom simulation that runs the ACTUAL find()-based hit-test logic
+(copied verbatim from makeReorderable()'s own move() function)
+against a real 3-level-deep nested structure with realistic,
+geometrically-nested mocked rects -- confirmed the OLD candidate
+ordering reproduces the bug exactly (always resolves to #dpGroups for
+a point anywhere inside the nested structure), and the NEW ordering
+correctly resolves to the deepest matching candidate, correctly
+resolves to a shallower candidate when the pointer is only inside
+that shallower one, correctly falls back to #dpGroups when the
+pointer is outside every group (un-nesting), and correctly excludes
+a dragged group's own body and all its descendants' bodies at any
+depth. Separately re-verified captureGroup()/placeGroup()'s own
+capture-then-restore round trip at a genuine 3 levels deep, restoring
+onto a flat, freshly-built DOM (matching the real resetSettings()
+flow). Full syntax check passed.
+
+No live in-game confirmation possible (Browser pane still down) --
+but this round's verification is meaningfully more rigorous than the
+original nesting port's own (simulating the actual hit-test algorithm
+rather than only checking data-structure correctness), specifically
+because that gap is what let the original bug ship undetected.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the

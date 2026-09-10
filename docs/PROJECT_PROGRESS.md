@@ -36,9 +36,18 @@ own styling/grouping capabilities (beyond what §12's text alone
 specifies) -- 16 new "Dev Panel" appearance settings (accent/slider
 color, font family, button height/text-border, scroll strength, 4x
 capitalize toggles, 4x letter-spacing); a "+ Add Group" button; and
-one-level group nesting (drag a group into another top-level group's
-own body) with recursive order capture/restore that lets a nested
-arrangement, and a purely custom group, both survive Reset/reload.
+group nesting (drag a group into another group's own body) with
+recursive order capture/restore that lets a nested arrangement, and a
+purely custom group, both survive Reset/reload. **Nesting was
+originally shipped capped at one level, but a later re-check against
+an updated template found and fixed a real bug: the drag hit-test's
+own candidate ordering meant a drop could never actually register as
+"into a specific group" via drag at all (always resolved to the
+top-level container instead) -- the one-level cap was never actually
+reachable in practice.** Now fixed and extended to UNLIMITED nesting
+depth, verified via a jsdom simulation of the actual hit-test
+algorithm (not just data structures) at 3 levels deep -- see
+CHANGELOG.txt for the full account.
 **Corrected in a follow-up round** ("you didnt implement the
 stylizing and visuals... also provide the Text Edit mode checkbox"):
 the fields that genuinely come FROM the template (accent/slider

@@ -70,11 +70,16 @@
   .dp-group { border-top:1px solid #33333f; }
   .dp-group:first-child { border-top:none; }
   .dp-group.dp-dragging, .dp-row.dp-dragging { opacity:.4; }
-  /* Nested group (one level, §12e/template parity) -- a .dp-group-body
-     can directly contain child .dp-group elements, not just .dp-row
-     settings. Indented + left-bordered so nesting is visually obvious;
-     an empty nested group's own body still needs a visible/hittable
-     drop target at 0 rows. */
+  /* Nested group, UNLIMITED depth (§12e/template parity) -- a
+     .dp-group-body can directly contain child .dp-group elements, not
+     just .dp-row settings. This selector isn't itself depth-limited --
+     it matches "any .dp-group directly inside any .dp-group-body"
+     regardless of how many further levels sit above that, so the
+     margin-left/border-left below naturally COMPOUND at each level
+     (a group nested 3 deep gets 3x the indent of a top-level one) with
+     no extra CSS needed as nesting depth grows. Indented + left-
+     bordered so nesting is visually obvious; an empty nested group's
+     own body still needs a visible/hittable drop target at 0 rows. */
   .dp-group-body > .dp-group {
     margin-left:8px; padding-left:6px; border-top:none; border-left:2px solid #33333f;
   }
@@ -1037,19 +1042,52 @@ function addDevGroup(){
   g.scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
-// Only top-level groups' own bodies (direct children of #dpGroups) are
-// offered as nest targets -- never a NESTED group's own body -- which is
-// what caps nesting at exactly one level (ported from
-// TEMPLATE_DEV_PANEL.html's own "one level of nesting" design, per
-// explicit request: "add groups and place groups within groups").
-// #dpGroups itself is always included too, so a nested group can be
-// dragged back out to top-level. Excludes the dragged group's own body
-// (can't nest a group inside itself).
+// Any .dp-group-body ANYWHERE in the tree is a valid nest target, at
+// UNLIMITED depth -- per TEMPLATE_DEV_PANEL.html's own follow-up fix
+// (folded back in here per its own MAINTENANCE note), replacing the
+// earlier "top-level bodies only, one level of nesting" design.
+//
+// That earlier design had a real, undetected bug, not just a
+// deliberate cap: #dpGroups was listed FIRST in the returned candidate
+// list, and since its own bounding rect always geometrically CONTAINS
+// every group body's rect (it's the scrollable container housing them
+// all), makeReorderable()'s own `candidates.find(c => pointerY within
+// c's own rect)` hit-test would match #dpGroups FIRST for ANY pointer
+// position anywhere in the panel -- meaning a drop could never
+// actually register as "into THIS specific group," 100% of the time,
+// regardless of pointer precision. The one-level nesting this project
+// shipped was therefore never actually reachable via drag (only via
+// applyOrder()'s own JSON-restore path) -- missed because the earlier
+// verification checked groupDragTargets()'s own returned candidate
+// LIST for correct membership/exclusions, but never simulated the
+// actual find()-based hit-test order against that list, which is
+// exactly where the bug lived. Caught this round by cross-referencing
+// the template's own explicit fix description, then confirmed via a
+// jsdom test that simulates the real find() hit-test (not just list
+// membership) against a 3-level-deep nested scenario.
+//
+// groupNestingDepth() sorts candidates DEEPEST-first (with #dpGroups
+// itself always LAST, as the top-level fallback) so find() always
+// prefers the most specific match, falling through to a shallower one
+// only when the pointer is genuinely outside every deeper candidate --
+// this ordering is not optional, it's what makes hit-testing into a
+// nested group possible at all. Excludes the dragged group's own body
+// AND every one of its descendants' bodies (draggedGroup.contains(gb))
+// -- can't nest a group inside itself or inside its own child.
+function groupNestingDepth(body, dpGroupsEl){
+  let depth = 0, cur = body.parentElement;
+  while (cur && cur !== dpGroupsEl){
+    if (cur.classList.contains('dp-group')) depth++;
+    cur = cur.parentElement;
+  }
+  return depth;
+}
 function groupDragTargets(draggedGroup){
   const dpGroupsEl = document.getElementById('dpGroups');
-  const topLevelBodies = Array.from(dpGroupsEl.querySelectorAll(':scope > .dp-group > .dp-group-body'))
-    .filter(gb => gb.parentElement !== draggedGroup);
-  return [dpGroupsEl, ...topLevelBodies];
+  const allBodies = Array.from(dpGroupsEl.querySelectorAll('.dp-group-body'))
+    .filter(gb => !draggedGroup.contains(gb));
+  allBodies.sort((a, b) => groupNestingDepth(b, dpGroupsEl) - groupNestingDepth(a, dpGroupsEl));
+  return [...allBodies, dpGroupsEl];
 }
 
 /* ---------------------------------------------------------------------
@@ -1512,15 +1550,15 @@ const isMobileClass = () => window.matchMedia('(max-width: 767px)').matches;
 // device-split — only the panel's own chrome (§12c) does, per §12f's own text.
 let activeDeviceTab = isMobileClass() ? 'mobile' : 'desktop';
 
-// Captures one group's own direct row keys, plus (one level deep only,
-// matching groupDragTargets()'s own one-level cap) any subgroups it
-// directly contains. `:scope`-scoped throughout so a query never reaches
-// past that one level into a nested subgroup's own rows/further nesting
-// -- there is none, since groupDragTargets() only ever offers TOP-LEVEL
-// bodies as valid nest targets, so a subgroup can never itself contain
-// another subgroup. `subgroups` is a new field (old saved data simply
-// won't have it -- applyOrder()'s own `(saved.subgroups || [])` handles
-// that as "no subgroups", not an error).
+// Captures one group's own direct row keys, plus any subgroups it
+// directly contains -- genuinely recursive, UNLIMITED depth (matching
+// groupDragTargets()'s own unlimited-depth nesting). `:scope`-scoped
+// throughout so a query only ever reaches DIRECT children at each
+// level; the recursion itself (subgroups.map(sub => captureGroup(sub)))
+// is what reaches deeper levels, one call per level, not a wider query.
+// `subgroups` is a new-ish field (old saved data simply won't have it
+// -- applyOrder()'s own `(saved.subgroups || [])` handles that as "no
+// subgroups", not an error).
 function captureGroup(g){
   const body = g.querySelector(':scope > .dp-group-body');
   return {
@@ -1534,10 +1572,10 @@ function getPanelOrder(){
   return Array.from(document.querySelectorAll('#dpGroups > .dp-group')).map(g => captureGroup(g));
 }
 
-// Places one saved group (and, one level deep, its own saved subgroups)
-// into parentContainer -- either #dpGroups itself (top-level) or another
-// group's own .dp-group-body (nested). Recursive, only ever called 2
-// deep (matching captureGroup()'s own one-level cap). Searches the WHOLE
+// Places one saved group (and, recursively, its own saved subgroups at
+// ANY depth) into parentContainer -- either #dpGroups itself (top-level)
+// or another group's own .dp-group-body (nested), matching
+// captureGroup()'s own unlimited-depth recursion. Searches the WHOLE
 // #dpGroups subtree for an existing group/row by key -- not just within
 // parentContainer -- since a row or group may currently sit somewhere
 // else in the tree (e.g. nested last save, top-level again this time).
