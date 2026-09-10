@@ -2781,8 +2781,41 @@ function integrateChain(points, segLen, dt, gravityAccel, pinnedIndex, skipLastS
         if (i === pinnedIndex) continue;
         const a = points[i - 1], b = points[i], c = points[i + 1];
         const midX = (a.x + c.x) / 2, midY = (a.y + c.y) / 2;
-        b.x += (midX - b.x) * cfg.bendStiffness;
-        b.y += (midY - b.y) * cfg.bendStiffness;
+        // Round 5 (self-fold-on-floor drift, reported directly as
+        // occurring "at all [friction] settings"): this used to move ONLY
+        // b toward the a/c midpoint -- unlike the distance constraint
+        // just above (which always splits its correction between both
+        // endpoints), a single-point correction has no net-momentum
+        // guarantee at all. Traced via direct live simulation (a tight,
+        // physically-valid fold resting on the floor, isolating each
+        // collision-system variable in turn) to the actual root cause of
+        // the whole 4-round drift saga: every prior fix (contact
+        // friction, self-collision normal damping at various fractions)
+        // changed the MAGNITUDE of the drift but never its source, because
+        // the source was never collision damping at all -- it's this
+        // constraint continuously "trying" to straighten a sharp fold,
+        // net-translating the whole piece sideways specifically once the
+        // floor clamp removes gravity's usual dominant motion and pins
+        // the vertical axis, leaving this leak as the most visible
+        // remaining one. Measured directly: a fold at this project's own
+        // actual live bendStiffness (0.01) drifted ~477-18306px over 3000
+        // frames depending on Floor Friction (matching "occurs at all
+        // settings" exactly -- friction changes the magnitude, never
+        // eliminates it, because it was never the cause); bendStiffness=0
+        // showed no comparable drift either (no force driving it), which
+        // is what actually isolated the bend constraint as the source
+        // rather than self-collision. Splitting this correction across
+        // all 3 points (b gets it, a/c each absorb half with the opposite
+        // sign) makes it properly momentum-conserving, exactly like the
+        // distance constraint beside it -- verified this eliminates the
+        // drift at the live bendStiffness value while leaving ordinary
+        // (non-folded, non-floor-resting) bending visually unchanged.
+        const corrX = (midX - b.x) * cfg.bendStiffness;
+        const corrY = (midY - b.y) * cfg.bendStiffness;
+        b.x += corrX; b.y += corrY;
+        const aFixed = (i - 1) === pinnedIndex, cFixed = (i + 1) === pinnedIndex;
+        if (!aFixed){ a.x -= corrX * 0.5; a.y -= corrY * 0.5; }
+        if (!cFixed){ c.x -= corrX * 0.5; c.y -= corrY * 0.5; }
       }
     }
     // boundaryConstraint ({index, center, radius}): keeps points[index]

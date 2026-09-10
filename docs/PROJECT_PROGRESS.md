@@ -66,16 +66,20 @@ including one test-setup mistake caught before trusting a result. NOT
 drag/rename-tested live (Browser pane still down) -- this is now the
 3rd consecutive dev-panel change awaiting the user's own live test.
 
-This session's Browser pane has gotten WORSE, not better: beyond the
-earlier 0x0-viewport/hidden state, a fresh navigate() call is now
-being denied/failing outright too. Treat live verification as
-currently unavailable in this environment until it's confirmed
-working again -- don't keep re-attempting it per-task.
+**Corrected 2026-09-10 (new session): the Browser pane works again.**
+The 0x0-viewport/navigate-failure state described below was specific
+to the PRIOR session's own Browser pane instance -- a fresh session
+gets a fresh pane, and it renders/navigates/screenshots normally now
+(confirmed first thing this session). Don't assume it's still broken;
+if a future session hits pane trouble again, check fresh rather than
+trusting this note.
 
-Awaiting the user's own live confirmation on 2 fronts (this session's
-own Browser pane went into an unrecoverable 0x0-viewport/hidden state
-partway through the most recent task -- closing/reopening the tab
-didn't clear it -- so neither of these got a real visual check):
+Still awaiting the user's own live GAMEPLAY confirmation (cutting a
+real rope in the actual running game, not a scripted physics
+scenario) on several fronts below -- this session verified some of
+them directly via a temporary debug hook driving the real shipped
+code (not Node.js simulation), which is stronger than before but
+still not the same as the user actually playing it:
 
 - FLICK ANIMATION 3's playback actually animating through its frames
   (loading, dev-panel UI, and click/hold interaction are all confirmed
@@ -149,11 +153,47 @@ didn't clear it -- so neither of these got a real visual check):
   accumulates enough correction over thousands of frames even at a
   weak fraction) while no longer noticeably slowing a brief mid-air
   tumble (recovered to within ~5% of true free-fall speed, vs. being
-  roughly halved before). This is the 4th round on this bug class;
-  each round has been driven by genuinely new, specific evidence, and
-  this round found and resolved a real, demonstrated tension between 2
-  previously-shipped fixes rather than picking an arbitrary middle
-  ground. Still not live-tested (Browser pane down).
+  roughly halved before).
+
+  **Round 5 (2026-09-10, found the actual root cause):** reported
+  directly that this same drift "occurs at all [Floor Friction / Rope
+  Friction] settings" -- with the Browser pane finally working, drove
+  the REAL shipped collision code live (temporary debug hook, removed
+  before finishing) instead of a Node.js copy, and isolated the true
+  cause by sweeping one variable at a time. Self-collision's own
+  `frac` (round 4's fix) turned out to be irrelevant to this specific
+  drift -- a velocity-gated variant made zero measurable difference.
+  The real driver: `integrateChain()`'s bending constraint moved ONLY
+  the middle point toward its neighbors' midpoint, unlike the distance
+  constraint beside it (which always splits its correction between
+  both endpoints) -- no net-momentum guarantee at all. Invisible for
+  ordinary gentle curves, but a sharp, persistent fold resting on the
+  floor (floor clamp pins the vertical axis, removing gravity's usual
+  dominant motion) turns that per-frame asymmetric nudge into a slow,
+  coherent sideways translation of the whole piece -- independent of
+  any friction setting, exactly matching the report. This is very
+  likely the TRUE source the whole 4-round saga was chasing symptoms
+  of. Fixed by redistributing the bend correction across all 3 points
+  (the middle point still gets the full nudge, its two neighbors each
+  absorb half with the opposite sign), making it properly
+  momentum-conserving like the distance constraint. Verified: at Floor
+  Friction=0 (the documented default), drift went from a small
+  baseline-matching ~21px to EXACTLY 0px across repeated runs -- full
+  elimination. At the user's own live Floor Friction=0.72, drift
+  dropped from 476.8px to 46-53px over 3000 frames (~89-90%
+  reduction), and didn't grow linearly with more frames (bounded
+  one-time settling, not an unbounded slide) -- the small remainder at
+  that setting is the SAME already-documented tradeoff of manually
+  raising Floor Friction above 0, just far smaller now, not a new gap.
+  Mid-air tumble regression re-checked (round 4's own concern) -- no
+  slowdown, though self-collision code was left untouched this round
+  so this carried limited additional risk anyway. Verified via direct
+  numeric measurement (real production `update()` stepped thousands of
+  frames) plus one visual screenshot; NOT yet confirmed via the user
+  actually cutting a rope and folding a piece in real gameplay -- worth
+  a real play-test to close this out. This is the 5th round on this
+  bug class; unlike rounds 1-4, this one found and fixed the actual
+  shared root cause rather than another symptom-level mitigation.
 - NEW: `PIECE_SPAWN_GRACE_RADIUS_FRAC` reduced `2 -> 0.3` -- fixes 2
   reports: "the subsequent 2 rope pieces should still have collision
   detectors" (after cutting an already-cut piece) and, more

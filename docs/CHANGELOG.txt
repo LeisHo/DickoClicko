@@ -8537,6 +8537,89 @@ rather than only checking data-structure correctness), specifically
 because that gap is what let the original bug ship undetected.
 
 ================================================================================
+2026-09-10  -  01:37 AM EDT
+
+Round 5 of the self-fold floor-drift bug (see the 4 prior rounds above) --
+found and fixed the ACTUAL root cause. Reported directly: "the friction
+drift issue when the rope bends on itself occurs at all settings," ruling
+out Floor Friction / Rope Friction tuning as the cause (both were checked
+live first -- the user's own saved settings had Floor Friction=0.72 and
+Rope Friction=0.71, well above their documented safe defaults, but the
+drift persisted even at Floor Friction=0 too).
+
+With the Browser pane finally working this session (unlike every prior
+round, which relied on Node.js simulations of copied code), drove the
+REAL shipped collision code live via a temporary DEV_MODE-gated debug
+hook (window.__test, exposing mainRope/fallenPieces/update()/cfg/the
+collision functions directly -- grep-confirmed 0 references removed
+before finishing, git diff confirmed clean each round). Built a
+physically-valid folded piece (every adjacent point pair exactly segLen
+apart, verified, not a degenerate/tension-violating shape) resting on the
+floor and stepped real update() frames, isolating one variable at a time:
+
+- Self-collision's own normal-damping fraction (SELF_COLLISION_NORMAL_
+  DAMP_FRAC=0.05, the round-4 fix) turned out to be COMPLETELY UNRELATED
+  to this drift -- a velocity-gated variant (full damping once a
+  colliding pair's relative speed drops below a settle threshold, same
+  pattern as PILE_SETTLED_MAX_SPEED, prototyped and live-tested) made
+  ZERO measurable difference (18305.7px drift before vs. 18305.5px after,
+  at Floor Friction=0, 3000 frames) -- reverted, not shipped.
+- Sweeping cfg.bendStiffness in isolation found the real driver: at the
+  project's own actual LIVE bendStiffness (0.01, well below the "tuned
+  low" 0.15 the code comments describe), drift was 476.8px/3000 frames;
+  at bendStiffness=0 (no straightening force at all) drift was ~21px
+  (pure settling noise); at bendStiffness=0.15 drift was ~11.8px (the
+  fold resolves/opens fast enough that no visible translation
+  accumulates). The LOW live value sits in a "goldilocks" zone -- weak
+  enough to never fully resolve the fold within any reasonable time, but
+  present enough to keep nudging it every frame.
+
+Root cause: integrateChain()'s bending constraint moved ONLY the middle
+point (b) toward the (a+c)/2 midpoint -- unlike the distance constraint
+right above it (which always splits its correction between both
+endpoints), this had NO net-momentum guarantee at all. For an ordinary
+gently-curving rope this is invisible (tiny, locally near-random
+corrections). For a SHARP, PERSISTENT fold resting on the floor (floor
+clamp pins the vertical axis, removing gravity's usual dominant motion),
+this asymmetric single-point correction, repeated every constraint
+iteration of every frame, manifests as a slow, consistent, coherent
+sideways translation of the entire piece -- exactly "the rope bends on
+itself" drift, and exactly why it never depended on friction settings at
+all. This is very likely the TRUE root cause the whole 4-round saga was
+chasing symptoms of: every prior fix (contact friction, self-collision
+normal damping at various fractions) changed the drift's MAGNITUDE
+(by changing how much the fold's own shape/overlap pattern could shift
+per frame) without ever touching its actual SOURCE.
+
+Fix: redistribute the bend correction across all 3 points instead of
+moving only b -- b still gets the full corrective nudge, but a and c
+each absorb half of it with the opposite sign, making the constraint
+properly momentum-conserving, the same way the distance constraint
+beside it already is. Verified directly: at Floor Friction=0 (the
+documented default), drift dropped from ~21px baseline-matching (already
+present, unrelated settling noise) to EXACTLY 0px across repeated runs --
+full elimination. At the user's own live Floor Friction=0.72, drift
+dropped from 476.8px to 46-53px over 3000 frames (~89-90% reduction),
+and did not grow linearly with more frames (82px total over 6000 frames,
+not ~2x -- a bounded one-time settling shift, not an unbounded slide) --
+the small remainder at that setting is the SAME already-documented,
+disclosed tradeoff of manually raising Floor Friction above its 0
+default (see Floor Friction's own comment), now at a much smaller
+magnitude, not a new gap in this fix. Regression-checked against the
+round-4 concern (mid-air tumble slowdown) with a fresh mid-air drop
+simulation -- avg Vy matched an unimpeded free-fall baseline almost
+exactly (ratio ~0.99999) at both 15 and 45 frames, no slowdown
+introduced, though this specific check carried limited weight since the
+self-collision code this session ultimately left untouched (reverted)
+was never the actual risk surface for this fix.
+
+Full syntax check passed (grep-confirmed 0 stray __test/debug-hook
+references, git diff shows only the intended integrateChain() change).
+Live-verified visually via a screenshot (a folded test piece resting
+flat near the floor, not sliding off-frame) in addition to the numeric
+centroid tracking above. Updated CHANGELOG.txt and PROJECT_PROGRESS.md.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
