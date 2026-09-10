@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.1,
-    "ropeLength": 15.0616341328112,
+    "ropeLength": 15.06163413281121,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -168,19 +168,20 @@
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
-    "flickX": 17,
-    "flickY": 73,
-    "flickScale": 40.5,
-    "flickAnimSpeed": 3,
+    "flickSource": "side-thumb",
+    "flickX": 37,
+    "flickY": 67,
+    "flickScale": 100,
+    "flickAnimSpeed": 4,
     "flick2X": 19,
     "flick2Y": 23,
-    "flick2Scale": 48,
+    "flick2Scale": 39.5,
     "flick2AnimSpeed": 4.4,
-    "flick3Source": "above",
+    "flick3Source": "side-thumb",
     "flick3X": 66,
-    "flick3Y": 22,
+    "flick3Y": 67,
     "flick3Scale": 100,
-    "flick3AnimSpeed": 4.9,
+    "flick3AnimSpeed": 4,
     "flickHoldMaxSpeed": 4,
     "flickHoldMaxDuration": 2.9,
     "ropeAttractionIntensity": 0.06,
@@ -190,7 +191,7 @@
   "order": [
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flick3Source",
         "flick3X",
@@ -204,6 +205,7 @@
       "key": "FLICK ANIMATION",
       "collapsed": false,
       "settings": [
+        "flickSource",
         "flickX",
         "flickY",
         "flickScale",
@@ -213,7 +215,7 @@
     },
     {
       "key": "FLICK ANIMATION 2",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick2X",
         "flick2Y",
@@ -438,10 +440,10 @@
   ],
   "panelGeometry": {
     "desktop": {
-      "left": 1286.4375,
-      "top": 17.912500381469727,
-      "width": 249.5500030517578,
-      "height": 570.0250244140625,
+      "left": 1552.4375,
+      "top": 62.90625,
+      "width": 249.546875,
+      "height": 570.015625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
