@@ -1448,6 +1448,32 @@ function tryCapture(el, pointerId){
   try { el.setPointerCapture(pointerId); } catch (err) { /* no active pointer to capture — window-level listeners below still work */ }
 }
 
+// Shared with applyPanelGeometry() below -- a saved position/size can come
+// from a WIDER viewport than the one it's being loaded into (a different
+// device, or the same device with the browser window since resized), and
+// resetSettings()'s own async settings fetch applies that saved geometry
+// several seconds AFTER boot, well after initPanelDrag()'s own one-time
+// startup clamp already ran (harmlessly, against the panel's still-default
+// position) -- with no 'resize' event to trigger a re-clamp afterward for a
+// user who never actually resizes their window. Reported directly: "Dev
+// panel dissappears in the first seconds of startup in dev mode" -- the
+// panel was rendering fine at its default position, then silently jumping
+// off-screen the moment the real saved geometry (e.g. left:1552 on a
+// narrower-than-that viewport) landed unclamped. See CLAUDE.md gotchas.
+function clampPanelToViewport(){
+  const panel = document.getElementById('devPanel');
+  if (panel.classList.contains('hidden')) return;
+  const r = panel.getBoundingClientRect();
+  const maxLeft = Math.max(0, viewportW() - r.width);
+  const maxTop = Math.max(0, viewportH() - r.height);
+  const left = Math.max(0, Math.min(maxLeft, r.left));
+  const top = Math.max(0, Math.min(maxTop, r.top));
+  if (left !== r.left || top !== r.top){
+    panel.style.right = 'auto';
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+  }
+}
 function initPanelDrag(){
   const panel = document.getElementById('devPanel');
   const header = document.getElementById('dpHeader');
@@ -1478,26 +1504,12 @@ function initPanelDrag(){
   // fine at a wide viewport could end up with its saved `left`/`top`
   // now past the new, narrower window's own edge, with nothing to pull
   // it back -- reported directly ("when i resize my browser to phone
-  // size, the panel will end up out of frame"). Reuses the exact same
-  // clamp formula the drag handler above already uses, just triggered by
-  // `resize` instead of `pointermove`, and also run once immediately (a
-  // saved geometry from a wider device, loaded fresh on a narrower one,
-  // needs the same correction before any resize event ever fires).
-  function clampToViewport(){
-    if (panel.classList.contains('hidden')) return;
-    const r = panel.getBoundingClientRect();
-    const maxLeft = Math.max(0, viewportW() - r.width);
-    const maxTop = Math.max(0, viewportH() - r.height);
-    const left = Math.max(0, Math.min(maxLeft, r.left));
-    const top = Math.max(0, Math.min(maxTop, r.top));
-    if (left !== r.left || top !== r.top){
-      panel.style.right = 'auto';
-      panel.style.left = left + 'px';
-      panel.style.top = top + 'px';
-    }
-  }
-  window.addEventListener('resize', clampToViewport);
-  clampToViewport();
+  // size, the panel will end up out of frame"). Reuses the shared
+  // clampPanelToViewport() (see its own comment above) -- also called
+  // from applyPanelGeometry() itself now, since that's what actually
+  // applies a freshly-loaded saved position/size.
+  window.addEventListener('resize', clampPanelToViewport);
+  clampPanelToViewport();
 }
 
 // §12c: "minimum size is whatever is functionally necessary" -- derived
@@ -1713,6 +1725,14 @@ function applyPanelGeometry(geom){
     panel.style.width = ''; panel.style.height = '';
   }
   applyPanelStyleValues(geom && geom.style);
+  // A geom loaded from a wider viewport (a different device, or this same
+  // one since resized) needs the same re-clamp initPanelDrag()'s own
+  // resize listener already does -- this is the call site that was
+  // actually missing one (see clampPanelToViewport()'s own comment for
+  // the full story: this fn runs asynchronously, seconds after boot,
+  // well after initPanelDrag()'s one-time startup clamp already ran
+  // against the panel's still-default position).
+  clampPanelToViewport();
 }
 
 /* ---------------------------------------------------------------------
