@@ -649,27 +649,40 @@ additions. Current state of each subsystem:
   `data/FLICK/2TONED/<SET>/A+B/C` (previously `data/FLICK/Genereated/<N>`,
   5 numbered sets), Animation 1 mirrors it from
   `data/FLICK/3TONED/<SET>/A+B/C` (previously a plain 17-frame ping-pong
-  loaded from `data/FLICK/ANI/`). SET is one of 5 named folders (ABOVE,
-  SIDE BEHIND, SIDE FRONT, SIDE PINKY, SIDE THUMB) for both -- each has
-  its own "Flick Frame Set"/"Flick3 Frame Set" dropdown (`cfg.flickSource`/
-  `cfg.flick3Source`), `TWOTONED_SETS`/`THREETONED_SETS` in index.html
-  map each dropdown value to its real folder name and filename prefix(es).
-  2TONED's filenames are clean/uniform (one prefix per set for A/B,
-  another for C); 3TONED's are NOT -- confirmed via `ls`, not assumed:
-  C's prefix has a space before "-CHARGE" for 3 of the 5 sets but not the
-  other 2, and SIDE THUMB's own A/B prefix is misspelled ("SideThub")
-  while its C prefix isn't ("SideThumb") -- `THREETONED_SETS` lists
-  `abPrefix`/`cPrefix` separately per set rather than deriving them from
-  one shared pattern. A's own frame numbers are non-contiguous
-  ([1,3,7,9,11,13,14]) and uniform across all 5 sets in 3TONED, but NOT
-  in 2TONED (SIDE BEHIND alone has an extra frame 15 there) -- re-verify
-  by hand (`ls` each set's A/B/C folder) and update the relevant
-  `TWOTONED_*`/`THREETONED_*` frame-number objects if any set's own
-  contents ever change. B and C are genuinely uniform (B: 1-15, C: 1-8)
-  across all 5 sets in BOTH 2TONED and 3TONED. All 301 source PNGs
-  (2400px wide, 151 + 150) were resized to 1400px and re-encoded as WebP
-  via `sharp`, same convention as every other FLICK animation (19.2MB
-  PNG -> ~3.2MB WebP combined).
+  loaded from `data/FLICK/ANI/`). SET is one of **6** named folders as of
+  2026-09-10 (ABOVE, SIDE BEHIND, SIDE FRONT, SIDE PINKY, **SIDE PINKY - 2**,
+  SIDE THUMB) for both -- SIDE PINKY - 2 was added after the initial
+  5-set build, per explicit request, using the exact same A/B/C shape.
+  Each animation has its own "Flick Frame Set"/"Flick3 Frame Set"
+  dropdown (`cfg.flickSource`/`cfg.flick3Source`), `TWOTONED_SETS`/
+  `THREETONED_SETS` in index.html map each dropdown value to its real
+  folder name and filename prefix(es).
+
+  **Neither 2TONED nor 3TONED's filenames are uniform across sets** --
+  2TONED looked clean/uniform at first (1 shared prefix formula worked
+  for the original 5 sets) but broke the moment ABOVE's own frames were
+  replaced (2026-09-10, same round SIDE PINKY - 2 was added): the
+  replacement files use a genuinely different convention ("2T -
+  FlatAbove_NNN.png" / "2T - FlatAbove - CHARGE_NNN.png", note the spaces
+  around the dash and all-caps CHARGE, both absent from the original
+  "Above_NNN.png"/"Above-Charge_NNN.png" convention), and SIDE PINKY - 2
+  uses that same newer convention. `TWOTONED_SETS` was generalized from 1
+  shared `prefix` field to separate `abPrefix`/`cPrefix` per set (mirroring
+  `THREETONED_SETS`' own already-established shape) specifically because
+  of this -- re-verify by hand (`ls` each set's A/B/C folder, or `git
+  status` against the tracked baseline to catch renames/deletions a bare
+  `ls` diff could miss) rather than assuming any 1 set's naming applies to
+  another. 3TONED's own inconsistency (space-before-CHARGE for 3 of the
+  original 5 sets but not the other 2, SIDE THUMB's misspelled "SideThub"
+  A/B prefix vs. its correctly-spelled C prefix) is unchanged, documented
+  in `THREETONED_SETS`' own comment. A's own frame numbers are
+  non-contiguous ([1,3,7,9,11,13,14]) and uniform across every set in
+  3TONED, but NOT in 2TONED (SIDE BEHIND alone has an extra frame 15) --
+  update the relevant `TWOTONED_*`/`THREETONED_*` frame-number objects by
+  hand if any set's own contents ever change; B and C are genuinely
+  uniform (B: 1-15, C: 1-8) across every set in both. All source PNGs
+  (2400px wide) are resized to 1400px and re-encoded as WebP via `sharp`,
+  same convention as every other FLICK animation.
 
   Click plays A forward + B reversed for both (same design animation 2
   already used). Hold is a genuinely NEW pattern for animations 1 and 3,

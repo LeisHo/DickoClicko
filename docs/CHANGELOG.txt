@@ -8841,6 +8841,81 @@ docs/PROJECT_PROGRESS.md (rewrote the whole FLICK-animations bullet in
 place to cover animations 1/2/3 consistently) and this file.
 
 ================================================================================
+2026-09-10  -  04:35 AM EDT
+
+"in both 2Toned and 3Toned, I replaced the frames in ABOVE and added a
+new SidePinky2 Set. Update and push." Checked via `git status` against
+the tracked baseline (established as the reliable method over the last
+2 rounds, since a bare `ls`/mtime diff can miss renames/deletions) --
+confirmed this was NOT a simple content refresh for ABOVE: every old
+file (both PNG and its own already-generated webp) was DELETED, and a
+genuinely different set of files appeared with a NEW naming convention
+("2T - FlatAbove_NNN.png"/"2T - FlatAbove - CHARGE_NNN.png" for 2TONED,
+"3T - FlatAbove_NNN.png"/"3T - FlatAbove-CHARGE_NNN.png" for 3TONED --
+note the spaces around the dash and all-caps CHARGE in 2TONED's
+version, both absent from the OLD "Above"/"SideAbove" convention). A
+brand-new "SIDE PINKY - 2" folder appeared in both 2TONED and 3TONED,
+using this same newer naming style ("2T - SidePinky2_NNN.png" / "3T -
+SidePinky2_NNN.png", same C-suffix conventions as their respective
+ABOVE replacements). Enumerated all 4 changed/new folders via a Node
+script -- frame counts uniform and matching the established pattern
+(A: 7, B: 15, C: 8) in all 4.
+
+This broke 2TONED's own previously-clean "1 shared prefix" URL-building
+formula (twotonedFrameUrl() used a single `prefix` field plus a
+hardcoded "-Charge_" suffix, since all 5 original sets happened to
+share 1 naming convention) -- generalized TWOTONED_SETS from 1 shared
+`prefix` to separate `abPrefix`/`cPrefix` per set, mirroring
+THREETONED_SETS' own already-established shape (built in the
+immediately preceding round specifically because 3TONED was NEVER
+uniform). The 4 untouched 2TONED sets (SIDE BEHIND/FRONT/PINKY/THUMB)
+keep their original clean prefixes unchanged; only ABOVE and the new
+SIDE PINKY - 2 use the newer convention. Added 'side-pinky-2' entries
+to TWOTONED_SETS/A_FRAMES/B_FRAMES/C_FRAMES and the equivalent
+THREETONED_* objects, and a 6th dropdown option ("Side Pinky 2") to
+both the "Flick Frame Set" and "Flick3 Frame Set" dropdowns -- both
+were still listing 5 options despite the actual on-disk data now
+having 6 real sets. Converted all 120 new/changed source PNGs (2TONED
+ABOVE 30 + 3TONED ABOVE 30 + 2TONED SIDE PINKY - 2 30 + 3TONED SIDE
+PINKY - 2 30) to WebP via sharp (1400px, quality 90) -- the old ABOVE
+webp files were already gone from disk (git status showed them deleted
+alongside their PNG sources), so no orphan cleanup was needed.
+
+Verification hit a real environment snag before succeeding: the
+existing Browser pane tab got stuck mid-navigation
+(document.readyState frozen at "loading" indefinitely, the root
+document request itself repeatedly showing net::ERR_CONNECTION_RESET
+in the network log despite the local python http.server's own access
+log showing clean 200 responses for every one of those same requests
+-- confirmed via `curl` directly against the server, which correctly
+returned the updated index.html with "FlatAbove" present, ruling out a
+server-side or stale-file explanation). Opening a genuinely NEW tab
+(rather than continuing to fight the stuck one) resolved it
+immediately -- worth remembering as the fix for this specific "tab
+looks permanently stuck loading" failure mode, on top of this
+session's own already-documented "re-front the tab before dispatching
+a synthetic click" workaround for a different flakiness class. On the
+fresh tab: all 240 new/changed-file requests (120 ABOVE + 120 SIDE
+PINKY - 2, across both 2TONED and 3TONED) came back 200 OK, 0 404s;
+both dropdowns confirmed via a direct DOM query (not the accessibility
+tree, which was reporting a bogus 0x0 viewport on this same tab) to
+list exactly 6 options each, including the correct
+"side-pinky-2":"Side Pinky 2" entry; a live console.error capture
+found only the pre-existing, already-documented unrelated
+net::ERR_CONNECTION_RESET noise, 0 real errors. node --check clean.
+
+Per a new standing instruction given mid-task ("From now on, push
+before updating project docs"), committed and pushed the code/asset
+changes (index.html + the 4 changed/new asset folders) FIRST --
+merged cleanly against 3 more concurrent live "Save Settings" commits
+(the user's own real dev-panel tuning, including switching both
+Flick Frame Set dropdowns to "side-thumb" and starting a new custom
+group -- confirmed as genuine activity, not corruption) -- pushed
+(ab4978b..d0325a3), THEN made this doc pass as a separate follow-up.
+Updated docs/PROJECT_PROGRESS.md (targeted rewrite of the relevant
+paragraphs) and this file.
+
+================================================================================
 APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
 formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
 correction, add a new entry noting the correction rather than editing the
