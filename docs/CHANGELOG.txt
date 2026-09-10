@@ -9134,3 +9134,147 @@ data/processed/dev-panel-settings.json, no overlap with index.html),
 merged cleanly via `git pull --no-rebase` (no conflicts, different
 files), pushed (701b3e5) -- THEN made this doc pass as a separate
 follow-up.
+
+================================================================================
+2026-09-10  -  09:45 AM EDT
+
+"I want you to look into the project DotFlicko and see the new
+features of the animation that is anchored onto the mouse on desktop.
+I have saved the same frames in
+J:\CLAUDE\PROJECTS\DICKOCLICKO\data\FLICK\2TONED. So i want you to
+adopt the angles and animation sequence of DotFlicko. So we have 8
+animation types. With a single click, you run the frames in subfolder
+A, in sequence, then reverse sequence. With a right click or
+rightclick/hold, you run the sequences in subfolder A in the 'Snap'
+folders. With a double click, you run the sequence in subfolder A in
+the 'SCISS' folders. With a click and hold, you run the frames in
+Subfolder A in the CHARGE subfolders, then continue to loop (excluding
+the first frame), then on release, you run the regular click
+sequence. Do not worry about the collision effects in DotFlicko for
+now. Just animate the frames that follow the cursor."
+
+Investigated DotFlicko's own index.html directly (a separate sibling
+project, single-file like this one) to find the actual mouse-anchoring
+implementation -- not a description, the real working code. Found:
+`mouseAngleFromCenter(mx,my,cx,cy)` (atan2-based, "up"=0°=directly
+above viewport center, clockwise), `directionIndexForAngle()` (8
+sectors of 45° centered on 0/45/.../315, with a calibration
+`angleOffset`), a `DIRECTIONS` array of 8 {key,folder,prefix} entries
+in a specific clockwise order (behind, behind-thumb, side-thumb,
+front-thumb, front, front-pinky, side-pinky, behind-pinky), and
+`ensureDirectionLoaded()`'s forward-then-reverse-excluding-duplicate-
+peak "playSequence" pattern (the exact same technique this project's
+own Scissor sets already use). DotFlicko's own position/rotation
+lerping (`expSmoothFactor`, `angleLerp`) and its "frozen sequence"
+design (direction bucket only switches while idle; an in-progress
+play keeps showing its already-captured frame set to completion even
+if the mouse crosses a sector boundary mid-play) were also adopted
+directly. DotFlicko itself had NO right-click/double-click/hold-charge
+handling yet (grep-confirmed zero matches for SNAP/SCISS/CHARGE/
+contextmenu/dblclick in its index.html) -- that whole 4-mode gesture
+system was new work for this task, not something to port.
+
+Enumerated the new `data/FLICK/2TONED` folders via a Node script
+before writing any code (this project's history has never once found
+2 sets sharing an identical naming convention, and this round was no
+exception): 8 base direction types (BEHIND, BEHIND PINKY, BEHIND
+THUMB, FRONT, FRONT PINKY, FRONT THUMB, SIDE PINKY, SIDE THUMB), each
+with 4 independently-prefixed variant folders (base=20 frames,
+CHARGE=8, SCISS=24, SNAP=24 -- 76 frames x 8 = 608 total), contiguous
+numbering within each folder but a different filename prefix per
+folder (e.g. base uses "2T -Flabbehind_NNN.png", its own CHARGE
+variant uses "2T Behind-CHARGE_NNN.png" -- no shared stem). Converted
+all 608 new source PNGs to WebP via the established sharp pipeline
+(resize 1400px wide, quality 90).
+
+Implementation (`MOUSE_FLICK_DIRECTIONS`, `mouseFlickFramesByDirection`,
+new state `mfX/mfY/mfEntityX/mfEntityY/mfEntityAngleDeg/mfDirectionKey/
+mfMode/mfFrameAccum/mfFrozenFrames/mfHoldCyclePos`, independent
+gesture listeners, `update()`/`render()` additions, a new "FLICK
+MOUSE" dev-panel group): click plays the adopted forward+reverse
+sequence; right-click/right-click-hold plays SNAP forward-once
+(explicit spec: both cases do the same thing, no duration
+distinction); double-click plays SCISS forward-once; click-and-hold
+plays CHARGE forward-once then loops the tail excluding frame 0 (same
+forward-then-loop-tail pattern `flick3HoldFrameIndex()` already
+established for Animations 1/3), and release always transitions into
+the click sequence regardless of hold duration (same "release always
+plays click" convention already established earlier this session).
+Hold-eligibility and double-click pairing both reuse the EXISTING
+`cfg.doubleClickThreshold` (the same proven technique the rope's own
+punch-charging already uses to guarantee a real double-click's 2
+quick taps can never be misread as a hold) rather than inventing new
+threshold sliders. A press while any mode is already active is
+ignored, matching the "don't interrupt an in-progress sequence"
+convention all 3 existing FLICK animations already use. Gesture
+listeners are entirely independent, fresh `addEventListener` calls on
+canvas/window -- NOT merged into the rope's own onPointerDown/
+onPointerUp -- so this new entity's right-click SNAP coexists cleanly
+alongside the existing, untouched right-click Rope Attraction, and its
+double-click SCISS coexists alongside the existing rope-cut double-
+click, with no shared state and no risk of one suppressing the other.
+Per explicit instruction, DotFlicko's own bouncing-ball/joint-collision
+demo was NOT ported -- only the mouse-follow, rotation, direction-
+switching, and sequence-playback mechanics.
+
+Verification hit a real environment obstacle worth documenting: a
+temporary debug hook (`window.__test`, grep-confirmed removed before
+finishing) initially showed `mfFrameAccum` frozen mid-sequence after a
+real dispatched click. Root-caused via a direct probe (a manual
+`requestAnimationFrame` counter registered and checked after a real
+500ms wait, showing exactly 0 ticks fired) to this sandbox's own
+Browser-pane quirk: rAF is suspended while the pane isn't genuinely
+foregrounded, even when `document.hidden` reports false and the FPS
+counter's last-painted text looks live. This is NOT a bug in the
+shipped code -- confirmed by adding a `mfManualTick(n)` hook that
+calls the REAL, unmodified `update(FIXED_DT)`/`render()` functions
+directly N times, bypassing rAF entirely: driven this way, every one
+of the 4 gesture modes behaved exactly as spec'd against the actual
+production code. Click: 39-frame (20+19) forward+reverse sequence,
+completes and returns to idle exactly at frame 39. Right-click: SNAP
+correctly triggered, direction-matched, 24 frames, completes cleanly.
+Double-click (via 2 rapid `computer:double_click` dispatches, tab
+freshly fronted via `tabs_select` immediately before -- the same fix
+this project's history already established for synthetic-event
+delivery): SCISS correctly triggered instead of a 2nd click, 24
+frames, completes cleanly. Click-and-hold (via a synthetic
+pointerdown, a real 250ms wait exceeding `cfg.doubleClickThreshold`,
+confirmed charging armed): `mfHoldCyclePos`'s resolved frame index
+sequence measured directly over 60 ticks --
+`[...,6,7,7,1,1,2,2,3,3,4,4,5,5,6,7,7,1,1,2,3,...]` -- forward through
+all 8 frames exactly once, then permanently loops indices 1-7, never
+revisiting 0, exactly as spec'd; a synthetic pointerup then correctly
+transitioned `mfMode` from 'charge' straight to 'click'. Separately
+confirmed all 608 new frames load with zero broken images
+(`naturalWidth>0` for every completed image) and all sampled network
+requests for the new assets returned 200 OK.
+
+While investigating an unrelated console-error count during this
+verification, discovered (NOT caused by this task -- see this file's
+own "CRITICAL" note in docs/PROJECT_PROGRESS.md's Open Questions for
+the full account) that Animations 1 and 3's ORIGINAL 2TONED source
+assets are gone from disk: all 6 original sets plus all 3 Scissor sets
+show as deleted in git (452 files), and 2 old folder names ("SIDE
+PINKY", "SIDE THUMB") were reused by the new mouse-flick content with
+entirely different prefixes, replacing rather than merging with the
+old A/B/C content. File mtimes on the new folders (08:49-09:01 AM,
+before this session's 09:07 AM start) confirm this happened via the
+user's own file placement for this task, not anything this session
+did. Left entirely untouched (out of scope, and not this session's
+call to make) -- flagged prominently in PROJECT_PROGRESS.md for the
+user's decision.
+
+Staging required care: `git add` on the "SIDE PINKY"/"SIDE THUMB"
+directories initially swept up the OLD, already-deleted B/C-subfolder
+files' deletions into the same commit (git stages a directory's whole
+diff, not just new files) -- caught before committing, unstaged via
+`git reset` on those 2 paths, then re-added scoped to just their `A`
+subfolders (which still unavoidably records the old A-file deletions
+alongside the new A-file additions in that same folder -- an accurate
+reflection of disk reality, not something further separable). Per the
+standing "push before updating project docs" instruction, committed
+and pushed the code/asset commit (604417d) first -- fetch found 4 more
+concurrent "Save Settings" commits from the user's own live tuning
+(touching only data/processed/dev-panel-settings.json), merged
+cleanly via `git pull --no-rebase`, pushed (131db77) -- THEN made this
+doc pass as a separate follow-up.

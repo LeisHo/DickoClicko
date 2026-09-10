@@ -20,6 +20,50 @@ work seamlessly from there.
 
 Nothing in progress — everything below is done and pushed.
 
+**New (2026-09-10): FLICK MOUSE, a 4th mouse-anchored FLICK overlay,
+adopted from the DotFlicko project.** Per explicit request ("adopt the
+angles and animation sequence of DotFlicko"): a new entity follows the
+cursor (desktop), rotating to face the viewport center and switching
+between 8 direction-bucket frame sets (45° sectors, order/keys
+matching DotFlicko's own DIRECTIONS array exactly: behind,
+behind-thumb, side-thumb, front-thumb, front, front-pinky, side-pinky,
+behind-pinky) based on the mouse's angle from center -- angle math and
+the forward+reverse click sequence both ported directly from
+DotFlicko's own `mouseAngleFromCenter()`/`directionIndexForAngle()`/
+`ensureDirectionLoaded()`. 4 interaction modes, each its own 2TONED
+variant folder (8 directions x 4 variants, 608 new source frames):
+click (A forward+reverse), right-click/right-click-hold (SNAP
+forward-once, no duration distinction per explicit spec), double-click
+(SCISS forward-once), click-and-hold (CHARGE forward-once then
+loop-tail excluding frame 0, release always plays the click sequence
+-- same convention Animations 1/3's own hold already uses). New
+"FLICK MOUSE" dev-panel group (Enabled/Scale/Anim Speed/Position &
+Rotation Smoothing/Angle Offset/Hold Max Speed & Duration). Gesture
+listeners are fully independent of the rope's own
+onPointerDown/onPointerUp (not merged in), so this coexists cleanly
+with existing right-click Rope Attraction and double-click rope-
+cutting. Collision physics from DotFlicko's own bouncing-ball demo
+deliberately NOT ported, per explicit instruction.
+
+Verified against the REAL production `update()`/`render()` code (not
+a reimplementation), working around this sandbox's own
+requestAnimationFrame-suspended-pane quirk (confirmed directly: a
+manual rAF probe showed 0 ticks fired over 500ms in a backgrounded
+pane) via a temporary debug hook driving `update(FIXED_DT)` manually
+in a tight loop -- grep-confirmed removed before finishing. All 4
+gesture modes confirmed end-to-end through real dispatched
+PointerEvents (fronting the tab via `tabs_select` immediately before
+dispatch, the same fix this project's history already established for
+synthetic-event delivery): click's 39-frame forward+reverse sequence,
+right-click's 24-frame SNAP, double-click's 24-frame SCISS, and
+charge's exact loop-tail sequence (`[...,6,7,7,1,1,2,2,3,3,...]` --
+forward through all 8 frames once, then permanently loops 1-7,
+verified never revisiting 0) followed by a correct release-into-click
+transition. 608/608 new frames confirmed loading with zero broken
+images. See "Open questions / blockers" below for a critical,
+unrelated discovery made while verifying this feature (Animations
+1/3's own original assets are gone from disk).
+
 Dev panel audited against CLAUDE.md's own §12 standard (per explicit
 request) -- already ~fully compliant (full resize/move/hide/collapse,
 Copy/Save/Reset with a real git-tracked-JSON write-through, group/row
@@ -878,6 +922,31 @@ change — see CODE_SUMMARY's `strokeRopeCurve()` note).
 
 ## Open questions / blockers
 
+- **CRITICAL, needs the user's decision:** Animations 1 and 3's
+  ORIGINAL 2TONED source assets are gone from disk -- discovered
+  2026-09-10 while building the new FLICK MOUSE feature below, NOT
+  caused by that work (confirmed via file mtimes: the replacement
+  folders were created 08:49-09:01 AM, before this session's task even
+  started at 09:07 AM -- almost certainly the user's own file
+  placement when adding "I have saved the same frames in
+  ...2TONED" for the new feature). All 6 original sets (ABOVE, SIDE
+  BEHIND, SIDE FRONT, SIDE PINKY, SIDE PINKY - 2, SIDE THUMB) plus all
+  3 Scissor sets (ABOVE/SIDE PINKY/SIDE THUMB - SCISSOR) are missing
+  their folders entirely (452 previously-tracked files show as deleted
+  in git). Two of the old folder NAMES got reused by the new content
+  ("SIDE PINKY", "SIDE THUMB" now hold the new mouse-flick direction's
+  own A-only frames with different prefixes, e.g. `2T
+  -DirectPink_001.png`) -- their old A/B/C content is gone, not merged.
+  Net effect: `cfg.flickSource`/`cfg.flick3Source` (Animation 1/3's own
+  dropdowns) now reference folders that mostly don't exist -- those 2
+  animations will show broken/blank frames for most or all of their 9
+  dropdown options. NOT fixed or touched by this session (out of scope
+  for the requested task, and doing so without the user's direction
+  risks discarding real intent) -- flagged here for the user to decide:
+  restore the old assets (if backed up elsewhere), repoint
+  TWOTONED_SETS/SCISSOR_SETS at whatever's now on disk, or confirm
+  Animations 1/3 are intentionally being retired in favor of the new
+  8-direction mouse-follow system.
 - Tier 1 (Vercel/GitHub API Save) itself is confirmed working end-to-end
   — many real "Update dev-panel-settings.json via Save Settings" commits
   have landed on the remote from the live deployment throughout this
