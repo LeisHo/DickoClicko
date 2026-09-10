@@ -2682,15 +2682,22 @@ function isPointInFlick3(x, y){
 // match DotFlicko's own DIRECTIONS array exactly (8 sectors of 45°,
 // starting at 0°=up and going clockwise) so the adopted angle math maps
 // to the same buckets.
-const BASE_A_FRAME_NUMBERS = [1, 3, 5, 7, 9, 11, 13, 14, 15, 16, 17, 18, 19, 20];
+// Re-updated again (2026-09-10, "i updated the base frames again"):
+// this shared list now covers 6 of the 8 directions (BEHIND THUMB, SIDE
+// THUMB, FRONT THUMB, FRONT, FRONT PINKY, SIDE PINKY); BEHIND and BEHIND
+// PINKY use their own separate BASE_A_FRAME_NUMBERS_8 (a genuinely
+// different 8-number set, not just this list minus one number by
+// coincidence -- confirmed via direct enumeration, not assumed).
+const BASE_A_FRAME_NUMBERS = [1, 5, 9, 11, 13, 15, 17, 19, 20];
+const BASE_A_FRAME_NUMBERS_8 = [1, 5, 9, 13, 15, 17, 19, 20];
 const MOUSE_FLICK_DIRECTIONS = [
   { key:'behind',
-    base:{   folder:'BEHIND',           prefix:'2T -Flabbehind',       nums:BASE_A_FRAME_NUMBERS },
+    base:{   folder:'BEHIND',           prefix:'2T -Flabbehind',       nums:BASE_A_FRAME_NUMBERS_8 },
     charge:{ folder:'BEHIND - CHARGE',  prefix:'2T Behind-CHARGE',     count:8 },
     sciss:{  folder:'BEHIND - SCISS',   prefix:'2T BEHIND - SCISS',   count:45 },
     snap:{   folder:'BEHIND - SNAP',    prefix:'2T BEHIND - SNAP', count:45 } },
   { key:'behind-thumb',
-    base:{   folder:'BEHIND THUMB',           prefix:'2T -BehindThumb',        count:20 },
+    base:{   folder:'BEHIND THUMB',           prefix:'2T -BehindThumb',        nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'BEHIND THUMB - CHARGE',  prefix:'2T BehindThumb-CHARGE',  count:8 },
     sciss:{  folder:'BEHIND THUMB - SCISS',   prefix:'2T BEHINDTHUMB - SCISS', count:45 },
     snap:{   folder:'BEHIND THUMB - SNAP',    prefix:'2T BEHINDTHUB - SNAP', count:45 } },
@@ -2720,7 +2727,7 @@ const MOUSE_FLICK_DIRECTIONS = [
     sciss:{  folder:'SIDE PINKY - SCISS',   prefix:'2T DIRECTPINK - SCISS', count:45 },
     snap:{   folder:'SIDE PINKY - SNAP',    prefix:'2T DIRECTPINK - SNAP', count:45 } },
   { key:'behind-pinky',
-    base:{   folder:'BEHIND PINKY',           prefix:'2T -BehindPink',        count:20 },
+    base:{   folder:'BEHIND PINKY',           prefix:'2T -BehindPink',        nums:BASE_A_FRAME_NUMBERS_8 },
     charge:{ folder:'BEHIND PINKY -CHARGE',   prefix:'2T BehindPink-CHARGE',  count:8 },
     sciss:{  folder:'BEHIND PINKY - SCISS',   prefix:'2T BEHINDPINK - SCISS', count:45 },
     snap:{   folder:'BEHIND PINKY - SNAP',    prefix:'2T BEHINDPINK - SNAP', count:45 } },
