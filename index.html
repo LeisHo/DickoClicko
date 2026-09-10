@@ -636,6 +636,16 @@ const DEV_GROUPS = [
     { key:'ropeAttractionSpeed',     label:'Rope Attraction Speed',     type:'slider', unit:'%vmin/s', min:5, max:200, step:5, def:60 },
     { key:'ropeAttractionMaxReach',  label:'Max Reach Distance',        type:'slider', unit:'%vmin', min:5, max:100, step:1, def:40 },
   ]},
+  { title:'FLICK MOUSE', controls:[
+    { key:'mouseFlickEnabled',           label:'Mouse Flick Enabled',            type:'checkbox', def:true },
+    { key:'mouseFlickScale',             label:'Mouse Flick Scale',              type:'slider', unit:'%vmin', min:1,    max:60,  step:0.5,  def:50 },
+    { key:'mouseFlickAnimSpeed',         label:'Mouse Flick Anim Speed',         type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
+    { key:'mouseFlickPositionSmoothing', label:'Mouse Flick Position Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
+    { key:'mouseFlickRotationSmoothing', label:'Mouse Flick Rotation Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
+    { key:'mouseFlickAngleOffset',       label:'Mouse Flick Angle Offset',       type:'slider', unit:'deg',   min:-180, max:180, step:1,    def:0 },
+    { key:'mouseFlickHoldMaxSpeed',      label:'Mouse Flick Hold Max Speed',     type:'slider', unit:'x',     min:1,    max:20,  step:0.5,  def:6 },
+    { key:'mouseFlickHoldMaxDuration',   label:'Mouse Flick Hold Max Duration',  type:'slider', unit:'s',     min:0.1,  max:5,   step:0.1,  def:1.5 },
+  ]},
 ];
 
 const cfg = {};
@@ -2621,6 +2631,171 @@ function flick3HoldFrameIndex(){
 const flick3Rect = { x: 0, y: 0, w: 0, h: 0 };
 function isPointInFlick3(x, y){
   return isPixelVisible(flick3Frames()[0], flick3Rect.x, flick3Rect.y, flick3Rect.w, flick3Rect.h, x, y);
+}
+
+// ---------------------------------------------------------------------
+// FLICK MOUSE -- a 4th, independent FLICK-style overlay that follows the
+// mouse cursor (desktop) instead of sitting at a fixed X/Y, adopted
+// directly from the DotFlicko project's own mouse-anchored entity (same
+// viewport-center-relative angle math, same 8-direction-bucket system,
+// same forward+reverse click sequence) -- per explicit request ("adopt
+// the angles and animation sequence of DotFlicko"). DotFlicko's own
+// bouncing-ball collision demo is deliberately NOT ported, per explicit
+// instruction to ignore collision for now -- only the mouse-follow,
+// rotation, direction-switching, and sequence-playback parts.
+//
+// 8 direction sets, each with 4 independently-prefixed variant folders
+// (base/charge/sciss/snap) -- confirmed via direct enumeration, not
+// assumed: every folder has its own idiosyncratic filename prefix (same
+// "no 2 sets share a naming convention" pattern every other 2TONED round
+// this project has hit), though frame numbers are cleanly contiguous
+// 1..count within each folder here (unlike the older non-scissor 2TONED
+// sets' own non-contiguous numbering). Order/keys match DotFlicko's own
+// DIRECTIONS array exactly (8 sectors of 45°, starting at 0°=up and
+// going clockwise) so the adopted angle math maps to the same buckets.
+const MOUSE_FLICK_DIRECTIONS = [
+  { key:'behind',
+    base:{   folder:'BEHIND',           prefix:'2T -Flabbehind',       count:20 },
+    charge:{ folder:'BEHIND - CHARGE',  prefix:'2T Behind-CHARGE',     count:8 },
+    sciss:{  folder:'BEHIND - SCISS',   prefix:'2T -Behind - SCISS',   count:24 },
+    snap:{   folder:'BEHIND - SNAP',    prefix:'2T -Blabehind - SNAP', count:24 } },
+  { key:'behind-thumb',
+    base:{   folder:'BEHIND THUMB',           prefix:'2T -BehindThumb',        count:20 },
+    charge:{ folder:'BEHIND THUMB - CHARGE',  prefix:'2T BehindThumb-CHARGE',  count:8 },
+    sciss:{  folder:'BEHIND THUMB - SCISS',   prefix:'2T BehindThumb - SCISS', count:24 },
+    snap:{   folder:'BEHIND THUMB - SNAP',    prefix:'2T -BehindThumb - SNAP', count:24 } },
+  { key:'side-thumb',
+    base:{   folder:'SIDE THUMB',           prefix:'2T -DirectThumb',       count:20 },
+    charge:{ folder:'SIDE THUMB - CHARGE',  prefix:'2T DirectThumb-CHARGE', count:8 },
+    sciss:{  folder:'SIDE THUMB - SCISS',   prefix:'2T DirectThumb - SCISS', count:24 },
+    snap:{   folder:'SIDE THUMB - SNAP',    prefix:'2T -SideThumb - SNAP',  count:24 } },
+  { key:'front-thumb',
+    base:{   folder:'FRONT THUMB',           prefix:'2T -SideThub',           count:20 },
+    charge:{ folder:'FRONT THUMB - CHARGE',  prefix:'2T FrontThumb-CHARGE',   count:8 },
+    sciss:{  folder:'FRONT THUMB - SCISS',   prefix:'2T -FrontThumb - SCISS', count:24 },
+    snap:{   folder:'FRONT THUMB - SNAP',    prefix:'2T - FrontThumb - SNAP', count:24 } },
+  { key:'front',
+    base:{   folder:'FRONT',           prefix:'2T -Flabove',       count:20 },
+    charge:{ folder:'FRONT - CHARGE',  prefix:'2T Front-CHARGE',   count:8 },
+    sciss:{  folder:'FRONT - SCISS',   prefix:'2T -Front - SCISS', count:24 },
+    snap:{   folder:'FRONT - SNAP',    prefix:'2T - Front - SNAP', count:24 } },
+  { key:'front-pinky',
+    base:{   folder:'FRONT PINKY',           prefix:'2T -SidePink',           count:20 },
+    charge:{ folder:'FRONT PINKY -CHARGE',   prefix:'2T FrontPink-CHARGE',    count:8 },
+    sciss:{  folder:'FRONT PINKY - SCISS',   prefix:'2T -FrontPink - SCISS',  count:24 },
+    snap:{   folder:'FRONT PINKY - SNAP',    prefix:'2T - FrontPink - SNAP',  count:24 } },
+  { key:'side-pinky',
+    base:{   folder:'SIDE PINKY',           prefix:'2T -DirectPink',        count:20 },
+    charge:{ folder:'SIDE PINKY - CHARGE',  prefix:'2T DirectPink-CHARGE',  count:8 },
+    sciss:{  folder:'SIDE PINKY - SCISS',   prefix:'2T -DirectPink - SCISS', count:24 },
+    snap:{   folder:'SIDE PINKY - SNAP',    prefix:'2T - DirectPink - SNAP', count:24 } },
+  { key:'behind-pinky',
+    base:{   folder:'BEHIND PINKY',           prefix:'2T -BehindPink',        count:20 },
+    charge:{ folder:'BEHIND PINKY -CHARGE',   prefix:'2T BehindPink-CHARGE',  count:8 },
+    sciss:{  folder:'BEHIND PINKY - SCISS',   prefix:'2T -BehindPink - SCISS', count:24 },
+    snap:{   folder:'BEHIND PINKY - SNAP',    prefix:'2T -BehindPink - SNAP', count:24 } },
+];
+function mouseFlickFrameUrl(variant, n){
+  return `data/FLICK/2TONED/${encodeURIComponent(variant.folder)}/A/${encodeURIComponent(variant.prefix + '_' + String(n).padStart(3, '0') + '.webp')}`;
+}
+// Eagerly preloaded at load (same convention as every other FLICK
+// animation in this file), not lazily per-direction like DotFlicko's own
+// version -- 8 directions x 4 variants x (20+8+24+24 frames) = 608
+// images total. base/sciss/snap each get a forward+reverse-excluding-
+// duplicate-peak "click" sequence except sciss/snap, which per explicit
+// request play forward-only (no "then reverse" language for those 2
+// modes, unlike click); charge gets only a forward array (its own
+// loop-tail playback is computed live from mfHoldCyclePos, same pattern
+// as flick3HoldFrameIndex() above, not baked into a fixed sequence).
+const mouseFlickFramesByDirection = {};
+MOUSE_FLICK_DIRECTIONS.forEach(dir => {
+  const load = (variant) => {
+    const forward = [];
+    for (let n = 1; n <= variant.count; n++){
+      const img = new Image();
+      img.src = mouseFlickFrameUrl(variant, n);
+      forward.push(img);
+    }
+    return forward;
+  };
+  const baseForward = load(dir.base);
+  mouseFlickFramesByDirection[dir.key] = {
+    click: baseForward.concat(baseForward.slice(0, -1).reverse()),
+    sciss: load(dir.sciss),
+    snap: load(dir.snap),
+    charge: load(dir.charge),
+  };
+});
+
+// State: entity position (lerped toward the mouse), rotation (lerped
+// toward the mouse's angle from viewport center), current direction
+// bucket (recomputed from that same angle while idle), and the active
+// click/sciss/snap/charge play state -- mirrors DotFlicko's own
+// entityX/entityY/entityAngleDeg/currentDirectionKey/playing shape
+// directly (adopted, not reinvented; see that project's index.html for
+// the original this was ported from).
+let mfX = 0, mfY = 0, mfHasMouse = false;
+let mfEntityX = 0, mfEntityY = 0, mfEntityAngleDeg = 0;
+let mfDirectionKey = MOUSE_FLICK_DIRECTIONS[0].key;
+// mode: 'idle' | 'click' | 'sciss' | 'snap' | 'charge'. A press of any
+// kind is ignored while a mode other than 'idle' is active -- same
+// "don't interrupt an in-progress sequence" rule the other 3 FLICK
+// animations already use.
+let mfMode = 'idle';
+let mfFrameAccum = 0;
+let mfFrozenFrames = null; // the click/sciss/snap frame array captured at trigger time
+let mfHoldCyclePos = 0, mfHoldTime = 0;
+let mfHoldTimer = null;
+let mfPendingClick = null; // {time, timer} -- same setTimeout-pairing technique as the rope's own double-click-to-cut (see CLAUDE.md gotchas)
+
+function mouseFlickDirection(){ return MOUSE_FLICK_DIRECTIONS.find(d => d.key === mfDirectionKey) || MOUSE_FLICK_DIRECTIONS[0]; }
+// "Up" (0°) = directly above viewport center, angle increases clockwise
+// -- identical formula to DotFlicko's own mouseAngleFromCenter().
+function mouseFlickAngleFromCenter(mx, my, cx, cy){
+  const dx = mx - cx, dy = my - cy;
+  return (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+}
+// 8 sectors of 45°, centered on 0/45/.../315 -- identical to DotFlicko's
+// own directionIndexForAngle() (cfg.mouseFlickAngleOffset is the adopted
+// angleOffset calibration knob).
+function mouseFlickDirectionIndexForAngle(angleDeg){
+  const shifted = (angleDeg + cfg.mouseFlickAngleOffset + 22.5 + 3600) % 360;
+  return Math.floor(shifted / 45) % 8;
+}
+function mouseFlickAngleLerp(current, target, factor){
+  const delta = ((target - current + 540) % 360) - 180;
+  return current + delta * factor;
+}
+function mouseFlickExpSmoothFactor(smoothing, dt){
+  if (smoothing >= 1) return 1;
+  return 1 - Math.pow(1 - smoothing, dt * 60);
+}
+// Starts a fresh click/sciss/snap play (forward, or forward+reverse for
+// click) -- ignored if a mode is already active, same "in-progress
+// sequence can't be interrupted" rule the other 3 FLICK animations use.
+function mouseFlickStartPlay(mode){
+  if (mfMode !== 'idle') return;
+  const frames = mouseFlickFramesByDirection[mfDirectionKey][mode];
+  if (!frames || !frames.length) return;
+  mfMode = mode;
+  mfFrameAccum = 0;
+  mfFrozenFrames = frames;
+}
+function mouseFlickStartCharge(){
+  if (mfMode !== 'idle') return;
+  mfMode = 'charge';
+  mfHoldCyclePos = 0;
+  mfHoldTime = 0;
+}
+// Release of a charge hold: per explicit request ("on release, you run
+// the regular click sequence"), always transitions straight into the
+// normal click (A forward+reverse) sequence, regardless of how long the
+// charge was held -- same unconditional "release always plays click"
+// convention Animations 1/3's own hold already uses.
+function mouseFlickEndCharge(){
+  if (mfMode !== 'charge') return;
+  mfMode = 'idle';
+  mouseFlickStartPlay('click');
 }
 
 /* ---------------------------------------------------------------------
@@ -5428,6 +5603,66 @@ window.addEventListener('pointerup', onPointerUp);
 window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); holdingFlick = null; ropeAttractionActive = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
+// ---------------------------------------------------------------------
+// FLICK MOUSE input -- independent gesture listeners, deliberately NOT
+// merged into onPointerDown/onPointerUp above (the rope/circle's own
+// gesture state machine): this entity is a separate, mouse-anchored
+// overlay that follows the cursor everywhere on screen, so its own
+// click/hold/double-click detection is self-contained and simply
+// coexists with whatever else a given press also happens to trigger --
+// e.g. a right-click-hold both pins Rope Attraction (existing, untouched
+// above) AND plays this entity's own SNAP sequence; nothing here needs
+// to know about that or suppress it.
+// ---------------------------------------------------------------------
+window.addEventListener('pointermove', e => {
+  mfX = e.clientX; mfY = e.clientY;
+  mfHasMouse = true;
+});
+canvas.addEventListener('pointerdown', e => {
+  if (!cfg.mouseFlickEnabled) return;
+  if (e.button === 2){
+    // Right click OR right-click-hold: per explicit request, both play
+    // the SAME thing (SNAP, forward once) -- nothing to distinguish by
+    // duration, so this fires once per press, ignored while busy.
+    mouseFlickStartPlay('snap');
+    return;
+  }
+  if (e.button !== 0) return;
+  clearTimeout(mfHoldTimer);
+  // Charging only becomes eligible after a FULL doubleClickThreshold of
+  // holding -- the same proven technique this project's own rope-punch
+  // charging already uses (see CLAUDE.md gotchas) to guarantee a real
+  // double-click's own 2 quick presses can never be misread as a hold.
+  mfHoldTimer = setTimeout(() => { mouseFlickStartCharge(); }, cfg.doubleClickThreshold);
+});
+window.addEventListener('pointerup', e => {
+  if (!cfg.mouseFlickEnabled || e.button !== 0) return;
+  clearTimeout(mfHoldTimer);
+  if (mfMode === 'charge'){
+    mouseFlickEndCharge();
+    return;
+  }
+  // Quick tap -- pair against a pending click for double-click (SCISS),
+  // same setTimeout-pairing technique as the rope's own double-click-to-
+  // cut (see CLAUDE.md gotchas: "Double-click detection is custom").
+  const mfNow = performance.now();
+  if (mfPendingClick && (mfNow - mfPendingClick.time) <= cfg.doubleClickThreshold){
+    clearTimeout(mfPendingClick.timer);
+    mfPendingClick = null;
+    mouseFlickStartPlay('sciss');
+    return;
+  }
+  if (mfPendingClick) clearTimeout(mfPendingClick.timer);
+  mfPendingClick = {
+    time: mfNow,
+    timer: setTimeout(() => {
+      mfPendingClick = null;
+      mouseFlickStartPlay('click');
+    }, cfg.doubleClickThreshold),
+  };
+});
+window.addEventListener('pointercancel', () => { clearTimeout(mfHoldTimer); if (mfMode === 'charge') mouseFlickEndCharge(); });
+
 /* ---------------------------------------------------------------------
    Update / render loop
 --------------------------------------------------------------------- */
@@ -6074,6 +6309,50 @@ function update(rawDt){
     pieceCollision(dt);
   } else {
     fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < viewportH() * 1.5));
+  }
+
+  // FLICK MOUSE: position/rotation lerp toward the mouse, direction-
+  // bucket recompute, and per-mode frame-index advance -- adopted
+  // directly from DotFlicko's own update() (see that project's
+  // index.html for the original this was ported from).
+  if (cfg.mouseFlickEnabled){
+    const mfCx = viewportW() / 2, mfCy = viewportH() / 2;
+    if (!mfHasMouse){ mfX = mfCx; mfY = mfCy; mfEntityX = mfCx; mfEntityY = mfCy; }
+    const mfPosFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickPositionSmoothing, rawDt);
+    mfEntityX += (mfX - mfEntityX) * mfPosFactor;
+    mfEntityY += (mfY - mfEntityY) * mfPosFactor;
+    const mfTargetAngle = mouseFlickAngleFromCenter(mfX, mfY, mfCx, mfCy);
+    const mfRotFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickRotationSmoothing, rawDt);
+    mfEntityAngleDeg = mouseFlickAngleLerp(mfEntityAngleDeg, mfTargetAngle, mfRotFactor);
+    // Direction bucket only switches while idle -- an in-progress
+    // click/sciss/snap/charge sequence keeps playing its already-frozen
+    // frame set to completion even if the mouse crosses a sector
+    // boundary mid-play (same "frozen sequence" design as DotFlicko's
+    // own playSequenceFrozen), while rotation above still follows the
+    // mouse live throughout.
+    if (mfMode === 'idle'){
+      mfDirectionKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfTargetAngle)].key;
+    }
+    if (mfMode === 'charge'){
+      mfHoldTime += rawDt;
+      const mfRampProgress = cfg.mouseFlickHoldMaxDuration > 0 ? Math.min(1, mfHoldTime / cfg.mouseFlickHoldMaxDuration) : 1;
+      const mfHoldRate = 1 + (cfg.mouseFlickHoldMaxSpeed - 1) * mfRampProgress;
+      mfHoldCyclePos += rawDt * FLICK_BASE_FPS * mfHoldRate;
+    } else if (mfMode !== 'idle' && mfFrozenFrames){
+      // Same "pause on a still-loading frame instead of racing past it"
+      // guard the other 3 FLICK animations already use (isFrameBlocking(),
+      // defined above in this same function) -- a slow network fetch
+      // shouldn't silently truncate the sequence's visible frame count.
+      const mfIdx = Math.min(Math.floor(mfFrameAccum), mfFrozenFrames.length - 1);
+      if (!isFrameBlocking(mfFrozenFrames[mfIdx])){
+        mfFrameAccum += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
+        if (Math.floor(mfFrameAccum) >= mfFrozenFrames.length){
+          mfMode = 'idle';
+          mfFrozenFrames = null;
+          mfFrameAccum = 0;
+        }
+      }
+    }
   }
 }
 
@@ -7182,6 +7461,38 @@ function render(){
       }
     } else {
       flick3Rect.w = 0; flick3Rect.h = 0;
+    }
+    // FLICK MOUSE -- draws rotated/translated to the entity's own
+    // lerped mouse-following position, adopted directly from DotFlicko's
+    // own render() (translate -> rotate -> drawImage centered at
+    // origin). No hit-test rect: this entity isn't clicked ON, its own
+    // gestures are global window/canvas listeners (see their own
+    // comment above onPointerDown/onPointerUp).
+    if (cfg.mouseFlickEnabled){
+      const mfFramesForDir = mouseFlickFramesByDirection[mfDirectionKey];
+      let mfImg;
+      if (mfMode === 'charge'){
+        const mfChargeFrames = mfFramesForDir.charge;
+        const mfN = mfChargeFrames.length;
+        const mfPos = Math.max(0, Math.floor(mfHoldCyclePos));
+        const mfChargeIdx = mfPos < mfN ? mfPos : 1 + ((mfPos - mfN) % (mfN - 1));
+        mfImg = mfChargeFrames[mfChargeIdx];
+      } else if (mfMode !== 'idle' && mfFrozenFrames){
+        const mfIdx = Math.min(Math.floor(mfFrameAccum), mfFrozenFrames.length - 1);
+        mfImg = mfFrozenFrames[mfIdx];
+      } else {
+        mfImg = mfFramesForDir.click[0];
+      }
+      if (mfImg && mfImg.complete && mfImg.naturalWidth > 0){
+        const mfSize = vmin(cfg.mouseFlickScale);
+        const mfDrawW = mfSize, mfDrawH = mfSize * (mfImg.naturalHeight / mfImg.naturalWidth);
+        const mfRotationRad = (mfEntityAngleDeg + 180) * Math.PI / 180;
+        ctx.save();
+        ctx.translate(mfEntityX, mfEntityY);
+        ctx.rotate(mfRotationRad);
+        ctx.drawImage(mfImg, -mfDrawW / 2, -mfDrawH / 2, mfDrawW, mfDrawH);
+        ctx.restore();
+      }
     }
   }
 }
