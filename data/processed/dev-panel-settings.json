@@ -169,17 +169,17 @@
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
     "flickX": 17,
-    "flickY": 48,
-    "flickScale": 24,
-    "flickAnimSpeed": 4.5,
+    "flickY": 73,
+    "flickScale": 40.5,
+    "flickAnimSpeed": 3,
     "flick2X": 19,
     "flick2Y": 23,
-    "flick2Scale": 26,
+    "flick2Scale": 48,
     "flick2AnimSpeed": 4.4,
     "flick3Source": "above",
-    "flick3X": 9,
+    "flick3X": 66,
     "flick3Y": 22,
-    "flick3Scale": 57,
+    "flick3Scale": 100,
     "flick3AnimSpeed": 4.9,
     "flickHoldMaxSpeed": 4,
     "flickHoldMaxDuration": 2.9,
@@ -190,7 +190,7 @@
   "order": [
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick3Source",
         "flick3X",
@@ -213,7 +213,7 @@
     },
     {
       "key": "FLICK ANIMATION 2",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "flick2X",
         "flick2Y",
@@ -437,11 +437,11 @@
     }
   ],
   "panelGeometry": {
-    "mobile": {
-      "left": 182,
-      "top": 42.28571319580078,
-      "width": 229,
-      "height": 374.7857360839844,
+    "desktop": {
+      "left": 1286.4375,
+      "top": 17.912500381469727,
+      "width": 249.5500030517578,
+      "height": 570.0250244140625,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -469,11 +469,11 @@
         "textEditMode": false
       }
     },
-    "desktop": {
-      "left": 1286.4375,
-      "top": 17.912500381469727,
-      "width": 249.5500030517578,
-      "height": 570.0250244140625,
+    "mobile": {
+      "left": 182,
+      "top": 42.28571319580078,
+      "width": 229,
+      "height": 374.7857360839844,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
