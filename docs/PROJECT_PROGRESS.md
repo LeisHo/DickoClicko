@@ -90,6 +90,36 @@ with existing right-click Rope Attraction and double-click rope-
 cutting. Collision physics from DotFlicko's own bouncing-ball demo
 deliberately NOT ported, per explicit instruction.
 
+**Extended (2026-09-10): mid-sequence direction switching + SNAP
+freeze-at-42.** Per a 3-point explicit spec: (1) click-and-hold
+(CHARGE) now switches to the new direction's charge frames if an
+angle threshold is crossed while still held, continuing the loop-tail
+without ever re-showing frame 0 -- needed no position remap since
+charge frame counts are uniform (8, contiguous) across every
+direction, so the existing loop-tail formula already guarantees this
+for free once direction is simply allowed to change mid-hold; (2)
+right-click-hold (SNAP) now freezes at frame 42 if the button is
+still held once playback reaches it, resuming to complete with
+whatever frames remain (43-45 currently) on release, tracked via a
+new live `mfRightDown` flag (the old trigger only fired once on
+pointerdown, never tracked release); (3) angle thresholds now apply
+mid-sequence for ALL 4 modes, not just while idle -- a direction
+switch mid-play continues from the SAME REAL FRAME NUMBER (not array
+index), falling back to the nearest available number when the exact
+one doesn't exist in the new direction's own set (relevant mainly for
+`base`/click, whose `nums` arrays genuinely differ per direction after
+the recent trims; sciss/snap/charge are currently uniform so this
+degenerates to an exact match for them). New `mouseFlickRemapSequence()`
+handles the click/sciss/snap case, aware of click's own
+forward+mirrored-reverse shape; preserves the sub-frame fraction of
+`mfFrameAccum` so a switch doesn't visibly stutter playback speed.
+Verified live via debug hook against the real production code: exact
+match (13->13), nearest-match tie-break (11->9, not 13, when 11 isn't
+in the new direction's set), charge loop confirmed never repeating
+frame 001 after a mid-hold switch (frame trace:
+...005,006,007,008,002,003,004... ), and SNAP confirmed freezing
+exactly at 042 then completing with 043/044/045 on release.
+
 Verified against the REAL production `update()`/`render()` code (not
 a reimplementation), working around this sandbox's own
 requestAnimationFrame-suspended-pane quirk (confirmed directly: a

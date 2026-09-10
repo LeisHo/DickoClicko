@@ -9549,3 +9549,117 @@ its new 8-frame-based sequence and returns to idle.
 Committed/pushed code+assets (f4166cc) -- fetch confirmed no
 divergence -- then this doc pass as a separate follow-up, per the
 standing instruction.
+
+================================================================================
+2026-09-10  -  06:43 PM EDT
+
+A 3-point explicit spec for FLICK MOUSE's mid-sequence behavior:
+1. "For the click and hold, while im still holding, if my mouse passes
+   the angle thresholds to trigger a change in animation type, change
+   it to the appropriate type, but continue looping the charge frames
+   in that type without the first frame within the charge folder."
+2. "For right click hold, play the sequence. But if the right click is
+   continually held, stop the sequence at frame 42. Hold that frame
+   until the right click is released, in which case you complete the
+   sequence with the last 3 frames. The comment from Point 1 in regards
+   to angle thresholds also apply."
+3. "The comment in regards to angle thresholds apply even during mid
+   animation sequence. If during an animation sequence, an angle
+   threshold is crossed by the mouse, continue the sequence but with
+   the new animation type, from the same frame number. If that exact
+   frame number does not exist in the corollary folder, use the next
+   closest frame number."
+
+Read the current state of every relevant code section fresh before
+designing anything (some of it had shifted line numbers across the
+recent frame-update commits) -- the direction-switch gate
+(`if (mfMode === 'idle')`), the charge index formula, the click/sciss/
+snap advance block, and the right-click event listeners.
+
+Key design realization that simplified the charge case significantly:
+charge frame counts are uniform (8, contiguous 1-8) across EVERY
+direction as of this writing. The existing loop-tail resolution
+formula (`pos < n ? pos : 1 + ((pos-n) % (n-1))`) already guarantees
+index 0 resolves at most once, ever, for the ENTIRE hold -- purely a
+function of the global `mfHoldCyclePos` and the (direction-independent)
+frame count `n`, never which direction is currently active. This means
+point 1's entire requirement falls out for free just by allowing
+`mfDirectionKey` to change while `mfMode==='charge'` -- no position
+remapping needed at all for charge, since switching which direction's
+array is INDEXED never revisits frame 0 once past the initial pass.
+Verified this reasoning directly rather than just trusting it.
+
+For click/sciss/snap, real remapping WAS needed: added
+`mouseFlickVariantNumbers(variant)` (returns `variant.nums` or the
+implied contiguous range), `mouseFlickNearestIndex(numbers, target)`
+(linear scan, strict less-than comparison so ties resolve to the
+FIRST/lowest matching number in array order -- a deliberate,
+documented tie-break, not an accident), and
+`mouseFlickRemapSequence(newKey)` -- reads the CURRENT real frame
+number from the OLD direction's own `nums`/count-derived array at the
+current position (aware of click's own forward-then-mirrored-reverse
+shape: determines which half the position falls in, reads the number
+accordingly), finds the nearest match in the NEW direction's array,
+and computes the corresponding new position (mirrored back into the
+reverse half if that's where we were), preserving `mfFrameAccum`'s
+sub-frame fraction so the switch doesn't visibly stutter playback
+speed. Wired into `update()`'s direction-check, which now runs EVERY
+frame (not just while idle) and calls this remap function BEFORE
+reassigning `mfDirectionKey`, so it reads the correct "old" direction.
+
+For SNAP's frame-42 freeze (point 2): the existing right-click handler
+only ever fired mouseFlickStartPlay('snap') once on pointerdown, with
+no tracking of the button's LIVE state during playback -- added a new
+`mfRightDown` boolean, set true on right pointerdown, false on right
+pointerup (the pointerup listener previously exited immediately for
+any non-0 button, silently dropping right-button releases entirely)
+and on pointercancel. In the advance block, a new guard --
+`mfMode==='snap' && mfRightDown && mfFrozenFrames.length > 41 &&
+mfIdx >= 41` -- simply skips the frame-advance for that tick instead
+of running it, which is ALL that's needed: releasing just stops the
+condition being true, and the very next tick resumes incrementing
+`mfFrameAccum` from exactly where it was pinned, naturally playing out
+whatever remains (43,44,45 for the current uniformly-45-frame SNAP
+sets) to a normal completion -- no separate "resume" code path.
+Guarded on the frame actually existing (`length > 41`) so a
+shorter-than-42-frame variant just plays through normally instead of
+freezing on nothing.
+
+Verified live via a temporary debug hook (grep-confirmed removed
+before finishing, node --check clean throughout) driving the REAL
+production update()/render() functions directly (not a
+reimplementation), including a new `mfSetMouseForDirection(dirIndex)`
+helper (places mfX/mfY at a real angle so update()'s own live
+angle-tracking resolves to and STAYS at a specific direction across
+ticks -- a plain forced mfDirectionKey assignment alone gets
+immediately overwritten by the very next tick's real angle read, which
+is itself confirmation the "switches every frame" part of point 3 is
+working):
+- Exact-match continuity: click sequence at frame 013 (BEHIND),
+  switched to BEHIND THUMB -> still frame 013 (present in both sets).
+- Nearest-match tie-break: click sequence at frame 011 (BEHIND THUMB
+  has 11, BEHIND doesn't), switched to BEHIND -> resolved to frame 009
+  (tied distance-2 candidates were 9 and 13; 9 correctly won via the
+  documented first-in-array-order tie-break).
+- Reverse-half mirroring: verified separately at a position past the
+  forward-array length, confirming the mirrored index math holds
+  post-switch too (frame 19, present in both directions, correctly
+  round-tripped through the reverse-half formula on both sides).
+- Charge loop never repeats frame 0 after a mid-hold switch: direct
+  frame-number trace across a switch from BEHIND to BEHIND THUMB mid-
+  loop showed ...005,006,007,008,002,003,004,005,006,007... -- 001
+  never recurs.
+- SNAP freeze: drove the sequence forward while `mfRightDown=true`,
+  confirmed it plays 001 through 042 normally then holds at 042
+  indefinitely (30+ consecutive ticks all still 042); set
+  `mfRightDown=false` and confirmed it resumes, plays exactly 043, 044,
+  045, then correctly returns to `mfMode:'idle'`.
+- SCISS mid-sequence switch (forward-only, same mechanism as SNAP):
+  confirmed it switches direction correctly and still runs to a clean
+  completion (`mfMode:'idle'`) afterward.
+
+Zero new console errors throughout (only the pre-existing,
+already-documented net::ERR_CONNECTION_RESET/404 noise).
+
+Committed/pushed (99e1eaf) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.
