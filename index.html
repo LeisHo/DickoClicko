@@ -525,6 +525,26 @@ const DEV_GROUPS = [
     // exactly (no change to current behavior at this default).
     { key:'pieceFriction',   label:'Rope Friction',    type:'slider',   unit:'x',   min:0,   max:1,   step:0.01, def:0.4 },
   ]},
+  { title:'WALLS', controls:[
+    // Per explicit request ("I want the ropes to have collision with the
+    // edges of the browser. they will not fall out of frame"). Covers
+    // LEFT/RIGHT/TOP only -- bottom is already FLOOR's own job (its own
+    // Enabled toggle, color, thickness, position, friction), and Floor
+    // disabled is an existing, intentional "let pieces fall away"
+    // behavior (see the fallenPieces cleanup filter at this same call
+    // site) that a redundant bottom wall would silently fight. With
+    // Floor's own default (enabled), all 4 sides are covered out of the
+    // box; disabling Floor only opens the bottom, on purpose.
+    { key:'wallEnabled',  label:'Wall Collision Enabled', type:'checkbox', def:true },
+    // Same mechanism/default/tradeoff as Floor Friction (clampToFloor's
+    // own comment) applied to the perpendicular axis: fraction of
+    // TANGENTIAL velocity removed the instant a point touches a wall
+    // (vertical velocity for the left/right walls, horizontal for the
+    // top wall). Default 0 -- no extra removal beyond cfg.damping's own
+    // general per-frame decay, matching Floor Friction's own default
+    // reasoning exactly.
+    { key:'wallFriction', label:'Wall Friction',          type:'slider',   unit:'x', min:0, max:1, step:0.01, def:0 },
+  ]},
   { title:'STARTUP ANIMATION', controls:[
     { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
     { key:'introWaitDuration',   label:'Startup Wait Duration',     type:'slider', unit:'s',     min:0,   max:10,  step:0.1, def:1.4 },
@@ -6502,6 +6522,47 @@ function update(rawDt){
     pieceCollision(dt);
   } else {
     fallenPieces = fallenPieces.filter(piece => piece.points.some(p => p.y < viewportH() * 1.5));
+  }
+
+  if (cfg.wallEnabled){
+    // Per explicit request ("I want the ropes to have collision with
+    // the edges of the browser. they will not fall out of frame").
+    // LEFT/RIGHT/TOP only -- see the WALLS dev-panel group's own
+    // comment for why bottom stays FLOOR's job, not duplicated here.
+    // Same half-thickness-offset convention as clampToFloor (a chain's
+    // points sit on their CENTERLINE, so clamping straight to the raw
+    // edge would let half the rendered rope width visibly poke past
+    // it) and the same "only kill velocity in the direction actually
+    // being constrained" principle used everywhere else in this file's
+    // constraint solve (clampToFloor, boundaryConstraint, tipTarget) --
+    // clamping x sets p.oldx = p.x (zeroing horizontal velocity only),
+    // clamping y sets p.oldy = p.y (zeroing vertical velocity only),
+    // never both from the same edge. wallFriction mirrors floorFriction
+    // exactly: an optional, disclosed removal of the TANGENTIAL
+    // velocity component on contact (vertical for a side wall,
+    // horizontal for the top wall), default 0 (no extra removal).
+    const clampToWalls = (points, thick) => {
+      const half = thick / 2;
+      const minX = half, maxX = viewportW() - half, minY = half;
+      points.forEach(p => {
+        if (p.x < minX){
+          p.x = minX;
+          if (cfg.wallFriction > 0) p.oldy = p.y - (p.y - p.oldy) * (1 - cfg.wallFriction);
+          p.oldx = p.x;
+        } else if (p.x > maxX){
+          p.x = maxX;
+          if (cfg.wallFriction > 0) p.oldy = p.y - (p.y - p.oldy) * (1 - cfg.wallFriction);
+          p.oldx = p.x;
+        }
+        if (p.y < minY){
+          p.y = minY;
+          if (cfg.wallFriction > 0) p.oldx = p.x - (p.x - p.oldx) * (1 - cfg.wallFriction);
+          p.oldy = p.y;
+        }
+      });
+    };
+    clampToWalls(mainRope.points, vmin(cfg.ropeThickness) * ropeThicknessMultiplier);
+    fallenPieces.forEach(piece => clampToWalls(piece.points, pieceThickness(piece)));
   }
 
   // FLICK MOUSE: position/rotation lerp toward the mouse, direction-
