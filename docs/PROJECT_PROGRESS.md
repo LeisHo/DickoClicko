@@ -286,6 +286,45 @@ rewinds the internal tap timestamp by a controlled amount, exercising
 the real comparison logic against a precise simulated elapsed time
 instead of fighting the environment's own throttled timers.
 
+**Added (2026-09-10): configurable Cursor Target Mode (Center/Endcap/
+Point in Rope/Rope/Random).** "I dont want it to point at the center
+anymore... I want to have a drop down to select them" -- 4 new modes
+for what mfEntityAngleDeg (the drawn sprite's own rotation) points
+toward, replacing the old fixed always-radiates-from-viewport-center
+behavior. Direction-bucket/hand-pose selection deliberately stayed on
+the ORIGINAL mouse-from-center angle, unchanged -- only rotation was
+asked to change. Follow Endcap targets mainRope's own tip, falling
+back to the most recently fallen piece's own original tip once the
+main rope's been cut down near its configured minimum length (too
+short a stub to meaningfully point at) -- required reading the actual
+cut/regrow mechanics (`tipEmerge`/`emergeFactor`/`mainTipFactor`)
+first to get the spec's own "50% of its endscale" threshold right,
+not guessed. Follow Point in Rope adds a 0-1 slider (0=anchor, 1=tip),
+interpolated between the 2 nearest physics points. Follow Rope reuses
+the EXISTING `nearestPointOnRope()` hit-testing helper verbatim.
+Random re-rolls between the other 3 every N seconds (a new interval
+slider), including a fresh random point position each time Point-in-
+Rope comes up. One genuine interpretive call, flagged rather than
+silently assumed: "fully cut" can't mean literally zero rope remaining
+(cutRopeAt refuses any cut shorter than `cfg.minRopeLength`), read
+instead as "cut down near that minimum" -- and which piece carries
+the ORIGINAL inherited endcap after SEVERAL cuts isn't tracked
+precisely (uses the most recent piece as a simplification). Verified
+live via a temporary debug hook: 'center' mode's angle matched the
+pre-existing formula exactly (regression check); 'point' mode landed
+exactly on the anchor/tip at t=0/1; 'rope' mode's nearest-point search
+returned a correctly-positioned point; 'endcap' mode's normal AND
+simulated-near-minimum-fallback cases both resolved correctly; 'random'
+mode's timer re-rolled correctly across 12 simulated cycles, visiting
+all 3 sub-modes. **Real cross-session collision, same handling as
+before:** discovered yet another concurrent session's own uncommitted
+"Wall Bounciness" feature in this same file mid-task -- removed this
+task's own debug hook first (simplifying the final hunk down to 100%
+theirs), then staged only this task's own hunks via a scoped
+`git apply --cached` patch, verified zero cross-contamination in
+either direction before committing, confirmed their work fully intact
+afterward.
+
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
 from `resetSettings()`'s own async settings fetch, which resolves

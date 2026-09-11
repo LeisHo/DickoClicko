@@ -10239,3 +10239,105 @@ being replaced by it.
 
 Committed/pushed (91fef40) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-10  -  11:50 PM EDT
+
+"Right now, the rope gradient scales with the rope length. Is there a
+way to make the gradient repeat instead of scaling" -- an exploratory
+question, answered directly (2-3 sentences: yes, possible by computing
+repeat-cycle count against a fixed length and re-adding the stop
+sequence that many times, since Canvas2D gradients have no native
+repeat mode; main tradeoff is a seam at the tip) without implementing
+anything, per this project's own "don't implement an exploratory
+question, offer a recommendation and let the user redirect" convention
+-- the user replied "nah thats fine" and moved to a different, fully-
+specified request instead, so nothing was built for this one.
+
+That different request: "I want to change something with the cursor
+animation. I dont want it to point at the center anymore... So i want
+to have a drop down to select them," followed by 4 fully-specified
+modes (Follow Endcap, Follow Point in Rope, Follow Rope, Random) with
+explicit sub-behavior for each, including a detailed 3-state spec for
+Follow Endcap's own cut/regrow interaction.
+
+Investigated the existing rotation code first rather than assuming:
+found mfEntityAngleDeg (the drawn sprite's own rotation) and the
+direction-bucket/hand-pose selection BOTH currently derive from the
+SAME angle (mouseFlickAngleFromCenter(mouse, viewport-center)) --
+"points at the center" is exactly this: the hand visually radiates
+outward from an implicit central body position toward wherever the
+mouse currently is. Deliberately kept direction-bucket selection tied
+to this SAME original angle, unchanged -- the request was specifically
+about what the sprite visually points at (its rotation), not which
+hand-pose/frame-set is shown, and changing the latter wasn't asked
+for (scope discipline).
+
+Read the actual cut/regrow mechanics (cutRopeAt, performMainRopeSplit,
+tipEmerge/emergeFactor, mainTipFactor) before writing Follow Endcap's
+3-state logic, rather than guessing at what "50% of its endscale"
+or "fully cut" could mean: confirmed mainRope.tipEmerge is freshly
+armed on every cut (an existing 0->1 growth-in animation for the new
+tip's own endcap), and mainTipFactor=emergeFactor(mainRope.tipEmerge)
+is exactly the "endscale" the spec's own 50% threshold refers to.
+Flagged one genuine interpretive call rather than silently guessing:
+mainRope can never be cut shorter than cfg.minRopeLength (cutRopeAt
+refuses any cut that would leave less), so "fully cut" can't mean
+literally zero rope remaining -- read as "cut down to (near) that
+configured minimum," with the fallback in that state targeting the
+MOST RECENTLY fallen piece's own ORIGINAL tip (piece.points[length-1],
+confirmed via the existing reversed-array drawEndcap convention to be
+where the ORIGINAL rope's inherited endcap actually lives) as a stand-
+in for "the endcap of the full rope that was cut" -- explicitly noted
+in both the code comment and here that this doesn't track exactly
+WHICH piece carries that original endcap across several cuts, a real
+simplification rather than a hidden assumption.
+
+Reused existing infrastructure directly rather than reinventing it:
+nearestPointOnRope() (already built for the rope's own hit-testing)
+powers Follow Rope's own nearest-point search verbatim; the dropdown
+control type and its {value,label} options shape were already
+supported by buildRow() (confirmed via an existing FLICK 3 direction
+dropdown elsewhere in DEV_GROUPS) needing no new UI plumbing.
+
+Verified live via a temporary debug hook (grep-confirmed removed):
+'center' mode's resulting angle matched the pre-existing formula
+exactly (a direct regression check, computed from mouse (300,300) and
+viewport center (200,400) -- (-315 deg = 45 deg mod 360, matching
+atan2(100,-(-100)) by hand)); 'point' mode's target position matched
+mainRope's own anchor/tip points[0]/points[length-1] EXACTLY at
+t=0/t=1; 'rope' mode's nearest-point search returned a real point
+correctly positioned between the anchor and tip, at the measured
+distance from the entity's own actual position; 'endcap' mode's normal
+case matched the rope's own tip exactly, and the near-minimum fallback
+(simulated directly by forcing mainRope.totalLength down to the
+configured minimum and pushing a fake fallen piece) correctly targeted
+that piece's own last point instead; 'random' mode's timer correctly
+reset and re-rolled both the sub-mode and the point value each time a
+simulated interval elapsed (fed via a controlled dt argument rather
+than real waits, sidestepping this sandbox's own documented setTimeout
+throttling), and across 12 consecutive re-rolls all 3 sub-modes
+(endcap/point/rope) were observed, confirming genuine randomization
+rather than a stuck value. Also visually confirmed the dropdown
+renders all 5 options with the exact requested labels via a live
+screenshot and a direct DOM read of the <select>'s own options.
+
+**Real cross-session collision, handled the same way as before:**
+discovered mid-task (via `git diff`, proactively re-checked given this
+exact class of collision has now happened twice this session) that
+YET ANOTHER concurrent session had added its own uncommitted "Wall
+Bounciness" feature (a new dev-panel slider + clampToWalls() restitution
+logic + its own `__testBounce` debug hook) to this same file while this
+task was in progress. Did not blanket-stage -- removed this task's own
+debug hook first (simplifying the final hunk down to 100% theirs, no
+hand-splitting needed there), then built a scoped patch via `git diff`
++ manual hunk selection + `git apply --cached` (same non-interactive
+`git add -p` equivalent as 2 tasks ago), verified zero "bounc"/
+"testBounce" lines in the staged diff and zero traces of this task's
+own code in the remaining unstaged diff, and confirmed a syntax check
+of the STAGED content specifically (`git show :index.html`) parsed
+cleanly before committing. Their uncommitted work (9 wallBounciness
+references, 1 __testBounce hook) confirmed fully intact afterward.
+
+Committed/pushed (5300ab1) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.

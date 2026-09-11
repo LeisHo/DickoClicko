@@ -558,3 +558,23 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   of depending on the environment's own throttled timers. Reach for
   this same technique for any future feature whose correctness depends
   on a short real-time gap between 2 dispatched events.
+- FLICK MOUSE's rotation target (`mfEntityAngleDeg`) and its direction-
+  bucket/hand-pose selection (`mfDirectionKey`) are DELIBERATELY 2
+  separate angle computations now (2026-09-10, Cursor Target Mode) --
+  `mfTargetAngle` (mouse-from-viewport-center) still drives ONLY the
+  direction bucket; `mfRotationTargetAngle` (from `cfg.
+  mouseFlickTargetMode` via `mouseFlickTargetPosition()`) drives ONLY
+  the rotation lerp. Don't collapse these back into one shared variable
+  -- changing what the sprite points at was the actual request, not
+  which hand-pose frame-set gets shown, and merging them would silently
+  change the latter too.
+- `mouseFlickEndcapTarget()`'s "fully cut" fallback (targets the most
+  recently fallen piece's own tip once `mainRope.totalLength` is near
+  `cfg.minRopeLength`) is a DELIBERATE simplification, not a precisely
+  verified spec: "fully cut" can't mean literally zero rope remaining
+  (`cutRopeAt` refuses any cut shorter than `minRopeLength`, so main
+  rope can never actually reach 0), and which fallen piece carries the
+  ORIGINAL rope's own inherited endcap after SEVERAL cuts isn't tracked
+  -- this always uses the most recent one. If a future report says the
+  wrong piece is being targeted after multiple cuts, this is the first
+  place to look, not a sign of a new bug.
