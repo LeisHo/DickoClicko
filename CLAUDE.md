@@ -467,3 +467,56 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   future frame trim ever removes frame 1 itself (unlike the trims so
   far, which have all preserved it), the anchor would need to shift to
   whichever frame IS used as that variant's reference instead.
+- Dev panel drag targets (`groupDragTargets()`/`rowDragTargets()`) MUST
+  exclude any candidate that isn't actually visible
+  (`gb.offsetParent !== null`) -- a collapsed group's own
+  `.dp-group-body` reports `getBoundingClientRect()` as an all-zero
+  rect at (0,0) (plain `display:none` behavior), which
+  `makeReorderable()`'s own "nearest candidate" drop fallback (used
+  whenever the pointer ends up outside every visible target's own
+  bounds) can match as "very close" for a drag ending near the top of
+  the screen -- silently nesting whatever's being dragged inside a
+  hidden, collapsed group instead of leaving it at top-level. Real,
+  reported, reproduced bug (2026-09-10: "when i drag a group out of
+  the panel. It dissappears"). Don't drop this filter if either
+  function is ever rewritten.
+- The dev panel's group-level `makeReorderable` registration matches
+  handles by the `dp-group-handle` class (NOT the older, shared
+  `dp-drag-handle` class every handle -- row or group -- also carries
+  for cursor/color/touch-action styling). This split is load-bearing:
+  a row's own handle carries `dp-row-handle dp-drag-handle`, so if the
+  group listener ever goes back to matching plain `.dp-drag-handle`,
+  a row-handle pointerdown will ALSO satisfy it (resolving
+  `handle.closest('.dp-group')` to the row's own CONTAINING group) and
+  silently start a second, simultaneous drag of that entire group.
+  Real, reported, reproduced bug (2026-09-10: "when I try [to drag a
+  single setting between groups], it drags the whole group") --
+  confirmed independently via a direct live test (dragging one row a
+  small amount visibly reordered its own parent group). If a NEW
+  draggable item type is ever added to this panel, give its handle its
+  own distinct class the same way, don't just reuse the bare
+  `dp-drag-handle` class for `makeReorderable`'s own `handleClass`
+  argument.
+- Row (setting) dragging is registered ONCE, delegated on `#dpBody`,
+  with `rowDragTargets()` as its crossContainerFn -- NOT once per
+  group body (the pre-2026-09-10 design, which was also part of why
+  cross-group row dragging never worked at all). A newly created
+  ("+ Add Group") or restored (`placeGroup()`) group needs NO row-
+  listener registration of its own -- the single delegated listener
+  already reaches it via `container.contains(handle)`. Don't
+  reintroduce a per-group `makeReorderable(gb, 'dp-row', ...)` call;
+  it's redundant with the delegated listener and reintroduces the
+  "confined to one group" limitation.
+- A setting row can now live in 2 different places: inside a group's
+  own `.dp-group-body`, or directly in `#dpUngrouped` (outside every
+  group). Anything that looks up a row by key across the whole panel
+  (restoring saved order, Text Edit Mode's rename sweep) must search
+  BOTH -- use the shared `findRowByKey()` helper rather than a
+  `#dpGroups`-scoped query, which will silently miss a row currently
+  sitting in `#dpUngrouped`.
+- `getPanelOrder()`/`applyOrder()`'s `order` field changed shape from a
+  bare array (just the groups) to `{ungrouped, groups}` (2026-09-10).
+  `applyOrder()` still accepts the old bare-array shape for backward
+  compat (`Array.isArray(order) ? order : (order.groups || [])`) --
+  don't remove that fallback, an existing user's saved settings log
+  predates this field.

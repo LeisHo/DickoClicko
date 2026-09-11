@@ -348,6 +348,80 @@ gets a fresh pane, and it renders/navigates/screenshots normally now
 if a future session hits pane trouble again, check fresh rather than
 trusting this note.
 
+**Added + fixed (2026-09-10): ungrouped settings area, plus 2 real
+drag-and-drop bugs found and fixed along the way.** 3 requests handled
+together, the last discovered mid-turn: (1) "place the text edit mode
+checkbox outside of any group"; (2) "allow me to drag any setting
+outside of any group... currently i cant drag a single setting between
+groups. fix that. When i try, it drags the whole group"; (3) "right
+now when i drag a group out of the panel. It dissappears. I dont want
+that. I dont want to accidentally delete anything." Investigated (2)
+and (3) directly via live drag reproduction (not just code reading)
+before writing any fix, and found BOTH were real, confirmed bugs with
+clear root causes:
+
+- **Bug (3):** a collapsed group's `.dp-group-body` reports
+  `getBoundingClientRect()` as an all-zero rect at (0,0) (the browser's
+  own `display:none` behavior). The drag-drop "nearest candidate"
+  fallback -- used whenever the pointer ends up outside every visible
+  target's own bounds, exactly what happens dragging a group UP AND
+  OUT of the panel -- treated that phantom (0,0) rect as a legitimate,
+  very-close match for any drag ending near the top of the screen,
+  silently nesting the dragged group inside the collapsed, now-
+  invisible parent. Reproduced exactly: collapsed one group, dragged
+  an unrelated group toward the top of the screen, watched it vanish
+  from the top-level list into the collapsed one. No data was ever
+  actually deleted, but it read exactly like deletion to a user with
+  no reason to suspect an invisible group swallowed it. Fixed by
+  excluding any non-visible candidate (`offsetParent !== null`) from
+  both `groupDragTargets()` and the new `rowDragTargets()` (same class
+  of bug, same fix, for rows).
+- **Bug (2):** a row's own drag handle carries BOTH `dp-row-handle` AND
+  the shared `dp-drag-handle` CSS class (for shared cursor/color/touch-
+  action styling) -- so a row-handle pointerdown ALSO matched the
+  group-level drag listener (which matched on the shared class alone),
+  which resolved `handle.closest('.dp-group')` to the row's own
+  CONTAINING group and started a second, simultaneous drag of that
+  entire group. Reproduced directly: dragging one setting row a small
+  amount visibly reordered its own parent group in the top-level list.
+  Fixed by giving group handles a distinct `dp-group-handle` class that
+  the group listener now matches on instead (mutually exclusive from a
+  row's own classes, regardless of DOM nesting/listener registration
+  order), plus `e.stopPropagation()` once a drag is claimed as
+  defense-in-depth.
+
+With both bugs fixed, request (1)/(2) became straightforward: added
+`#dpUngrouped`, an always-visible, non-collapsible row list living
+outside `#dpGroups` entirely (same empty-state dashed-box styling as
+an empty group, for the same drop-target discoverability). Text Edit
+Mode's row now builds into it by default. Row dragging, previously
+registered once PER GROUP BODY (confined to that one group, which is
+part of why cross-group dragging never worked), is now registered
+ONCE on the whole panel body with a new `rowDragTargets()` as its
+cross-container function -- the exact same delegated-listener pattern
+group dragging already used -- so a setting can be dragged into any
+group or into the ungrouped area, and a newly created/restored group
+needs no extra registration of its own.
+`getPanelOrder()`/`applyOrder()` extended from a bare array to
+`{ungrouped, groups}` to capture/restore the ungrouped row list, with
+backward compat for an old save's bare-array shape (tested directly:
+applying an old-format saved order no longer throws).
+
+Verified everything live via real pointer drags (not synthetic
+events) plus a temporary debug hook (grep-confirmed removed) for the
+parts a drag alone can't observe (the persisted order shape): (a) the
+original collapsed-group-swallows-a-drag scenario reproduced, then
+re-tested after the fix -- the dragged group now correctly stays at
+top-level; (b) dragging a row toward the same collapsed group
+correctly landed it in `#dpUngrouped` instead, with zero effect on
+its own parent group's position; (c) dragging a row directly into a
+DIFFERENT group's own body (not just the nearest-fallback case) moved
+only that row, leaving both groups' own top-level positions
+unchanged; (d) `getPanelOrder()`/`applyOrder()` round-tripped a row
+between `#dpUngrouped` and a group correctly; (e) an old bare-array
+`order` applied without throwing; (f) Text Edit Mode's rename
+override still reaches a row now living in `#dpUngrouped`.
+
 Still awaiting the user's own live GAMEPLAY confirmation (cutting a
 real rope in the actual running game, not a scripted physics
 scenario) on several fronts below -- this session verified some of

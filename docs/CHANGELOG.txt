@@ -10015,3 +10015,146 @@ via Save Settings" auto-commit from the deployed site, this project's
 own well-established harmless pattern) -- merged cleanly (different
 file, zero conflict) and pushed (82b0090) -- then this doc pass as a
 separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-10  -  09:52 PM EDT
+
+3 requests, handled as one investigation since they all touch the
+same dev-panel drag-and-drop subsystem -- (1) "place the text edit
+mode checkbox outside of any group"; (2) "Also allow me to drag any
+setting outside of any group"; (3) "right now when i drag a group out
+of the panel. It dissappears. I dont want that. I dont want to
+accidentally delete anything." A 4th arrived mid-investigation, once
+the first pass of code-reading had already surfaced the same
+mechanism as the likely cause: "and currently i cant drag a single
+setting between groups. fix that. When i try, it drags the whole
+group."
+
+Before writing any fix, re-synced with the repo -- another concurrent
+session's own WALLS collision feature (flagged and handled mid-task in
+the previous entry) had since been committed and merged upstream
+(`3c31c8d`/`82b0090`), plus a live Save-Settings auto-commit
+(`36e69f8`). `git pull --ff-only` brought local current before
+touching anything.
+
+Read the dev panel's own group/row rendering and drag-reorder code
+(`buildDevPanel`/`buildPanelStyleGroup`/`createGroupElement`/
+`makeReorderable`/`groupDragTargets`) to understand the current
+architecture before assuming a cause for any of the 3 reports:
+settings only ever lived INSIDE a group (`PANEL_STYLE_CONTROLS`
+render into the built-in "Dev Panel" group's own body; `DEV_GROUPS`
+controls render into their own group), and row dragging
+(`makeReorderable(gb, 'dp-row', 'dp-row-handle')`, no
+crossContainerFn) was registered separately PER GROUP BODY, confined
+to that one body -- confirming request (2) at the code level before
+touching anything: there was genuinely no way to drag a setting to a
+"no group" destination, since no such destination existed in the DOM
+at all.
+
+For request (3), rather than guess at a cause, reproduced it live
+first: opened the panel, collapsed one group ("DEV PANEL"), dragged
+an UNRELATED group ("WALLS") toward the top of the screen, and
+confirmed it vanished from the top-level group list -- into the
+collapsed group's own (invisible) body. Root cause, found by directly
+inspecting `getBoundingClientRect()` on a collapsed group's own
+`.dp-group-body`: an all-zero rect at (0,0), since `display:none`
+elements report zero dimensions. `makeReorderable()`'s own "nearest
+candidate" drop fallback (used whenever the pointer isn't within ANY
+candidate's own bounds -- exactly the case for a drag ending outside
+the panel) computes distance from the pointer to each candidate's own
+center; a phantom (0,0) target reads as "very close" for any drag
+landing near the top of the screen, regardless of how far outside the
+panel it actually is. Confirmed this was the exact mechanism (not
+just a plausible theory) by literally checking the collapsed body's
+rect via a live `getBoundingClientRect()` call before writing any
+fix.
+
+For the 4th, user-reported request (dragging a row also drags the
+whole parent group), investigated similarly rather than assuming: a
+row's own handle element carries BOTH `dp-row-handle` (its own,
+correctly-scoped matching class) AND the shared `dp-drag-handle` CSS
+class (used for cursor/color/touch-action styling, shared with group
+handles). Since the GROUP-level `makeReorderable` registration
+matched handles by `.dp-drag-handle` alone (not anything row-specific),
+a row-handle pointerdown ALSO satisfied the group listener's own
+match, which then resolved `handle.closest('.dp-group')` to the row's
+CONTAINING group and started a second, simultaneous drag of that
+entire group. Confirmed directly via a live test BEFORE the user's
+own message arrived describing the same symptom: dragged one setting
+row a small amount and watched its own parent group visibly reorder
+in the top-level list as an unwanted side effect -- the user's mid-
+task report then independently confirmed this exact finding.
+
+Fixed all 4 together, since 3 and 4 are two symptoms of the SAME
+underlying "invisible/incorrect drop target" class of bug, and 1/2
+build directly on the same drag-target machinery:
+- `groupDragTargets()` and a new `rowDragTargets()` now both exclude
+  any candidate that isn't actually visible (`offsetParent !== null`)
+  -- fixes bug 3 for groups, and the equivalent case for rows.
+- Group handles now carry a new, distinct `dp-group-handle` class
+  (alongside the existing shared `dp-drag-handle`), and the group-
+  level `makeReorderable` registration now matches on THAT instead of
+  the shared class -- mutually exclusive from a row's own classes
+  regardless of DOM nesting or listener registration order, not
+  reliant on event-bubbling timing. Also added `e.stopPropagation()`
+  once a drag is claimed, as defense-in-depth. Fixes bug 4.
+- New `#dpUngrouped`: an always-visible, non-collapsible row list
+  living outside `#dpGroups` entirely, same empty-state dashed-box
+  CSS treatment as an empty group (for the same drop-target
+  discoverability reason). Text Edit Mode's own row now builds into
+  it by default (`buildPanelStyleGroup()` special-cases just that one
+  control's placement; every other panel-style control, and all of
+  PANEL_STYLE_CONTROLS/applyPanelStyleValues()'s own value/persistence
+  path, is completely unchanged). Fixes request 1.
+- Row dragging is now registered ONCE, delegated on the whole panel
+  body (`#dpBody`), with `rowDragTargets()` as its crossContainerFn --
+  the exact same one-listener-with-delegation pattern group dragging
+  already used -- replacing the 4 separate per-group-body
+  registrations that existed before (in `buildDevPanel`, `addDevGroup`,
+  `placeGroup`, and `buildPanelStyleGroup`). This is what actually
+  makes request 2 possible: a setting can now be dragged into any
+  group OR into the ungrouped area, and a newly created/restored group
+  needs no extra registration since the single delegated listener
+  already reaches it via `container.contains(handle)`.
+- `getPanelOrder()`/`applyOrder()` extended from a bare array to
+  `{ungrouped, groups}` to capture/restore the ungrouped row list --
+  backward compat for an old save's bare-array shape handled the same
+  way `captureGroup()`'s own `(saved.subgroups || [])` already handles
+  a field that didn't exist in an older save.
+- `applyDevTextOverrides()`'s row-label selector widened from
+  `#dpGroups .dp-row label` to `#dpBody .dp-row label` so Text Edit
+  Mode's rename feature still reaches a row now living in
+  `#dpUngrouped`.
+- `findRowByKey()`, a new small shared helper, searches the WHOLE
+  panel (both `#dpGroups`' subtree and `#dpUngrouped`) for a row by
+  key -- used by both `placeGroup()`'s restore logic and the new
+  ungrouped-restore logic in `applyOrder()`, since a row's current
+  location can legitimately be either depending on what's been
+  dragged where.
+
+Verified everything live via real pointer drags (not synthetic
+events, using the same left_click_drag approach this session's own
+history already established works reliably for this panel) plus a
+temporary debug hook (grep-confirmed removed before finishing) for
+the parts a drag alone can't observe:
+- Re-ran the EXACT bug-3 repro (collapse a group, drag an unrelated
+  one toward the top) after the fix -- the dragged group now correctly
+  stays at top-level (`wallsParentIsTopLevel: true`), group's own
+  contents intact.
+- Dragged a row toward the same collapsed group -- landed correctly
+  in `#dpUngrouped`, with the row's own PARENT group's top-level
+  position completely unchanged (fixes bug 4, confirmed together with
+  bug 3's own fix in the same test).
+- Dragged a row directly into a DIFFERENT, specific group's own body
+  (not just the nearest-candidate fallback case) -- moved only that
+  row; both the source and destination groups' own top-level positions
+  stayed exactly where they were.
+- `getPanelOrder()` confirmed returning the new `{ungrouped, groups}`
+  shape; a full capture -> scramble -> `applyOrder()` -> re-check
+  round-trip correctly restored a row's location; a hand-built OLD
+  bare-array `order` applied via `applyOrder()` without throwing.
+- Text Edit Mode's rename override, applied to a row now living in
+  `#dpUngrouped`, correctly updated that row's own visible label.
+
+Committed/pushed (ea91da0) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.
