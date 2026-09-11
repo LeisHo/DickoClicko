@@ -17,8 +17,8 @@
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
       {
-        "pos": 0.4794371271030566,
-        "color": "#ffc28a"
+        "pos": 0.49045138185327536,
+        "color": "#feb686"
       },
       {
         "pos": 0,
@@ -56,7 +56,7 @@
       },
       {
         "pos": 0,
-        "color": "#ffa366"
+        "color": "#ff9466"
       },
       {
         "pos": 0.3155967806072454,
@@ -189,9 +189,32 @@
     "flickHoldMaxDuration": 2.9,
     "ropeAttractionIntensity": 0.06,
     "ropeAttractionSpeed": 23,
-    "ropeAttractionMaxReach": 64
+    "ropeAttractionMaxReach": 64,
+    "mouseFlickEnabled": true,
+    "mouseFlickScale": 50,
+    "mouseFlickAnimSpeed": 3.2,
+    "mouseFlickPositionSmoothing": 1,
+    "mouseFlickRotationSmoothing": 1,
+    "mouseFlickAngleOffset": 0,
+    "mouseFlickHoldMaxSpeed": 6,
+    "mouseFlickHoldMaxDuration": 1.5
   },
   "order": [
+    {
+      "key": "FLICK MOUSE",
+      "collapsed": true,
+      "settings": [
+        "mouseFlickEnabled",
+        "mouseFlickScale",
+        "mouseFlickAnimSpeed",
+        "mouseFlickPositionSmoothing",
+        "mouseFlickRotationSmoothing",
+        "mouseFlickAngleOffset",
+        "mouseFlickHoldMaxSpeed",
+        "mouseFlickHoldMaxDuration"
+      ],
+      "subgroups": []
+    },
     {
       "key": "DEV PANEL",
       "collapsed": true,
@@ -250,7 +273,7 @@
     },
     {
       "key": "FLICK ANIMATION 3",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "flick3Enabled",
         "flick3Source",
@@ -352,7 +375,7 @@
     },
     {
       "key": "ROPE CUT",
-      "collapsed": false,
+      "collapsed": true,
       "settings": [
         "doubleClickDistance",
         "clickDistance",
@@ -371,7 +394,7 @@
     },
     {
       "key": "ROPE",
-      "collapsed": true,
+      "collapsed": false,
       "settings": [
         "pieceGradientEnabled",
         "pieceGradientColors",
@@ -457,11 +480,11 @@
     }
   ],
   "panelGeometry": {
-    "mobile": {
-      "left": 182,
-      "top": 155.13690185546875,
-      "width": 229,
-      "height": 448.2083435058594,
+    "desktop": {
+      "left": 1286.4625244140625,
+      "top": 62.900001525878906,
+      "width": 249.53750610351562,
+      "height": 570.0125122070312,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
@@ -489,11 +512,11 @@
         "textEditMode": false
       }
     },
-    "desktop": {
-      "left": 1552.4375,
-      "top": 62.90625,
-      "width": 249.546875,
-      "height": 570.015625,
+    "mobile": {
+      "left": 182,
+      "top": 155.13690185546875,
+      "width": 229,
+      "height": 448.2083435058594,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
