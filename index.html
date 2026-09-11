@@ -677,6 +677,24 @@ const DEV_GROUPS = [
     { key:'mouseFlickAngleOffset',       label:'Mouse Flick Angle Offset',       type:'slider', unit:'deg',   min:-180, max:180, step:1,    def:0 },
     { key:'mouseFlickHoldMaxSpeed',      label:'Mouse Flick Hold Max Speed',     type:'slider', unit:'x',     min:1,    max:20,  step:0.5,  def:6 },
     { key:'mouseFlickHoldMaxDuration',   label:'Mouse Flick Hold Max Duration',  type:'slider', unit:'s',     min:0.1,  max:5,   step:0.1,  def:1.5 },
+    // Cursor Target Mode (per explicit request: "I dont want it to
+    // point at the center anymore... I want to test a couple things.
+    // So i want to have a drop down to select them") -- ONLY changes
+    // what mfEntityAngleDeg (the drawn sprite's own rotation) points
+    // toward; direction-bucket/hand-pose selection is deliberately left
+    // driven by the mouse's own angle from viewport center exactly as
+    // before, since that wasn't part of the request. See
+    // mouseFlickTargetPosition()'s own comment for each mode's exact
+    // behavior.
+    { key:'mouseFlickTargetMode', label:'Cursor Target Mode', type:'dropdown', def:'center', options:[
+      { value:'center', label:'Center (Default)' },
+      { value:'endcap', label:'Follow Endcap' },
+      { value:'point',  label:'Follow Point in Rope' },
+      { value:'rope',   label:'Follow Rope' },
+      { value:'random', label:'Random' },
+    ] },
+    { key:'mouseFlickTargetPoint', label:'Follow Point In Rope Position', type:'slider', unit:'', min:0, max:1, step:0.01, def:0.5 },
+    { key:'mouseFlickRandomInterval', label:'Random Target Change Interval', type:'slider', unit:'s', min:0.5, max:30, step:0.1, def:3 },
   ]},
 ];
 
@@ -2938,6 +2956,18 @@ MOUSE_FLICK_DIRECTIONS.forEach(dir => {
 // the original this was ported from).
 let mfX = 0, mfY = 0, mfHasMouse = false;
 let mfEntityX = 0, mfEntityY = 0, mfEntityAngleDeg = 0;
+// Cursor Target Mode (cfg.mouseFlickTargetMode) state -- 'random' mode
+// cycles between 'endcap'/'point'/'rope' every mouseFlickRandomInterval
+// seconds, re-rolling BOTH the sub-mode and (for when that roll lands
+// on 'point') a fresh point position each time, per explicit request
+// ("A timed randomization of the 3... slider to set the amount of
+// seconds between change") -- see mouseFlickTargetPosition()'s own
+// comment for how these feed the rotation-only target (direction-
+// bucket selection is deliberately untouched, still driven by the
+// mouse's own angle from viewport center exactly as before).
+let mfRandomTargetMode = 'endcap';
+let mfRandomTargetPoint = 0.5;
+let mfRandomTargetTimer = 0;
 let mfDirectionKey = MOUSE_FLICK_DIRECTIONS[0].key;
 // mode: 'idle' | 'click' | 'sciss' | 'snap' | 'charge'. A press of any
 // kind is ignored while a mode other than 'idle' is active -- same
@@ -2989,6 +3019,80 @@ function mouseFlickAngleLerp(current, target, factor){
 function mouseFlickExpSmoothFactor(smoothing, dt){
   if (smoothing >= 1) return 1;
   return 1 - Math.pow(1 - smoothing, dt * 60);
+}
+
+// Cursor Target Mode (cfg.mouseFlickTargetMode) -- world position the
+// FLICK MOUSE sprite's own rotation should point toward. Returns null
+// for 'center' (the original, unchanged behavior: point outward from
+// viewport center toward the mouse), so the caller in update() can
+// fall back to that exact math with no special-casing needed.
+//
+// 'point': a fixed 0-1 position along mainRope.points (0=anchor,
+// 1=tip), set by cfg.mouseFlickTargetPoint -- interpolated between the
+// 2 nearest physics points rather than snapping to the nearest one, so
+// the slider reads smoothly across its own range.
+function mouseFlickPointOnRope(t){
+  const points = mainRope.points;
+  const clamped = Math.max(0, Math.min(1, t));
+  const idx = clamped * (points.length - 1);
+  const i0 = Math.floor(idx), i1 = Math.min(points.length - 1, i0 + 1);
+  const frac = idx - i0;
+  const a = points[i0], b = points[i1];
+  return { x: a.x + (b.x - a.x) * frac, y: a.y + (b.y - a.y) * frac };
+}
+
+// 'endcap': per explicit 3-state spec -- normally mainRope's own tip
+// (points[length-1], where its endcap sits once mainTipFactor reaches
+// 1 -- see render()'s own mainTipFactor/hasEndcap comment); a freshly
+// cut tip whose endcap hasn't regrown past HALFWAY yet (mainTipFactor
+// < 0.5, "the new rope has [not yet] reached 50% of its endscale")
+// still targets that SAME tip point -- both states are visually the
+// same world coordinate, they just differ in whether a full endcap
+// graphic has emerged there yet or it's still reading as a bare rope-
+// width stub (mainTipFactor's own 0=stub/1=full-endcap convention).
+//
+// The 3rd state ("If the rope has been fully cut") is a genuine
+// interpretive call, called out here rather than left silent: mainRope
+// can never be cut shorter than cfg.minRopeLength (cutRopeAt refuses
+// any cut that would leave less), so "fully cut" can't mean literally
+// zero remaining rope -- read instead as "cut down to (near) that
+// configured minimum," i.e. too short a stub to be a meaningful thing
+// to visually point at. In that state, targets the MOST RECENTLY
+// fallen piece's own ORIGINAL tip (piece.points[length-1] -- the far
+// end from its cut edge, where the ORIGINAL rope's own endcap lives,
+// per the reversed-array convention drawEndcap's own cut-edge caller
+// uses) as a stand-in for "the endcap of the full rope that was cut."
+// A rope that's had several cuts could have that original endcap on
+// an EARLIER piece than the most recent one -- this simplification
+// doesn't track that lineage precisely, flagged here rather than
+// silently assumed correct.
+function mouseFlickEndcapTarget(){
+  const points = mainRope.points;
+  const nearMinimum = mainRope.totalLength <= vh(cfg.minRopeLength) + mainRope.segLen;
+  if (nearMinimum && fallenPieces.length > 0){
+    const piece = fallenPieces[fallenPieces.length - 1];
+    return piece.points[piece.points.length - 1];
+  }
+  return points[points.length - 1];
+}
+
+// Resolves the CURRENT effective sub-mode for 'random' (cfg.
+// mouseFlickTargetMode itself for every other mode), then returns that
+// sub-mode's own target position -- null for 'center', matching
+// mouseFlickTargetPosition()'s own null-means-"use the original
+// center-relative behavior" convention.
+function mouseFlickResolvedTargetMode(){
+  return cfg.mouseFlickTargetMode === 'random' ? mfRandomTargetMode : cfg.mouseFlickTargetMode;
+}
+function mouseFlickTargetPosition(){
+  const mode = mouseFlickResolvedTargetMode();
+  if (mode === 'endcap') return mouseFlickEndcapTarget();
+  if (mode === 'point'){
+    const t = cfg.mouseFlickTargetMode === 'random' ? mfRandomTargetPoint : cfg.mouseFlickTargetPoint;
+    return mouseFlickPointOnRope(t);
+  }
+  if (mode === 'rope') return nearestPointOnRope(mfEntityX, mfEntityY, mainRope.points);
+  return null;
 }
 // The real frame-NUMBER array a variant's forward-ordered frames
 // correspond to (not array index) -- variant.nums when present
@@ -6781,9 +6885,37 @@ function update(rawDt){
     const mfPosFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickPositionSmoothing, rawDt);
     mfEntityX += (mfX - mfEntityX) * mfPosFactor;
     mfEntityY += (mfY - mfEntityY) * mfPosFactor;
+    // mfTargetAngle (the mouse's own angle from viewport center) drives
+    // direction-bucket/hand-pose selection ONLY, below -- deliberately
+    // left untouched by Cursor Target Mode, which only ever affects the
+    // separate mfRotationTargetAngle a few lines down (see that
+    // variable's own comment, and mouseFlickTargetPosition()'s).
     const mfTargetAngle = mouseFlickAngleFromCenter(mfX, mfY, mfCx, mfCy);
+    // Random mode's own re-roll timer -- ticks only while actually in
+    // 'random' mode, so switching away and back doesn't silently use up
+    // a stale, already-elapsed window.
+    if (cfg.mouseFlickTargetMode === 'random'){
+      mfRandomTargetTimer += rawDt;
+      if (mfRandomTargetTimer >= cfg.mouseFlickRandomInterval){
+        mfRandomTargetTimer = 0;
+        const options = ['endcap', 'point', 'rope'];
+        mfRandomTargetMode = options[Math.floor(Math.random() * options.length)];
+        mfRandomTargetPoint = Math.random();
+      }
+    }
+    // Cursor Target Mode's own rotation target (per explicit request --
+    // see cfg.mouseFlickTargetMode's own comment). mouseFlickTargetPosition()
+    // returns null for 'center', in which case this is IDENTICAL to the
+    // original always-point-at-mouse-from-center behavior; otherwise the
+    // angle is computed from the ENTITY's own current position toward
+    // the resolved world target, so the sprite visually reaches/faces
+    // toward that point rather than radiating outward from screen center.
+    const mfTargetPos = mouseFlickTargetPosition();
+    const mfRotationTargetAngle = mfTargetPos
+      ? mouseFlickAngleFromCenter(mfTargetPos.x, mfTargetPos.y, mfEntityX, mfEntityY)
+      : mfTargetAngle;
     const mfRotFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickRotationSmoothing, rawDt);
-    mfEntityAngleDeg = mouseFlickAngleLerp(mfEntityAngleDeg, mfTargetAngle, mfRotFactor);
+    mfEntityAngleDeg = mouseFlickAngleLerp(mfEntityAngleDeg, mfRotationTargetAngle, mfRotFactor);
     // Direction bucket switches EVERY frame now, even mid-sequence/hold
     // (per explicit spec, point 3: "angle thresholds apply even during
     // mid animation sequence") -- no longer idle-only. While idle, this
