@@ -288,7 +288,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -396,6 +396,15 @@
         ],
         "subgroups": [
           {
+            "key": "CLICK",
+            "collapsed": true,
+            "settings": [
+              "clickIntensity",
+              "holdDistance"
+            ],
+            "subgroups": []
+          },
+          {
             "key": "RIGHT CLICK",
             "collapsed": true,
             "settings": [
@@ -416,7 +425,7 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "doubleClickDistance",
               "clickDistance",
@@ -429,15 +438,6 @@
               "pieceDecayDelay",
               "pieceDecaySpeed",
               "pieceMinThickness"
-            ],
-            "subgroups": []
-          },
-          {
-            "key": "CLICK",
-            "collapsed": true,
-            "settings": [
-              "clickIntensity",
-              "holdDistance"
             ],
             "subgroups": []
           }
@@ -609,6 +609,7 @@
     "group:RIGHT CLICK": "RIGHT CLICK-ATTRACT",
     "group:FLICK HOLD": "CLICK HOLD-CHARGE",
     "group:New Group (6)": "CLICK FUNCTIONS",
-    "group:ROPE CUT": "DOUBLE CLICK-CUT"
+    "group:ROPE CUT": "DOUBLE CLICK-CUT",
+    "group:CLICK": "CLICK-FLICK"
   }
 }
