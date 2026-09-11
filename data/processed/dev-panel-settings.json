@@ -11,8 +11,8 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 4.6,
-    "ropeLength": 10.01259628734212,
-    "ropeDefaultLength": 10,
+    "ropeLength": 16.842105263157872,
+    "ropeDefaultLength": 29,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -259,7 +259,7 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "mouseFlickTargetMode",
           "mouseFlickTargetPoint",
@@ -288,7 +288,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -535,9 +535,9 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 869.6625366210938,
+      "left": 1242.4625244140625,
       "top": 62.900001525878906,
-      "width": 666.3375244140625,
+      "width": 293.5249938964844,
       "height": 570.0125122070312,
       "style": {
         "titleFontSize": 13,
