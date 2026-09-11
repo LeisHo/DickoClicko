@@ -10409,3 +10409,76 @@ time this task finished).
 
 Committed/pushed (58437c6) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-11  -  04:28 AM EDT
+
+2 requests on Cursor Target Mode (the previous session's feature),
+the second correcting a misreading of the first.
+
+(1) "when using the new Cursor Animation modes, rotate the image
+frame by 180 degrees." Read mouseFlickTargetPosition()/the render()
+draw call fresh first. Added +180 to mfRotationTargetAngle whenever
+mouseFlickTargetPosition() returns non-null (every mode except
+Center) -- applied to the LERP TARGET, not as a post-lerp adjustment,
+so the offset rides the same smoothing pass as everything else;
+mouseFlickAngleLerp()'s own modulo-normalized delta needs no extra
+wrapping for a target outside [0,360). Verified live via a temporary
+debug hook (grep-confirmed removed): cross-checked the reported
+entity angle against a hand-computed mouseFlickAngleFromCenter(...)+180
+for rope/endcap/point modes -- rope and point matched to the exact
+decimal, endcap was ~0.27 degrees off due to expected inter-tick
+simulation drift (both the entity's own position AND the rope tip
+target move slightly each tick, not a formula issue); confirmed
+center mode's angle was completely unaffected (no +180 applied, as
+designed).
+
+(2) Mid-task on the above, the user sent a clarification while other
+work was still in flight: "When i said the image 'points' its
+pointing from the center of the bottom edge, to the center of the top
+edge. and the angle of that line will determine what animation type
+to be showing." This directly contradicted a design decision the
+PREVIOUS session had explicitly documented in CLAUDE.md just one day
+earlier ("FLICK MOUSE's rotation target and its direction-bucket
+selection are DELIBERATELY 2 separate angle computations... don't
+collapse these back into one shared variable"). Rather than guess
+which of 3 readings was meant (a request to reverse that decision for
+all modes; a request to reverse it only for the new non-Center modes;
+or just a clarification of what "points" meant for the 180-degree
+request with no further code implications), asked directly via
+AskUserQuestion. User picked the broadest option: direction-bucket
+selection should follow the sprite's own rendered pointing angle for
+EVERY mode, Center included, not just the new ones.
+
+Implemented: direction-bucket selection (mfTargetDirKey, previously
+computed from the raw mfTargetAngle mouse-from-center angle) now
+reads a new mfPointingAngle = mfEntityAngleDeg + 180 -- deliberately
+matching render()'s own rotation formula exactly, so it's the sprite's
+literal on-screen pointing direction, not a separately-derived
+approximation of it. mfTargetAngle itself is unchanged and still feeds
+the Center-mode branch of the rotation lerp's own target -- only its
+OTHER former use (direction-bucket selection) was replaced. A real,
+intended side effect disclosed rather than silently shipped:
+direction-bucket switching now inherits the rotation lerp's own
+smoothing lag (Mouse Flick Rotation Smoothing) instead of updating
+instantly/independently the way it always had before, for every mode
+including Center.
+
+Verified live via a temporary debug hook (grep-confirmed removed):
+for both 'center' and 'rope' modes, independently recomputed
+mouseFlickDirectionIndexForAngle()'s own bucket-selection formula by
+hand against the reported pointing angle and confirmed it matched the
+live-resolved direction key exactly in both cases (front-pinky at
+225 degrees, side-pinky at 261.44 degrees) -- not just eyeballing a
+screenshot.
+
+Corrected the CLAUDE.md gotcha this reverses in place, documented as
+an explicit correction (with the original reasoning and the new
+reasoning both preserved) rather than silently overwritten, matching
+this project's own established convention for reversing a previously-
+documented decision.
+
+Committed/pushed the rotation fix (782b921), the direction-bucket
+reversal (5adc285), and the CLAUDE.md correction (4559e3e) as 3
+separate commits -- no divergence across any of the 3 pushes -- then
+this doc pass as a separate follow-up, per the standing instruction.

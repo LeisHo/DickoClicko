@@ -291,9 +291,9 @@ Point in Rope/Rope/Random).** "I dont want it to point at the center
 anymore... I want to have a drop down to select them" -- 4 new modes
 for what mfEntityAngleDeg (the drawn sprite's own rotation) points
 toward, replacing the old fixed always-radiates-from-viewport-center
-behavior. Direction-bucket/hand-pose selection deliberately stayed on
-the ORIGINAL mouse-from-center angle, unchanged -- only rotation was
-asked to change. Follow Endcap targets mainRope's own tip, falling
+behavior. Direction-bucket/hand-pose selection initially stayed on the
+ORIGINAL mouse-from-center angle, unchanged -- see the 2026-09-11
+follow-up below for why that changed the very next day. Follow Endcap targets mainRope's own tip, falling
 back to the most recently fallen piece's own original tip once the
 main rope's been cut down near its configured minimum length (too
 short a stub to meaningfully point at) -- required reading the actual
@@ -324,6 +324,41 @@ theirs), then staged only this task's own hunks via a scoped
 `git apply --cached` patch, verified zero cross-contamination in
 either direction before committing, confirmed their work fully intact
 afterward.
+
+**Extended (2026-09-11): 180° rotation for the new modes, then
+direction-bucket selection reversed to follow it.** Two follow-up
+requests, the second correcting a misunderstanding from the first.
+(1) "when using the new Cursor Animation modes, rotate the image
+frame by 180 degrees" -- the sprite's authored forward direction
+apparently faces the opposite way from what Endcap/Point/Rope/Random's
+own "reach toward a point" semantics need (unlike Center's outward-
+radiating convention the existing render()-side +180 was already
+tuned for); added a conditional +180 to the rotation LERP TARGET for
+every mode except Center. (2) "When i said the image 'points' its
+pointing from the center of the bottom edge, to the center of the top
+edge. and the angle of that line will determine what animation type
+to be showing" -- clarified that direction-bucket/hand-pose selection
+(which of the 8 frame sets shows) was always meant to track the
+sprite's own rendered pointing line, not the independent raw mouse-
+angle the previous day's build had deliberately kept it on. Asked the
+user directly (AskUserQuestion) whether this applied to all modes or
+just the new ones, or was merely a clarification with no code
+implications, since it directly reversed a design decision documented
+the day before -- user picked "all modes, all the time." Direction-
+bucket selection now reads `mfPointingAngle = mfEntityAngleDeg + 180`
+(the sprite's literal on-screen pointing angle, matching render()'s
+own rotation formula) instead of the raw mouse-from-center angle, for
+Center mode too. Real, intended side effect: direction-bucket
+switching now inherits the rotation lerp's own smoothing lag instead
+of updating instantly. Verified both changes live via a temporary
+debug hook (grep-confirmed removed each time): the +180 offset
+confirmed exactly matching hand-calculated values for rope/endcap/
+point modes and confirmed absent for center mode; the direction-
+bucket change confirmed self-consistent (the resolved direction key
+independently recomputed from the reported pointing angle matched the
+live result) for both center and rope modes. Corrected the CLAUDE.md
+gotcha this reverses, documented as a correction rather than a silent
+overwrite.
 
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
