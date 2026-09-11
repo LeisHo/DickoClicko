@@ -6950,9 +6950,21 @@ function update(rawDt){
     // angle is computed from the ENTITY's own current position toward
     // the resolved world target, so the sprite visually reaches/faces
     // toward that point rather than radiating outward from screen center.
+    // +180 for every non-'center' mode, per explicit follow-up request
+    // ("when using the new Cursor Animation modes, rotate the image
+    // frame by 180 degrees") -- the sprite's own forward direction is
+    // apparently authored facing the opposite way from what these new
+    // modes need to read correctly (Endcap/Point/Rope/Random all "reach
+    // toward" a world point, unlike Center's own outward-radiating
+    // convention, which the existing render()-side +180 was already
+    // tuned for). Added here, on the TARGET fed into mfEntityAngleLerp,
+    // not as a separate post-lerp adjustment, so the offset is included
+    // in the same smoothing pass rather than snapping in a second step;
+    // mouseFlickAngleLerp()'s own modulo-normalized delta handles a
+    // target outside [0,360) correctly, no extra wrapping needed here.
     const mfTargetPos = mouseFlickTargetPosition();
     const mfRotationTargetAngle = mfTargetPos
-      ? mouseFlickAngleFromCenter(mfTargetPos.x, mfTargetPos.y, mfEntityX, mfEntityY)
+      ? mouseFlickAngleFromCenter(mfTargetPos.x, mfTargetPos.y, mfEntityX, mfEntityY) + 180
       : mfTargetAngle;
     const mfRotFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickRotationSmoothing, rawDt);
     mfEntityAngleDeg = mouseFlickAngleLerp(mfEntityAngleDeg, mfRotationTargetAngle, mfRotFactor);
