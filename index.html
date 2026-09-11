@@ -556,6 +556,16 @@ const DEV_GROUPS = [
     // general per-frame decay, matching Floor Friction's own default
     // reasoning exactly.
     { key:'wallFriction', label:'Wall Friction',          type:'slider',   unit:'x', min:0, max:1, step:0.01, def:0 },
+    // How much of the NORMAL (into-the-wall) velocity component is
+    // reflected back outward on contact, standard Verlet restitution:
+    // new implied velocity = -(incoming velocity) * wallBounciness.
+    // 0 (default) = current shipped behavior exactly, a dead stop (the
+    // clamp's own p.oldx=p.x / p.oldy=p.y already does this when
+    // bounciness is 0); 1 = a perfectly elastic bounce, full incoming
+    // speed reflected with no loss. Orthogonal to Wall Friction, which
+    // only ever touches the TANGENTIAL component -- this is the first
+    // slider in this file to touch the wall clamp's own NORMAL axis.
+    { key:'wallBounciness', label:'Wall Bounciness',      type:'slider',   unit:'x', min:0, max:1, step:0.01, def:0 },
   ]},
   { title:'STARTUP ANIMATION', controls:[
     { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
@@ -6845,29 +6855,59 @@ function update(rawDt){
     // it) and the same "only kill velocity in the direction actually
     // being constrained" principle used everywhere else in this file's
     // constraint solve (clampToFloor, boundaryConstraint, tipTarget) --
-    // clamping x sets p.oldx = p.x (zeroing horizontal velocity only),
-    // clamping y sets p.oldy = p.y (zeroing vertical velocity only),
-    // never both from the same edge. wallFriction mirrors floorFriction
-    // exactly: an optional, disclosed removal of the TANGENTIAL
-    // velocity component on contact (vertical for a side wall,
-    // horizontal for the top wall), default 0 (no extra removal).
+    // clamping x sets p.oldx from p.x (zeroing horizontal velocity by
+    // default), clamping y sets p.oldy from p.y (zeroing vertical
+    // velocity by default), never both from the same edge. wallFriction
+    // mirrors floorFriction exactly: an optional, disclosed removal of
+    // the TANGENTIAL velocity component on contact (vertical for a side
+    // wall, horizontal for the top wall), default 0 (no extra removal).
+    //
+    // wallBounciness (added 2026-09-10, per explicit request: "how much
+    // the rope bounces off the wall") acts on the OTHER axis -- the
+    // NORMAL, into-the-wall component -- reflecting it instead of just
+    // zeroing it. Standard Verlet restitution: capture the incoming
+    // velocity (`vx = p.x - p.oldx`) BEFORE p.x gets overwritten by the
+    // clamp, then set `p.oldx = p.x(post-clamp) + vx * wallBounciness`
+    // -- NEXT frame's own velocity then reads as `-vx * wallBounciness`,
+    // reversed and scaled. At the default 0 this reduces to `p.oldx =
+    // p.x`, IDENTICAL to the original always-zero behavior (no change
+    // for anyone who never touches this new slider); at 1 it's a
+    // perfectly elastic bounce, full incoming speed reflected with none
+    // lost. Deliberately independent of wallFriction, which only ever
+    // touches the tangential axis -- a wall can be bouncy AND
+    // frictionless, bouncy AND sticky-tangentially, or any combination,
+    // since the 2 sliders never touch the same component. Capturing
+    // `vx`/`vy` BEFORE the clamp overwrites p.x/p.y is load-bearing --
+    // using the post-clamp value there instead silently reflects a
+    // near-zero, position-dependent quantity rather than the real
+    // approach speed (caught live: see this function's own inline
+    // comments at each capture site for the exact reproduction).
     const clampToWalls = (points, thick) => {
       const half = thick / 2;
       const minX = half, maxX = viewportW() - half, minY = half;
       points.forEach(p => {
         if (p.x < minX){
+          // Incoming velocity captured BEFORE p.x is overwritten below --
+          // using the post-clamp p.x here instead would silently discard
+          // the real approach speed and reflect a near-zero, position-
+          // dependent value instead (a real bug caught during live
+          // verification: bounciness=1 was reflecting at a fraction of
+          // the actual incoming speed, traced directly to this ordering).
+          const vx = p.x - p.oldx;
           p.x = minX;
           if (cfg.wallFriction > 0) p.oldy = p.y - (p.y - p.oldy) * (1 - cfg.wallFriction);
-          p.oldx = p.x;
+          p.oldx = p.x + vx * cfg.wallBounciness;
         } else if (p.x > maxX){
+          const vx = p.x - p.oldx;
           p.x = maxX;
           if (cfg.wallFriction > 0) p.oldy = p.y - (p.y - p.oldy) * (1 - cfg.wallFriction);
-          p.oldx = p.x;
+          p.oldx = p.x + vx * cfg.wallBounciness;
         }
         if (p.y < minY){
+          const vy = p.y - p.oldy;
           p.y = minY;
           if (cfg.wallFriction > 0) p.oldx = p.x - (p.x - p.oldx) * (1 - cfg.wallFriction);
-          p.oldy = p.y;
+          p.oldy = p.y + vy * cfg.wallBounciness;
         }
       });
     };
