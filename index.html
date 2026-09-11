@@ -6925,11 +6925,20 @@ function update(rawDt){
     const mfPosFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickPositionSmoothing, rawDt);
     mfEntityX += (mfX - mfEntityX) * mfPosFactor;
     mfEntityY += (mfY - mfEntityY) * mfPosFactor;
-    // mfTargetAngle (the mouse's own angle from viewport center) drives
-    // direction-bucket/hand-pose selection ONLY, below -- deliberately
-    // left untouched by Cursor Target Mode, which only ever affects the
-    // separate mfRotationTargetAngle a few lines down (see that
-    // variable's own comment, and mouseFlickTargetPosition()'s).
+    // mfTargetAngle (the mouse's own angle from viewport center) feeds
+    // the rotation LERP TARGET for 'center' mode only now (see
+    // mfRotationTargetAngle's own comment a few lines down) -- it no
+    // longer drives direction-bucket selection directly. Corrected
+    // 2026-09-11: this comment used to say the opposite (direction-
+    // bucket was deliberately kept on this raw angle, independent of
+    // Cursor Target Mode's own rotation) -- per explicit clarification
+    // ("the angle of that [pointing] line will determine what
+    // animation type to be showing"), direction-bucket selection was
+    // switched to read the sprite's own RENDERED pointing angle
+    // instead, for every mode including Center -- see mfPointingAngle
+    // below. Don't revert this without re-reading that clarification;
+    // it deliberately supersedes the earlier "keep them separate"
+    // design documented in CLAUDE.md's own gotchas (also corrected).
     const mfTargetAngle = mouseFlickAngleFromCenter(mfX, mfY, mfCx, mfCy);
     // Random mode's own re-roll timer -- ticks only while actually in
     // 'random' mode, so switching away and back doesn't silently use up
@@ -6986,7 +6995,25 @@ function update(rawDt){
     // during the very first fractional frame of the WHOLE hold
     // (mfHoldCyclePos in [0,1)), which is direction-independent by
     // construction, not something a mid-hold switch could re-trigger.
-    const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfTargetAngle)].key;
+    //
+    // mfPointingAngle (2026-09-11, per explicit clarification: "the
+    // image 'points' [from] the center of the bottom edge, to the
+    // center of the top edge. and the angle of that line will
+    // determine what animation type to be showing") -- the sprite's
+    // own FINAL RENDERED pointing direction, matching render()'s own
+    // rotation formula exactly (`(mfEntityAngleDeg + 180) * PI/180`),
+    // not the raw mfTargetAngle (mouse-from-center) used previously.
+    // This is the smoothed, already-lerped mfEntityAngleDeg (set just
+    // above), so direction-bucket switching now tracks the SAME
+    // rotation the player actually sees on screen -- including its own
+    // smoothing lag -- rather than an independent, instantly-updating
+    // raw angle. Applies to EVERY Cursor Target Mode, Center included
+    // (explicit choice, not a Center-only carve-out): in Center mode
+    // mfEntityAngleDeg still lerps toward mfTargetAngle exactly as
+    // before, so the two remain numerically close, differing only by
+    // the lerp's own smoothing delay.
+    const mfPointingAngle = mfEntityAngleDeg + 180;
+    const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfPointingAngle)].key;
     if (mfTargetDirKey !== mfDirectionKey){
       if (mfMode === 'click' || mfMode === 'sciss' || mfMode === 'snap'){
         mouseFlickRemapSequence(mfTargetDirKey);
