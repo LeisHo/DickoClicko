@@ -578,3 +578,20 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   -- this always uses the most recent one. If a future report says the
   wrong piece is being targeted after multiple cuts, this is the first
   place to look, not a sign of a new bug.
+- `clampToWalls()`'s bounce reflection (`cfg.wallBounciness`) MUST
+  capture the incoming velocity (`const vx = p.x - p.oldx;`) BEFORE
+  `p.x` gets overwritten to the clamped boundary value -- a real bug
+  in the first version, caught live: it computed
+  `p.oldx = p.x + (p.x - p.oldx) * wallBounciness` AFTER `p.x = minX;`
+  had already run, so `(p.x - p.oldx)` silently read the clamped
+  position instead of the real approach speed, reflecting a near-zero,
+  position-dependent value instead of the actual incoming velocity.
+  Confirmed via an isolated Node extraction of the exact logic (0/37/74
+  reflected velocity for bounciness 0/0.5/1 against an incoming -74)
+  and live in the browser (bounciness=1 correctly bounced a free test
+  piece away from the wall at high speed once fixed). Any FUTURE
+  per-axis reflection/restitution logic added to this file's physics
+  must capture the pre-mutation value first, the same way `clampToFloor`
+  and this fix both do -- don't compute a "before" quantity from a
+  variable that's already been reassigned to its "after" value on an
+  earlier line of the same block.
