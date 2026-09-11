@@ -134,6 +134,7 @@
     "pieceFriction": 0.71,
     "wallEnabled": true,
     "wallFriction": 0,
+    "wallBounciness": 0,
     "introEnabled": true,
     "introWaitDuration": 1.5,
     "introRiseSpeed": 5.5,
@@ -197,9 +198,12 @@
     "mouseFlickAnimSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
     "mouseFlickRotationSmoothing": 1,
-    "mouseFlickAngleOffset": 0,
+    "mouseFlickAngleOffset": 180,
     "mouseFlickHoldMaxSpeed": 6,
-    "mouseFlickHoldMaxDuration": 1.5
+    "mouseFlickHoldMaxDuration": 1.5,
+    "mouseFlickTargetMode": "rope",
+    "mouseFlickTargetPoint": 0.5,
+    "mouseFlickRandomInterval": 3
   },
   "order": {
     "ungrouped": [],
@@ -208,6 +212,7 @@
         "key": "WALLS",
         "collapsed": true,
         "settings": [
+          "wallBounciness",
           "wallEnabled",
           "wallFriction"
         ],
@@ -254,8 +259,11 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
+          "mouseFlickTargetMode",
+          "mouseFlickTargetPoint",
+          "mouseFlickRandomInterval",
           "mouseFlickEnabled",
           "mouseFlickScale",
           "mouseFlickAnimSpeed",
@@ -377,7 +385,7 @@
       },
       {
         "key": "STARTUP ANIMATION",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "bgRopeEndcapPauseHeight",
           "mainEndcapGrowSpeed",
