@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 4.6,
-    "ropeLength": 16.842105263157872,
+    "ropeLength": 4.183301003208324,
     "ropeDefaultLength": 29,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -106,9 +106,9 @@
     "ropeGrowthRate": 12,
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 8.4,
-    "minRopeLength": 2.6,
-    "clickDistance": 20,
-    "doubleClickDistance": 20,
+    "minRopeLength": 0.6,
+    "clickDistance": 30,
+    "doubleClickDistance": 32,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.1,
@@ -259,7 +259,7 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "mouseFlickTargetMode",
           "mouseFlickTargetPoint",
@@ -296,6 +296,7 @@
           "ropeGradientEnabled",
           "ropeGradientColors",
           "ropeColor",
+          "minRopeLength",
           "tipSegmentShapeEnabled"
         ],
         "subgroups": [
@@ -388,7 +389,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "intensityCeiling",
           "clickHoldMaxDuration"
@@ -415,7 +416,7 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "doubleClickDistance",
               "clickDistance",
@@ -427,8 +428,7 @@
               "cutSweepThickness",
               "pieceDecayDelay",
               "pieceDecaySpeed",
-              "pieceMinThickness",
-              "minRopeLength"
+              "pieceMinThickness"
             ],
             "subgroups": []
           },
@@ -608,6 +608,7 @@
     "group:New Group (5)": "BACKGROUND ROPE",
     "group:RIGHT CLICK": "RIGHT CLICK-ATTRACT",
     "group:FLICK HOLD": "CLICK HOLD-CHARGE",
-    "group:New Group (6)": "CLICK FUNCTIONS"
+    "group:New Group (6)": "CLICK FUNCTIONS",
+    "group:ROPE CUT": "DOUBLE CLICK-CUT"
   }
 }
