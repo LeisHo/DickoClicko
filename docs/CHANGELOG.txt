@@ -9929,3 +9929,89 @@ both hook names before and after.
 
 Committed/pushed (b771426) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-10  -  09:31 PM EDT
+
+"I want the ropes to have collision with the edges of the browser.
+they will not fall out of frame." Worked in this same repo
+CONCURRENTLY with another active session mid-completing the FLICK
+MOUSE wrist-anchor feature (its own uncommitted work discovered
+already sitting in index.html at the start of this task, plus a
+live-editing race on a shared debug-hook naming convention -- see
+the multi-session handling notes below).
+
+Read the existing FLOOR mechanism (`clampToFloor` in update()) first
+to establish the pattern to mirror: points sit on their CENTERLINE,
+so the clamp offsets by half the chain's own live thickness rather
+than the raw edge; and only the velocity component in the actually-
+constrained axis gets zeroed (`p.oldx = p.x` / `p.oldy = p.y`), never
+both, matching the same principle already used by boundaryConstraint/
+tipTarget elsewhere in this file's constraint solve. Deliberately
+scoped WALLS to LEFT/RIGHT/TOP only, not all 4 sides -- bottom is
+already FLOOR's own job, and disabling Floor is an existing,
+intentional "let pieces fall away" behavior (the fallenPieces cleanup
+filter at that same call site) that a redundant bottom wall would
+silently fight. With Floor's own default (enabled), all 4 sides are
+covered out of the box; disabling Floor only opens the bottom, on
+purpose -- a deliberate design choice, not an oversight, worth
+knowing if a future request asks for "wall #4."
+
+Added a new WALLS dev-panel group (Wall Collision Enabled, default
+on; Wall Friction, default 0) mirroring FLOOR's own Enabled/Friction
+pair exactly, and a `clampToWalls()` pass in update() called right
+after the existing floor if/else block -- applies to mainRope.points
+and every fallenPieces[i].points, same call-site pattern as
+clampToFloor.
+
+**Multi-session handling, in detail:** found index.html already
+carrying ~87 uncommitted lines belonging to a DIFFERENT, concurrent
+session's own wrist-anchor feature (a `MOUSE_FLICK_VISIBLE_BOUNDS`
+table + render() change, matching the immediately-preceding request
+in this project's history verbatim) -- left it completely untouched,
+per this project's own multi-session discipline. That session was
+ALSO still actively editing live (its own leftover debug hook,
+`window.__test`, changed under me twice mid-edit -- an `alphaAt`
+method got renamed to `pixelAt` and gained a `clear` method between
+2 of my own read attempts on the exact same lines). Rather than
+fight that live edit, added a completely separate, independently
+named hook (`window.__testWalls`) elsewhere in the same DEV_MODE
+block instead of touching theirs at all. Confirmed via `preview_start`
+that port 8532 was already held by that other session's own dev
+server (a real, live-server collision, not just a staged-file one) --
+used this project's own pre-provisioned `dicko-clicko-static-alt`
+(port 8533) rather than stopping their server. The other session's
+work committed cleanly on its own partway through this task (`b771426`/
+`522c415`, confirmed via `git log`) -- by the time this task was ready
+to commit, `git diff` on index.html showed ONLY this task's own 61
+insertions, confirming no entanglement occurred at any point.
+
+Verified live via `window.__testWalls`, using a genuinely FREE
+(unpinned) synthetic piece rather than mainRope's own anchor-pinned
+points -- an early attempt using mainRope's own tip gave misleading
+"it's not working" results purely because the tight anchor-to-tip
+distance constraint (running earlier in update(), at line ~6282,
+BEFORE the wall clamp) was itself pulling an artificially-displaced
+point back toward the anchor within the same single tick, landing it
+well inside the viewport before the wall clamp ever got a chance to
+matter -- correctly diagnosed as a test-methodology issue, not a code
+bug, by adding a `spawnFreePiece()` helper (2 points, correctly
+pre-spaced at a given segLen, no anchor) to isolate the wall-clamp
+logic on its own. Confirmed: a piece placed 100px past the LEFT edge
+clamps to exactly x=14.2 (half the live rope thickness) after 1 tick;
+past the RIGHT edge clamps to exactly x=385.8 (viewportW - half) on a
+400px-wide test viewport; past the TOP edge clamps to exactly
+y=14.2. Confirmed the Wall Collision Enabled toggle actually gates
+the behavior -- with it off, an identical off-screen piece was left
+untouched (x stayed at -100) instead of being pulled back.
+
+Removed only this task's own `window.__testWalls` block before
+committing (grep-confirmed 0 matches for both `__testWalls` and
+`__test =` afterward), leaving no debug hook in the shipped commit.
+
+Committed/pushed (3c31c8d) -- fetch found the remote had moved ahead
+1 commit in the meantime (`fc3ea80`, a live "Update dev-panel-settings.json
+via Save Settings" auto-commit from the deployed site, this project's
+own well-established harmless pattern) -- merged cleanly (different
+file, zero conflict) and pushed (82b0090) -- then this doc pass as a
+separate follow-up, per the standing instruction.

@@ -825,6 +825,22 @@ additions. Current state of each subsystem:
   the radius question). Full mechanism details and verification in
   docs/CHANGELOG.txt; not yet confirmed via a live visual check (the
   Browser pane went into an unrecoverable 0x0/hidden state mid-task).
+- **Walls (2026-09-10):** the main rope and every fallen piece now
+  collide with the left/right/top edges of the browser viewport --
+  per explicit request ("I want the ropes to have collision with the
+  edges of the browser. they will not fall out of frame"). Bottom
+  stays FLOOR's own job (its own Enabled toggle already governs
+  whether things land or fall away when disabled); WALLS covers the
+  remaining 3 sides so nothing escapes the frame by default, without
+  duplicating or fighting Floor's existing bottom behavior. New WALLS
+  dev-panel group: Wall Collision Enabled (default on) and Wall
+  Friction (default 0), mirroring Floor's own Enabled/Friction pair
+  exactly -- same half-thickness-offset clamp and same "only zero
+  velocity in the constrained axis" principle already used by
+  `clampToFloor`. Verified live against a genuinely free (unpinned)
+  test chain on all 3 sides -- confirmed exact clamp to
+  half-thickness inset from each edge, confirmed the Enabled toggle
+  lets a piece pass through when off.
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
