@@ -2851,6 +2851,64 @@ function mouseFlickNearestIndex(numbers, target){
 // as of this writing (re-verify if SNAP ever goes per-direction like
 // base/click already has).
 const SNAP_FREEZE_INDEX = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 41);
+
+// Per-direction, per-VARIANT visible-content anchor point -- ported
+// directly from DotFlicko's own VISIBLE_BOUNDS_BY_DIRECTION (per
+// explicit request: "we have in that project placed a specific end
+// point for each animation type... good enough"). The cursor should
+// sit at the base of the WRIST, i.e. the bottom-center of each frame's
+// own actual non-transparent content, not the raw PNG's geometric
+// bottom-center (the source art has real transparent padding around
+// the visible hand -- same class of padding DotFlicko had to account
+// for, confirmed here too: this table's own 'behind'/base entry
+// (0.5265/0.8916) matches DotFlicko's 'behind' entry EXACTLY, since
+// the base frame art is shared between the 2 sibling projects).
+//
+// Extended beyond DotFlicko's own single-set-per-direction shape:
+// DotFlicko has no SCISS/SNAP/CHARGE, only one pose set per direction,
+// so one vb per direction was enough there. Here each of the 4
+// variants (base/sciss/snap/charge) is its own distinct pose with its
+// own wrist placement within the frame -- confirmed real, not
+// negligible (e.g. front-pinky: base bottomY 0.9221 vs charge 0.9228;
+// front-thumb: base centerX 0.4738 vs sciss 0.4706) -- so bounds are
+// computed per (direction, variant) pair, 32 entries total, each from
+// that variant's own frame 1 (always present in every variant/
+// direction as of this writing, unlike some later frame numbers that
+// have been trimmed).
+//
+// PRECOMPUTED OFFLINE via Node + sharp against frame 1 of each real
+// variant/direction on disk, same ALPHA_HIT_THRESHOLD=10 convention
+// already used elsewhere in this file (hitTest/isOpaqueAtLocalPoint).
+// TO REGENERATE (e.g. after replacing a direction/variant's frame 1
+// art): re-run the computation against
+// `data/FLICK/2TONED/<FOLDER>/A/<prefix>_001.png` for each entry,
+// using DotFlicko's own documented one-liner as the template (see that
+// project's VISIBLE_BOUNDS_BY_DIRECTION comment) -- same alpha
+// threshold, same centerX/bottomY formula.
+const MOUSE_FLICK_VISIBLE_BOUNDS = {
+  'behind':       { base:{centerX:0.5265,bottomY:0.8916}, charge:{centerX:0.5266,bottomY:0.891},  sciss:{centerX:0.5299,bottomY:0.891},  snap:{centerX:0.5299,bottomY:0.891} },
+  'behind-thumb': { base:{centerX:0.5029,bottomY:0.9009}, charge:{centerX:0.4987,bottomY:0.8931}, sciss:{centerX:0.4992,bottomY:0.8931}, snap:{centerX:0.4992,bottomY:0.8931} },
+  'side-thumb':   { base:{centerX:0.4788,bottomY:0.8815}, charge:{centerX:0.4786,bottomY:0.8815}, sciss:{centerX:0.4786,bottomY:0.8815}, snap:{centerX:0.4786,bottomY:0.8815} },
+  'front-thumb':  { base:{centerX:0.4738,bottomY:0.9009}, charge:{centerX:0.4737,bottomY:0.9005}, sciss:{centerX:0.4706,bottomY:0.9005}, snap:{centerX:0.4706,bottomY:0.9005} },
+  'front':        { base:{centerX:0.4763,bottomY:0.9145}, charge:{centerX:0.4763,bottomY:0.9143}, sciss:{centerX:0.4719,bottomY:0.9143}, snap:{centerX:0.4719,bottomY:0.9143} },
+  'front-pinky':  { base:{centerX:0.4942,bottomY:0.9221}, charge:{centerX:0.4943,bottomY:0.9228}, sciss:{centerX:0.4922,bottomY:0.9228}, snap:{centerX:0.4922,bottomY:0.9228} },
+  'side-pinky':   { base:{centerX:0.5194,bottomY:0.9272}, charge:{centerX:0.5195,bottomY:0.927},  sciss:{centerX:0.5195,bottomY:0.927},  snap:{centerX:0.5195,bottomY:0.927} },
+  'behind-pinky': { base:{centerX:0.521, bottomY:0.917},  charge:{centerX:0.5208,bottomY:0.9175}, sciss:{centerX:0.5208,bottomY:0.9175}, snap:{centerX:0.5208,bottomY:0.9175} },
+};
+// The 0.5/1 fallback (old center-anchor behavior) only matters for a
+// direction/variant combo missing from the table above (e.g. a newly
+// added direction whose bounds haven't been regenerated yet).
+function mouseFlickVisibleBounds(directionKey, variantKey){
+  const dir = MOUSE_FLICK_VISIBLE_BOUNDS[directionKey];
+  return (dir && dir[variantKey]) || { centerX: 0.5, bottomY: 1 };
+}
+// Maps the live mfMode to the visible-bounds table's variant keys --
+// 'click' and 'idle' both draw from the base/click frame set, so both
+// resolve to 'base'; 'sciss'/'snap'/'charge' map directly to themselves.
+function mouseFlickVariantKeyForMode(mode){
+  if (mode === 'sciss' || mode === 'snap' || mode === 'charge') return mode;
+  return 'base';
+}
 // Mid-sequence direction switch for click/sciss/snap (charge needs no
 // equivalent -- see its own comment at the mfMode==='charge' direction-
 // switch call site for why). Per explicit spec: continue the sequence
@@ -7659,10 +7717,18 @@ function render(){
         const mfSize = vmin(cfg.mouseFlickScale);
         const mfDrawW = mfSize, mfDrawH = mfSize * (mfImg.naturalHeight / mfImg.naturalWidth);
         const mfRotationRad = (mfEntityAngleDeg + 180) * Math.PI / 180;
+        // Anchored at the base of the WRIST (each variant's own visible-
+        // content bottom-center), not the raw PNG's geometric center --
+        // per explicit request, ported from DotFlicko's own
+        // VISIBLE_BOUNDS_BY_DIRECTION convention. drawImage's own (dx,dy)
+        // is its top-left corner, so -drawW*centerX/-drawH*bottomY puts
+        // that exact wrist point at mfEntityX/mfEntityY (the entity's own
+        // translated+rotated origin).
+        const mfVb = mouseFlickVisibleBounds(mfDirectionKey, mouseFlickVariantKeyForMode(mfMode));
         ctx.save();
         ctx.translate(mfEntityX, mfEntityY);
         ctx.rotate(mfRotationRad);
-        ctx.drawImage(mfImg, -mfDrawW / 2, -mfDrawH / 2, mfDrawW, mfDrawH);
+        ctx.drawImage(mfImg, -mfDrawW * mfVb.centerX, -mfDrawH * mfVb.bottomY, mfDrawW, mfDrawH);
         ctx.restore();
       }
     }
