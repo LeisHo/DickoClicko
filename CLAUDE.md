@@ -558,16 +558,31 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   of depending on the environment's own throttled timers. Reach for
   this same technique for any future feature whose correctness depends
   on a short real-time gap between 2 dispatched events.
-- FLICK MOUSE's rotation target (`mfEntityAngleDeg`) and its direction-
-  bucket/hand-pose selection (`mfDirectionKey`) are DELIBERATELY 2
-  separate angle computations now (2026-09-10, Cursor Target Mode) --
-  `mfTargetAngle` (mouse-from-viewport-center) still drives ONLY the
-  direction bucket; `mfRotationTargetAngle` (from `cfg.
-  mouseFlickTargetMode` via `mouseFlickTargetPosition()`) drives ONLY
-  the rotation lerp. Don't collapse these back into one shared variable
-  -- changing what the sprite points at was the actual request, not
-  which hand-pose frame-set gets shown, and merging them would silently
-  change the latter too.
+- **Corrected 2026-09-11 (see below for the full reversal) --** FLICK
+  MOUSE's rotation target (`mfEntityAngleDeg`) and its direction-
+  bucket/hand-pose selection (`mfDirectionKey`) were briefly kept as 2
+  deliberately separate angle computations (2026-09-10, Cursor Target
+  Mode's own initial build) on the theory that changing what the
+  sprite points at shouldn't silently change which hand-pose frame-set
+  gets shown. That theory turned out to be WRONG per explicit user
+  clarification the very next day: "the image 'points' [from] the
+  center of the bottom edge, to the center of the top edge. and the
+  angle of that line will determine what animation type to be
+  showing" -- i.e. direction-bucket selection was always SUPPOSED to
+  track the sprite's own rendered pointing line, not an independent
+  raw mouse-angle. Direction-bucket selection now reads
+  `mfPointingAngle = mfEntityAngleDeg + 180` (matching render()'s own
+  rotation formula exactly, so it's the literal on-screen pointing
+  direction), for EVERY Cursor Target Mode including Center -- not
+  `mfTargetAngle` (mouse-from-center) any more, which now feeds only
+  the Center-mode branch of the rotation lerp's own target. A real,
+  intended side effect: direction-bucket switching now inherits the
+  rotation lerp's own smoothing lag (Mouse Flick Rotation Smoothing),
+  instead of updating instantly/independently the way it used to for
+  every mode. If a future report says direction-switching feels
+  "laggy" compared to pre-2026-09-11 behavior, this is why -- it's the
+  now-correct, explicitly-requested behavior, not a regression to
+  silently revert.
 - `mouseFlickEndcapTarget()`'s "fully cut" fallback (targets the most
   recently fallen piece's own tip once `mainRope.totalLength` is near
   `cfg.minRopeLength`) is a DELIBERATE simplification, not a precisely
