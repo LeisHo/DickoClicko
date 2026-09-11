@@ -10341,3 +10341,71 @@ references, 1 __testBounce hook) confirmed fully intact afterward.
 
 Committed/pushed (5300ab1) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-11  -  12:07 AM EDT
+
+"add a wall bounciness slider. as in how much the rope bounces off
+the wall" -- a follow-up to the WALLS feature built the previous day.
+Ran again concurrently with another session in the same file (the
+Cursor Target Mode feature, confirmed via `git log` after this task
+finished and their commit had already landed cleanly) -- same
+handling as every prior concurrent-session round this project has
+hit: left their uncommitted work untouched, used a distinctly-named
+debug hook (`window.__testBounce`, not reusing their own `window.__test`),
+and used the pre-provisioned alt-port dev server since port 8532 was
+already held by their own live server.
+
+Added a `wallBounciness` slider (default 0, WALLS group) and extended
+`clampToWalls()`'s existing per-axis clamp: where it previously always
+zeroed the NORMAL (into-the-wall) velocity component
+(`p.oldx = p.x` / `p.oldy = p.y`), it now reflects that component by
+a tunable fraction instead -- standard Verlet restitution. Deliberately
+kept independent of the existing Wall Friction slider, which only
+ever touches the TANGENTIAL component -- the 2 sliders can never
+fight over the same axis.
+
+**Caught a real bug during live verification, not just a design
+review:** the first implementation computed the reflection as
+`p.oldx = p.x + (p.x - p.oldx) * wallBounciness` -- but by the time
+that line ran, `p.x` had ALREADY been overwritten to the clamped
+boundary value 2 lines above, so `(p.x - p.oldx)` was silently
+reading the wrong, already-clamped position instead of the real
+pre-clamp incoming velocity. Live-tested to confirm: with
+bounciness=1 and an incoming velocity of -74 (moving hard into the
+left wall), the buggy version reflected only a small, position-
+dependent amount rather than the expected full +74 -- an actual,
+reproduced discrepancy, not a hypothetical one. Fixed by capturing
+`vx`/`vy` from the pre-clamp `p.x`/`p.y` BEFORE the clamp line
+overwrites them, then reflecting from that captured value.
+
+Verified the fix 2 ways: (1) an isolated Node script with the exact
+clamp logic extracted verbatim (not reconstructed from memory) fed
+synthetic points at bounciness 0/0.5/1, confirming the reflected
+velocity exactly matches `-incoming * bounciness` in every case
+(0, 37, 74 for an incoming velocity of -74) with zero floating-point
+surprises; (2) live in the real browser via `window.__testBounce`,
+spawning a genuinely free (unpinned) test piece moving hard into the
+left wall -- bounciness=0 clamped to the exact same half-thickness
+inset as before with zero reflection (confirmed byte-for-byte
+identical to this feature's pre-bounciness behavior, i.e. no
+regression for anyone who never touches the new slider), bounciness=1
+reflected and moved away from the wall at high speed over the next
+tick, bounciness=0.5 landed measurably in between the two. Also hit
+and diagnosed (not a code bug) a test-methodology trap along the way:
+an early attempt spawned a test point at a fixed x=20 assumed "safely
+inside the frame," but this session's own actual browser viewport
+(1024x768) gave a half-thickness of ~27px, meaning the point was
+ALREADY inside the wall's clamp zone at spawn before any velocity was
+even applied -- confirmed by testing with wallEnabled=false (the
+point moved normally in that case) before concluding the clamp
+formula itself, not the fix, was the issue.
+
+Removed only this task's own `window.__testBounce` hook before
+committing (grep-confirmed 0 matches for it and for `__test =`
+afterward, the latter already correctly absent since the OTHER
+session's own hook had already been cleaned up and committed by the
+time this task finished).
+
+Committed/pushed (58437c6) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.

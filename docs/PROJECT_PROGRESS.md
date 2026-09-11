@@ -979,15 +979,25 @@ additions. Current state of each subsystem:
   stays FLOOR's own job (its own Enabled toggle already governs
   whether things land or fall away when disabled); WALLS covers the
   remaining 3 sides so nothing escapes the frame by default, without
-  duplicating or fighting Floor's existing bottom behavior. New WALLS
-  dev-panel group: Wall Collision Enabled (default on) and Wall
-  Friction (default 0), mirroring Floor's own Enabled/Friction pair
-  exactly -- same half-thickness-offset clamp and same "only zero
-  velocity in the constrained axis" principle already used by
-  `clampToFloor`. Verified live against a genuinely free (unpinned)
-  test chain on all 3 sides -- confirmed exact clamp to
-  half-thickness inset from each edge, confirmed the Enabled toggle
-  lets a piece pass through when off.
+  duplicating or fighting Floor's existing bottom behavior. WALLS
+  dev-panel group: Wall Collision Enabled (default on), Wall Friction
+  (default 0, mirrors Floor's own Friction -- tangential velocity
+  removal on contact), and **Wall Bounciness** (default 0, added
+  same day per "add a wall bounciness slider... how much the rope
+  bounces off the wall") -- reflects the NORMAL (into-the-wall)
+  velocity component instead of zeroing it, standard Verlet
+  restitution, independent of Friction (which only ever touches the
+  tangential component). Same half-thickness-offset clamp as
+  `clampToFloor` throughout. Verified live against a genuinely free
+  (unpinned) test chain on all 3 sides for the base clamp, and
+  against all 3 notable Bounciness values (0/0.5/1) for the reflection
+  -- confirmed 0 reproduces the original dead-stop exactly, 1 reflects
+  the full incoming speed, 0.5 lands in between. Caught and fixed a
+  real bug during that verification: the reflection formula initially
+  read the ALREADY-CLAMPED position instead of the pre-clamp incoming
+  velocity, silently reflecting a near-zero, position-dependent value
+  -- fixed by capturing the incoming velocity before the clamp
+  overwrites it (see CLAUDE.md gotchas).
 - **Startup animation**: a permanent, always-visible background rope
   (bgRope, clipped to the circle's shape) climbs on load, starting just
   out of sight below the circle (Rope Thickness + 1, not a full
