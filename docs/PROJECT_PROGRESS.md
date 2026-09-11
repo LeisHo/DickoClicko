@@ -530,6 +530,31 @@ between `#dpUngrouped` and a group correctly; (e) an old bare-array
 `order` applied without throwing; (f) Text Edit Mode's rename
 override still reaches a row now living in `#dpUngrouped`.
 
+**Fixed (2026-09-11): couldn't drag a setting into a 2nd-level-or-
+deeper subgroup.** Reported directly: "I can drag it between top
+level groups, but not second level." `groupDragTargets()` (used for
+dragging entire GROUPS) already sorts its candidate list deepest-
+first, specifically because `querySelectorAll` returns group bodies
+in DOM order -- an OUTER group's body always geometrically CONTAINS
+every nested subgroup's body, so without that sort,
+`makeReorderable()`'s own `find(c => pointerY within c's rect)` hit-
+test would always match the outer body first, for ANY pointer
+position inside the nested one too (this was the exact root cause of
+an earlier, separately-fixed "group-nesting drag hit-test bug").
+`rowDragTargets()` (used for dragging individual SETTINGS) never got
+that same sort when row-dragging was generalized to cross-group
+targets -- confirmed directly against the user's own real, currently-
+saved panel structure (a top-level group holding 2 loose settings
+alongside several nested subgroups) via a temporary debug hook: before
+the fix, `rowDragTargets()` listed the outer group's body before its
+nested subgroup's body; after adding the same `groupNestingDepth`-
+based sort `groupDragTargets()` already uses, the nested body was
+listed first, and a simulated drop position inside the nested
+subgroup's own bounds correctly resolved to it instead of the outer
+group. Also confirmed no regression for the simpler case (dropping on
+a nested group's own collapsed SIBLING still correctly resolves to
+their shared outer parent).
+
 Still awaiting the user's own live GAMEPLAY confirmation (cutting a
 real rope in the actual running game, not a scripted physics
 scenario) on several fronts below -- this session verified some of

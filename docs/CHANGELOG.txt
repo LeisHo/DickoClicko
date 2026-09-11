@@ -10482,3 +10482,73 @@ Committed/pushed the rotation fix (782b921), the direction-bucket
 reversal (5adc285), and the CLAUDE.md correction (4559e3e) as 3
 separate commits -- no divergence across any of the 3 pushes -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-11  -  06:28 AM EDT
+
+"im having issues with dragging settings into groups... Within group,
+Click Functions, I have subgroups of the various click interactions.
+On the same level, i have the setting Flick Hold max Duration and
+Flick Hold Max Speed. I tried to drag them into Click Hold-Charge
+group but it wouldnt let me." Followed up mid-investigation with the
+key diagnostic clue, sent while the first read of the drag code was
+still in progress: "I can drag it between top level groups, but not
+second level."
+
+That single clarification pinpointed the root cause before any live
+reproduction was even needed. Read `groupDragTargets()` first (used
+for dragging entire groups) and found it already sorts its candidate
+list DEEPEST-first via `groupNestingDepth()`, with an extensive
+existing comment explaining exactly why: `querySelectorAll` returns
+group bodies in DOM/document order, and since an OUTER group's body
+always geometrically CONTAINS every nested subgroup's body,
+`makeReorderable()`'s own `candidates.find(c => pointerY within c's
+own rect)` hit-test would otherwise always match the outer body
+FIRST for any pointer position inside the nested one too -- this was
+literally the root cause of an earlier, already-fixed "group-nesting
+drag hit-test bug" for GROUP-dragging specifically. Read
+`rowDragTargets()` (the equivalent function for dragging individual
+SETTINGS) immediately after and found it constructs its own
+candidate list the exact same way (`querySelectorAll('.dp-group-
+body')`, DOM order) but was MISSING that same sort entirely -- it was
+simply never carried over when row-dragging was generalized to cross-
+group targets in an earlier round. This directly explains the exact
+reported symptom: dragging between TOP-LEVEL groups works (their
+bodies never contain each other, so DOM order never matters for
+them), but dragging INTO a nested subgroup fails, because its
+CONTAINING top-level group's body always wins the unsorted find().
+
+Fixed with a one-line addition mirroring `groupDragTargets()`'s own
+fix exactly: sort `rowDragTargets()`'s `allBodies` array deepest-first
+using the same existing `groupNestingDepth()` helper (already a
+standalone, reusable function, not scoped to the group-drag code)
+before appending `#dpUngrouped` as the always-last fallback target
+(playing the same role `dpGroupsEl` plays at the end of
+`groupDragTargets()`'s own returned list).
+
+Verified directly against the user's OWN real, currently-saved panel
+structure rather than a synthetic scenario: read the freshly re-saved
+`data/processed/dev-panel-settings.json` and confirmed it independently
+matches the reported bug shape exactly -- a top-level group ("New
+Group (6)") holding 2 loose settings alongside 4 nested subgroups
+(RIGHT CLICK, FLICK HOLD, ROPE CUT, CLICK). Live in the browser (via
+a temporary debug hook, grep-confirmed removed): expanded the real
+"FLICK ANIMATIONS" group and its nested "FLICK ANIMATION" subgroup
+(the same 2-level nesting shape, already present in the loaded
+settings), confirmed `rowDragTargets()` now lists the nested
+subgroup's body BEFORE its outer parent's body (depth 2 before depth
+1, previously the reverse), then directly exercised the real
+`find()`-based hit-test logic with a simulated pointer Y coordinate
+inside the nested subgroup's own bounding rect -- correctly resolved
+to the nested subgroup, not the outer one. Also confirmed no
+regression for the adjacent case: a pointer position over a
+COLLAPSED SIBLING subgroup's own header (inside the outer body but
+outside any nested body) still correctly resolves to their shared
+outer parent.
+
+Committed/pushed (0a733a6) -- fetch found 4 intervening remote
+"Update dev-panel-settings.json via Save Settings" auto-commits
+(matching the user's own mention of having just saved settings),
+confirmed touching only that JSON file, merged cleanly, pushed the
+merge -- then this doc pass as a separate follow-up, per the standing
+instruction.
