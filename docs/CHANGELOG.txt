@@ -10158,3 +10158,84 @@ the parts a drag alone can't observe:
 
 Committed/pushed (ea91da0) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-10  -  10:24 PM EDT
+
+"so for hte right click and hold, make it a triple click and hold on
+mobile. fix and push" -- touch has no secondary mouse button, so
+SNAP (triggered by right-click-hold on desktop) was completely
+unreachable on mobile until now.
+
+Read the existing right-click-hold code first (the pointerdown/
+pointerup listeners around `e.button === 2`) to confirm the exact
+trigger/hold/release shape before designing a mobile equivalent:
+right-click's own pointerDOWN is what fires `mouseFlickStartPlay
+('snap')` immediately (not deferred), with a separate live
+`mfRightDown` flag tracked for the freeze-at-frame-42 mechanic and
+cleared on pointerup. Designed the mobile equivalent to match this
+shape exactly: the 3RD rapid tap's own pointerdown triggers SNAP
+immediately (mirroring right-click's immediate-on-press behavior,
+not deferred like a resolved single/double-click), with a new
+`mfTripleHeld` flag mirroring `mfRightDown`'s own role feeding the
+SAME freeze condition in `update()` (`mfRightDown || mfTripleHeld`).
+Kept as a SEPARATE flag rather than reusing `mfRightDown` directly,
+so a genuine mouse right-click and a touch triple-tap-hold can never
+get conflated on a hybrid touch+mouse device.
+
+The harder design problem was the existing double-click(SCISS)
+detection: on touch, 2 rapid taps currently resolve to SCISS
+IMMEDIATELY on the 2nd tap's own release (the existing mfPendingClick
+pairing), which would make a genuine triple-tap impossible to detect
+-- by the time a 3rd tap arrives, the first 2 have already been
+consumed as a completed double-click. Fixed by giving touch its OWN,
+entirely separate tap-counting mechanism (mfTouchTapCount/Time/Timer)
+that, on touch specifically, defers the SCISS resolution by one MORE
+doubleClickThreshold window after the 2nd tap (instead of firing
+immediately), giving the 3rd tap's own pointerdown a chance to
+preempt it and fire SNAP instead. Desktop mouse behavior is completely
+untouched -- mfPendingClick's own existing pairing logic (immediate
+resolution on the 2nd click) still runs exactly as before, gated by
+`e.pointerType !== 'touch'` implicitly (the new touch branch returns
+early before ever reaching it).
+
+Verification hit a real environment quirk worth recording: this
+sandbox's Browser pane clamps `setTimeout` to roughly 1 second
+minimum regardless of the requested delay (confirmed directly --
+`await new Promise(r=>setTimeout(r,60))` measured via `performance.
+now()` before/after took ~1000ms, not 60ms), even after explicitly
+fronting the tab (tabs_select), which is what fixed this project's
+OTHER known timing quirk (requestAnimationFrame suspension in a
+backgrounded pane) -- this is evidently a SEPARATE, unconditional
+clamp, not the same issue. This made testing a real ~60ms inter-tap
+gap (well under the 180ms doubleClickThreshold) impossible via actual
+waits. Worked around it by adding a temporary debug-hook function
+that directly rewinds the internal mfTouchTapTime timestamp backward
+by a chosen amount, exercising the REAL comparison logic
+(`performance.now() - mfTouchTapTime <= cfg.doubleClickThreshold`)
+against a precisely controlled simulated elapsed time, rather than
+depending on the environment's own (heavily throttled) timers --
+same category of fix as this project's prior test-methodology
+corrections (working around the environment rather than changing the
+code to suit a testing limitation).
+
+Verified via synthetic PointerEvents (dispatched with explicit
+`pointerType`) end-to-end: a single tap resolves to CLICK after the
+deferred window; 2 taps with no 3rd following resolve to SCISS after
+the deferred window; a 3rd tap arriving within the window (simulated
+via the timestamp-rewind technique) triggers SNAP immediately on its
+own pointerdown and sets mfTripleHeld; held through 200+ ticks,
+mfMode stayed 'snap' (frozen, same freeze-at-SNAP_FREEZE_INDEX
+mechanic already proven earlier this session); released, mfTripleHeld
+cleared immediately; ran to a clean 'idle' completion afterward.
+Regression-checked the DESKTOP mouse path wasn't disturbed: a mouse
+double-click still resolves to SCISS immediately (no deferral,
+matching its original behavior) with mfTouchTapCount staying 0
+throughout; a real right-click-hold (button===2) still triggers SNAP,
+holds correctly (mfRightDown true, mode stays 'snap'), and completes
+correctly on release -- all via the same code path as before, now
+sharing the freeze condition with mfTripleHeld via an OR rather than
+being replaced by it.
+
+Committed/pushed (91fef40) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.

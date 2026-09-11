@@ -520,3 +520,41 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   compat (`Array.isArray(order) ? order : (order.groups || [])`) --
   don't remove that fallback, an existing user's saved settings log
   predates this field.
+- SNAP's trigger (mfMode='snap') has 2 separate input sources now: a
+  real mouse right-click (`e.button===2`, sets `mfRightDown`) and a
+  mobile triple-click-and-hold (a 3rd rapid touch tap's own
+  pointerdown, sets `mfTripleHeld`) -- deliberately 2 SEPARATE flags,
+  not one shared boolean, so a real right-click and a touch
+  triple-tap-hold can't get conflated on a hybrid touch+mouse device.
+  The SNAP freeze-at-frame-42 check in `update()` reads
+  `(mfRightDown || mfTripleHeld)` -- any FUTURE input source added for
+  triggering SNAP needs its own flag OR'd in here too, not a reused
+  existing one.
+- Touch tap-counting for the above (`mfTouchTapCount`/`Time`/`Timer`)
+  is COMPLETELY SEPARATE from `mfPendingClick` (the mouse-only single/
+  double-click pairing) -- touch input never touches `mfPendingClick`,
+  and mouse input never touches the touch counters. This was
+  deliberate: mouse's existing double-click(SCISS) resolution fires
+  IMMEDIATELY on the 2nd click's release (unchanged, still does), but
+  touch's 2nd tap DEFERS its SCISS resolution by one more
+  `doubleClickThreshold` window instead, specifically so a 3rd tap's
+  pointerdown (within that window) can preempt it and fire SNAP
+  instead -- collapsing these two mechanisms back into one shared
+  pairing would either break the deferral touch needs or add an
+  unwanted, unrequested deferral to desktop's own click resolution.
+- This sandbox's Browser pane clamps `setTimeout` to roughly 1 SECOND
+  minimum regardless of the requested delay (measured directly:
+  `await new Promise(r=>setTimeout(r,60))` took ~1000ms via
+  `performance.now()` before/after) -- confirmed this is NOT the same
+  issue as the already-documented requestAnimationFrame-suspended-pane
+  quirk (fronting the tab via `tabs_select`, which fixes THAT one, did
+  NOT fix this). Makes it impossible to test a real short (sub-
+  ~1-second) inter-event gap via an actual `await setTimeout()` wait in
+  this environment. Workaround used for the triple-tap-hold feature: a
+  temporary debug-hook function that directly rewinds the relevant
+  internal timestamp variable backward by a controlled amount,
+  exercising the real `performance.now() - timestamp <= threshold`
+  comparison logic against a precisely simulated elapsed time instead
+  of depending on the environment's own throttled timers. Reach for
+  this same technique for any future feature whose correctness depends
+  on a short real-time gap between 2 dispatched events.

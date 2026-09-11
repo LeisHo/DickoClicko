@@ -252,6 +252,40 @@ confirmed their uncommitted work (including their own separate
 `__testWalls` debug hook, also left untouched) remained exactly intact
 in the working tree afterward.
 
+**Added (2026-09-10): triple-click-and-hold as mobile's right-click-
+hold equivalent.** "so for hte right click and hold, make it a triple
+click and hold on mobile." Touch has no secondary mouse button, so
+SNAP was completely unreachable on mobile before this. New
+`mfTripleHeld` flag mirrors `mfRightDown`'s own role (feeding the SAME
+SNAP freeze-at-frame-42 check in `update()` via `mfRightDown ||
+mfTripleHeld`) -- kept separate rather than reusing `mfRightDown`
+directly, so a real mouse right-click and a touch triple-tap-hold
+can't get conflated on a hybrid device. The 3rd rapid tap's own
+pointerdown triggers SNAP immediately, mirroring right-click's own
+immediate-on-press behavior exactly (not deferred the way a resolved
+single/double-click is). The harder problem: the EXISTING double-
+click(SCISS) detection resolves immediately on the 2nd tap's release,
+which would make a real triple-tap physically undetectable (the first
+2 taps are already consumed as SCISS before a 3rd could ever arrive)
+-- fixed by giving touch its OWN separate tap-counting mechanism that
+defers SCISS by one more `doubleClickThreshold` window after the 2nd
+tap specifically on touch, giving a 3rd tap's pointerdown a chance to
+preempt it. Desktop mouse behavior is completely unchanged (the
+existing `mfPendingClick` pairing still resolves immediately, gated
+off before ever reaching the new touch branch). Verified via synthetic
+PointerEvents: single tap -> CLICK, double tap (no 3rd) -> SCISS
+(deferred), triple-tap -> SNAP firing immediately on the 3rd press
+with a correct freeze/hold/resume cycle; desktop mouse double-click
+and right-click-hold both confirmed unaffected. Hit a real environment
+quirk along the way -- this sandbox clamps `setTimeout` to ~1 second
+minimum regardless of the requested delay (confirmed via
+`performance.now()` measurement, and NOT fixed by fronting the tab,
+unlike this project's other known rAF-suspension timing quirk) --
+worked around it with a temporary debug-hook function that directly
+rewinds the internal tap timestamp by a controlled amount, exercising
+the real comparison logic against a precise simulated elapsed time
+instead of fighting the environment's own throttled timers.
+
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
 from `resetSettings()`'s own async settings fetch, which resolves
