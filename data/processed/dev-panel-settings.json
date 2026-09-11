@@ -102,7 +102,7 @@
     "ropeAnimSpeed": 1.2,
     "gravityStrength": 1.7,
     "damping": 0.986,
-    "constraintIterations": 9,
+    "constraintIterations": 1,
     "ropeGrowthRate": 12,
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 8.4,
@@ -259,7 +259,7 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "mouseFlickTargetMode",
           "mouseFlickTargetPoint",
@@ -301,22 +301,22 @@
         "subgroups": [
           {
             "key": "ANCHOR PHYSICS",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
-              "circleBoundaryOffset"
+              "circleBoundaryOffset",
+              "anchorWeight"
             ],
             "subgroups": []
           },
           {
             "key": "ROPE ANIMATION",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
               "damping",
               "constraintIterations",
-              "bendStiffness",
-              "anchorWeight"
+              "bendStiffness"
             ],
             "subgroups": []
           },
