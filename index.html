@@ -100,6 +100,17 @@
   .dp-group-body:empty {
     min-height:20px; border:1px dashed #3a3a4a; border-radius:3px; opacity:.5;
   }
+  /* Ungrouped settings (§12e-adjacent extension, per explicit request:
+     "place the text edit mode checkbox outside of any group... allow
+     me to drag any setting outside of any group") -- a bare row list
+     sitting OUTSIDE #dpGroups entirely, not a collapsible group itself
+     (no header, always visible). Same empty-state dashed-box treatment
+     as .dp-group-body:empty, for the same discoverability reason: an
+     empty ungrouped area still needs a visible/hittable drop target. */
+  .dp-ungrouped { margin-bottom:8px; }
+  .dp-ungrouped:empty {
+    min-height:20px; border:1px dashed #3a3a4a; border-radius:3px; opacity:.5;
+  }
   .dp-group-header {
     padding:7px 2px; font-weight:600; font-size:var(--dp-group-size, 11px); letter-spacing:var(--dp-group-letter-spacing, 0);
     color:var(--dp-text-color, #c9c9d8); cursor:pointer; display:flex; align-items:center; gap:6px;
@@ -237,6 +248,7 @@
       <button type="button" id="dpResetBtn">Reset</button>
     </div>
     <button type="button" id="dpAddGroupBtn" class="dp-add-group-btn">+ Add Group</button>
+    <div id="dpUngrouped" class="dp-ungrouped"></div>
     <div id="dpGroups"></div>
     <div class="dp-click-log-wrap">
       <div class="dp-click-log-header">
@@ -811,7 +823,10 @@ function buildPanelStyleGroup(){
   g.dataset.key = 'DEV PANEL';
   const h = document.createElement('div');
   h.className = 'dp-group-header';
-  h.innerHTML = '<span class="dp-drag-handle">⠿</span><span class="arrow">▼</span><span>Dev Panel</span>';
+  // 'dp-group-handle' here too -- see createGroupElement()'s own
+  // matching comment (makeReorderable()'s GROUP registration must not
+  // also match a ROW's handle, which shares 'dp-drag-handle' for CSS).
+  h.innerHTML = '<span class="dp-group-handle dp-drag-handle">⠿</span><span class="arrow">▼</span><span>Dev Panel</span>';
   const gb = document.createElement('div');
   gb.className = 'dp-group-body';
   h.addEventListener('click', e => { if (!e.target.closest('.dp-drag-handle')) g.classList.toggle('collapsed'); });
@@ -883,13 +898,27 @@ function buildPanelStyleGroup(){
       row.appendChild(cb);
       panelStyleNumEls[ctrl.key] = { cb };
     }
-    gb.appendChild(row);
+    // Text Edit Mode lives OUTSIDE any group by default -- per explicit
+    // request ("place the text edit mode checkbox outside of any
+    // group"). Every other panel-style control still builds into this
+    // group's own body as before; this is a build-time PLACEMENT
+    // choice only -- PANEL_STYLE_CONTROLS/applyPanelStyleValues() and
+    // every other value/persistence path are completely unchanged, and
+    // per rowDragTargets() this row (like any other) can still be
+    // dragged right back into a group afterward if the user wants that.
+    if (ctrl.key === 'textEditMode'){
+      document.getElementById('dpUngrouped').appendChild(row);
+    } else {
+      gb.appendChild(row);
+    }
   });
 
   g.appendChild(h); g.appendChild(gb);
   const container = document.getElementById('dpGroups');
   container.insertBefore(g, container.firstChild);
-  makeReorderable(gb, 'dp-row', 'dp-row-handle');
+  // No per-group row registration needed -- the single delegated row
+  // listener (see makeReorderable()'s own comment) already reaches
+  // this group's body via event delegation.
 }
 
 function applyPanelStyleValues(saved){
@@ -973,7 +1002,9 @@ function applyDevTextOverrides(){
     const original = devTextOriginalFor(key, titleSpan.textContent);
     titleSpan.textContent = devTextOverrides[key] != null ? devTextOverrides[key] : original;
   });
-  document.querySelectorAll('#dpGroups .dp-row label').forEach(label => {
+  // '#dpBody' (not '#dpGroups') -- reaches #dpUngrouped's own rows too
+  // (e.g. Text Edit Mode's own row, which now lives there by default).
+  document.querySelectorAll('#dpBody .dp-row label').forEach(label => {
     if (label.querySelector('textarea')) return;
     const row = label.closest('.dp-row');
     if (!row) return;
@@ -1044,7 +1075,12 @@ function createGroupElement(name){
   g.dataset.key = name;
   const h = document.createElement('div');
   h.className = 'dp-group-header';
-  const handle = document.createElement('span'); handle.className = 'dp-drag-handle'; handle.textContent = '⠿';
+  // 'dp-group-handle' (in addition to the shared 'dp-drag-handle' CSS
+  // styling class) is what makeReorderable()'s GROUP registration
+  // actually matches on -- see that function's own comment for why a
+  // ROW handle (which also carries 'dp-drag-handle', for the same
+  // shared cursor/color/touch-action styling) must NOT match here too.
+  const handle = document.createElement('span'); handle.className = 'dp-group-handle dp-drag-handle'; handle.textContent = '⠿';
   const arrow = document.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '▼';
   const title = document.createElement('span'); title.textContent = name;
   h.appendChild(handle); h.appendChild(arrow); h.appendChild(title);
@@ -1073,11 +1109,11 @@ function buildDevPanel(){
     group.controls.forEach(ctrl => gb.appendChild(buildRow(ctrl)));
     body.appendChild(g);
   });
-  makeReorderable(body, 'dp-group', 'dp-drag-handle', groupDragTargets);
-  DEV_GROUPS.forEach(group => {
-    const gb = body.querySelector('.dp-group[data-key="' + CSS.escape(group.title) + '"] .dp-group-body');
-    makeReorderable(gb, 'dp-row', 'dp-row-handle');
-  });
+  makeReorderable(body, 'dp-group', 'dp-group-handle', groupDragTargets);
+  // Row (setting) dragging is registered ONCE, on the whole panel body
+  // (see the single call site near this file's init sequence, after
+  // buildPanelStyleGroup()/the ungrouped area both exist) -- not here,
+  // per group -- so it isn't repeated here.
 }
 
 // "+ Add Group" (§12e/template parity, per explicit request: "I also
@@ -1097,7 +1133,9 @@ function addDevGroup(){
   while (existingNames.has(name)){ name = 'New Group (' + n + ')'; n++; }
   const g = createGroupElement(name);
   container.appendChild(g);
-  makeReorderable(g.querySelector('.dp-group-body'), 'dp-row', 'dp-row-handle');
+  // No per-group row registration needed -- the single delegated row
+  // listener (see makeReorderable()'s own comment) already reaches
+  // this new group's body via event delegation.
   g.scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
@@ -1141,24 +1179,72 @@ function groupNestingDepth(body, dpGroupsEl){
   }
   return depth;
 }
+// Excludes any body that isn't actually VISIBLE right now (collapsed,
+// or nested inside a collapsed ancestor) -- fixes a real, reproduced
+// data-integrity bug: `getBoundingClientRect()` on a `display:none`
+// element (a collapsed group's own `.dp-group-body`, per this file's
+// own `.collapsed .dp-group-body{display:none}` CSS) returns an
+// all-zero rect at (0,0). makeReorderable()'s own "nearest candidate"
+// fallback (used whenever the pointer isn't within ANY candidate's own
+// vertical bounds -- exactly what happens when dragging a group UP AND
+// OUT of the panel's visible area) then treats that phantom (0,0) rect
+// as genuinely "close" to any drag ending near the top of the screen,
+// silently nesting the dragged group inside the COLLAPSED, invisible
+// parent instead of leaving it at top-level. Reported directly ("when
+// i drag a group out of the panel. It dissappears. I dont want that.
+// I dont want to accidentally delete anything") and reproduced exactly:
+// collapsing one group, then dragging an unrelated group toward the
+// top of the screen, silently relocated it inside the collapsed one --
+// no data was ever actually lost, but it vanished from the visible
+// top-level list until that specific collapsed parent was re-expanded,
+// which reads as deletion to a user with no reason to suspect it.
+// `offsetParent !== null` is the standard "is this actually rendered"
+// check -- true regardless of whether the body itself or any ancestor
+// is what's collapsed, unlike checking `.collapsed` one level at a
+// time. rowDragTargets() (below) applies the same fix for the same
+// reason.
 function groupDragTargets(draggedGroup){
   const dpGroupsEl = document.getElementById('dpGroups');
   const allBodies = Array.from(dpGroupsEl.querySelectorAll('.dp-group-body'))
-    .filter(gb => !draggedGroup.contains(gb));
+    .filter(gb => !draggedGroup.contains(gb) && gb.offsetParent !== null);
   allBodies.sort((a, b) => groupNestingDepth(b, dpGroupsEl) - groupNestingDepth(a, dpGroupsEl));
   return [...allBodies, dpGroupsEl];
 }
+// Valid drop targets for a dragged ROW (setting): every currently-
+// visible group body (same collapsed/hidden exclusion as
+// groupDragTargets() above, and for the same reason -- a row dragged
+// toward a collapsed group must not silently vanish into it either)
+// plus the ungrouped area (#dpUngrouped) itself, so a setting can
+// always be dragged OUT of every group entirely. Unlike
+// groupDragTargets(), a row never CONTAINS a `.dp-group-body` itself
+// (rows are leaf UI, not containers), so there's no "exclude my own
+// descendants" filtering needed here.
+function rowDragTargets(){
+  const dpGroupsEl = document.getElementById('dpGroups');
+  const ungroupedEl = document.getElementById('dpUngrouped');
+  const allBodies = Array.from(dpGroupsEl.querySelectorAll('.dp-group-body'))
+    .filter(gb => gb.offsetParent !== null);
+  return [...allBodies, ungroupedEl];
+}
 
 /* ---------------------------------------------------------------------
-   Drag-to-reorder (groups, and settings within a group) — pointer-based
-   so it works the same on touch and mouse. `crossContainerFn(dragEl)`
-   (optional) lets an item cross into a DIFFERENT sibling container
-   instead of only reordering within the one it started in -- used for
-   GROUP dragging (see groupDragTargets() above) so a group can be
-   dropped either back at top-level or nested into another group's own
-   body; omitted for ROW dragging, which stays confined to its own
-   group exactly as before (moving a SETTING between groups was never
-   requested, only groups themselves).
+   Drag-to-reorder (groups, and settings within/across groups) —
+   pointer-based so it works the same on touch and mouse.
+   `crossContainerFn(dragEl)` (optional) lets an item cross into a
+   DIFFERENT sibling container instead of only reordering within the
+   one it started in -- used for GROUP dragging (groupDragTargets(),
+   above) so a group can be dropped either back at top-level or nested
+   into another group's own body, and for ROW dragging (rowDragTargets(),
+   below) so a setting can be dragged into ANY group or into the
+   ungrouped area (#dpUngrouped) -- per explicit request ("allow me to
+   drag any setting outside of any group"). ROW dragging used to be
+   registered once PER GROUP BODY, confined to that one body; now
+   registered ONCE on the whole #dpBody (see the single call site near
+   this file's init sequence) with rowDragTargets as crossContainerFn,
+   the same one-listener-with-delegation pattern GROUP dragging already
+   used -- this also means a newly created/restored group never needs
+   its OWN row-listener registered, the single delegated listener
+   already reaches it.
 --------------------------------------------------------------------- */
 function makeReorderable(container, itemClass, handleClass, crossContainerFn){
   let dragEl = null;
@@ -1175,6 +1261,22 @@ function makeReorderable(container, itemClass, handleClass, crossContainerFn){
     // subtree) is enough to confirm this pointerdown is genuinely ours.
     if (!item || (!crossContainerFn && item.parentElement !== container)) return;
     e.preventDefault();
+    // A ROW's own handle carries BOTH 'dp-row-handle' AND the shared
+    // 'dp-drag-handle' class (buildRow()'s own handle.className), so
+    // without this, a row-handle pointerdown -- after being claimed
+    // here -- kept bubbling up past its own group body all the way to
+    // #dpGroups, where the GROUP-level listener (matching the shared
+    // '.dp-drag-handle' class) ALSO fired, resolving `item` to the
+    // row's own CONTAINING group and starting a SECOND, simultaneous
+    // drag of that entire group. Real, reproduced bug -- confirmed via
+    // direct report ("when I try [to drag a single setting between
+    // groups], it drags the whole group") and independently via a live
+    // test (dragging one row a small amount visibly reordered its own
+    // parent group in the top-level list). stopPropagation() here
+    // claims the event fully once a valid drag starts, so only the
+    // INNERMOST matching listener (whichever one's container is the
+    // nearest ancestor) ever begins a drag for a given pointerdown.
+    e.stopPropagation();
     dragEl = item;
     dragEl.classList.add('dp-dragging');
     tryCapture(handle, e.pointerId);
@@ -1639,17 +1741,33 @@ function captureGroup(g){
     subgroups: Array.from(body.querySelectorAll(':scope > .dp-group')).map(sub => captureGroup(sub)),
   };
 }
+// A row can now live in #dpGroups' subtree (inside some group) OR in
+// #dpUngrouped (outside every group) -- searches the WHOLE panel, not
+// just one or the other, since a row's current location can genuinely
+// be either depending on what's been dragged where.
+function findRowByKey(key){
+  return document.getElementById('devPanel').querySelector('.dp-row[data-key="' + CSS.escape(key) + '"]');
+}
+// order.ungrouped: the row keys currently sitting directly in
+// #dpUngrouped, in order -- new field, alongside the pre-existing
+// order.groups (was the WHOLE return value before ungrouped settings
+// existed; applyOrder() below still accepts that old bare-array shape
+// for backward compat with a save from before this feature).
 function getPanelOrder(){
-  return Array.from(document.querySelectorAll('#dpGroups > .dp-group')).map(g => captureGroup(g));
+  return {
+    ungrouped: Array.from(document.getElementById('dpUngrouped').querySelectorAll(':scope > .dp-row')).map(r => r.dataset.key),
+    groups: Array.from(document.querySelectorAll('#dpGroups > .dp-group')).map(g => captureGroup(g)),
+  };
 }
 
 // Places one saved group (and, recursively, its own saved subgroups at
 // ANY depth) into parentContainer -- either #dpGroups itself (top-level)
 // or another group's own .dp-group-body (nested), matching
 // captureGroup()'s own unlimited-depth recursion. Searches the WHOLE
-// #dpGroups subtree for an existing group/row by key -- not just within
+// panel for an existing group/row by key -- not just within
 // parentContainer -- since a row or group may currently sit somewhere
-// else in the tree (e.g. nested last save, top-level again this time).
+// else in the tree (e.g. nested last save, top-level again this time,
+// or now, ungrouped last save but saved back into a group this time).
 function placeGroup(saved, parentContainer){
   const dpGroupsEl = document.getElementById('dpGroups');
   let groupEl = dpGroupsEl.querySelector('.dp-group[data-key="' + CSS.escape(saved.key) + '"]');
@@ -1658,20 +1776,35 @@ function placeGroup(saved, parentContainer){
     // survives a reload: it doesn't exist in DEV_GROUPS/the static build
     // at all, only in saved order.
     groupEl = createGroupElement(saved.key);
-    makeReorderable(groupEl.querySelector('.dp-group-body'), 'dp-row', 'dp-row-handle');
+    // No per-group row registration needed -- the single delegated row
+    // listener (see makeReorderable()'s own comment) already reaches
+    // this new group's body via event delegation.
   }
   parentContainer.appendChild(groupEl);
   groupEl.classList.toggle('collapsed', !!saved.collapsed);
   const body = groupEl.querySelector(':scope > .dp-group-body');
   (saved.settings || []).forEach(k => {
-    const rowEl = dpGroupsEl.querySelector('.dp-row[data-key="' + CSS.escape(k) + '"]');
+    const rowEl = findRowByKey(k);
     if (rowEl) body.appendChild(rowEl);
   });
   (saved.subgroups || []).forEach(sub => placeGroup(sub, body));
 }
 function applyOrder(order){
+  if (!order) return;
   const groupsContainer = document.getElementById('dpGroups');
-  (order || []).forEach(g => placeGroup(g, groupsContainer));
+  const ungroupedEl = document.getElementById('dpUngrouped');
+  // Backward compat: a save from before ungrouped settings existed has
+  // `order` as a bare array (what getPanelOrder() used to return
+  // wholesale) -- treat that as "no ungrouped rows recorded" rather
+  // than an error, same convention as captureGroup()'s own
+  // `(saved.subgroups || [])` for an older field that didn't exist yet.
+  const groups = Array.isArray(order) ? order : (order.groups || []);
+  const ungrouped = Array.isArray(order) ? [] : (order.ungrouped || []);
+  groups.forEach(g => placeGroup(g, groupsContainer));
+  ungrouped.forEach(k => {
+    const rowEl = findRowByKey(k);
+    if (rowEl) ungroupedEl.appendChild(rowEl);
+  });
 }
 
 function applyValues(values){
@@ -7862,6 +7995,12 @@ if (DEV_MODE){
   document.getElementById('devPanel').classList.remove('hidden');
   buildDevPanel();
   buildPanelStyleGroup();
+  // Row (setting) dragging, registered ONCE here -- delegation-based
+  // (see makeReorderable()'s own comment), so this single call reaches
+  // every row in every group AND #dpUngrouped, including ones created/
+  // restored later (a new "+ Add Group", or applyOrder()'s own
+  // restore path), with no further registration needed anywhere else.
+  makeReorderable(document.getElementById('dpBody'), 'dp-row', 'dp-row-handle', rowDragTargets);
   applyPanelStyle();
   initPanelDrag();
   initResizeHandles();
