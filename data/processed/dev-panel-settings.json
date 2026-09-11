@@ -194,7 +194,7 @@
     "ropeAttractionSpeed": 23,
     "ropeAttractionMaxReach": 64,
     "mouseFlickEnabled": true,
-    "mouseFlickScale": 50,
+    "mouseFlickScale": 60,
     "mouseFlickAnimSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
     "mouseFlickRotationSmoothing": 1,
@@ -203,7 +203,7 @@
     "mouseFlickHoldMaxDuration": 1.5,
     "mouseFlickTargetMode": "rope",
     "mouseFlickTargetPoint": 0.5,
-    "mouseFlickRandomInterval": 3
+    "mouseFlickRandomInterval": 1.1
   },
   "order": {
     "ungrouped": [],
@@ -259,7 +259,7 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "mouseFlickTargetMode",
           "mouseFlickTargetPoint",
@@ -288,7 +288,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -388,7 +388,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "intensityCeiling",
           "clickHoldMaxDuration"
@@ -406,7 +406,7 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "flickHoldMaxSpeed",
               "flickHoldMaxDuration"
