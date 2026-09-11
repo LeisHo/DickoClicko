@@ -132,6 +132,8 @@
     "floorHeight": 6,
     "floorFriction": 0.72,
     "pieceFriction": 0.71,
+    "wallEnabled": true,
+    "wallFriction": 0,
     "introEnabled": true,
     "introWaitDuration": 1.5,
     "introRiseSpeed": 5.5,
@@ -168,7 +170,7 @@
     "detachTipStartScale": 0.1,
     "detachTipGrowDuration": 0.8,
     "detachThicknessMultiplier": 1.02,
-    "flickEnabled": true,
+    "flickEnabled": false,
     "flickSource": "above",
     "flickX": 28,
     "flickY": 67,
@@ -199,287 +201,299 @@
     "mouseFlickHoldMaxSpeed": 6,
     "mouseFlickHoldMaxDuration": 1.5
   },
-  "order": [
-    {
-      "key": "DEV PANEL",
-      "collapsed": true,
-      "settings": [
-        "textEditMode",
-        "accentColor",
-        "sliderColor",
-        "fontFamily",
-        "buttonHeight",
-        "buttonTextBorder",
-        "scrollStrength",
-        "capsButtonText",
-        "capsTabText",
-        "capsGroupNames",
-        "capsSettingsText",
-        "buttonLetterSpacing",
-        "tabLetterSpacing",
-        "groupLetterSpacing",
-        "settingsLetterSpacing",
-        "titleFontSize",
-        "tabFontSize",
-        "groupFontSize",
-        "labelFontSize",
-        "opacity",
-        "titleColor",
-        "bodyFontSize",
-        "bgColor",
-        "textColor"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "UI",
-      "collapsed": true,
-      "settings": [
-        "backgroundColor"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "FLICK MOUSE",
-      "collapsed": true,
-      "settings": [
-        "mouseFlickEnabled",
-        "mouseFlickScale",
-        "mouseFlickAnimSpeed",
-        "mouseFlickPositionSmoothing",
-        "mouseFlickRotationSmoothing",
-        "mouseFlickAngleOffset",
-        "mouseFlickHoldMaxSpeed",
-        "mouseFlickHoldMaxDuration"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "CIRCLE",
-      "collapsed": true,
-      "settings": [
-        "circleSize",
-        "circleX",
-        "circleY",
-        "circleColor"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "ROPE",
-      "collapsed": true,
-      "settings": [
-        "pieceGradientEnabled",
-        "pieceGradientColors",
-        "arcSeamOverlapPx",
-        "arcGradientEnabled",
-        "arcGradientColors",
-        "ropeDefaultLength",
-        "endcapGradientEnabled",
-        "endcapGradientColors",
-        "endcapDesign",
-        "endcapHeight",
-        "ropeThickness",
-        "ropeLength",
-        "ropeColor",
-        "ropeGradientEnabled",
-        "ropeGradientColors",
-        "bgRopeGradientEnabled",
-        "bgRopeGradientColors",
-        "ropeEndCurveArc",
-        "ropeTopCurveArc",
-        "tipSegmentShapeEnabled"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "New Group (2)",
-      "collapsed": true,
-      "settings": [],
-      "subgroups": []
-    },
-    {
-      "key": "New Group",
-      "collapsed": true,
-      "settings": [],
-      "subgroups": [
-        {
-          "key": "FLICK ANIMATION",
-          "collapsed": true,
-          "settings": [
-            "flickEnabled",
-            "flickSource",
-            "flickX",
-            "flickY",
-            "flickScale",
-            "flickAnimSpeed"
-          ],
-          "subgroups": []
-        },
-        {
-          "key": "FLICK ANIMATION 2",
-          "collapsed": true,
-          "settings": [
-            "flick2Enabled",
-            "flick2X",
-            "flick2Y",
-            "flick2Scale",
-            "flick2AnimSpeed"
-          ],
-          "subgroups": []
-        },
-        {
-          "key": "FLICK ANIMATION 3",
-          "collapsed": true,
-          "settings": [
-            "flick3Enabled",
-            "flick3Source",
-            "flick3X",
-            "flick3Y",
-            "flick3Scale",
-            "flick3AnimSpeed"
-          ],
-          "subgroups": []
-        }
-      ]
-    },
-    {
-      "key": "RIGHT CLICK",
-      "collapsed": true,
-      "settings": [
-        "ropeAttractionIntensity",
-        "ropeAttractionSpeed",
-        "ropeAttractionMaxReach"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "FLICK HOLD",
-      "collapsed": true,
-      "settings": [
-        "flickHoldMaxSpeed",
-        "flickHoldMaxDuration"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "STARTUP ANIMATION",
-      "collapsed": true,
-      "settings": [
-        "bgRopeEndcapPauseHeight",
-        "mainEndcapGrowSpeed",
-        "bgRopeStartEndcapEnabled",
-        "bgRopeEndcapHeight",
-        "bgRopeEndcapGradientEnabled",
-        "bgRopeEndcapGradientColors",
-        "startupRiseGravity",
-        "detachWaitDuration",
-        "introRiseClearOffsetEnabled",
-        "bgRopeClipEnabled",
-        "debugShowRiseClearOffset",
-        "introExtendSpeed",
-        "introExtendSpeedTweenEnabled",
-        "introExtendStartSpeed",
-        "introEnabled",
-        "introWaitDuration",
-        "introRiseSpeed",
-        "introRiseClearOffset",
-        "introPauseDuration",
-        "detachPauseDuration",
-        "detachTipStartScale",
-        "detachTipGrowDuration",
-        "detachThicknessMultiplier"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "ANCHOR PHYSICS",
-      "collapsed": true,
-      "settings": [
-        "circleBoundaryOffset",
-        "anchorWeight"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "ROPE CUT",
-      "collapsed": true,
-      "settings": [
-        "doubleClickDistance",
-        "clickDistance",
-        "doubleClickThreshold",
-        "ropeFallSpeed",
-        "cutSpeed",
-        "endcapAtCutEnd",
-        "cutSweepColor",
-        "cutSweepThickness",
-        "pieceDecayDelay",
-        "pieceDecaySpeed",
-        "pieceMinThickness",
-        "minRopeLength"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "ROPE ANIMATION",
-      "collapsed": true,
-      "settings": [
-        "ropeAnimSpeed",
-        "gravityStrength",
-        "damping",
-        "constraintIterations",
-        "bendStiffness"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "CLICK",
-      "collapsed": true,
-      "settings": [
-        "clickIntensity",
-        "holdDistance"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "ROPE GROWTH",
-      "collapsed": true,
-      "settings": [
-        "ropeGrowthRate",
-        "clickHoldMaxDuration",
-        "intensityCeiling"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "END EMERGE",
-      "collapsed": true,
-      "settings": [
-        "endcapStartingScaleWidth",
-        "pieceEndEmergeSpeed",
-        "endEmergeEnabled",
-        "endcapStartingScale",
-        "endEmergeDelay",
-        "endEmergeSpeed",
-        "endEmergeEasingStrength",
-        "endEmergeTweening"
-      ],
-      "subgroups": []
-    },
-    {
-      "key": "FLOOR",
-      "collapsed": true,
-      "settings": [
-        "floorFriction",
-        "pieceFriction",
-        "floorEnabled",
-        "floorColor",
-        "floorThickness",
-        "floorHeight"
-      ],
-      "subgroups": []
-    }
-  ],
+  "order": {
+    "ungrouped": [],
+    "groups": [
+      {
+        "key": "WALLS",
+        "collapsed": true,
+        "settings": [
+          "wallEnabled",
+          "wallFriction"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "DEV PANEL",
+        "collapsed": true,
+        "settings": [
+          "textEditMode",
+          "accentColor",
+          "sliderColor",
+          "fontFamily",
+          "buttonHeight",
+          "buttonTextBorder",
+          "scrollStrength",
+          "capsButtonText",
+          "capsTabText",
+          "capsGroupNames",
+          "capsSettingsText",
+          "buttonLetterSpacing",
+          "tabLetterSpacing",
+          "groupLetterSpacing",
+          "settingsLetterSpacing",
+          "titleFontSize",
+          "tabFontSize",
+          "groupFontSize",
+          "labelFontSize",
+          "opacity",
+          "titleColor",
+          "bodyFontSize",
+          "bgColor",
+          "textColor"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "UI",
+        "collapsed": true,
+        "settings": [
+          "backgroundColor"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "FLICK MOUSE",
+        "collapsed": true,
+        "settings": [
+          "mouseFlickEnabled",
+          "mouseFlickScale",
+          "mouseFlickAnimSpeed",
+          "mouseFlickPositionSmoothing",
+          "mouseFlickRotationSmoothing",
+          "mouseFlickAngleOffset",
+          "mouseFlickHoldMaxSpeed",
+          "mouseFlickHoldMaxDuration"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "CIRCLE",
+        "collapsed": true,
+        "settings": [
+          "circleSize",
+          "circleX",
+          "circleY",
+          "circleColor"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "ROPE",
+        "collapsed": true,
+        "settings": [
+          "pieceGradientEnabled",
+          "pieceGradientColors",
+          "arcSeamOverlapPx",
+          "arcGradientEnabled",
+          "arcGradientColors",
+          "ropeDefaultLength",
+          "endcapGradientEnabled",
+          "endcapGradientColors",
+          "endcapDesign",
+          "endcapHeight",
+          "ropeThickness",
+          "ropeLength",
+          "ropeColor",
+          "ropeGradientEnabled",
+          "ropeGradientColors",
+          "bgRopeGradientEnabled",
+          "bgRopeGradientColors",
+          "ropeEndCurveArc",
+          "ropeTopCurveArc",
+          "tipSegmentShapeEnabled"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "New Group (2)",
+        "collapsed": true,
+        "settings": [],
+        "subgroups": []
+      },
+      {
+        "key": "New Group",
+        "collapsed": false,
+        "settings": [],
+        "subgroups": [
+          {
+            "key": "FLICK ANIMATION",
+            "collapsed": true,
+            "settings": [
+              "flickEnabled",
+              "flickSource",
+              "flickX",
+              "flickY",
+              "flickScale",
+              "flickAnimSpeed"
+            ],
+            "subgroups": []
+          },
+          {
+            "key": "FLICK ANIMATION 2",
+            "collapsed": true,
+            "settings": [
+              "flick2Enabled",
+              "flick2X",
+              "flick2Y",
+              "flick2Scale",
+              "flick2AnimSpeed"
+            ],
+            "subgroups": []
+          },
+          {
+            "key": "FLICK ANIMATION 3",
+            "collapsed": true,
+            "settings": [
+              "flick3Enabled",
+              "flick3Source",
+              "flick3X",
+              "flick3Y",
+              "flick3Scale",
+              "flick3AnimSpeed"
+            ],
+            "subgroups": []
+          }
+        ]
+      },
+      {
+        "key": "RIGHT CLICK",
+        "collapsed": true,
+        "settings": [
+          "ropeAttractionIntensity",
+          "ropeAttractionSpeed",
+          "ropeAttractionMaxReach"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "FLICK HOLD",
+        "collapsed": true,
+        "settings": [
+          "flickHoldMaxSpeed",
+          "flickHoldMaxDuration"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "STARTUP ANIMATION",
+        "collapsed": true,
+        "settings": [
+          "bgRopeEndcapPauseHeight",
+          "mainEndcapGrowSpeed",
+          "bgRopeStartEndcapEnabled",
+          "bgRopeEndcapHeight",
+          "bgRopeEndcapGradientEnabled",
+          "bgRopeEndcapGradientColors",
+          "startupRiseGravity",
+          "detachWaitDuration",
+          "introRiseClearOffsetEnabled",
+          "bgRopeClipEnabled",
+          "debugShowRiseClearOffset",
+          "introExtendSpeed",
+          "introExtendSpeedTweenEnabled",
+          "introExtendStartSpeed",
+          "introEnabled",
+          "introWaitDuration",
+          "introRiseSpeed",
+          "introRiseClearOffset",
+          "introPauseDuration",
+          "detachPauseDuration",
+          "detachTipStartScale",
+          "detachTipGrowDuration",
+          "detachThicknessMultiplier"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "ANCHOR PHYSICS",
+        "collapsed": true,
+        "settings": [
+          "circleBoundaryOffset",
+          "anchorWeight"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "ROPE CUT",
+        "collapsed": true,
+        "settings": [
+          "doubleClickDistance",
+          "clickDistance",
+          "doubleClickThreshold",
+          "ropeFallSpeed",
+          "cutSpeed",
+          "endcapAtCutEnd",
+          "cutSweepColor",
+          "cutSweepThickness",
+          "pieceDecayDelay",
+          "pieceDecaySpeed",
+          "pieceMinThickness",
+          "minRopeLength"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "ROPE ANIMATION",
+        "collapsed": true,
+        "settings": [
+          "ropeAnimSpeed",
+          "gravityStrength",
+          "damping",
+          "constraintIterations",
+          "bendStiffness"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "CLICK",
+        "collapsed": true,
+        "settings": [
+          "clickIntensity",
+          "holdDistance"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "ROPE GROWTH",
+        "collapsed": true,
+        "settings": [
+          "ropeGrowthRate",
+          "clickHoldMaxDuration",
+          "intensityCeiling"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "END EMERGE",
+        "collapsed": true,
+        "settings": [
+          "endcapStartingScaleWidth",
+          "pieceEndEmergeSpeed",
+          "endEmergeEnabled",
+          "endcapStartingScale",
+          "endEmergeDelay",
+          "endEmergeSpeed",
+          "endEmergeEasingStrength",
+          "endEmergeTweening"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "FLOOR",
+        "collapsed": true,
+        "settings": [
+          "floorFriction",
+          "pieceFriction",
+          "floorEnabled",
+          "floorColor",
+          "floorThickness",
+          "floorHeight"
+        ],
+        "subgroups": []
+      }
+    ]
+  },
   "panelGeometry": {
     "desktop": {
       "left": 1286.4625244140625,
