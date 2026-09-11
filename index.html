@@ -2953,6 +2953,20 @@ let mfPendingClick = null; // {time, timer} -- same setTimeout-pairing technique
 // on pointerdown) -- needed for the SNAP freeze-at-frame-42 mechanic
 // (see the pointerup listener and update()'s own SNAP-freeze comment).
 let mfRightDown = false;
+// Mobile equivalent of right-click-hold, per explicit request ("for the
+// right click and hold, make it a triple click and hold on mobile") --
+// touch has no secondary button, so SNAP would otherwise be completely
+// unreachable there. mfTripleHeld mirrors mfRightDown's own role (live
+// "still held" state feeding the SAME SNAP freeze-at-frame-42 check in
+// update()) but kept as a SEPARATE flag rather than reusing mfRightDown
+// itself, so a real mouse right-click and a touch triple-tap-hold never
+// get conflated on a hybrid (touch+mouse) device. mfTouchTapCount/Time/
+// Timer track up to 2 completed taps (the 3rd tap's own pointerdown is
+// what actually triggers SNAP -- see that handler's own comment) --
+// entirely separate from mfPendingClick above, which stays mouse-only
+// and completely unchanged; touch input never touches mfPendingClick.
+let mfTripleHeld = false;
+let mfTouchTapCount = 0, mfTouchTapTime = 0, mfTouchTapTimer = null;
 
 function mouseFlickDirection(){ return MOUSE_FLICK_DIRECTIONS.find(d => d.key === mfDirectionKey) || MOUSE_FLICK_DIRECTIONS[0]; }
 // "Up" (0°) = directly above viewport center, angle increases clockwise
@@ -5965,6 +5979,23 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
   if (e.button !== 0) return;
+  // Mobile triple-click-and-hold (see mfTripleHeld's own comment) --
+  // this IS the 3rd tap if exactly 2 touch taps already completed
+  // within doubleClickThreshold of each other and this press follows
+  // within that same window. Fires on PRESS, not release, mirroring
+  // right-click's own immediate-on-press trigger above (and so
+  // mfTripleHeld is live from the moment this press starts, the same
+  // way mfRightDown is). Checked BEFORE the charge-hold-timer setup
+  // below and returns early, so this press is never ALSO eligible to
+  // become a charge-hold.
+  if (e.pointerType === 'touch' && mfTouchTapCount === 2 &&
+      (performance.now() - mfTouchTapTime) <= cfg.doubleClickThreshold){
+    clearTimeout(mfTouchTapTimer);
+    mfTouchTapCount = 0;
+    mfTripleHeld = true;
+    mouseFlickStartPlay('snap');
+    return;
+  }
   clearTimeout(mfHoldTimer);
   // Charging only becomes eligible after a FULL doubleClickThreshold of
   // holding -- the same proven technique this project's own rope-punch
@@ -5988,6 +6019,41 @@ window.addEventListener('pointerup', e => {
     mouseFlickEndCharge();
     return;
   }
+  // Release of the 3rd tap's own hold (see pointerdown's own comment --
+  // SNAP already started on that press, mfTripleHeld tracks it live the
+  // same way mfRightDown does). Must return here, before the tap-
+  // counting logic below, since this press was already fully consumed
+  // as the SNAP trigger and must never ALSO be counted as a fresh tap.
+  if (mfTripleHeld){
+    mfTripleHeld = false;
+    return;
+  }
+  // Touch gets its OWN tap-counting (up to 3), entirely separate from
+  // mfPendingClick below -- a plain single/double-click pairing can't
+  // tell a 2nd tap apart from "the start of a triple-tap-hold" without
+  // first waiting to see if a 3rd tap follows, so on touch specifically,
+  // 2 completed taps defer their SCISS resolution by one more
+  // doubleClickThreshold window (mfTouchTapTimer below) instead of
+  // firing immediately -- giving the 3rd tap's own pointerdown, above,
+  // a chance to preempt it. Mouse keeps its existing, unchanged,
+  // immediate-on-2nd-tap behavior (desktop already has a dedicated
+  // right-click gesture for SNAP, so no such deferral is needed there).
+  if (e.pointerType === 'touch'){
+    const mfTouchNow = performance.now();
+    if (mfTouchTapCount > 0 && (mfTouchNow - mfTouchTapTime) <= cfg.doubleClickThreshold){
+      clearTimeout(mfTouchTapTimer);
+      mfTouchTapCount++;
+    } else {
+      mfTouchTapCount = 1;
+    }
+    mfTouchTapTime = mfTouchNow;
+    const mfTouchCountAtTap = mfTouchTapCount;
+    mfTouchTapTimer = setTimeout(() => {
+      mfTouchTapCount = 0;
+      mouseFlickStartPlay(mfTouchCountAtTap >= 2 ? 'sciss' : 'click');
+    }, cfg.doubleClickThreshold);
+    return;
+  }
   // Quick tap -- pair against a pending click for double-click (SCISS),
   // same setTimeout-pairing technique as the rope's own double-click-to-
   // cut (see CLAUDE.md gotchas: "Double-click detection is custom").
@@ -6007,7 +6073,14 @@ window.addEventListener('pointerup', e => {
     }, cfg.doubleClickThreshold),
   };
 });
-window.addEventListener('pointercancel', () => { clearTimeout(mfHoldTimer); mfRightDown = false; if (mfMode === 'charge') mouseFlickEndCharge(); });
+window.addEventListener('pointercancel', () => {
+  clearTimeout(mfHoldTimer);
+  mfRightDown = false;
+  mfTripleHeld = false;
+  clearTimeout(mfTouchTapTimer);
+  mfTouchTapCount = 0;
+  if (mfMode === 'charge') mouseFlickEndCharge();
+});
 
 /* ---------------------------------------------------------------------
    Update / render loop
@@ -6766,7 +6839,11 @@ function update(rawDt){
         // computed once above via the same nearest-number lookup used
         // for mid-sequence switching, so it stays correct across future
         // frame trims instead of needing another manual re-derivation.
-        const mfSnapFrozen = mfMode === 'snap' && mfRightDown && mfFrozenFrames.length > SNAP_FREEZE_INDEX && mfIdx >= SNAP_FREEZE_INDEX;
+        // `mfRightDown || mfTripleHeld` -- the desktop right-click-hold
+        // and mobile triple-click-hold flags (see mfTripleHeld's own
+        // comment) both feed this SAME freeze condition, since they're
+        // the same gesture's 2 input-specific triggers.
+        const mfSnapFrozen = mfMode === 'snap' && (mfRightDown || mfTripleHeld) && mfFrozenFrames.length > SNAP_FREEZE_INDEX && mfIdx >= SNAP_FREEZE_INDEX;
         if (!mfSnapFrozen){
           mfFrameAccum += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
           if (Math.floor(mfFrameAccum) >= mfFrozenFrames.length){
