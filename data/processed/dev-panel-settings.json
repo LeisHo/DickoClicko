@@ -138,9 +138,9 @@
     "introWaitDuration": 1.5,
     "introRiseSpeed": 5.5,
     "startupRiseGravity": 0.1,
-    "introRiseClearOffsetEnabled": true,
+    "introRiseClearOffsetEnabled": false,
     "introRiseClearOffset": 2.5,
-    "debugShowRiseClearOffset": true,
+    "debugShowRiseClearOffset": false,
     "bgRopeClipEnabled": true,
     "bgRopeStartEndcapEnabled": true,
     "bgRopeEndcapHeight": 0.85,
@@ -313,7 +313,7 @@
       },
       {
         "key": "New Group",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [],
         "subgroups": [
           {
@@ -377,7 +377,7 @@
       },
       {
         "key": "STARTUP ANIMATION",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "bgRopeEndcapPauseHeight",
           "mainEndcapGrowSpeed",
