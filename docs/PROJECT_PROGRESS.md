@@ -201,6 +201,57 @@ frame trim that also removes 41 itself would fall back to the nearest
 surviving number automatically instead of silently going stale again
 the same way the original hardcoded `41` did.
 
+**Added (2026-09-10): cursor anchored at the wrist, per direction AND
+per animation type.** "I want my cursor to be at the base of the
+visible part of the pngs, IE the wrist, the bottom... [DotFlicko]
+placed a specific end point for each animation type. There isnt Snap
+or Sciss or Charge in that project, but good enough." Previously the
+FLICK MOUSE sprite was drawn centered on `mfEntityX`/`mfEntityY`
+(`-drawW/2, -drawH/2`) -- the raw PNG's geometric center, not the
+wrist, since the source art has real transparent padding around the
+visible hand. Read DotFlicko's own actual code (not reconstructed from
+memory) to find its proven mechanism: a precomputed, offline
+`VISIBLE_BOUNDS_BY_DIRECTION` table (Node + sharp, `ALPHA_HIT_
+THRESHOLD=10`) giving each direction's visible-content `centerX`/
+`bottomY` (normalized 0-1), used to offset `drawImage`'s own top-left
+corner so that exact point lands at the entity's translated+rotated
+origin. Ported directly, then EXTENDED beyond DotFlicko's own shape:
+DotFlicko has only one pose set per direction (no SCISS/SNAP/CHARGE),
+so one vb per direction was enough there; here each of the 4 variants
+is visually distinct with its own real wrist placement (confirmed,
+not assumed -- e.g. front-pinky: base bottomY 0.9221 vs charge
+0.9228), so bounds are computed per (direction, variant) pair, 32
+entries total, each from that variant's own frame 1 (always present
+in every variant/direction, unlike some later frame numbers already
+trimmed this session). New `MOUSE_FLICK_VISIBLE_BOUNDS` table +
+`mouseFlickVisibleBounds()`/`mouseFlickVariantKeyForMode()` helpers;
+`render()`'s draw call now offsets by `-drawW*vb.centerX,
+-drawH*vb.bottomY` instead of the old fixed `/2` split. Cross-checked
+the computed values against DotFlicko's own precomputed table before
+trusting the script: this project's own 'behind'/base entry
+(0.5265/0.8916) matches DotFlicko's 'behind' entry EXACTLY, confirming
+the base frame art is genuinely shared between the 2 sibling projects
+and the computation methodology is correct. Verified live via a
+temporary debug hook (grep-confirmed removed) with precise per-pixel
+sampling rather than just a visual glance: placed the entity at a
+known unrotated point and scanned vertically through the anchor --
+the hand-to-background color transition lands EXACTLY at the anchor
+row (dy=0, an anti-aliased blend pixel; dy=-1 still hand-white;
+dy=+1 already pure background), confirmed across 3 direction/variant
+combos. **Real cross-session collision caught and handled correctly
+while working on this:** discovered mid-task (via the Edit tool's own
+"file modified on disk" warning, then confirmed via `git diff`) that
+ANOTHER concurrent session had added a genuinely unrelated, uncommitted
+"WALLS" collision feature to this SAME file while this task was in
+progress. Did NOT blanket-stage the whole file (would have swept their
+in-progress work into this commit) -- built a scoped patch containing
+only this task's own 2 hunks via `git diff` + `git apply --cached`
+(the non-interactive equivalent of `git add -p`), verified the staged
+content contained zero WALLS-related lines before committing, and
+confirmed their uncommitted work (including their own separate
+`__testWalls` debug hook, also left untouched) remained exactly intact
+in the working tree afterward.
+
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
 from `resetSettings()`'s own async settings fetch, which resolves

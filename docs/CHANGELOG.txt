@@ -9816,3 +9816,116 @@ mechanic had against the old 45-frame data before the asset trim.
 
 Committed/pushed (727c0df) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-10  -  09:25 PM EDT
+
+"I want my cursor to be at the base of the visible part of the pngs,
+IE the wrist, the bottom. Take a look at the project Dot Flicko, it
+uses similar frames, and we have in that project placed a specific
+end point for each animation type. There isnt Snap or Sciss or
+Charge in that project, but good enough" -- a cross-project port
+request. Read DotFlicko's own actual index.html directly (grep for
+VISIBLE_BOUNDS_BY_DIRECTION/localOffsetFromNormalized/drawImage's own
+call site) rather than reconstructing the mechanism from this
+session's own earlier prose descriptions of it, to confirm the exact
+real implementation before porting anything.
+
+Found the mechanism: a precomputed `VISIBLE_BOUNDS_BY_DIRECTION`
+table (centerX/bottomY per direction, normalized 0-1), generated
+offline via a documented Node+sharp one-liner (ALPHA_HIT_THRESHOLD=
+10, same convention this project already uses for its own per-pixel
+hit-testing), applied by offsetting drawImage's own top-left corner
+(`-drawW*centerX, -drawH*bottomY`) so that exact point in the sprite
+lands at the entity's translated+rotated origin -- replacing an
+earlier LIVE in-browser scan that DotFlicko's own history shows went
+through 2 real rounds of bugs (a freeze from running full-res scans
+during interaction, then an accuracy tradeoff from downscaling to fix
+that) before landing on the offline-precomputed approach used today.
+
+Read DICKOCLICKO's own current FLICK MOUSE draw call
+(`ctx.drawImage(mfImg, -mfDrawW/2, -mfDrawH/2, mfDrawW, mfDrawH)`) --
+confirmed it was a plain geometric-center anchor, never wrist-aware,
+matching the user's own complaint exactly.
+
+Extended the port beyond DotFlicko's own shape rather than a literal
+1:1 copy: DotFlicko has one pose set per direction (no SCISS/SNAP/
+CHARGE), so one vb per direction sufficed there -- the user's own
+"good enough" framing signaled the MECHANISM was the reference, not
+an exact 1-vb-per-direction scope limit, and this project has 4
+visually distinct variants per direction. Wrote a one-off Node+sharp
+script (adapted from DotFlicko's own documented one-liner, same alpha
+threshold/formula) computing centerX/bottomY for all 8 directions x 4
+variants (32 entries) against each variant's own frame 1 PNG (always
+present in every variant/direction, unlike some later frame numbers
+already trimmed earlier this session). Cross-checked the computed
+values against DotFlicko's OWN precomputed table before trusting the
+script at all: this project's 'behind'/base entry came out as
+EXACTLY 0.5265/0.8916, matching DotFlicko's 'behind' entry to all 4
+decimal places -- strong independent confirmation both that the base
+frame art is genuinely shared between the 2 sibling projects and that
+the computation methodology is correct, not just self-consistent.
+
+Added `MOUSE_FLICK_VISIBLE_BOUNDS` (the 32-entry table) plus
+`mouseFlickVisibleBounds()`/`mouseFlickVariantKeyForMode()` (maps the
+live mfMode -- 'idle'/'click'/'sciss'/'snap'/'charge' -- onto the
+table's 4 variant keys, 'idle' and 'click' both resolving to 'base'
+since both draw from the same frame set). Changed the draw call from
+the fixed `-mfDrawW/2, -mfDrawH/2` split to `-mfDrawW*vb.centerX,
+-mfDrawH*vb.bottomY`, looked up fresh every frame from the CURRENT
+direction+mode.
+
+Verified live via a temporary debug hook (grep-confirmed removed) --
+not just a visual glance, but precise per-pixel sampling: placed the
+entity at a known, unrotated point (mfEntityAngleDeg=180 so
+mfRotationRad=0, world space = local space, no trig needed to predict
+the sample point) and scanned vertically through the anchor row by
+row. Result was a clean, single-pixel-precise transition: dy=-1 still
+reads hand-white (254/255), dy=0 (the anchor itself) reads a blended
+~51 (the natural anti-aliased edge pixel), dy=+1 onward reads pure
+background (37) -- confirmed across 3 direction/variant combos
+(behind/idle, behind/charge, front-pinky/sciss). Hit 2 real test-
+methodology snags along the way, both fixed by adjusting the TEST
+rather than the code: (1) the canvas turned out to be 400x800 (a
+narrow/portrait viewport from this browser pane's current state), so
+an initial sample point of (700,500) silently read alpha 0 for
+sampling OFF-canvas entirely, not a real bug -- switched to an
+in-bounds point; (2) a first alpha-only comparison read 255
+everywhere including background, because the canvas's own opaque
+background fill (drawn fresh by every render() call) has alpha 255
+too -- switched to comparing actual RGB color against the sprite's
+own visibly different tone instead of alpha alone.
+
+**Real cross-session collision, handled without disturbing the other
+session's work:** partway through, an Edit call returned "the file
+had been modified on disk since you last read it" -- investigated via
+`git diff` rather than assuming it was noise, and found a genuinely
+unrelated "WALLS" collision feature (dev-panel group + update()
+logic + its own debug hook) had appeared in the SAME file, uncommitted,
+clearly from another active Claude session (confirmed independently:
+attempting to start a preview server on port 8533, this project's own
+documented alt port, was refused because "port 8533 is in use by
+another chat's dev server" -- direct evidence of a concurrent session,
+not just an inferred one). Per this project's own standing multi-
+session discipline, did NOT run a blanket `git add index.html` (which
+would have silently swept their in-progress, unreviewed work into
+this commit). Instead: saved the full `git diff` to a patch file,
+identified the exact hunk boundaries (3 hunks: their WALLS dev-panel
+group, then this task's own 2 hunks), extracted a patch containing
+ONLY this task's own hunks, verified it applied cleanly via `git
+apply --cached --check`, then applied it with `git apply --cached`
+(the non-interactive equivalent of `git add -p`, staging specific
+hunks to the index without touching the working tree). Verified the
+result 3 ways before committing: `git diff --cached` contained zero
+lines mentioning "wall"; the working tree still had the WALLS block
+fully intact (not reverted); a syntax check of the STAGED content
+specifically (`git show :index.html`, not the working-tree file)
+parsed cleanly on its own. When cleaning up this task's own temporary
+debug hook afterward, found the OTHER session had ALSO left its own
+debug hook (`window.__testWalls`) sitting in the working tree --
+removed only this task's own `window.__test` block, leaving
+`__testWalls` completely untouched, re-confirmed via a grep count on
+both hook names before and after.
+
+Committed/pushed (b771426) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.

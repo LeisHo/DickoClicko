@@ -443,3 +443,27 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   wherever 41 sits, or the nearest surviving number if 41 itself gets
   removed) -- don't reintroduce a hardcoded index here even if a future
   trim seems to "just need one more number adjusted."
+- The FLICK MOUSE cursor is anchored at the WRIST (`MOUSE_FLICK_
+  VISIBLE_BOUNDS`, 2026-09-10, ported from DotFlicko's own
+  `VISIBLE_BOUNDS_BY_DIRECTION`), not the raw PNG's geometric center --
+  `render()`'s draw call offsets by `-drawW*vb.centerX, -drawH*vb.
+  bottomY`, looked up per (direction, variant) via `mouseFlickVisible
+  Bounds()`/`mouseFlickVariantKeyForMode()`. Values are PRECOMPUTED
+  OFFLINE against each variant's own frame 1 PNG (Node + sharp,
+  `ALPHA_HIT_THRESHOLD=10`), never scanned live -- DotFlicko's own
+  history is the reason why (2 real rounds of bugs from a live scan:
+  a freeze from running it during interaction, then an accuracy
+  tradeoff from downscaling to fix that). **If ANY variant's frame 1
+  art changes for ANY direction, regenerate that specific entry** --
+  re-run the offline scan against the new `<prefix>_001.png` (same
+  formula as DotFlicko's own documented one-liner: alpha>10 bounding
+  box, `centerX=((minX+maxX)/2)/w`, `bottomY=(maxY+1)/h`) and update
+  just that one `{centerX,bottomY}` pair in `MOUSE_FLICK_VISIBLE_
+  BOUNDS` -- don't assume a stale entry is still close enough, the 4
+  variants within one direction can differ meaningfully (e.g.
+  front-pinky: base bottomY 0.9221 vs charge 0.9228 vs sciss/snap
+  0.9228 with a different centerX again). This table depends on frame
+  1 specifically always existing for every variant/direction -- if a
+  future frame trim ever removes frame 1 itself (unlike the trims so
+  far, which have all preserved it), the anchor would need to shift to
+  whichever frame IS used as that variant's reference instead.
