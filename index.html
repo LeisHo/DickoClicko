@@ -1252,6 +1252,25 @@ function rowDragTargets(){
   const ungroupedEl = document.getElementById('dpUngrouped');
   const allBodies = Array.from(dpGroupsEl.querySelectorAll('.dp-group-body'))
     .filter(gb => gb.offsetParent !== null);
+  // Same DEEPEST-first sort as groupDragTargets(), and for the exact
+  // same reason (see that function's own comment for the full account):
+  // querySelectorAll returns bodies in DOM/document order, which puts
+  // an OUTER group's body before any nested subgroup's body living
+  // inside it -- and since a parent body's own bounding rect always
+  // geometrically CONTAINS its nested child's rect, makeReorderable()'s
+  // `candidates.find(c => pointerY within c's rect)` would match the
+  // OUTER body first for ANY drop position inside the nested one too,
+  // making it impossible to ever drag a row INTO a 2nd-level-or-deeper
+  // subgroup specifically -- reported directly ("I can drag it between
+  // top level groups, but not second level") and reproduced exactly
+  // this way. groupDragTargets() already had this exact sort; it was
+  // simply never carried over here when row-dragging was generalized
+  // to cross-group targets. rowDragTargets() has no equivalent of
+  // groupDragTargets()'s own trailing `dpGroupsEl` top-level fallback
+  // to also reorder in the sort -- ungroupedEl plays that same
+  // always-last role, appended after sorting rather than sorted with
+  // the rest, since it's never nested inside a group body.
+  allBodies.sort((a, b) => groupNestingDepth(b, dpGroupsEl) - groupNestingDepth(a, dpGroupsEl));
   return [...allBodies, ungroupedEl];
 }
 
