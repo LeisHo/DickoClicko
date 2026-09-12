@@ -803,3 +803,23 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   never reaches the rope branch at all) -- don't reintroduce the
   unconditional version thinking the circle check alone is sufficient
   protection; it only protects an ACTUAL circle hit, not a near-miss.
+- FLICK MOUSE's direction-lock (`update()`, right after `mfTargetDirKey`
+  is computed) must distinguish SNAP's own HELD phase from its
+  post-release completion tail -- they are NOT the same thing, even
+  though both share `mfMode === 'snap'`. Unlike click/sciss (which fire
+  once immediately with no hold phase at all), SNAP has a genuine held
+  state (right-click-and-hold, or the mobile triple-tap-hold
+  equivalent) before its own end sequence plays out. A version of this
+  lock that excludes bare `mfMode === 'snap'` (lumping it in with
+  click/sciss/dragRelease) incorrectly locks the HELD phase too -- real,
+  reported, reproduced bug (2026-09-12: "when i do right click and
+  hold, during the hold, [direction should] respond to the cursor
+  position"), confirmed via a real dispatched right-click-hold + cursor
+  move showing zero direction change across a full screen-width sweep
+  while still held. Fixed via `mfSnapHeld = mfMode === 'snap' &&
+  (mfRightDown || mfTripleHeld)`, used as `(mfMode !== 'snap' ||
+  mfSnapHeld)` in the lock condition -- responsive while genuinely
+  held, locked only once release starts playing out the remaining
+  frames. Any FUTURE change to this lock must keep held-vs-tail as 2
+  separate states for SNAP specifically; click/sciss/dragRelease have
+  no hold phase at all and stay simple always-locked exclusions.

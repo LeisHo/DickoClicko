@@ -11512,3 +11512,55 @@ the far corner of the canvas (286px from the nearest rope point) now
 correctly resolves `charging:true` instead of dragging; a hold
 dispatched directly on a rope point still correctly resolves
 `dragging:true`. Committed/pushed (3339d61) -- no divergence.
+
+================================================================================
+2026-09-12  -  07:23 AM EDT
+
+"Right now when i do righ click and hold, durin the hold, the
+animation frames are updating accoridng to the 8 types. please fix
+that. Its only on a non hold sequeunce doess it choose not to change
+types. in any hold state, the animation type will respond to the
+cursor position" -- genuinely ambiguous wording, could be read either
+polarity. Asked directly (AskUserQuestion) whether SNAP's direction
+should lock or stay responsive during hold -- user confirmed
+responsive-during-hold is the DESIRED behavior, which didn't by itself
+establish whether that was also the CURRENT behavior. Verified
+directly rather than continuing to guess: read `update()`'s own
+direction-lock condition (`mfMode !== 'click' && mfMode !== 'sciss' &&
+mfMode !== 'snap' && mfMode !== 'dragRelease'`), confirmed via a
+temporary debug hook and a real dispatched right-click-hold + mouse
+move that direction was in fact LOCKED throughout the entire held
+phase (moving from directly above center to directly below produced
+zero direction change while `mfMode` stayed `'snap'` the whole time) --
+a real, confirmed regression, not a wording misunderstanding.
+
+Root cause: unlike click/sciss (which fire once immediately, no hold
+phase at all), SNAP has its OWN genuine held state (right-click-and-
+hold, or the mobile triple-tap-hold equivalent) before its end
+sequence plays out -- but the exclusion list added 2026-09-11 treated
+bare `mfMode === 'snap'` as always-locked, which incorrectly covered
+the held phase too. The comment right above that exact line already
+documented the correct original intent for exactly this shape of
+problem ("while the click is held... changes... but not during the
+end sequence") -- SNAP's own hold just never got carved out from its
+own end-sequence lock the way charge already was kept separate from
+click/sciss.
+
+Fixed with a new `mfSnapHeld = mfMode === 'snap' && (mfRightDown ||
+mfTripleHeld)` distinguishing the 2 phases -- direction now updates
+live for as long as the button/touch is actually down, and only locks
+once SNAP is genuinely playing out its remaining frames after release
+(preserving the original 2026-09-11 intent for that specific tail).
+Verified live via the same debug hook + dispatched-event technique:
+direction correctly switched (side-thumb -> front) while still held
+after moving the cursor to the opposite side of the screen; released
+and confirmed the mode/direction state remains internally consistent
+through the tail (a very short remaining tail in this specific test
+run meant the lock window itself wasn't independently re-observed,
+but it's the same boolean expression already directly verified for
+the held case, not a separate untested code path). Committed/pushed
+(64b35f7) -- no divergence.
+
+A separate `*D* Grab Animation Speed` request in the same message was
+deferred at the user's own request ("nvm ignore tat for now") -- not
+built, not clarified further, revisit when asked again.

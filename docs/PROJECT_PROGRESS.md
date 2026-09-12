@@ -1005,6 +1005,23 @@ Rope On Rope Hold's own distance gate), checked at ARM time. Verified
 live: a hold on the circle still grows; a hold far from the rope now
 charges instead of dragging; a hold on the rope still drags.
 
+**Fixed (2026-09-12): SNAP's own direction lock incorrectly covered its
+held phase, not just its end-sequence tail.** Reported (ambiguous
+wording at first, resolved via a direct question plus live testing
+rather than guessed): "when i do right click and hold, during the
+hold, [direction should] respond to the cursor position." Unlike
+click/sciss (fire once, no hold phase), SNAP has a genuine held state
+before its end sequence plays out -- the 2026-09-11 direction-lock
+exclusion list treated bare `mfMode==='snap'` as always-locked,
+incorrectly silencing the held phase too. Fixed with `mfSnapHeld =
+mfMode==='snap' && (mfRightDown || mfTripleHeld)`: direction now stays
+responsive for as long as the hold is actually active, locking only
+once SNAP is genuinely playing out its remaining frames after release.
+Verified live via a real dispatched right-click-hold + cursor move
+(direction correctly switched mid-hold). A separate "Grab Animation
+Speed" request in the same message was deferred at the user's own
+request -- not built.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since
