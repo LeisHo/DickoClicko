@@ -10,9 +10,9 @@
     "endcapDesign": "form1-01",
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
-    "ropeThickness": 4.6,
-    "ropeLength": 6.316606944970496,
-    "ropeDefaultLength": 18,
+    "ropeThickness": 7.2,
+    "ropeLength": 15.0616341328112,
+    "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -98,6 +98,7 @@
     "arcSeamOverlapPx": 2.8,
     "clickIntensity": 3,
     "holdDistance": 24,
+    "dragRopeEnabled": false,
     "bendStiffness": 0.01,
     "ropeAnimSpeed": 1.8,
     "gravityStrength": 0.9,
@@ -105,6 +106,7 @@
     "constraintIterations": 2,
     "ropeGrowthRate": 12,
     "ropeGrowthOnRopeHold": false,
+    "ropeGrowthHoldDistance": 20,
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
     "minRopeLength": 2.8,
@@ -119,6 +121,17 @@
     "pieceDecayDelay": 10,
     "pieceDecaySpeed": 0.5,
     "pieceMinThickness": 1.2,
+    "cutSplatterEnabled": false,
+    "cutSplatterColor": "#8b0000",
+    "cutSplatterHorizontalSpread": 60,
+    "cutSplatterVerticalSpread": 80,
+    "cutSplatterParticleCount": 16,
+    "cutSplatterParticleSize": 1.1,
+    "cutSplatterSizeVariance": 0.6,
+    "cutSplatterGravity": 2.5,
+    "cutSplatterFlightDuration": 0.4,
+    "cutSplatterFadeTime": 6,
+    "cutSplatterOpacity": 0.85,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
     "endcapStartingScaleWidth": 0.88,
@@ -195,8 +208,10 @@
     "ropeAttractionSpeed": 23,
     "ropeAttractionMaxReach": 64,
     "mouseFlickEnabled": true,
-    "mouseFlickScale": 60,
+    "mouseFlickEnabledLiveMode": true,
+    "mouseFlickScale": 80,
     "mouseFlickAnimSpeed": 3.2,
+    "mouseFlickTickleSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
     "mouseFlickRotationSmoothing": 1,
     "mouseFlickAngleOffset": 180,
@@ -204,11 +219,30 @@
     "mouseFlickHoldMaxDuration": 1.5,
     "mouseFlickTargetMode": "rope",
     "mouseFlickTargetPoint": 0.5,
-    "mouseFlickRandomInterval": 1.1
+    "mouseFlickRandomInterval": 1.1,
+    "snapRepeatDuration": 5
   },
   "order": {
     "ungrouped": [],
     "groups": [
+      {
+        "key": "CUT SPLATTER",
+        "collapsed": true,
+        "settings": [
+          "cutSplatterEnabled",
+          "cutSplatterColor",
+          "cutSplatterHorizontalSpread",
+          "cutSplatterVerticalSpread",
+          "cutSplatterParticleCount",
+          "cutSplatterParticleSize",
+          "cutSplatterSizeVariance",
+          "cutSplatterGravity",
+          "cutSplatterFlightDuration",
+          "cutSplatterFadeTime",
+          "cutSplatterOpacity"
+        ],
+        "subgroups": []
+      },
       {
         "key": "WALLS",
         "collapsed": true,
@@ -260,8 +294,11 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
+          "mouseFlickEnabledLiveMode",
+          "mouseFlickTickleSpeed",
+          "snapRepeatDuration",
           "mouseFlickTargetMode",
           "mouseFlickTargetPoint",
           "mouseFlickRandomInterval",
@@ -382,6 +419,7 @@
             "key": "ROPE GROWTH",
             "collapsed": true,
             "settings": [
+              "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
             ],
@@ -398,6 +436,7 @@
             "key": "CLICK",
             "collapsed": false,
             "settings": [
+              "dragRopeEnabled",
               "clickIntensity",
               "clickDistance"
             ],
@@ -536,16 +575,16 @@
     ]
   },
   "panelGeometry": {
-    "desktop": {
-      "left": 1242.4625244140625,
-      "top": 62.900001525878906,
-      "width": 293.5249938964844,
-      "height": 570.0125122070312,
+    "mobile": {
+      "left": 36.9523811340332,
+      "top": 305.56549072265625,
+      "width": 229,
+      "height": 439.0238037109375,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
-        "groupFontSize": 14,
-        "labelFontSize": 10,
+        "groupFontSize": 11,
+        "labelFontSize": 11,
         "opacity": 0.94,
         "titleColor": "#e8e8f0",
         "bodyFontSize": 12,
@@ -568,16 +607,16 @@
         "textEditMode": false
       }
     },
-    "mobile": {
-      "left": 182,
-      "top": 155.13690185546875,
-      "width": 229,
-      "height": 448.2083435058594,
+    "desktop": {
+      "left": 1242.4625244140625,
+      "top": 62.900001525878906,
+      "width": 293.5249938964844,
+      "height": 570.0125122070312,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
-        "groupFontSize": 11,
-        "labelFontSize": 11,
+        "groupFontSize": 14,
+        "labelFontSize": 10,
         "opacity": 0.94,
         "titleColor": "#e8e8f0",
         "bodyFontSize": 12,
