@@ -8483,6 +8483,14 @@ function renderCutSweep(entity){
 }
 
 function render(){
+  // Per explicit request: hide the native OS/browser cursor whenever
+  // FLICK MOUSE is actually showing, so the player doesn't see both the
+  // default arrow AND the custom hand overlay at once. Re-synced every
+  // frame (cheap -- an unchanged style write is a no-op) rather than only
+  // on toggle, so it stays correct through every way mouseFlickActive()
+  // can change (the checkbox, the separate Live Mode checkbox, or a
+  // fresh page load's own DEV_MODE).
+  canvas.style.cursor = mouseFlickActive() ? 'none' : '';
   ctx.fillStyle = cfg.backgroundColor;
   ctx.fillRect(0, 0, viewportW(), viewportH());
 
