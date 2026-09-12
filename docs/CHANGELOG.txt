@@ -11469,3 +11469,46 @@ drag PointerEvent sequence from that clean load and confirmed
 after (grep-confirmed 0 matches); `index.html` itself has a net zero
 diff from this investigation, only the settings JSON changed.
 Committed/pushed (0daaeab) -- no divergence.
+
+================================================================================
+2026-09-12  -  07:10 AM EDT
+
+"click and hold to grow int he circle doesnt work. ivestigate" ->
+immediately reframed mid-investigation: "wherever in the browser i
+click and hold, it triggers a drag. I dont want that. Only when i
+click and hold ON the rope itself does it trigger. any other time,
+click and hold should trigger a charge, or a grow."
+
+Read `onPointerDown`'s circle branch first -- `isOnCircle(x,y)` is
+checked and returns BEFORE the rope-hold logic ever runs, so a
+genuine circle hit was never actually capable of being hijacked by
+Drag Rope; growing itself was not broken. The real bug, once the
+2nd message reframed it: the original Drag Rope implementation
+(2026-09-11) armed `downInfo.dragging` unconditionally whenever
+`cfg.dragRopeEnabled` was on, with NO proximity gate at all --
+`nearestPointOnRope()` always returns SOME point regardless of
+distance, so literally any hold anywhere on the canvas (including one
+that narrowly missed the circle's own hit-zone) got swallowed into a
+drag instead of falling through to the ordinary charge behavior.
+Charging itself has always had an equivalent gate (`holdDistance`,
+checked at RELEASE), which Drag Rope's own first version never
+replicated.
+
+Fixed with a new dedicated `dragRopeHoldDistance` slider (CLICK group,
+same established pattern as Grow Rope On Rope Hold's own
+`ropeGrowthHoldDistance` -- a distance gate PER hold-trigger, not one
+shared "sensitivity" dial), checked at ARM time inside the same
+holdTimer callback: `cfg.dragRopeEnabled && downInfo.hit.dist <=
+vmin(cfg.dragRopeHoldDistance)` now gates dragging; failing that check
+falls through to the pre-existing `downInfo.charging = true` branch
+unchanged.
+
+Verified live via a temporary debug hook (grep-confirmed removed) and
+real dispatched PointerEvents, all 3 required outcomes confirmed in
+one pass: a hold dispatched directly at the circle's own anchor point
+still correctly resolves `mode:'circle'` and `growing:true`
+(unaffected, exactly as code-reading predicted); a hold dispatched at
+the far corner of the canvas (286px from the nearest rope point) now
+correctly resolves `charging:true` instead of dragging; a hold
+dispatched directly on a rope point still correctly resolves
+`dragging:true`. Committed/pushed (3339d61) -- no divergence.

@@ -787,3 +787,19 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   control whose own default is `false`, since that's exactly the
   state a real visitor silently inherits until someone deliberately
   flips and saves it.
+- Drag Rope's own arm condition (`onPointerDown`'s rope-branch
+  holdTimer) is `cfg.dragRopeEnabled && downInfo.hit.dist <=
+  vmin(cfg.dragRopeHoldDistance)` -- the distance check is NOT
+  optional. The first version (2026-09-11) only checked the checkbox,
+  and since `nearestPointOnRope()` always returns SOME point
+  regardless of distance, that meant literally ANY hold anywhere on
+  the canvas armed a drag, including a hold that narrowly missed the
+  circle's own `isOnCircle()` hit-zone -- real, reported, reproduced
+  bug (2026-09-12: "wherever in the browser i click and hold, it
+  triggers a drag... Only when i click and hold ON the rope itself
+  does it trigger. any other time, click and hold should trigger a
+  charge, or a grow"). `isOnCircle()` itself is checked earlier and
+  takes precedence regardless of this gate (a genuine circle hit
+  never reaches the rope branch at all) -- don't reintroduce the
+  unconditional version thinking the circle check alone is sufficient
+  protection; it only protects an ACTUAL circle hit, not a near-miss.

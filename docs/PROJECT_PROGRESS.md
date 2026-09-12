@@ -987,7 +987,23 @@ correctly from that clean state. Along the way, confirmed
 first ("Tier 1"), which works unconditionally on any server without
 needing File System Access permission -- a real, positive change from
 what this project's CLAUDE.md gotchas still describe as the sole
-mechanism; that gotcha needs a correcting update, not yet done.
+mechanism -- corrected in CLAUDE.md's own gotchas the same session.
+
+**Fixed (2026-09-12): Drag Rope was arming for ANY hold, not just
+holds near the rope.** Reported as "click and hold to grow in the
+circle doesn't work," then reframed mid-investigation to the real
+scope: "wherever in the browser i click and hold, it triggers a drag."
+Circle hold-to-grow itself was never actually broken (`isOnCircle()`
+already takes precedence over the rope-hold path) -- the real bug was
+Drag Rope's own first version arming unconditionally whenever
+`dragRopeEnabled` was on, with no proximity gate at all, unlike
+charging's own `holdDistance` (checked at release). Any hold that
+missed the circle's hit-zone, or landed anywhere else on the canvas,
+was being swallowed into a drag instead of falling through to charge.
+Fixed with a new `dragRopeHoldDistance` slider (same pattern as Grow
+Rope On Rope Hold's own distance gate), checked at ARM time. Verified
+live: a hold on the circle still grows; a hold far from the rope now
+charges instead of dragging; a hold on the rope still drags.
 
 ## Recently completed
 
