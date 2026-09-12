@@ -8908,21 +8908,6 @@ resetSettings(); // load last-saved values/order/geometry, if any (falls back to
 lastTime = performance.now();
 requestAnimationFrame(loop);
 
-if (DEV_MODE){
-  window.__testDrag = {
-    tick: (n=1) => { for (let i=0;i<n;i++){ update(FIXED_DT); } render(); },
-    forceRopeDrag: (idx) => { downInfo = { mode:'rope', hit:{index:idx, dist:0}, startTime: performance.now(), charging:false, startedInCircle:false, dragging:true, dragIndex:idx }; },
-    endDown: () => { downInfo = null; },
-    downInfoState: () => downInfo,
-    ropePoint: (i) => ({ x: mainRope.points[i].x, y: mainRope.points[i].y }),
-    ropePointCount: () => mainRope.points.length,
-    ropeSegLen: () => mainRope.segLen,
-    anchor: () => ({ x: mainRope.points[0].x, y: mainRope.points[0].y }),
-    setRopeLen: (vhVal) => { setMainRopeTotalLength(vh(vhVal)); },
-    setMouse: (x, y) => { mouseX = x; mouseY = y; },
-  };
-}
-
 })();
 </script>
 </body>
