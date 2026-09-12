@@ -98,7 +98,7 @@
     "arcSeamOverlapPx": 2.8,
     "clickIntensity": 3,
     "holdDistance": 24,
-    "dragRopeEnabled": false,
+    "dragRopeEnabled": true,
     "bendStiffness": 0.01,
     "ropeAnimSpeed": 1.8,
     "gravityStrength": 0.9,
