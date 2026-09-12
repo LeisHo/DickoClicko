@@ -6,12 +6,12 @@
     "circleY": 18,
     "circleColor": "#111023",
     "circleBoundaryOffset": 1.5,
-    "anchorWeight": 0,
+    "anchorWeight": 2.9,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
-    "ropeLength": 20.48238589774371,
+    "ropeLength": 10.705086551198164,
     "ropeDefaultLength": 38,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -100,13 +100,13 @@
     "holdDistance": 24,
     "dragRopeEnabled": true,
     "dragRopeHoldDistance": 20,
-    "bendStiffness": 0.01,
+    "bendStiffness": 0.05,
     "ropeAnimSpeed": 1.8,
-    "gravityStrength": 0.9,
+    "gravityStrength": 0.5,
     "damping": 0.988,
     "constraintIterations": 2,
     "ropeGrowthRate": 12,
-    "ropeGrowthOnRopeHold": false,
+    "ropeGrowthOnRopeHold": true,
     "ropeGrowthHoldDistance": 20,
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
@@ -222,7 +222,7 @@
     "mouseFlickTargetMode": "rope",
     "mouseFlickTargetPoint": 0.5,
     "mouseFlickRandomInterval": 1.1,
-    "snapRepeatDuration": 5
+    "snapRepeatDuration": 1.5
   },
   "order": {
     "ungrouped": [],
@@ -296,7 +296,7 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "mouseFlickDragSpeed",
           "mouseFlickEnabledLiveMode",
@@ -343,7 +343,7 @@
         "subgroups": [
           {
             "key": "ANCHOR PHYSICS",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "circleBoundaryOffset",
               "anchorWeight"
@@ -352,7 +352,7 @@
           },
           {
             "key": "ROPE ANIMATION",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
@@ -420,7 +420,7 @@
           },
           {
             "key": "ROPE GROWTH",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
