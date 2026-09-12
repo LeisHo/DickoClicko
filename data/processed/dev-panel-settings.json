@@ -107,7 +107,7 @@
     "ropeGrowthOnRopeHold": false,
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
-    "minRopeLength": 3,
+    "minRopeLength": 2.8,
     "clickDistance": 25,
     "doubleClickDistance": 29,
     "doubleClickThreshold": 180,
