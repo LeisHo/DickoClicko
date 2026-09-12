@@ -1296,6 +1296,22 @@ audit** (per explicit request) re-read every one of this file's 23
 case; everything else remaining is either a self-contained function/
 early-return or a block whose entire contents are genuinely dev-only.
 
+**Fixed (2026-09-12): Drag Rope's dragged point now follows FLICK
+MOUSE's own annotated frame-1 grip point, not the raw cursor.** Per
+explicit request: "the rope drag point shouldnt be displaced to the
+true cursor location. It should be displaced to the Frame 01 point
+location." `update()`'s per-frame drag-follow code used raw
+`mouseX`/`mouseY` as the target; now routes through the same
+`mouseFlickInteractionPos(realX, realY, 'drag')` wrapper already used
+for the drag distance gate/arm-time hit-test, so the actual per-frame
+target is Drag's own annotated frame-1 point (evaluated at its current
+live world position) instead of the literal cursor. Existing
+anchor-relative rest-length clamp and Drag Max Distance cap unchanged.
+Verified live via dispatched PointerEvents with a real hold-confirmed
+drag: the dragged point's angle from the anchor matched the annotated
+point's angle within 1.28 degrees (one frame of lag), vs. 79-80
+degrees off from the raw cursor's own angle -- unambiguous.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

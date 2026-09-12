@@ -12537,3 +12537,50 @@ ENTIRE contents are genuinely, deliberately dev-only (the rebuilt FLICK
 block, `resetSettings()` already confirmed to sit OUTSIDE it per an
 earlier, separately-documented fix; `GIT_LOG_WRITABLE`'s own
 const-level gate). No other accidental-nesting case found.
+
+================================================================================
+2026-09-12  -  11:38 AM - 11:52 AM EDT
+
+"for drag animation, the rope drag point shouldnt be displaced to the
+true cursor location. It should be displaced to the Frame 01 point
+location." `update()`'s own per-frame Drag Rope follow code
+(the block right after the `dragPinIndex`/`maxDragDist` setup) used raw
+`mouseX`/`mouseY` directly as the point the grabbed rope point chases
+every frame -- `let dx = mouseX - anchor.x, dy = mouseY - anchor.y;`.
+This project already has an established mechanism for exactly this
+substitution (`mouseFlickInteractionPos(realX, realY, purpose)`,
+built 2026-09-12 earlier the same day for the click/hold/cut/drag
+DISTANCE gates), including a `'drag'` purpose already mapped to
+`MOUSE_FLICK_INTERACTION_POINTS.drag[dirKey]` -- explicitly documented
+as "Drag's own frame 1 point." The arm-time hit-test/distance gate
+(`onPointerDown`'s own `dragPos = mouseFlickInteractionPos(x, y,
+'drag')`) already used this same point; only the ONGOING per-frame
+drag target in `update()` still used the raw cursor. Fixed by routing
+that one line through the same wrapper:
+`const dragTargetPos = mouseFlickInteractionPos(mouseX, mouseY,
+'drag'); let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y -
+anchor.y;` -- the existing anchor-relative rest-length clamp and Drag
+Max Distance cap are both unchanged, now just applied to the
+annotated point's offset instead of the cursor's. Falls back to the
+literal cursor via the wrapper's own null-safety whenever FLICK MOUSE
+isn't active/visible or the point/frame data isn't loaded yet, same
+as every other of its 4 existing call sites.
+
+Verified live via dispatched real `PointerEvent`s (pointerdown on the
+canvas, waited for the real hold-confirmation timer, not a synthetic
+state write) plus a temporary debug hook exposing `downInfo`/the
+annotated point/the raw cursor (grep-confirmed removed after, 0
+matches): with a drag genuinely armed and held, computed each
+position's angle from the anchor to isolate DIRECTION (immune to the
+existing distance clamp, which preserves direction exactly and only
+scales magnitude) -- the dragged rope point's angle matched the
+annotated frame-1 point's angle to within 1.28 degrees (the small
+residual is exactly one frame of simulation lag between when the drag
+target was last computed and when state was read, not a bug), while
+the raw cursor's own angle from the anchor differed by 79-80 degrees
+in the same reading. Re-confirmed after 10 more simulated frames with
+the entity having moved further, same result. Syntax-checked before
+and after. No other hunks in this diff -- confirmed via `git diff`
+immediately before staging that no concurrent session had unrelated
+uncommitted work in this file at commit time.
+
