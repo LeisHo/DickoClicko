@@ -1058,6 +1058,33 @@ expected. Only 2 of 8 Drag Rope directions still have open gaps: the
 its 3-frame gap (45-47) -- both handled gracefully by the existing
 fallback, not blocking.
 
+**Added (2026-09-12): queue a FLICK MOUSE trigger instead of dropping
+it while busy.** Per explicit request: "when an animation sequence is
+running, and the user triggers another animation sequence, run the
+2nd animation sequence AND triggered reaction after the 1st sequence
+is finished." Previously a trigger arriving while `mfMode !== 'idle'`
+was silently dropped (the same rule the other FLICK animations already
+enforce against interruption). New single-slot `mfQueuedTrigger`
+(`{type:'play',mode}` or `{type:'charge'}`, latest-wins) is set instead
+of dropped, and fired by `mouseFlickFireQueuedTrigger()` at the shared
+click/sciss/snap natural-completion point in `update()`. One edge case
+identified and guarded before shipping (not found live, reasoned
+through the state machine): a queued 'charge' firing after the button
+was already released would have nothing left to ever end it, sitting
+stuck mid-charge forever -- new `mfLeftDown` tracking (mirrors the
+existing `mfRightDown`/`mfTripleHeld` pattern) lets the queue-fire
+function drop a stale 'charge' silently instead of starting it; 'play'
+triggers need no equivalent guard, since they're one-shot sequences
+that always complete on their own. Verified via a temporary debug hook
+(grep-confirmed removed) driving the trigger functions directly,
+sidestepping this sandbox's own ~1-second `setTimeout` clamp: (1) a
+2nd trigger during an in-progress sequence correctly queues rather than
+interrupting, and fires in the same frame the 1st sequence's frame
+counter reaches its length; (2) a queued charge with the button already
+released is correctly dropped, never reaching `mfMode:'charge'`; (3) a
+queued charge with the button still held correctly fires. Committed/
+pushed (`0934cf0`).
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

@@ -868,3 +868,23 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   it summarizes; this is the 3rd distinct design this exact mechanism
   has gone through this project, each one a real, explicit correction
   of the one before it, not an arbitrary preference.
+- FLICK MOUSE queues a busy trigger instead of dropping it
+  (`mfQueuedTrigger`, 2026-09-12, per explicit request: "when an
+  animation sequence is running, and the user triggers another
+  animation sequence, run the 2nd animation sequence AND triggered
+  reaction after the 1st sequence is finished"). A single slot,
+  latest-wins if a 3rd attempt arrives before the queued one gets its
+  turn -- fired by `mouseFlickFireQueuedTrigger()` at the shared
+  click/sciss/snap natural-completion point in `update()`. **The
+  `mfLeftDown` guard on the 'charge' case is load-bearing, not
+  redundant with `mfRightDown`/`mfTripleHeld`** -- those track a
+  completely different button/gesture (SNAP's trigger). A queued
+  'charge' that fires after the LEFT button/touch has already been
+  released has no future `pointerup` left to ever end it
+  (`mouseFlickEndCharge()` only runs from a real release), so it would
+  sit stuck mid-charge permanently with no way out. `mouseFlickFire
+  QueuedTrigger()` checks `mfLeftDown` specifically for the 'charge'
+  case and drops it silently if false; 'play' triggers (click/sciss/
+  snap) need no equivalent guard, since they're one-shot sequences
+  that always complete on their own regardless of button state. Don't
+  remove `mfLeftDown` thinking an existing flag already covers it.

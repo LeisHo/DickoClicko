@@ -11699,3 +11699,53 @@ this is purely a documentation/attribution note; recorded here for the
 same reason the 2 earlier occurrences were (2026-09-11 Drag Rope,
 2026-09-12 this same morning) -- a future `git log -p` search for this
 fix's own commit message won't find one, since it never got its own.
+
+================================================================================
+2026-09-12  -  08:17 AM EDT
+
+"AND when an animation sequeunce is running, and the user triggers
+another animation sequence, run the 2nd animation sequeunce AND
+triggered reaction after the 1st sequence is finished." Previously,
+`mouseFlickStartPlay()`/`mouseFlickStartCharge()` both silently
+DROPPED a trigger that arrived while `mfMode !== 'idle'` (the same
+"can't interrupt an in-progress sequence" rule the other 3 FLICK
+animations use) -- per this request, a busy trigger now QUEUES
+instead (`mfQueuedTrigger`, a single slot, latest-wins if a 3rd
+attempt arrives before the 2nd even gets a chance to play), firing
+automatically via `mouseFlickFireQueuedTrigger()` the instant
+click/sciss/snap naturally complete (the shared completion branch in
+`update()`).
+
+One real edge case identified and guarded before shipping, not found
+via live testing but via reasoning through the state machine directly:
+a QUEUED 'charge' trigger, if the button/touch is already released by
+the time it's about to fire, would start playing with nothing left to
+ever end it (`mouseFlickEndCharge()` only runs from a genuine
+`pointerup`, which already happened) -- it would sit stuck mid-charge
+forever. New `mfLeftDown` tracking (mirrors the existing
+`mfRightDown`/`mfTripleHeld` pattern, set/cleared alongside the
+existing left-button pointerdown/pointerup handling) lets
+`mouseFlickFireQueuedTrigger()` check this specifically for the
+'charge' case and drop it silently if the button's no longer held,
+while 'play' (click/sciss/snap) triggers need no equivalent guard --
+they're one-shot forward sequences that always complete on their own
+regardless of button state.
+
+Verified live via a temporary debug hook (grep-confirmed removed),
+using direct trigger-function calls to sidestep this sandbox's own
+documented setTimeout-clamps-to-~1s quirk (real quick-tap/double-tap
+timing can't be reliably driven through dispatched events here) rather
+than fighting the environment instead of testing the actual logic: (1)
+started a click, queued a snap mid-playback via a 2nd trigger call --
+confirmed `mfMode` stayed `'click'` the whole time (not interrupted),
+`mfQueuedTrigger` held `{type:'play',mode:'snap'}`, then at the exact
+frame click's own frame-accumulator reached its length, `mfMode`
+switched straight to `'snap'` in the same tick and the queue cleared
+to `null` -- traced frame-by-frame (30 individual 1-tick steps) to
+confirm the hand-off happens in a single frame, no gap. (2) Queued a
+'charge' with `mfLeftDown` forced false (simulating an already-
+released button) -- confirmed it was silently dropped, `mfMode`
+settling on `'idle'`, never `'charge'`, no stuck state. (3) Queued a
+'charge' with `mfLeftDown` true -- confirmed it fired correctly the
+instant the busy sequence finished. All 3 outcomes matched the design
+exactly. Committed/pushed (0934cf0) -- no divergence.
