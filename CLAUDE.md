@@ -419,6 +419,21 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   wrong (not just incomplete) for a genuine new physics trigger. An
   arm-only/failed-attempt/purely-informational event correctly wants
   `'none'` and needs no entry.
+- The `#dpClickLog` panel also has its own **Copy** button
+  (`copyClickLog()`, header row, next to Clear, 2026-09-12) — copies
+  the panel's own already-rendered DOM lines directly (the DOM IS the
+  log; no separate source of truth), same clipboard/flash mechanism
+  `copySettings()` uses. And a **DEBUG** group (this project's first)
+  holds "Log Rope Position Data" (`cfg.clickLogPositionDataEnabled`,
+  default `true`), which filters `CLICK_LOG_POSITION_KEYS` (`x`, `y`,
+  `hitDist`, `hitIndex`, `releaseDist`, `index`) out of the PANEL line
+  when off — `console.log`'s own separate output is never filtered,
+  regardless of this checkbox. **Any NEW `logClick()` data key that
+  represents a raw screen/rope coordinate, distance, or point index**
+  (as opposed to an outcome/state value like `intensity`/`willCut`/
+  `target`) **needs adding to `CLICK_LOG_POSITION_KEYS` too** — a key
+  missing from that set stays visible even with the checkbox off,
+  silently defeating the point of turning it off.
 - `GIT_LOG_WRITABLE` requires `DEV_MODE` (not just `protocol !== 'file:'`)
   — a deployed/hosted origin (e.g. a Vercel preview or production URL) is
   a normal `https:` origin that would otherwise pass the bare protocol
