@@ -11250,3 +11250,59 @@ no real conflict. Recorded here in full because the actual commit
 history now attributes this feature to an unrelated commit message --
 a future session searching for "Drag Rope" in `git log -p` needs this
 note to understand why `2b93c94`'s own message never mentions it.
+
+================================================================================
+2026-09-11  -  11:13 PM EDT
+
+Live Mode checkbox investigation, RESOLVED: user confirmed testing on
+the actual deployed site (`dicko-clicko.vercel.app/?dev=1`), and that
+it failed on BOTH mobile and desktop there -- enough new information
+to move from "can't reproduce, need more info" (see the earlier
+2026-09-11 10:25 PM entry) to a real root cause. Not a code bug.
+
+Ruled out systematically, each with real evidence before moving to the
+next: (1) `mouseFlickActive()`'s own gate logic -- already confirmed
+correct in the earlier entry; (2) missing/404 assets on the deployment
+specifically -- wrote a one-off Node script (`extract_flick.js` +
+`verify_flick_deployed.js`, scratchpad-only, not committed) that
+extracts the real `MOUSE_FLICK_DIRECTIONS` data straight out of
+`index.html` (bracket-counting to find the array literal rather than a
+fragile regex), regenerates all 1,158 expected frame URLs via the same
+`mouseFlickFrameUrl()`/`mouseFlickVariantNumbers()` logic the app
+itself uses, and HEAD-checks each against the live deployment with
+20-way concurrency -- 0 missing, ruling this out completely (an
+earlier ad-hoc check via the browser's own console/network tools had
+surfaced 14 misleading 404s for an OLD, pre-rename asset prefix --
+confirmed via a direct `fetch(..., {cache:'no-store'})` of the served
+`index.html` that this was stale browser-cache noise from an earlier
+navigation in the same test tab, not a real current 404, before
+building the comprehensive script to check properly); (3) read the
+ACTUAL checkbox states out of the deployed dev panel's own live DOM
+(`document.querySelectorAll('.dp-row')`, not just the git-tracked
+settings file) -- both `Mouse Flick Enabled` and `Cursor Animations
+Enabled (Live Mode)` confirmed checked there.
+
+With every config/asset explanation eliminated, checked the canvas
+directly: a screenshot with the dev panel open showed nothing; hiding
+it (`document.getElementById('devPanel').classList.add('hidden')` --
+this test tab's own DOM only, never touched anything persisted or
+shipped) revealed the FLICK MOUSE hand entity sitting exactly at
+viewport center, precisely where the dev panel had been sitting on top
+of it. Root cause: `mfHasMouse` (true only once a real pointermove
+with an actual position has been seen) stays false at boot and
+whenever there's no live hover/touch happening right now -- update()'s
+own `if (!mfHasMouse){ mfX = mfCx; mfY = mfCy; ... }` then defaults the
+entity to dead-center of the viewport, which is exactly where the dev
+panel renders. For any REAL, non-dev visitor this is a complete
+non-issue -- the dev panel doesn't exist at all outside `?dev=1`, so
+the center-defaulted entity is fully visible; the entire "doesn't
+show" report traces to testing WITH the dev panel open while looking
+for the cursor it was itself covering. No code changed as a result --
+correctly identified as a testing artifact rather than "fixed" with an
+unneeded workaround. Flagged, not raised as a bug: on mobile
+specifically, `mfHasMouse` may rarely go true at all outside an active
+touch-drag (no ambient hover on a touchscreen), so a real mobile
+player may mostly see a static, center-parked hand rather than one
+that visibly follows -- worth remembering if "the cursor feels static
+on mobile" is ever reported, but out of scope for this investigation
+since it wasn't what was reported.

@@ -454,25 +454,42 @@ show` that 10 of that commit's own added lines match this feature's
 markers). No code was lost; this session's own remaining contribution
 was removing a leftover debug hook (`ed35245`) and merging/pushing.
 
-**Investigated (2026-09-11): reported "Cursor Animations Enabled (Live
-Mode) checkbox doesn't work -- checked, but the cursor animation still
-doesn't show in live mode."** Traced `mouseFlickActive()`'s own gate
-(`cfg.mouseFlickEnabled && (DEV_MODE || cfg.mouseFlickEnabledLiveMode)`)
-and all 4 of its call sites (pointerdown/pointerup listeners, update(),
-render()) -- logic is correct by inspection, and confirmed live: with
-the actual current saved settings (`mouseFlickEnabled: true`,
-`mouseFlickEnabledLiveMode: true`), directly simulating the non-dev
-branch of this exact gate (bypassing `DEV_MODE` specifically) returns
-`true`, meaning a real non-dev visitor with these settings WOULD see
-the cursor animation. No code bug found or fixed -- most likely
-explanations, not yet confirmed with the user: (1) `Mouse Flick
-Enabled` (the OTHER, separate master checkbox in the same FLICK MOUSE
-group) is off in their actual test session -- Live Mode only adds a
-non-dev-visitor path on TOP of that master switch, it doesn't replace
-it; or (2) they're testing a deployed URL that hasn't picked up this
-brand-new checkbox yet. Needs the user's own confirmation of exactly
-what they tested (local dev-panel toggle vs. a deployed URL, and
-whether Mouse Flick Enabled is also checked) to close out.
+**Investigated and RESOLVED (2026-09-11): "Cursor Animations Enabled
+(Live Mode) checkbox doesn't work -- checked, but the cursor animation
+still doesn't show," confirmed by the user on the deployed site
+(`dicko-clicko.vercel.app/?dev=1`), on both mobile and desktop.** Not
+a code bug -- the feature works correctly; it was hidden behind the
+dev panel the whole time it was being tested. Ruled out, in order,
+before finding the real cause: (1) `mouseFlickActive()`'s own gate
+logic, confirmed correct both by inspection and by directly simulating
+its non-dev branch against the real saved settings; (2) missing/404ing
+assets -- wrote a verification script mirroring this project's own
+established Node-based asset-check convention, generating all 1,158
+expected FLICK MOUSE frame URLs (8 directions x 5 variants) from the
+real `MOUSE_FLICK_DIRECTIONS` data and HEAD-checking each against the
+live deployment -- 0 missing, ruling this out completely; (3) checked
+the ACTUAL live checkbox states in the deployed dev panel's own DOM
+(not just the git-tracked settings file) -- both `Mouse Flick Enabled`
+and `Cursor Animations Enabled (Live Mode)` confirmed checked. With
+every config/asset explanation eliminated, checked the canvas directly
+via screenshot: nothing visible with the dev panel open, but hiding
+the panel (`devPanel.classList.add('hidden')`, this test tab only)
+revealed the FLICK MOUSE hand entity sitting exactly at viewport
+center -- precisely where the dev panel had been covering it. Root
+cause: whenever `mfHasMouse` is false (no live mouse/touch position
+yet -- ALWAYS true on load, and on mobile stays true unless an active
+touch-drag is happening right now, since touchscreens have no ambient
+hover), the entity defaults to dead-center of the viewport, which the
+dev panel sits directly on top of. **For a REAL non-dev visitor this
+is a non-issue** -- the dev panel doesn't exist outside `?dev=1`, so
+the center-defaulted entity is fully visible to them; the confusion
+was purely a dev-mode testing artifact from having the panel open
+while looking for it. Worth a follow-up design note, not raised as a
+bug: on mobile specifically, `mfHasMouse` may rarely go true at all
+(no ambient hover), so a real mobile player might mostly see a static,
+center-parked hand rather than one that visibly "follows" -- not
+reported as a problem, just flagged for awareness if "the cursor feels
+static on mobile" ever comes up.
 
 **Added (2026-09-11): Cut Splatter -- a particle burst at the cut point,
 dev-only.** Answered a "how hard is fluid/liquid sim for a blood-splatter
