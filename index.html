@@ -335,7 +335,6 @@ const DEV_GROUPS = [
         { value:'form9', label:'Form 9' },
       ] },
     { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1.45 },
-    { key:'tipSegmentShapeEnabled', label:'Tip Segment Shape', type:'checkbox', def:false },
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:10 },
     // Segment Length (2026-09-12, per explicit request: "do i have a
     // slider that sets the amount of segments? If not, add that
@@ -8563,40 +8562,6 @@ const { bottoms: ENDCAP_BOTTOM_Y, tipWidths: ENDCAP_TIP_WIDTH } = (function(){
   return { bottoms, tipWidths };
 })();
 
-// The user-supplied "tip segment" shape (data/Rope/RopeEG.svg) -- an
-// optional replacement for the plain rope-colored stroke on just the LAST
-// segment (the one between the endcap and the rest of the rope), toggled
-// via the Tip Segment Shape checkbox (see drawTipSegmentShape() below).
-// Unlike the endcap designs, this SVG has no explicit alignment <line> of
-// its own -- per its own author's description, orientation is simply a
-// vertical line through the shape's horizontal center, so topCenterX
-// comes from its bounding box's own midpoint rather than a shared
-// reference line. topY/bottomY (getBBox()-derived, same technique as
-// ENDCAP_BOTTOM_Y above) bound its natural authored height, which is what
-// a live segment's CURRENT length gets stretched to match -- so the shape
-// always spans exactly from the second-to-last physics point to the tip,
-// however long that segment currently is, rather than a fixed size.
-const TIP_SEGMENT_SHAPE = (function(){
-  const d = 'M183.74,176.56c-17.44-45.3-26.85-107.11,12.71-149.24h-123.66c39.56,42.13,30.15,103.94,12.71,149.24-14.01,36.38-26.26,70.59,11.44,126.28,2.26,3.33,11.87,15.34,14.26,18.74,4.53,6.01,8.35,10.74,12.17,17.19.6,1.01.34,2.47,2.43,2.53,2.2.06,2.98-2.69,4.54-4.74,1.19-1.56,3.14-2.46,4.28-2.57,1.14.11,3.09,1.02,4.28,2.57,1.57,2.05,2.34,4.81,4.54,4.74,2.09-.06,1.84-1.52,2.43-2.53,3.82-6.46,7.64-11.18,12.17-17.19,2.39-3.4,12.01-15.41,14.26-18.74,37.7-55.69,25.44-89.9,11.44-126.28Z';
-  const path = new Path2D(d);
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.style.position = 'absolute'; svg.style.width = '0'; svg.style.height = '0'; svg.style.overflow = 'hidden';
-  document.body.appendChild(svg);
-  const p = document.createElementNS(svgNS, 'path');
-  p.setAttribute('d', d);
-  svg.appendChild(p);
-  const bbox = p.getBBox();
-  document.body.removeChild(svg);
-  return {
-    path,
-    topCenterX: bbox.x + bbox.width / 2,
-    width: bbox.width,
-    topY: bbox.y,
-    bottomY: bbox.y + bbox.height,
-  };
-})();
-
 /* ---------------------------------------------------------------------
    End Emerge -- when enabled (End Emerge Enabled), a freshly-cut edge's
    endcap doesn't appear at full size/position the instant the real split
@@ -8809,8 +8774,7 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   // world units rather than needing to reason about the design's own
   // locally-scaled coordinate space. This is what keeps the hidden/
   // mid-slide endcap from sticking out past a narrower rope segment
-  // (e.g. under Tip Segment Shape's own taper) than the endcap's full
-  // natural width -- "make sure to use a mask... such that the hidden
+  // than the endcap's full natural width -- "make sure to use a mask... such that the hidden
   // endcap doesn't stick out of the left and right of the rope, since
   // the end segment of the rope has variable width", per explicit
   // request. A fully-emerged endcap (factor >= 1, including End Emerge
@@ -8869,67 +8833,6 @@ function drawEndcap(points, thicknessPx, designKey, color, heightMult, factor, g
   ctx.restore();
 }
 
-// Draws TIP_SEGMENT_SHAPE anchored by its own bottom edge to the tip (same
-// point drawEndcap() anchors to, so it sits flush against the endcap),
-// scaled uniformly from rope thickness -- see the scale comment inside for
-// why this is NOT stretched to fit exactly one physics segment. Horizontal
-// scale matches the rope's current thickness, same as every endcap design.
-// Drawn UNDER the endcap (render() calls this first) so the endcap remains
-// the visible cap right at the very tip. render() must also stop the
-// plain rope stroke short of this shape's own height (see
-// pointsExcludingTipSegmentShape() below) -- both this shape and the
-// stroke render in the exact same cfg.ropeColor, so without that, the
-// full-width stroke underneath fills in exactly where this shape's own
-// narrower silhouette (waist, fork) should show as a visible cutout,
-// making the shape invisible against its own backdrop.
-function drawTipSegmentShape(points, thicknessPx, color){
-  if (points.length < 2) return;
-  const dir = tipDirection(points);
-  const angle = Math.atan2(-dir.x, dir.y);
-  const tip = points[points.length - 1];
-  // Scaled UNIFORMLY from rope thickness alone (same as drawEndcap), not
-  // stretched to match the live segment's own length. The shape's natural
-  // proportions (~2.5x taller than wide) don't fit into one physics
-  // segment (~28px at default settings, only ~9% of the shape's own
-  // natural height) -- forcing its height to match the segment exactly
-  // squashed it into an unrecognizable flat blob (confirmed: a per-row
-  // filled-width scan across the compressed shape showed almost no
-  // variation, ~37px throughout, since the neck/waist/belly/fork detail
-  // had no vertical room left to read). Per explicit choice: keep the
-  // shape looking like the shape, even though its own top edge then
-  // generally does NOT land exactly on the second-to-last physics point
-  // (it typically reaches further up the chain, past it) -- this is
-  // cosmetic-only, like the endcap, and never affects the physics chain
-  // itself in any way.
-  const scale = thicknessPx / TIP_SEGMENT_SHAPE.width;
-  ctx.save();
-  ctx.translate(tip.x, tip.y);
-  ctx.rotate(angle);
-  ctx.scale(scale, scale);
-  ctx.translate(-TIP_SEGMENT_SHAPE.topCenterX, -TIP_SEGMENT_SHAPE.bottomY);
-  ctx.fillStyle = color;
-  ctx.fill(TIP_SEGMENT_SHAPE.path);
-  ctx.restore();
-}
-
-// When Tip Segment Shape is enabled, the plain stroke (strokeRopeCurve)
-// must stop short of wherever that shape's own scaled height reaches back
-// to along the chain -- otherwise the two overlap in the exact same color
-// and the shape's own narrower silhouette (waist, fork) never shows
-// through (see drawTipSegmentShape()'s own comment). Approximated in whole
-// segments via the entity's own segLen rather than exact stroke arc-length
-// -- plenty precise for this purpose, since over-omitting by a fraction of
-// a segment just leaves a bit more of the shape's own natural taper
-// visible instead of stroke (never a gap: the shape's bottom is always
-// exactly anchored to the true tip regardless of how much stroke got
-// omitted above it). Returns `points` unchanged when the feature is off or
-// the chain is too short to safely trim.
-function pointsExcludingTipSegmentShape(points, segLen, thicknessPx){
-  if (!cfg.tipSegmentShapeEnabled || points.length < 3) return points;
-  const shapeHeightPx = (thicknessPx / TIP_SEGMENT_SHAPE.width) * (TIP_SEGMENT_SHAPE.bottomY - TIP_SEGMENT_SHAPE.topY);
-  const segmentsToOmit = Math.min(points.length - 2, Math.max(1, Math.ceil(shapeHeightPx / segLen)));
-  return points.slice(0, points.length - segmentsToOmit);
-}
 
 function renderCutSweep(entity){
   const sweep = entity.cutSweep;
@@ -9109,9 +9012,7 @@ function render(){
   // than risking the two drifting apart.
   const computeTipArcMult = piece => {
     const tipFactor = emergeFactor(piece.tipEmerge);
-    // the shape covers the free/tip end entirely when enabled -- no round-
-    // cap arc treatment needed there anymore, same reasoning as hasEndcap.
-    return (hasEndcap && tipFactor >= 1) || cfg.tipSegmentShapeEnabled ? 0 : cfg.ropeEndCurveArc;
+    return (hasEndcap && tipFactor >= 1) ? 0 : cfg.ropeEndCurveArc;
   };
   const computeCutArcMult = piece => {
     const cutFactor = emergeFactor(piece.cutEdgeEmerge);
@@ -9122,7 +9023,7 @@ function render(){
     // thickness -- see pieceThickness() -- never mainRope/bgRope's live
     // (possibly Detach-Thickness-Multiplier-boosted) thickness.
     const pieceThick = pieceThickness(piece);
-    const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
+    const strokePoints = piece.points;
     // A fallen piece gets its own independent gradient (Piece Gradient)
     // now, recomputed each frame from its OWN current points span --
     // previously reused Rope Gradient (per an earlier request, "i want
@@ -9156,14 +9057,9 @@ function render(){
   // 'pausing''s own start rather than its end, is why 'pausing' used to
   // be included here -- it no longer is, now that the spawn moved).
   const showMainRope = introPhase === 'growing' || introPhase === 'done';
-  const mainStrokePoints = pointsExcludingTipSegmentShape(mainRope.points, mainRope.segLen, liveThickness);
-  const mainEffectiveArcMult = cfg.tipSegmentShapeEnabled ? 0 : mainArcMult;
+  const mainStrokePoints = mainRope.points;
   const mainRopeColor = ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
   if (showMainRope) strokeRopeCurve(mainStrokePoints, liveThickness, mainRopeColor);
-  if (cfg.tipSegmentShapeEnabled){
-    fallenPieces.forEach(piece => drawTipSegmentShape(piece.points, pieceThickness(piece), cfg.ropeColor));
-    if (showMainRope) drawTipSegmentShape(mainRope.points, liveThickness, cfg.ropeColor);
-  }
   if (hasEndcap){
     // Independent endcap gradient (see endcapGradientEnabled/Colors) --
     // recomputed per piece each frame from its OWN current points span,
@@ -9218,10 +9114,10 @@ function render(){
   // every endcap above -- not gated on hasEndcap, since Endcap Design
   // 'none' still needs these to draw exactly as before. See
   // drawRopeEndArcs()'s own comment for why the layering moved.
-  if (showMainRope) drawRopeEndArcs(mainStrokePoints, liveThickness, mainRopeColor, mainEffectiveArcMult, cfg.ropeTopCurveArc);
+  if (showMainRope) drawRopeEndArcs(mainStrokePoints, liveThickness, mainRopeColor, mainArcMult, cfg.ropeTopCurveArc);
   fallenPieces.forEach(piece => {
     const pieceThick = pieceThickness(piece);
-    const strokePoints = pointsExcludingTipSegmentShape(piece.points, piece.segLen, pieceThick);
+    const strokePoints = piece.points;
     const pieceColor = ropeStrokeColor(piece.points, cfg.pieceGradientEnabled, cfg.pieceGradientColors, cfg.ropeColor);
     drawRopeEndArcs(strokePoints, pieceThick, pieceColor, computeTipArcMult(piece), computeCutArcMult(piece));
   });
