@@ -123,9 +123,9 @@
     "pieceMinThickness": 1.2,
     "cutSplatterEnabled": true,
     "cutSplatterColor": "#ffffff",
-    "cutSplatterHorizontalSpread": 117,
-    "cutSplatterVerticalSpread": 150,
-    "cutSplatterParticleCount": 120,
+    "cutSplatterHorizontalSpread": 51,
+    "cutSplatterVerticalSpread": 28,
+    "cutSplatterParticleCount": 49,
     "cutSplatterParticleSize": 0.6,
     "cutSplatterSizeVariance": 1,
     "cutSplatterGravity": 1.7,
@@ -579,9 +579,9 @@
   "panelGeometry": {
     "mobile": {
       "left": 182,
-      "top": 451.4226379394531,
+      "top": 452.3571472167969,
       "width": 229,
-      "height": 300.98809814453125,
+      "height": 332.63690185546875,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
