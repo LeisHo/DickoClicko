@@ -7776,9 +7776,22 @@ function update(rawDt){
   // Drag Rope (per explicit request): while a hold armed by onPointerDown's
   // own holdTimer branch is actively dragging, the grabbed point is
   // repositioned DIRECTLY every frame (kinematic, like positionGrowingTip()'s
-  // own tip placement) toward the live mouse position, clamped so it can
-  // never be pulled farther from the anchor than the rope's own real rest
-  // length between anchor and that point -- "the distance the rope can be
+  // own tip placement) toward FLICK MOUSE's own annotated 'drag' point --
+  // frame 1's own gripping point, evaluated at its CURRENT live world
+  // position (2026-09-12, corrected from the raw mouse position per
+  // explicit request: "the rope drag point shouldnt be displaced to the
+  // true cursor location. It should be displaced to the Frame 01 point
+  // location") -- rather than the literal cursor, so the rope visually
+  // follows the hand's own drawn grip point instead of a raw screen
+  // coordinate that can sit slightly off from it. Falls back to the real
+  // (mouseX,mouseY) via mouseFlickInteractionPos() whenever FLICK MOUSE
+  // isn't active/visible or the point/frame data isn't ready yet, same
+  // fallback-safe wrapper the arm-time hit-test and distance gate already
+  // use (see onPointerDown's own 'drag' dragPos comment) -- this is the
+  // 5th call site to route through it, now covering the ACTUAL per-frame
+  // drag target, not just arming/gating. Clamped so it can never be
+  // pulled farther from the anchor than the rope's own real rest length
+  // between anchor and that point -- "the distance the rope can be
   // dragged is determined by the length of the rope between the drag point
   // and the rope start," the exact same anchor-relative rest-length clamp
   // Rope Attraction already uses for its own tip pin, just scoped to the
@@ -7804,7 +7817,8 @@ function update(rawDt){
     // what the rope's own real length between anchor and drag point
     // physically allows).
     const maxDragDist = Math.min(mainRope.segLen * dragPinIndex, vmin(cfg.dragMaxDistance));
-    let dx = mouseX - anchor.x, dy = mouseY - anchor.y;
+    const dragTargetPos = mouseFlickInteractionPos(mouseX, mouseY, 'drag');
+    let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
     const ddist = Math.hypot(dx, dy) || 1e-6;
     if (ddist > maxDragDist){ dx *= maxDragDist / ddist; dy *= maxDragDist / ddist; }
     const dragPoint = mainRope.points[dragPinIndex];
