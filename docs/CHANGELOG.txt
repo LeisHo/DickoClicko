@@ -11582,3 +11582,54 @@ Flick Enabled" immediately restored the native cursor
 (`canvas.style.cursor` -> `''`), re-checking it hid it again (-> `'none'`).
 Committed/pushed (fd1df8c), merged against one intervening routine
 Save-Settings auto-commit, no real divergence.
+
+--------------------------------------------------------------------------------
+2026-09-12  -  07:57 AM - 08:xx AM EDT
+
+Drag Rope: synced behind-thumb and behind-pinky frames to their
+updated folders.
+
+"i updated behind thumb drag and behind pink drag frames. implement
+and push." Re-enumerated both folders directly rather than trusting
+the report at face value (this project's own established "check
+again" discipline, per the Tickle SIDE THUMB/FRONT THUMB sagas):
+
+- BEHHIND THUMB DRAG: now a genuinely complete 48/48 set (the earlier
+  single-frame gap at 24 is closed) under a NEW prefix
+  ("BehindThumb Drag", was "Behind THUMBDrag") -- confirmed via direct
+  enumeration, not assumed from the filename change alone. Simplified
+  its MOUSE_FLICK_DIRECTIONS `drag` entry back to plain `count:48`,
+  removing the now-unnecessary explicit `nums` workaround array.
+- BEHHIND PINK DRAG: also re-supplied under a new prefix
+  ("BehindPink Drag", was "Behind Pink Drag"), but the gap MOVED
+  rather than closed -- previously missing 17-20/41 (43/48), now
+  missing 45-47 instead (45/48). Updated the `nums` array to the new
+  gap so the existing `mouseFlickNearestIndex()` fallback (already
+  proven for Tickle/SNAP) continues to degrade gracefully.
+- Regenerated WebP for both folders from scratch (93 files total) --
+  neither folder had any `.webp` files left after the PNG re-supply
+  (the old ones didn't carry over, matching the same wipe-and-replace
+  pattern already seen on this project's other re-supplied folders).
+
+Verified live against a fresh dev server: HEAD-checked all 93 expected
+frame URLs built via the exact same formula as `mouseFlickFrameUrl()`
+-- 0 failures; separately confirmed the 3 genuinely-missing behind-
+pinky frames (45/46/47) return real 404s, matching the updated `nums`
+array exactly rather than assuming the gap list was right. 0 console
+errors.
+
+Noted, not investigated further (unrelated, another session's own
+concurrent work found via the standing pre-commit `git diff` scope
+check): `index.html` also carried an in-progress direction-bucket-
+angle fix from a concurrent session (`mfDirectionSourceAngle`,
+replacing the previous `mfPointingAngle` approach with a fixed
+anchor-relative origin) -- confirmed non-overlapping with this task's
+own 2 hunks before staging, left untouched, and included in the same
+commit as an unavoidable side effect of both sessions editing the
+same file concurrently (same disclosed pattern as prior entries this
+project).
+
+Committed/pushed code (38f2f15) -- 363 files (index.html + the full
+PNG+WebP delete/rename/create set for both folders), fast-forward, no
+divergence -- then this doc pass as a separate follow-up, per the
+standing instruction.

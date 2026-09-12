@@ -755,13 +755,20 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   real defensive guard (any FUTURE direction added without drag art
   degrades the same safe way), it's just no longer active for 'front'
   specifically now that its own gap is closed.
-- 3 of the 8 real Drag Rope frame folders have internal gaps
-  (behind-thumb missing frame 24; front-pinky missing 20-23,34;
-  behind-pinky missing 17-20,41) -- given explicit `nums:` arrays
-  (not plain `count:48`) on their `drag` entries, same
-  `mouseFlickNearestIndex()` fallback Tickle/SNAP already rely on. If
-  any of these folders' frames are ever replaced/re-supplied, verify
-  the gap is actually closed via direct enumeration (same "check
+- **Corrected 2026-09-12:** 2 of the 8 real Drag Rope frame folders
+  have internal gaps (front-pinky missing 20-23,34; behind-pinky
+  missing 45-47) -- given explicit `nums:` arrays (not plain
+  `count:48`) on their `drag` entries, same `mouseFlickNearestIndex()`
+  fallback Tickle/SNAP already rely on. behind-thumb's own earlier gap
+  (frame 24) is now closed (re-supplied 48/48 under yet another new
+  prefix, `BehindThumb Drag`) -- simplified back to plain `count:48`.
+  behind-pinky's gap MOVED rather than closed when ITS folder was
+  re-supplied the same day (was 17-20,41; now 45-47), also under a new
+  prefix (`BehindPink Drag`) -- don't assume a re-supplied folder's old
+  gap numbers still apply, re-enumerate fresh every time. If any of
+  these folders' frames are ever replaced/re-supplied again, verify
+  the gap is actually closed (or has moved) via direct enumeration
+  (same "check
   again" discipline the Tickle SIDE THUMB saga already established)
   before simplifying back to a plain `count:48`. The other 5
   (behind, front-thumb, side-thumb, side-pinky, front) are all

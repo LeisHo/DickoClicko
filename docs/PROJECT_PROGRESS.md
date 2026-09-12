@@ -1028,6 +1028,20 @@ showing.** `render()` syncs `canvas.style.cursor` to `'none'` whenever
 so it tracks correctly through the checkbox, Live Mode, or DEV_MODE
 itself. Verified live via the real dev-panel checkbox toggle.
 
+**Synced (2026-09-12): Drag Rope frames for behind-thumb and
+behind-pinky.** User re-supplied both folders; re-enumerated directly
+rather than trusting the report. behind-thumb is now a genuinely
+complete 48/48 (earlier gap at frame 24 closed) under a new prefix --
+simplified back to plain `count:48`. behind-pinky's gap MOVED, not
+closed (was 17-20/41, now 45-47) under its own new prefix -- `nums`
+array updated to match. Regenerated all 93 WebP files fresh (neither
+folder kept its old ones). Verified live: all 93 real frame URLs
+return 200, the 3 genuinely-missing behind-pinky frames return 404 as
+expected. Only 2 of 8 Drag Rope directions still have open gaps: the
+'front' direction has no frames at all yet, and behind-pinky still has
+its 3-frame gap (45-47) -- both handled gracefully by the existing
+fallback, not blocking.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since
