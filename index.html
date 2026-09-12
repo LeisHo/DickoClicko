@@ -5110,6 +5110,27 @@ let growing = false;
 // for the charging-arm timer, at a different delay) -- see Grow Rope
 // On Rope Hold's own onPointerDown comment.
 let growthOnRopeHoldTimer = null;
+// Per explicit correction ("be sure that when click and hold triggers
+// a rope growth, on release it does not trigger a flick") -- FLICK
+// MOUSE's own pointerdown/pointerup listeners are entirely separate
+// from the rope's (a cursor-follow overlay that arms its own charge
+// timer on EVERY left-press, position-independent), so a hold that
+// grows the rope -- via the circle's own long-standing hold-to-grow,
+// or the new Grow Rope On Rope Hold checkbox -- would otherwise ALSO,
+// completely independently, trigger FLICK MOUSE's own charge-then-
+// click sequence on the exact same release. Set true the MOMENT
+// `growing` actually becomes true in EITHER hold-to-grow timer
+// callback (circle's own, or growthOnRopeHoldTimer's above); consumed
+// (checked then reset) at the very top of FLICK MOUSE's own pointerup
+// handler, before anything else there runs. Deliberately a SEPARATE
+// flag from `growing` itself rather than having FLICK's handler read
+// `growing` directly -- by the time FLICK's handler runs, the rope's
+// own onPointerUp (registered earlier, so it always runs first for
+// the same event) has already reset `growing` back to false, so
+// `growing` itself is stale/useless for FLICK's own handler to read
+// at release time; this flag captures the fact that it WAS true
+// during this same gesture, independent of listener ordering.
+let mfSuppressClickFromGrowth = false;
 
 // direction to extend the tip in: the settled rope's own local tangent
 // (from the point BEFORE prev, to prev) -- deliberately not derived from the
@@ -5903,6 +5924,7 @@ function onPointerDown(e){
     holdTimer = setTimeout(() => {
       if (!downInfo || downInfo.mode !== 'circle') return;
       growing = true;
+      mfSuppressClickFromGrowth = true;
       logClick('hold:grow-start', { x, y });
     }, HOLD_THRESHOLD_MS);
     return;
@@ -5960,6 +5982,7 @@ function onPointerDown(e){
     growthOnRopeHoldTimer = setTimeout(() => {
       if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
       growing = true;
+      mfSuppressClickFromGrowth = true;
       logClick('hold:grow-start-from-rope', { x, y });
     }, HOLD_THRESHOLD_MS);
   }
@@ -6209,6 +6232,21 @@ window.addEventListener('pointerup', e => {
   }
   if (e.button !== 0) return;
   clearTimeout(mfHoldTimer);
+  // Per explicit correction -- a hold that grew the rope (circle's own
+  // hold-to-grow, or the Grow Rope On Rope Hold checkbox) must never
+  // ALSO play a flick sequence on release. See mfSuppressClickFromGrowth's
+  // own comment for why this flag exists instead of just reading
+  // `growing` directly here (already reset to false by the time this
+  // runs). Resets mfMode to 'idle' directly rather than through
+  // mouseFlickEndCharge() specifically to skip that function's own
+  // unconditional "always plays click on release" step -- still a
+  // clean reset (the cursor returns to idle, not stuck mid-charge),
+  // just without the click.
+  if (mfSuppressClickFromGrowth){
+    mfSuppressClickFromGrowth = false;
+    if (mfMode === 'charge') mfMode = 'idle';
+    return;
+  }
   if (mfMode === 'charge'){
     mouseFlickEndCharge();
     return;
