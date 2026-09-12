@@ -12300,3 +12300,171 @@ merge (git merge, not stash+rebase, specifically to avoid touching the
 concurrent session's own uncommitted working-tree changes at all) --
 origin had advanced by 2 settings-save commits in the meantime, both
 confirmed to touch only dev-panel-settings.json before merging.
+
+================================================================================
+2026-09-12  -  10:25 AM - 11:22 AM EDT
+
+Three real reported bugs from the same message: "right now when i
+trigger a drag, it also triggers some sort of flick effect. fix that"
+/ "also provide me a checkbox in debug that turns on and off the new
+displaced cursor points that trigger the different sequeunces...
+[clarified] by turn on and off i mean making them visible. not turning
+on and off their function" / "when flicking the main rope, the
+background rope seems overly affected by the flick. Sometimes after a
+flick, the background rope seems to fly up far higher than both the
+main rope and the main rope start anchor."
+
+1) Drag-triggers-flick: root-caused as a race, not a missing suppress
+flag. `mfPendingClick`'s own timer is armed on every quick tap's
+release and fires `mouseFlickStartPlay('click')` exactly
+`cfg.doubleClickThreshold` later regardless of what happens next -- a
+quick tap immediately followed by a genuine press-and-hold (Drag Rope,
+plain charging, either hold-to-grow path) arms its OWN confirmation at
+that SAME delay, so the earlier tap's stale click can fire squarely
+mid-hold, hijacking `mfMode` (confirmed live: `mfMode` ended up
+'click' while `downInfo.dragging` was true). First attempt (a new
+`mfCancelPendingClick()` helper, called from all 4 hold-confirmation
+sites) was insufficient and re-reproduced live -- the pending timer
+was always armed EARLIER than the new hold's own timer, so it always
+fired first regardless of the cancel calls. Real fix: an
+`if (mfLeftDown) return;` guard added directly inside both the mouse
+pending-click timer callback and the touch tap timer callback -- if a
+new press is already down by the time the stale click's timer fires,
+skip it. Re-verified live for Drag Rope (`{mode:'charge',
+dragging:true, queued:null, suppress:true}`, was
+`{mode:'click', dragging:true, queued:{type:'charge'}}`) and for plain
+charging with no drag.
+
+2) "Show Interaction Points" checkbox (FLICK MOUSE group): purely
+visual per the user's explicit clarification, not a functional toggle
+-- draws a small colored dot (click/hold/cut/drag, distinct colors) at
+each purpose's `mouseFlickInteractionPointWorld()` position in
+`render()`, DEV_MODE-gated. Verified via screenshot.
+
+3) Background-rope punch overreaction: root cause confirmed via a
+temporary punch()-driving debug hook -- `mainRope.points[0]` (the
+anchor) is not a rigid pin (`cfg.anchorWeight` lets the constraint
+solver move it), and a single strong punch measured swinging it 130+px
+(203.5 -> 73.0). `bgRope.points[0]` used to SNAP to this swinging
+position every frame with no smoothing; since bgRope's own Verlet
+integration derives implied velocity from frame-to-frame position
+delta, this injected a large single-frame velocity kick into bgRope's
+otherwise-independent chain.
+
+An exponential-lerp smoothing slider was built and tested FIRST
+(`bgRopeAnchorSmoothing`, `mouseFlickExpSmoothFactor`) and measured
+ineffective via a controlled paired test (settled rest state confirmed
+via repeated-value convergence over up to 6000 simulated frames --
+this chain's own rest position turned out to depend on prior transient
+path/floor-pile settling and needed real convergence-checking, not a
+fixed tick count, to compare fairly): smoothing=1 (old instant-snap
+equivalent) produced -197.9px undershoot (tip flies up) / +53.0px
+overshoot; smoothing=0.2 produced -189.8px / +59.7px -- barely
+different in the reported direction and WORSE in the other. A lagging
+exponential tracker doesn't reduce the total injected velocity, it
+delays/spreads it, and that lag can land out of phase with mainRope's
+own multi-frame swing-then-rebound, amplifying the rebound-direction
+overshoot instead of damping it.
+
+Replaced with a direct per-frame movement-speed CLAMP on
+`bgRope.points[0]`'s tracking of `mainRope.points[0]` (new
+`bgRopeAnchorMaxSpeed` slider, %vmin/s, same maxMove-clamp pattern as
+`ropeAttractionSpeed`) -- bounds the injected velocity directly
+regardless of how fast mainRope's own anchor swings, rather than
+merely lagging behind it. The clamp mechanism itself verified exact
+(maxSpeed=30 against a measured dt of 0.03 produced a measured
+6.912px max per-frame step, matching vmin(30)*0.03=6.912 precisely).
+
+HONEST RESULT, not oversold: a fixed settle(convergence)+punch(1,10)
+recipe from fresh page loads, compared across maxSpeed 1000
+(~unclamped) / 60 / 10, showed the clamp meaningfully reduces the
+REBOUND overshoot (+60.3px at 1000, +34.8px at 60, +40.6px at 10 --
+non-monotonic, 60 measured best of the 3 and shipped as the new
+default) but only marginally reduces the PRIMARY reported symptom
+itself, the initial upward fly: -75.1px at 1000, -74.3px at 60,
+-70.6px at 10 -- under a 7% reduction even at the most aggressive
+clamp tested. Conclusion, stated plainly rather than glossed over:
+bgRope's tip flying up right after a punch is mostly driven by
+ordinary whip-propagation through the chain once point 0 starts
+moving at all, not primarily by the SPEED of point 0's own motion --
+this fix is a real, measured, partial improvement (rebound direction),
+not a full fix of the reported symptom. A more complete fix would
+likely need to reduce how far mainRope's own anchor swings on a punch
+in the first place (`cfg.anchorWeight` or a new anchor-side damping
+mechanism), which was deliberately NOT attempted here since it would
+change mainRope's own already-tuned physics response for every punch,
+not just bgRope's reaction to it -- flagged for the user as a follow-up
+decision rather than made unilaterally.
+
+Verified: syntax-checked; drag/charging race fix confirmed live via
+the debug hook's own state readout; interaction-points overlay
+confirmed via screenshot; the anchor-speed clamp's own mechanism
+verified exact via direct measurement (see above), its real-world
+effect measured honestly rather than assumed. Temporary
+`window.__testFlickBug` debug hook grep-confirmed removed (0 matches)
+before commit.
+
+Committed as an 11-hunk patch (git add -p), not a blanket add -- an
+unrelated, already-present uncommitted ClickLog "Copy" button
+(`dpClickLogCopy`/`copyClickLog`) was sitting in the same working-tree
+file from a concurrent session; confirmed excluded from the staged
+diff and left untouched, unstaged, afterward.
+
+================================================================================
+2026-09-12  -  11:24 AM EDT
+
+2 requests handled together: "provide a button to copy clicklog text"
+and, arriving mid-turn, "provide a checkbox in the debug group. It
+turns on and off the logging of the rope position data in the click
+log."
+
+New `copyClickLog()` reads `#dpClickLog`'s own already-rendered DOM
+lines directly (the DOM IS the log -- `logClick()` appends straight to
+it -- so no separate source of truth to keep in sync) and writes them
+to the clipboard, newline-joined in the exact order shown, via the
+identical `navigator.clipboard.writeText`/flash-feedback mechanism
+`copySettings()` already uses -- deliberately reused rather than
+inventing a new pattern. New `Copy` button placed in the ClickLog's own
+header, next to the existing `Clear` button, inheriting its styling
+for free via the existing generic `.dp-click-log-header button` CSS
+selector (no new CSS needed).
+
+New `DEBUG` dev-panel group (this project's first -- none existed
+before, per the workspace-wide §12n#5 convention that every panel
+should have one) holds a single checkbox so far, "Log Rope Position
+Data" (`cfg.clickLogPositionDataEnabled`, default `true` -- no
+behavior change). New `CLICK_LOG_POSITION_KEYS` (`x`, `y`, `hitDist`,
+`hitIndex`, `releaseDist`, `index`) identifies which of `logClick()`'s
+own data-object keys represent raw rope/screen POSITION information as
+opposed to outcome/state values (`intensity`, `heldMs`, `t`, `willCut`,
+`willDetach`, `target`, `wasGrowing`, `startedInCircle`, etc., which
+this checkbox never hides); when off, those keys are filtered out of
+the PANEL line only -- `console.log`'s own separate output is
+untouched either way, staying fully detailed for real console-based
+debugging regardless of the checkbox.
+
+Verified live via real dispatched `PointerEvent`s against the local
+dev server: with the checkbox on (default), a tap on the rope produced
+a `down:rope` line with `x`/`y`/`hitDist`/`hitIndex` all present;
+toggling the checkbox off via a genuine DOM click on its actual
+checkbox input (not a config override) immediately made the NEXT
+logged tap's `down:rope`/`up:tap-pending` lines correctly omit those
+same 4 fields while keeping `startedInCircle`/`target` visible.
+Directly read the exact text `copyClickLog()` would produce from the
+live panel and confirmed it matches the rendered lines exactly,
+newline-joined. `node`-equivalent syntax validation passed; 0 console
+errors on a fresh cache-busted reload.
+
+**Cross-session note:** this task's own `DEBUG` group + the
+`clickLogPositionDataEnabled` config entry (added to `DEV_GROUPS`
+first, before the `logClick()`/panel-wiring half of the same feature)
+landed already-committed inside a concurrent session's own,
+differently-themed commit (`0e3eedc`, "Fix drag-triggers-flick bug;
+add Show Interaction Points debug toggle; blunt background-rope punch
+overreaction") -- confirmed via `git show HEAD:index.html | grep`
+that the exact config entry is present and already pushed before this
+commit; no content lost. This task's own remaining commit (`b714838`)
+contains only what hadn't yet landed (the Copy button + its handler,
+and the actual `CLICK_LOG_POSITION_KEYS` filter logic in `logClick()`
+itself) -- confirmed via a fresh `git diff` immediately before staging
+that nothing else was mixed in either direction this time.

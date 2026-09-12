@@ -1218,6 +1218,59 @@ grow, drag-end, and cut all confirmed showing correctly in the actual
 panel. Staged as a scoped 2-hunk patch around another concurrent
 session's own unrelated in-progress work in the same file.
 
+**Fixed (2026-09-12): Drag Rope (and plain click-and-hold) was also
+triggering an unwanted FLICK MOUSE click on release.** Root cause was
+a timing race, not a missing suppress flag: `mfPendingClick`'s own
+timer, armed at an earlier tap's release, always fires before a new
+hold's own confirmation timer (same delay, armed later) can cancel it.
+Fixed with an `if (mfLeftDown) return;` guard directly inside the
+pending-click timer callbacks (mouse and touch) -- skips a stale click
+if a new press is already down when it would fire. Verified live for
+both Drag Rope and plain charging.
+
+**Added (2026-09-12): "Show Interaction Points" debug checkbox (FLICK
+MOUSE group).** Purely visual per explicit clarification -- draws the
+click/hold/cut/drag interaction points as small colored dots; changes
+nothing about which point the gates themselves use.
+
+**Partially fixed (2026-09-12): background rope overreacting to a
+punch on the main rope ("the background rope seems overly affected by
+the flick... sometimes... flies up far higher than both the main rope
+and the main rope start anchor").** Root cause confirmed: mainRope's
+own anchor isn't a rigid pin and can swing 130+px on a strong punch;
+bgRope's own anchor point used to snap to it instantly every frame,
+injecting a large velocity spike into bgRope's independent chain. An
+exponential-lerp smoothing attempt was tried first and MEASURED
+ineffective (see CHANGELOG.txt for the numbers); replaced with a
+direct per-frame movement-speed clamp (new `bgRopeAnchorMaxSpeed`
+slider, STARTUP ANIMATION group). Measured, honest result: this
+meaningfully reduces the rebound overshoot (~42% reduction at the
+shipped default) but only marginally reduces the primary reported
+"flies up" symptom itself (under 7% even at an aggressive clamp) --
+that symptom is mostly ordinary whip-propagation through bgRope's own
+chain once its anchor starts moving at all, not primarily driven by
+how fast the anchor itself moves. A more complete fix would likely
+need to reduce how far mainRope's own anchor swings on a punch in the
+first place (`cfg.anchorWeight` or a new anchor-side damping
+mechanism) -- not attempted here since it would change mainRope's own
+already-tuned physics response for every punch, not just bgRope's
+reaction to it. Flagged to the user as a follow-up decision.
+
+**Added (2026-09-12): ClickLog Copy button + a new DEBUG group with a
+position-data filter checkbox.** Per 2 requests ("provide a button to
+copy clicklog text" / "provide a checkbox in the debug group... turns
+on and off the logging of the rope position data"): `copyClickLog()`
+copies `#dpClickLog`'s own rendered lines to the clipboard (same
+pattern as `copySettings()`); the new `DEBUG` group (this project's
+first) holds "Log Rope Position Data" (default on), which filters
+`x`/`y`/`hitDist`/`hitIndex`/`releaseDist`/`index` out of the PANEL
+line only when off, via `CLICK_LOG_POSITION_KEYS`. Verified live: the
+filter correctly drops/keeps the right fields on toggle, and the copy
+text matches the panel exactly. The DEBUG group's own config entry
+landed via a concurrent session's differently-themed commit before
+this task's own remaining code was committed -- confirmed intact, no
+content lost; see CHANGELOG.txt.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since
