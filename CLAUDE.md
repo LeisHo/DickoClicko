@@ -273,23 +273,49 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   growing from the top). If `max-height` ever changes, update this constant
   to match.
 - Save/Reset (§12d/§12l) write and read the git-tracked settings log
-  ONLY — there is deliberately no parallel localStorage default. An
-  earlier version of this project dual-wrote to both; that was corrected
-  after an explicit §12d/§12l wording change made clear the git-tracked
-  log is the *only* place Save Settings writes to. `getGitSettingsFileHandle()`
-  takes a `mode` ('read' | 'readwrite'): boot-time/Reset reads use
-  `queryPermission()` only (never prompts — there's no user gesture at
-  boot to back a native permission dialog) and silently fall back to
-  hardcoded defaults if permission isn't already granted; Save always
-  runs from a real click/keydown, so it can fall through to
-  `requestPermission()`/`showSaveFilePicker()` when needed. A
-  `FileSystemFileHandle` is natively structured-clone-able (a documented
-  File System Access API guarantee), so it can go straight into
-  `idbSet()` — don't "simplify" this by trying to serialize the handle to
-  JSON first, that would break it. (A test mock standing in for a real
-  handle, with plain function properties, is NOT cloneable and will fail
-  `idbSet()` — that's a limitation of the mock, not a bug in this code;
-  the real API's handle objects work fine.)
+  ONLY — there is deliberately no parallel localStorage default.
+  **Corrected 2026-09-12 — this project's own settings architecture has
+  moved on from what this gotcha used to describe (File System Access
+  as the sole mechanism); that description is now stale for reads and
+  for a real deployment's writes.** Current shape, 3 tiers each for
+  read (`resetSettings()`) and write (`saveSettings()`):
+  - **Tier 1 — a real server-backed path, works on ANY device/origin**
+    (local dev server or an actual Vercel deployment), no picker/
+    permission dance needed. Reads (`readSettingsViaApi()`) are a plain
+    `fetch('/data/processed/dev-panel-settings.json', {cache:'no-store'})`
+    — the file is just a static, git-tracked asset once committed.
+    Writes (`writeSettingsViaApi()`) go through a Vercel serverless
+    endpoint that commits via the GitHub API (§12l's `GITHUB_TOKEN`/
+    `DEV_PANEL_SAVE_SECRET` in the parent CLAUDE.md) — this is what
+    actually lets a REAL, non-dev visitor's own Save (or a mobile
+    device) persist to the shared settings file; it's not local-
+    developer-only the way Tier 2 is.
+  - **Tier 2 — this browser's own previously-granted File System
+    Access handle** (`getGitSettingsFileHandle()`, `readGitSettingsLog()`/
+    `writeGitSettingsLog()`), gated on `GIT_LOG_WRITABLE` (itself
+    requiring `IS_LOCAL_CONTEXT` — `file:`/`localhost`/`127.0.0.1`
+    only). This is the mechanism the OLD version of this gotcha
+    described as the only one; it's now the fallback for local dev
+    specifically, not the universal path. Boot-time/Reset reads still
+    use `queryPermission()` only (never prompts); Save can still fall
+    through to `requestPermission()`/`showSaveFilePicker()`. A
+    `FileSystemFileHandle` is natively structured-clone-able, so it
+    goes straight into `idbSet()` — don't serialize it to JSON first,
+    that breaks it. (A test mock with plain function properties is NOT
+    cloneable and will fail `idbSet()` — a mock limitation, not a bug.)
+  - **Tier 3 — last resort**, only when neither above reached the log
+    at all: read falls back to this tab's own `sessionStorage`; write
+    hands the user a real downloadable file (`downloadSettingsAsFile()`)
+    AND stashes it in `sessionStorage` (never a persistent default),
+    honestly reporting "session only" rather than claiming a real save.
+  `IS_LOCAL_CONTEXT` (not just protocol) is what gates whether a
+  deployed page is ever allowed to fall through past Tier 1 into
+  Tier 2/3's local-save mechanisms — added after a real reported bug
+  (clicking Save on an actual configured Vercel deployment still
+  triggered the native file-save picker, since the check that existed
+  before didn't exclude a genuinely deployed `https:` origin). Don't
+  reintroduce a bare `location.protocol !== 'file:'` check as the ONLY
+  gate for this fallthrough; it's not sufficient on its own.
 - `logClick()` (DEV_MODE-gated `console.log('[click]', event, data)`) is the
   standing click/hold/double-click diagnostic — one call at every real
   state transition in `onPointerDown`/`onPointerUp` (down on circle/rope,
@@ -717,18 +743,19 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   on the last frame"), unlike Tickle's own repeating tail. On release,
   it counts back DOWN from WHEREVER it actually stopped (not always
   47) to 0 -- a quick drag-and-release well before reaching the last
-  frame reverses from its own real stopping point, verified live. The
-  'front' direction has NO drag frames on disk yet (both "FRONT DRAG"
-  and "FRONT DRAG - Copy" are empty, confirmed via direct enumeration)
-  -- `mouseFlickDragFrameIndex()` returns `null` for a direction with
-  no drag art, and both `onPointerUp`'s release check and render()'s
-  own draw both gate on this before ever indexing into
-  `mfFramesForDir.drag`, so this direction just shows the ordinary
-  charge/idle display with zero crash risk. Add a `drag:{...}` entry
-  to this direction's MOUSE_FLICK_DIRECTIONS object once real frames
-  exist -- don't assume the existing fallback is "good enough
-  forever," it's a gap to close, not a design choice.
-- 3 of the 7 real Drag Rope frame folders have internal gaps
+  frame reverses from its own real stopping point, verified live.
+  **Corrected 2026-09-12:** the 'front' direction's own "FRONT DRAG"
+  folder was empty when this feature first shipped (2026-09-11) but
+  real frames have since been added (48/48, contiguous) -- it now has
+  its own `drag:{...}` entry like every other direction. `mouseFlick
+  DragFrameIndex()` still returns `null` for any direction genuinely
+  missing drag art, and both `onPointerUp`'s release check and
+  render()'s own draw still gate on this before indexing into
+  `mfFramesForDir.drag` -- that fallback path stays in the code as a
+  real defensive guard (any FUTURE direction added without drag art
+  degrades the same safe way), it's just no longer active for 'front'
+  specifically now that its own gap is closed.
+- 3 of the 8 real Drag Rope frame folders have internal gaps
   (behind-thumb missing frame 24; front-pinky missing 20-23,34;
   behind-pinky missing 17-20,41) -- given explicit `nums:` arrays
   (not plain `count:48`) on their `drag` entries, same
@@ -736,4 +763,27 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   any of these folders' frames are ever replaced/re-supplied, verify
   the gap is actually closed via direct enumeration (same "check
   again" discipline the Tickle SIDE THUMB saga already established)
-  before simplifying back to a plain `count:48`.
+  before simplifying back to a plain `count:48`. The other 5
+  (behind, front-thumb, side-thumb, side-pinky, front) are all
+  gap-free, plain `count:48`.
+- **A dev-panel checkbox that defaults to `false` stays off for
+  EVERY visitor -- dev or real, mobile or desktop -- until someone
+  actually checks it AND clicks Save Settings, since Save writes to
+  the one shared, git-tracked settings file every session's `cfg`
+  loads from.** Real, found, fixed bug (2026-09-12): `dragRopeEnabled`
+  (def `false`) was also saved as `false` in `dev-panel-settings.json`,
+  so the entire Drag Rope feature -- mechanic AND its own hand
+  animation, both fully built and pushed since 2026-09-11 -- was
+  switched off for literally everyone the whole time; reported as
+  "drag interaction doesnt work... nor does the actual dragging work."
+  The CODE was completely correct on every path tested (mouse and
+  touch PointerEvents, direct physics ticks) -- the bug was purely
+  that nobody had ever toggled this specific checkbox on AND saved it.
+  Fixed with a one-field DATA change (`dragRopeEnabled: false -> true`
+  in the settings file), not a code change. **When a shipped feature
+  seems totally inert/invisible on every device and environment
+  tested, check the actual saved value in `dev-panel-settings.json`
+  before assuming the code itself is broken** -- especially for any
+  control whose own default is `false`, since that's exactly the
+  state a real visitor silently inherits until someone deliberately
+  flips and saves it.

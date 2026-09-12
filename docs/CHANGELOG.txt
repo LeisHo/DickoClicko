@@ -11406,3 +11406,66 @@ Committed/pushed (f78470d, 651 files -- 1 code + 325 new PNG + 325
 new WebP frames across the 7 populated Drag folders; fast-forward, no
 divergence) -- this doc pass as a separate follow-up, per the
 standing instruction.
+
+================================================================================
+2026-09-12  -  06:46 AM EDT
+
+Front direction's Drag Rope frames: "I added the front drag frames."
+Direct enumeration of "FRONT DRAG" confirmed 48/48 PNGs, contiguous,
+prefix "Front - Drag" (literal spaces around the hyphen) -- converted
+to WebP via the established sharp pipeline (same as every other Drag
+folder), then all 48 expected paths re-verified present before wiring
+in. Added the `front` direction's own `drag:{ folder:'FRONT DRAG',
+prefix:'Front - Drag', count:48, noSubfolder:true }` entry to
+MOUSE_FLICK_DIRECTIONS, replacing the "no drag entry -- folder is
+empty" comment this exact spot carried since yesterday. Live-verified
+locally (48/48 frames loaded, no broken images) before the user said
+"yeah dont need to verify animation updates from now on. youre well
+familiar with the process so its fine" -- noted as standing feedback
+for future asset-integration tasks on this project; this was the last
+one verified under the old standard. Committed/pushed (cb04601).
+
+Immediately after, reported: "drag interaction doesnt work. i dont
+see the drag aniation frames nor does the actual dragging work" --
+this time a real functional bug, not an asset-verification task, so
+investigated properly despite the note above (that note was about
+routine "did the frames load" checks, not about skipping investigation
+of an actively broken feature). Tested the core mechanic directly
+(temporary debug hook, real dispatched PointerEvents, both mouse and
+`pointerType:'touch'`) -- `downInfo.dragging` armed correctly, the rope
+visibly bent at the drag point in a screenshot, `mfDragCyclePos`
+advanced, direction resolution worked -- the CODE was completely fine
+on every path tested, which redirected the investigation toward
+runtime configuration rather than logic.
+
+**Root cause, found by checking the actual data, not just the code:**
+`dragRopeEnabled` defaults to `false` (CLICK group's own def) AND was
+saved as `false` in `data/processed/dev-panel-settings.json` -- the
+single git-tracked settings file EVERY visitor's `cfg` loads from
+equally (confirmed via `resetSettings()`'s own "Tier 1" plain-`fetch()`
+read, which works unconditionally on any server, dev or deployed, no
+File-System-Access permission needed for reads -- a real, positive
+architecture change from what this project's own CLAUDE.md gotchas
+still described as the sole mechanism; worth a doc correction of its
+own, separate from this fix). Net effect: NOBODY -- dev or real
+player, mobile or desktop, local or deployed -- has ever had Drag Rope
+actually active unless they personally checked the box in their own
+live session, which never persisted anywhere since Save Settings was
+never clicked with it on. This explains BOTH reported symptoms at
+once (no drag animation -- never arms without the flag; no actual
+dragging -- same flag gates the underlying mechanic too), and why
+"drag isn't working" surfaced only now: the feature's own code has
+been fully correct and pushed since yesterday, but the shared
+configuration that controls whether it's ever active was left off the
+whole time, including through today's Front Drag frame addition.
+
+Fixed with a single-field data change (not a code change):
+`dragRopeEnabled: false -> true` in the git-tracked settings file.
+Verified the fix, not just asserted it: reloaded fresh (new cache-bust
+query, no manual `setCfg` override) and confirmed `cfg.dragRopeEnabled`
+reads `true` with zero intervention, then dispatched a real hold-and-
+drag PointerEvent sequence from that clean load and confirmed
+`downInfo.dragging` arms correctly end-to-end. Debug hook removed
+after (grep-confirmed 0 matches); `index.html` itself has a net zero
+diff from this investigation, only the settings JSON changed.
+Committed/pushed (0daaeab) -- no divergence.

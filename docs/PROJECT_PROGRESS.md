@@ -957,13 +957,37 @@ disk (behind, behind-thumb, side-thumb, front-thumb, front-pinky,
 side-pinky, behind-pinky) -- 3 have real internal gaps (behind-thumb
 missing frame 24; front-pinky missing 20-23,34; behind-pinky missing
 17-20,41), handled via the same nearest-frame-number fallback Tickle
-and SNAP already use. The 'front' direction has no Drag frames at all
-yet (both "FRONT DRAG" and "FRONT DRAG - Copy" are empty on disk) --
-falls back cleanly to the ordinary charge display, a real gap to fill
-once frames exist for that direction. New `mfMode:'dragRelease'` state
-for the reverse playback and a dedicated "Drag Animation Speed"
-slider. Verified live via a temporary debug hook (removed before
-commit) -- see CHANGELOG.txt for the full verification detail.
+and SNAP already use. New `mfMode:'dragRelease'` state for the reverse
+playback and a dedicated "Drag Animation Speed" slider. Verified live
+via a temporary debug hook (removed before commit) -- see
+CHANGELOG.txt for the full verification detail.
+
+**Closed out (2026-09-12): 'front' direction's Drag frames added, and
+a real "nobody can see this feature" config bug fixed.** The user
+supplied 48/48 real frames for "FRONT DRAG" (contiguous, converted to
+WebP, verified present) -- the 8th and final direction now has a full
+`drag:{...}` entry, no direction left on the charge-display fallback.
+Immediately after, reported "drag interaction doesnt work... nor does
+the actual dragging work" -- investigated as a real bug (not routine
+asset verification, which the user separately said isn't needed going
+forward for animation updates specifically): the CODE was completely
+fine on every path tested (mouse and touch PointerEvents, direct
+frame-driven physics ticks), but `dragRopeEnabled` -- default `false`
+-- was ALSO saved as `false` in the git-tracked settings file every
+visitor's `cfg` loads from. Net effect: the entire Drag Rope feature
+(mechanic + its own hand animation) has been correctly built and
+pushed since yesterday, but switched off for literally everyone the
+whole time, on every device and environment, since nobody had ever
+saved it on. Fixed with a single-field data change
+(`dragRopeEnabled: false -> true` in `dev-panel-settings.json`), not a
+code change -- verified via a genuinely fresh page load (no manual
+override) picking up `true` and a real dispatched drag gesture arming
+correctly from that clean state. Along the way, confirmed
+`resetSettings()` now reads the settings file via a plain `fetch()`
+first ("Tier 1"), which works unconditionally on any server without
+needing File System Access permission -- a real, positive change from
+what this project's CLAUDE.md gotchas still describe as the sole
+mechanism; that gotcha needs a correcting update, not yet done.
 
 ## Recently completed
 
