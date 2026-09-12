@@ -767,6 +767,7 @@ const DEV_GROUPS = [
     { key:'mouseFlickScale',             label:'Mouse Flick Scale',              type:'slider', unit:'%vmin', min:1,    max:60,  step:0.5,  def:50 },
     { key:'mouseFlickAnimSpeed',         label:'Mouse Flick Anim Speed',         type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
     { key:'mouseFlickTickleSpeed',       label:'Tickle Animation Speed',         type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
+    { key:'mouseFlickDragSpeed',         label:'Drag Animation Speed',           type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
     { key:'mouseFlickPositionSmoothing', label:'Mouse Flick Position Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
     { key:'mouseFlickRotationSmoothing', label:'Mouse Flick Rotation Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
     { key:'mouseFlickAngleOffset',       label:'Mouse Flick Angle Offset',       type:'slider', unit:'deg',   min:-180, max:180, step:1,    def:0 },
@@ -3013,13 +3014,27 @@ const MOUSE_FLICK_DIRECTIONS = [
     // directly in the direction folder, no "/A" subfolder -- confirmed
     // by direct enumeration, not assumed to match the established
     // convention.
-    tickle:{ folder:'BEHIND-TICKLE',        prefix:'Behind-Tickle',       count:48, noSubfolder:true } },
+    tickle:{ folder:'BEHIND-TICKLE',        prefix:'Behind-Tickle',       count:48, noSubfolder:true },
+    // Drag Rope hand animation (2026-09-11, per explicit request: "during
+    // click and hold dragging of the rope you use that animation. run in
+    // sequence. while holding, pause on the last frame. Then on release,
+    // run the frames in reverse order"). noSubfolder:true, same as Tickle
+    // -- confirmed by direct enumeration, frames sit directly in the
+    // direction folder. Prefix has a literal double space ("Behind  Drag")
+    // -- confirmed via direct enumeration, not a typo to silently fix.
+    drag:{ folder:'BEHIND DRAG', prefix:'Behind  Drag', count:48, noSubfolder:true } },
   { key:'behind-thumb',
     base:{   folder:'BEHIND THUMB',           prefix:'2T -BehindThumb',        nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'BEHIND THUMB - CHARGE',  prefix:'2T BehindThumb-CHARGE',  count:8 },
     sciss:{  folder:'BEHIND THUMB - SCISS',   prefix:'2T BEHINDTHUMB - SCISS', nums:SCISS_A_FRAME_NUMBERS },
     snap:{   folder:'BEHIND THUMB - SNAP',    prefix:'2T BEHINDTHUB - SNAP', nums:SNAP_A_FRAME_NUMBERS },
-    tickle:{ folder:'BEHIND THUMB-TICKLE',  prefix:'BehindThumb-Tickle',  count:48, noSubfolder:true } },
+    tickle:{ folder:'BEHIND THUMB-TICKLE',  prefix:'BehindThumb-Tickle',  count:48, noSubfolder:true },
+    // Drag Rope -- see 'behind' direction's own comment. This direction's
+    // real folder is missing frame 24 (confirmed via direct enumeration,
+    // 47/48 files) -- explicit nums array (not plain count:48) so the
+    // existing mouseFlickNearestIndex() fallback resolves 24 to the
+    // nearest surviving frame instead of requesting a 404.
+    drag:{ folder:'BEHHIND THUMB DRAG', prefix:'Behind THUMBDrag', nums:Array.from({length:48},(_,i)=>i+1).filter(n=>n!==24), noSubfolder:true } },
   { key:'side-thumb',
     base:{   folder:'SIDE THUMB',           prefix:'2T -DirectThumb',       nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'SIDE THUMB - CHARGE',  prefix:'2T DirectThumb-CHARGE', count:8 },
@@ -3030,7 +3045,13 @@ const MOUSE_FLICK_DIRECTIONS = [
     // than the original partial set: no hyphen, lowercase 'humb', space
     // before Tickle) -- synced to the real current filename, not the
     // earlier one.
-    tickle:{ folder:'SIDE THUMB - TICKLE',  prefix:'Directhumb Tickle',  count:48, noSubfolder:true } },
+    tickle:{ folder:'SIDE THUMB - TICKLE',  prefix:'Directhumb Tickle',  count:48, noSubfolder:true },
+    // Drag Rope -- see 'behind' direction's own comment. Prefix is
+    // 'Directhumb Pinch' (real filenames say "Pinch," not "Drag," despite
+    // the folder itself being named "SIDE THUMB DRAG") -- confirmed via
+    // direct enumeration, synced to the actual filename, not the folder
+    // name's own wording.
+    drag:{ folder:'SIDE THUMB DRAG', prefix:'Directhumb Pinch', count:48, noSubfolder:true } },
   { key:'front-thumb',
     base:{   folder:'FRONT THUMB',           prefix:'2T -SideThub',           nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'FRONT THUMB - CHARGE',  prefix:'2T FrontThumb-CHARGE',   count:8 },
@@ -3040,7 +3061,9 @@ const MOUSE_FLICK_DIRECTIONS = [
     // after this folder's own files were re-supplied with a different
     // naming convention than the original partial set (space before
     // Tickle, no hyphen) -- synced to the real current filename.
-    tickle:{ folder:'FRONT THUMB - TICKLE', prefix:'FrontThumb Tickle',   count:48, noSubfolder:true } },
+    tickle:{ folder:'FRONT THUMB - TICKLE', prefix:'FrontThumb Tickle',   count:48, noSubfolder:true },
+    // Drag Rope -- see 'behind' direction's own comment.
+    drag:{ folder:'FRONT THUMB DRAG', prefix:'Front Thumb Drag', count:48, noSubfolder:true } },
   { key:'front',
     base:{   folder:'FRONT',           prefix:'2T -Flabove',       nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'FRONT - CHARGE',  prefix:'2T Front-CHARGE',   count:8 },
@@ -3052,24 +3075,48 @@ const MOUSE_FLICK_DIRECTIONS = [
     // per this project's own established convention of syncing to
     // whatever the real filename is, not inferred intent.
     tickle:{ folder:'FRONT - TICKLE',  prefix:'FRON Tickle',       count:48, noSubfolder:true } },
+    // NOTE: no `drag` entry for this direction -- "FRONT DRAG" and
+    // "FRONT DRAG - Copy" are both genuinely empty (0 files) on disk as
+    // of this writing, confirmed via direct enumeration, not assumed.
+    // mouseFlickFramesByDirection['front'].drag will be undefined, and
+    // every drag-frame render/update site already checks for that before
+    // using it (same `dir.drag ? load(dir.drag) : undefined` pattern
+    // Tickle established) -- a drag on this direction just shows the
+    // ordinary charge frames instead, no crash. Add a `drag:{...}` entry
+    // here once real frames exist for this direction.
   { key:'front-pinky',
     base:{   folder:'FRONT PINKY',           prefix:'2T -SidePink',           nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'FRONT PINKY -CHARGE',   prefix:'2T FrontPink-CHARGE',    count:8 },
     sciss:{  folder:'FRONT PINKY - SCISS',   prefix:'2T FRONTPINK - SCISS',  nums:SCISS_A_FRAME_NUMBERS },
     snap:{   folder:'FRONT PINKY - SNAP',    prefix:'2T FRONTPINK - SNAP',  nums:SNAP_A_FRAME_NUMBERS },
-    tickle:{ folder:'FRONT PINK - TICKLE',  prefix:'FRONTPINKTickle',    count:48, noSubfolder:true } },
+    tickle:{ folder:'FRONT PINK - TICKLE',  prefix:'FRONTPINKTickle',    count:48, noSubfolder:true },
+    // Drag Rope -- see 'behind' direction's own comment. This direction's
+    // real folder is missing frames 20-23 and 34 (confirmed via direct
+    // enumeration, 43/48 files) -- explicit nums array so the existing
+    // mouseFlickNearestIndex() fallback degrades gracefully.
+    drag:{ folder:'FRONT PINKY DRAG', prefix:'Front Pink Drag', nums:Array.from({length:48},(_,i)=>i+1).filter(n=>![20,21,22,23,34].includes(n)), noSubfolder:true } },
   { key:'side-pinky',
     base:{   folder:'SIDE PINKY',           prefix:'2T -DirectPink',        nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'SIDE PINKY - CHARGE',  prefix:'2T DirectPink-CHARGE',  count:8 },
     sciss:{  folder:'SIDE PINKY - SCISS',   prefix:'2T DIRECTPINK - SCISS', nums:SCISS_A_FRAME_NUMBERS },
     snap:{   folder:'SIDE PINKY - SNAP',    prefix:'2T DIRECTPINK - SNAP', nums:SNAP_A_FRAME_NUMBERS },
-    tickle:{ folder:'SIDE PINKY - TICKLE',  prefix:'DirectPink-Tickle',  count:48, noSubfolder:true } },
+    tickle:{ folder:'SIDE PINKY - TICKLE',  prefix:'DirectPink-Tickle',  count:48, noSubfolder:true },
+    // Drag Rope -- see 'behind' direction's own comment. Prefix is
+    // 'DirectPPINK Pinch' (real filenames say "Pinch," not "Drag," and
+    // double the P) -- confirmed via direct enumeration, synced to the
+    // actual filename.
+    drag:{ folder:'SIDE PINKY DRAG', prefix:'DirectPPINK Pinch', count:48, noSubfolder:true } },
   { key:'behind-pinky',
     base:{   folder:'BEHIND PINKY',           prefix:'2T -BehindPink',        nums:BASE_A_FRAME_NUMBERS_8 },
     charge:{ folder:'BEHIND PINKY -CHARGE',   prefix:'2T BehindPink-CHARGE',  count:8 },
     sciss:{  folder:'BEHIND PINKY - SCISS',   prefix:'2T BEHINDPINK - SCISS', nums:SCISS_A_FRAME_NUMBERS },
     snap:{   folder:'BEHIND PINKY - SNAP',    prefix:'2T BEHINDPINK - SNAP', nums:SNAP_A_FRAME_NUMBERS },
-    tickle:{ folder:'BEHIND PINKY-TICKLE',  prefix:'BehindPink-Tickle',   count:48, noSubfolder:true } },
+    tickle:{ folder:'BEHIND PINKY-TICKLE',  prefix:'BehindPink-Tickle',   count:48, noSubfolder:true },
+    // Drag Rope -- see 'behind' direction's own comment. This direction's
+    // real folder is missing frames 17-20 and 41 (confirmed via direct
+    // enumeration, 43/48 files) -- explicit nums array so the existing
+    // mouseFlickNearestIndex() fallback degrades gracefully.
+    drag:{ folder:'BEHHIND PINK DRAG', prefix:'Behind Pink Drag', nums:Array.from({length:48},(_,i)=>i+1).filter(n=>![17,18,19,20,41].includes(n)), noSubfolder:true } },
 ];
 function mouseFlickFrameUrl(variant, n){
   // noSubfolder (Tickle only, as of this writing): frames sit directly in
@@ -3116,6 +3163,12 @@ MOUSE_FLICK_DIRECTIONS.forEach(dir => {
     // direction added without tickle art (or one whose art is pulled)
     // degrades to the normal charge display instead of throwing.
     tickle: dir.tickle ? load(dir.tickle) : undefined,
+    // Drag Rope hand animation (2026-09-11) -- gated on dir.drag the same
+    // way tickle is above; the 'front' direction has none as of this
+    // writing (see its own comment in MOUSE_FLICK_DIRECTIONS), so a drag
+    // on that direction just shows the ordinary charge display instead of
+    // throwing.
+    drag: dir.drag ? load(dir.drag) : undefined,
   };
 });
 
@@ -3183,6 +3236,20 @@ function mouseFlickTickleFrameIndex(dirKey, frameNumber){
   const numbers = mouseFlickVariantNumbers(dir.tickle);
   return mouseFlickNearestIndex(numbers, frameNumber);
 }
+// Drag Rope's own frame-number resolver, same reasoning as
+// mouseFlickTickleFrameIndex() above -- 3 of the 7 directions with real
+// drag art have real gaps (behind-thumb missing 24; front-pinky missing
+// 20-23,34; behind-pinky missing 17-20,41 -- confirmed via direct
+// enumeration), so this always degrades to the nearest surviving frame
+// rather than requesting a missing one. Returns null (not a resolved
+// index) when the direction has no drag art at all (the 'front' gap) --
+// callers must check for that before using the result.
+function mouseFlickDragFrameIndex(dirKey, frameNumber){
+  const dir = MOUSE_FLICK_DIRECTIONS.find(d => d.key === dirKey);
+  if (!dir.drag) return null;
+  const numbers = mouseFlickVariantNumbers(dir.drag);
+  return mouseFlickNearestIndex(numbers, frameNumber);
+}
 
 // State: entity position (lerped toward the mouse), rotation (lerped
 // toward the mouse's angle from viewport center), current direction
@@ -3229,6 +3296,17 @@ let mfHoldCyclePos = 0, mfHoldTime = 0;
 // silently advancing it out of view. Reset alongside mfHoldCyclePos at
 // the same charge-start call site.
 let mfTickleCyclePos = 0;
+// Drag Rope hand animation (2026-09-11) -- mfDragCyclePos advances 0..47
+// (frame numbers 1..48) while a rope drag is active, CLAMPED at 47 (not
+// looped) once it reaches the last frame -- per explicit spec ("while
+// holding, pause on the last frame"), unlike Tickle's own repeating tail.
+// On release, mfMode switches to 'dragRelease' and mfDragCyclePos counts
+// back DOWN from wherever it currently sits to 0 (whatever frame the
+// hold actually reached, not always assumed to be the last one -- a
+// quick drag-and-release before reaching frame 48 reverses from its own
+// real stopping point). Reset to 0 wherever a fresh drag is armed
+// (onPointerDown's dragging-arm branch).
+let mfDragCyclePos = 0;
 let mfHoldTimer = null;
 let mfPendingClick = null; // {time, timer} -- same setTimeout-pairing technique as the rope's own double-click-to-cut (see CLAUDE.md gotchas)
 // Live right-button-down state (distinct from the one-shot SNAP trigger
@@ -6282,6 +6360,11 @@ function onPointerDown(e){
       downInfo.dragging = true;
       downInfo.dragIndex = Math.max(1, downInfo.hit.index);
       mfSuppressClickFromGrowth = true;
+      // Drag Rope hand animation (2026-09-11): reset the forward-play
+      // position for whichever direction ends up active during this drag
+      // -- see mfDragCyclePos's own declaration comment for the full
+      // forward/pause/reverse mechanism.
+      mfDragCyclePos = 0;
       logClick('hold:drag-start', { x, y, index: downInfo.dragIndex });
       return;
     }
@@ -6440,6 +6523,20 @@ function onPointerUp(e){
     // already stops touching the point the instant downInfo is nulled
     // just above, so releasing simply lets normal physics resume from
     // wherever the point was last dragged to.
+    //
+    // Drag Rope hand animation (2026-09-11): if the active direction has
+    // real drag art and FLICK MOUSE was actually in 'charge' (the state
+    // the forward drag animation overrides -- see mfDragActive in
+    // update()/render()), switch to 'dragRelease' so the SAME frames
+    // play back in reverse from wherever the forward play actually
+    // stopped (mfDragCyclePos itself is left untouched here -- NOT
+    // always assumed to be the last frame; a quick drag-and-release
+    // before reaching it reverses from its own real stopping point).
+    // Falls through to the normal mfMode otherwise (e.g. the 'front'
+    // direction's own drag-art gap).
+    if (mfMode === 'charge' && mouseFlickFramesByDirection[mfDirectionKey] && mouseFlickFramesByDirection[mfDirectionKey].drag){
+      mfMode = 'dragRelease';
+    }
     logClick('up:drag-end', { x: e.clientX, y: e.clientY, index: info.dragIndex });
     return;
   }
@@ -7509,7 +7606,7 @@ function update(rawDt){
     // the lerp's own smoothing delay.
     const mfPointingAngle = mfEntityAngleDeg + 180;
     const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfPointingAngle)].key;
-    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'snap'){
+    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'snap' && mfMode !== 'dragRelease'){
       mfDirectionKey = mfTargetDirKey;
     }
     if (mfMode === 'charge'){
@@ -7538,6 +7635,28 @@ function update(rawDt){
       // mention of accelerating the longer growth continues.
       const mfGrowHolding = growing && downInfo && (downInfo.mode === 'circle' || downInfo.mode === 'rope');
       if (mfGrowHolding) mfTickleCyclePos += rawDt * FLICK_BASE_FPS * cfg.mouseFlickTickleSpeed;
+      // Drag Rope hand animation (2026-09-11): "run in sequence [while
+      // dragging]... while holding, pause on the last frame." Mutually
+      // exclusive with Tickle above by construction -- dragging
+      // (downInfo.mode==='rope') and hold-to-grow (circle, or the rope
+      // checkbox) are already 2 separate, non-overlapping gestures at
+      // the onPointerDown level (Drag Rope's own hold-timer branch
+      // returns before charging/growth's own branches could also arm).
+      // Advances forward but CLAMPS at the last frame number (47, i.e.
+      // frame 48) instead of looping/wrapping -- unlike Tickle's own
+      // repeating tail, a drag that's held past the last frame just
+      // stays parked there until release.
+      const mfDragActive = downInfo && downInfo.mode === 'rope' && downInfo.dragging;
+      if (mfDragActive) mfDragCyclePos = Math.min(47, mfDragCyclePos + rawDt * FLICK_BASE_FPS * cfg.mouseFlickDragSpeed);
+    } else if (mfMode === 'dragRelease'){
+      // Reverse playback after a drag release (2026-09-11, per explicit
+      // spec: "on release, run the frames in reverse order") -- counts
+      // mfDragCyclePos back DOWN from wherever the forward play actually
+      // stopped (not always assumed to be the last frame) to 0, then
+      // returns to idle. Uses the same Drag Animation Speed as the
+      // forward play for a symmetric-feeling reverse.
+      mfDragCyclePos = Math.max(0, mfDragCyclePos - rawDt * FLICK_BASE_FPS * cfg.mouseFlickDragSpeed);
+      if (mfDragCyclePos <= 0) mfMode = 'idle';
     } else if (mfMode !== 'idle' && mfFrozenFrames){
       // Same "pause on a still-loading frame instead of racing past it"
       // guard the other 3 FLICK animations already use (isFrameBlocking(),
@@ -8744,30 +8863,59 @@ function render(){
       const mfFramesForDir = mouseFlickFramesByDirection[mfDirectionKey];
       let mfImg;
       if (mfMode === 'charge'){
-        // Tickle overrides charge's own display while actively hold-to-
-        // growing the rope, for whichever directions have tickle art
-        // (all 8 as of this writing) -- see update()'s own mfGrowHolding
-        // comment for the precise trigger condition (covers BOTH the
-        // circle's own hold-to-grow and the separate "Grow Rope On Rope
-        // Hold" checkbox's own rope-hold path), and
-        // MOUSE_FLICK_TICKLE_SEQUENCE's comment for the sequence itself.
-        // Guarded on mfFramesForDir.tickle truthiness (not assumed
-        // present) so a direction missing tickle art falls straight
-        // through to the normal charge display below, unchanged.
-        const mfGrowHoldingRender = growing && downInfo && (downInfo.mode === 'circle' || downInfo.mode === 'rope');
-        if (mfGrowHoldingRender && mfFramesForDir.tickle){
-          const mfTicklePos = Math.max(0, Math.floor(mfTickleCyclePos));
-          const mfTickleSeqIdx = mouseFlickLoopTailIndex(mfTicklePos, MOUSE_FLICK_TICKLE_SEQUENCE.length, MOUSE_FLICK_TICKLE_PREFIX_LEN);
-          const mfTickleFrameNumber = MOUSE_FLICK_TICKLE_SEQUENCE[mfTickleSeqIdx];
-          const mfTickleArrIdx = mouseFlickTickleFrameIndex(mfDirectionKey, mfTickleFrameNumber);
-          mfImg = mfFramesForDir.tickle[mfTickleArrIdx];
+        // Drag Rope hand animation (2026-09-11) overrides charge's own
+        // display while actively dragging a rope point -- see update()'s
+        // own mfDragActive comment. Checked before Tickle below since the
+        // 2 are mutually exclusive gestures anyway, but this ordering
+        // isn't load-bearing. Guarded on mfFramesForDir.drag truthiness
+        // (not assumed present) so a direction missing drag art (the
+        // 'front' gap, as of this writing) falls straight through to
+        // Tickle/charge below, unchanged.
+        const mfDragActiveRender = downInfo && downInfo.mode === 'rope' && downInfo.dragging;
+        // Reuses MOUSE_FLICK_TICKLE_FORWARD (frame numbers 1..48) as a
+        // plain sequential frame-number lookup -- Drag's own sequence has
+        // no repeating tail/ping-pong to justify its own dedicated array,
+        // it's just "play forward through the real frame numbers."
+        const mfDragFrameNumber = mfDragActiveRender && mfFramesForDir.drag
+          ? MOUSE_FLICK_TICKLE_FORWARD[Math.max(0, Math.min(47, Math.floor(mfDragCyclePos)))]
+          : null;
+        if (mfDragFrameNumber !== null){
+          const mfDragArrIdx = mouseFlickDragFrameIndex(mfDirectionKey, mfDragFrameNumber);
+          mfImg = mfFramesForDir.drag[mfDragArrIdx];
         } else {
-          const mfChargeFrames = mfFramesForDir.charge;
-          const mfN = mfChargeFrames.length;
-          const mfPos = Math.max(0, Math.floor(mfHoldCyclePos));
-          const mfChargeIdx = mfPos < mfN ? mfPos : 1 + ((mfPos - mfN) % (mfN - 1));
-          mfImg = mfChargeFrames[mfChargeIdx];
+          // Tickle overrides charge's own display while actively hold-to-
+          // growing the rope, for whichever directions have tickle art
+          // (all 8 as of this writing) -- see update()'s own mfGrowHolding
+          // comment for the precise trigger condition (covers BOTH the
+          // circle's own hold-to-grow and the separate "Grow Rope On Rope
+          // Hold" checkbox's own rope-hold path), and
+          // MOUSE_FLICK_TICKLE_SEQUENCE's comment for the sequence itself.
+          // Guarded on mfFramesForDir.tickle truthiness (not assumed
+          // present) so a direction missing tickle art falls straight
+          // through to the normal charge display below, unchanged.
+          const mfGrowHoldingRender = growing && downInfo && (downInfo.mode === 'circle' || downInfo.mode === 'rope');
+          if (mfGrowHoldingRender && mfFramesForDir.tickle){
+            const mfTicklePos = Math.max(0, Math.floor(mfTickleCyclePos));
+            const mfTickleSeqIdx = mouseFlickLoopTailIndex(mfTicklePos, MOUSE_FLICK_TICKLE_SEQUENCE.length, MOUSE_FLICK_TICKLE_PREFIX_LEN);
+            const mfTickleFrameNumber = MOUSE_FLICK_TICKLE_SEQUENCE[mfTickleSeqIdx];
+            const mfTickleArrIdx = mouseFlickTickleFrameIndex(mfDirectionKey, mfTickleFrameNumber);
+            mfImg = mfFramesForDir.tickle[mfTickleArrIdx];
+          } else {
+            const mfChargeFrames = mfFramesForDir.charge;
+            const mfN = mfChargeFrames.length;
+            const mfPos = Math.max(0, Math.floor(mfHoldCyclePos));
+            const mfChargeIdx = mfPos < mfN ? mfPos : 1 + ((mfPos - mfN) % (mfN - 1));
+            mfImg = mfChargeFrames[mfChargeIdx];
+          }
         }
+      } else if (mfMode === 'dragRelease'){
+        // Reverse playback after a drag release -- see update()'s own
+        // 'dragRelease' comment. Same frame-number lookup as the forward
+        // play above, just driven by the same mfDragCyclePos now counting
+        // down instead of up.
+        const mfDragReleaseFrameNumber = MOUSE_FLICK_TICKLE_FORWARD[Math.max(0, Math.min(47, Math.floor(mfDragCyclePos)))];
+        const mfDragReleaseArrIdx = mouseFlickDragFrameIndex(mfDirectionKey, mfDragReleaseFrameNumber);
+        mfImg = mfFramesForDir.drag ? mfFramesForDir.drag[mfDragReleaseArrIdx] : mfFramesForDir.click[0];
       } else if (mfMode !== 'idle' && mfFrozenFrames){
         const mfIdx = Math.min(Math.floor(mfFrameAccum), mfFrozenFrames.length - 1);
         mfImg = mfFrozenFrames[mfIdx];
