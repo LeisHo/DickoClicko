@@ -1135,6 +1135,37 @@ front-pinky commit (`1c47871`) -- both confirmed intact and correct via
 `git show | grep`, no content lost either direction; see
 CHANGELOG.txt for the full account.
 
+**Fixed + added (2026-09-12): circle hold-to-grow now uses a plain
+proximity-to-center measurement, plus a Drag Rope override checkbox
+and max-distance slider.** Per explicit correction: "click and hold to
+grow within the circle still doesn't work... i want you to do it as
+simply a proximity measurement from the cursor measurement point to
+the center of the circle. The Click and Hold distance will determine
+that threshold... Grow sequence always trumps a Click and Hold Charge
+sequence as well as the Drag sequence." New `isNearCircleCenterForGrow()`
+replaces `isOnCircle()`'s boundary-based test for hold-to-grow
+specifically (not `isOnCircle()` itself, which stays load-bearing for
+the Circle Cut Distance floor) -- used at both onPointerDown call sites
+(the circle-branch gate and `startedInCircle`), so grow automatically
+trumps both charge and drag within this zone via the existing
+suppression mechanism, no new priority logic needed. Also: new "Drag
+Overrides Grow On Rope Hold" checkbox (default true, no behavior
+change) lets Grow Rope On Rope Hold win over Drag Rope for a
+qualifying hold when turned off; new "Drag Max Distance" slider adds
+an optional tighter cap on top of the existing anchor-relative
+rest-length clamp. Verified via a temporary debug hook (grep-confirmed
+removed): the proximity boundary, grow-wins-with-checkbox-on-vs-off
+(both states confirmed via real dispatched holds), and the distance-cap
+formula against live rope geometry. **Staged as a scoped patch** -- 2
+OTHER concurrent sessions had their own substantial uncommitted work
+in this same file (a Segment Length slider, a Drag Rope angle-
+reference feature) at commit time; confirmed the staged diff contained
+zero Segment Length markers and left that work fully intact/unstaged;
+one small, complete, non-conflicting hunk of the angle-reference
+feature was unavoidably interleaved with this task's own drag-arm
+edit and included as-is (disclosed, not silently absorbed) -- see
+CHANGELOG.txt for the full account.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

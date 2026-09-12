@@ -957,3 +957,55 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   scope, check `git show <hash> --stat` against what the message
   claims -- a mismatch (as `3682673`'s "cleanup only, no functional
   changes" vs. its real 175 insertions) is the tell.
+- **Circle hold-to-grow's own trigger zone (`isNearCircleCenterForGrow`,
+  2026-09-12) is DELIBERATELY separate from `isOnCircle()`, not a
+  rename of it.** Per explicit correction: "I think its currently some
+  boundary based thing. Instead, i want you to do it as simply a
+  proximity measurement from the cursor measurement point to the
+  center of the circle. The Click and Hold distance will determine
+  that threshold." `isOnCircle()`'s own radius
+  (`circleExclusionRadius()`) is EXPLICITLY, intentionally shared with
+  `cutRopeAt()`'s Circle Cut Distance floor (see that function's own
+  comment: "whatever counts as 'on the circle' for growing must also
+  always count as 'too close to cut'") -- redefining `isOnCircle()`
+  itself to satisfy this request would have silently changed cut
+  behavior too, which was never asked for. `isNearCircleCenterForGrow()`
+  reuses the EXISTING `cfg.holdDistance` (Click And Hold Distance)
+  slider as its threshold, per explicit instruction -- not a new
+  slider, don't add one thinking it's missing. Used at BOTH
+  `onPointerDown` call sites that used to call `isOnCircle()` for this
+  purpose (the circle-branch gate, and `startedInCircle`) -- **"Grow
+  always trumps Charge and Drag within this distance" requires NO
+  separate priority-arbitration code**, since `startedInCircle`
+  already unconditionally gates OUT both the charging and Drag Rope
+  arm branches (see their own holdTimer callbacks); swapping the SAME
+  underlying zone definition in both places is sufficient on its own.
+  If a future change ever needs `isOnCircle()`'s own radius to
+  diverge further from this zone (or vice versa), keep them as 2
+  distinct functions -- don't collapse them back into one just because
+  they happen to look similar.
+- `dragOverridesGrowOnRopeHold` (2026-09-12, default `true`) governs
+  ONLY the ROPE-hold-triggered "Grow Rope On Rope Hold" checkbox's own
+  interaction with Drag Rope arming (both can qualify for the same
+  hold outside the circle's own zone) -- it has NO effect on the
+  circle's own hold-to-grow (`isNearCircleCenterForGrow`, the gotcha
+  above), which always wins unconditionally per a separate, later
+  explicit request. Checked via `wouldAlsoGrow` inside the SAME
+  holdTimer callback that decides whether Drag Rope arms, reusing
+  `hit` (the shared, press-time-frozen rope hit already used for
+  charging/rope-growth's own gate) rather than the substitute-point
+  `dragHit`, so both this check and Grow Rope On Rope Hold's own
+  independent timer agree on the identical press-time data -- don't
+  swap in `dragHit` here, that would let the 2 conditions disagree
+  about whether "this same hold" actually qualifies for both.
+- `cfg.dragMaxDistance` (2026-09-12, default = its own slider max, a
+  deliberate no-op) is an ADDITIONAL cap layered on top of the
+  pre-existing anchor-relative rest-length clamp
+  (`mainRope.segLen * dragPinIndex`) via `Math.min(...)` in `update()`'s
+  own drag-pin code -- never a replacement. That natural clamp is
+  itself a previously-shipped, explicitly-requested design ("the
+  distance the rope can be dragged is determined by the length of the
+  rope between the drag point and the rope start") -- don't delete or
+  bypass it when touching this slider; the 2 are meant to combine,
+  with this slider only ever pulling the effective max distance IN,
+  never letting it exceed what the rope's own real geometry allows.

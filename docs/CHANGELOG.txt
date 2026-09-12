@@ -11972,3 +11972,111 @@ session's own commit message describes it accurately. Item (4)'s own
 commit (`613a055`) was staged via a fresh, verified `git diff --stat`
 immediately before `git add`, confirming it contained ONLY this task's
 own remaining code at that point -- no further mixing occurred.
+
+================================================================================
+2026-09-12  -  09:38 AM EDT
+
+3 related requests handled as one task, the 3rd arriving mid-turn as a
+correction/extension of a pre-existing report. (1) "provide a checkbox
+to turn off the Drag trigger overriding the Click Hold to Grow
+trigger." (2) "provide a drag distance slider." (3) "the click and
+hold to grow within the circle still doesn work. I think its currently
+some boundary based thing. Instead, i want you to do it as simply a
+proximity measurement from the cursor measurement point to the center
+of the circle. The Click and Hold distance will determine that
+threshold at which the grow sequence is triggered. Remember, Grow
+sequeunce always trumps a Click and Hold Charge sequeunce as well as
+the Drag sequence as long as the click and hold is within the
+determined distance from the circle center."
+
+(3) New `isNearCircleCenterForGrow(x,y)` -- a plain distance-from-
+circle-CENTER check against the EXISTING Click And Hold Distance
+slider -- replaces `isOnCircle()`'s own boundary-based
+(`circleExclusionRadius`) test for the circle's hold-to-grow trigger
+specifically, at both of its 2 call sites in `onPointerDown`
+(the circle-branch gate itself, and `startedInCircle`). Deliberately
+did NOT redefine `isOnCircle()` itself -- its own radius is explicitly,
+intentionally shared with `cutRopeAt()`'s Circle Cut Distance floor
+(per that function's own comment: "whatever counts as 'on the circle'
+for growing must also always count as 'too close to cut'"), a coupling
+this request never asked to touch; changing `isOnCircle()` directly
+would have silently changed cut-distance behavior too. Because
+`startedInCircle` already gates OUT both the charging AND Drag Rope
+arm branches unconditionally (see their own holdTimer callbacks,
+unchanged), swapping just the underlying zone DEFINITION used in both
+places makes "Grow always trumps Charge and Drag within this distance"
+fall out for free -- no new priority-arbitration logic was needed, the
+existing suppression mechanism already does exactly this once both
+call sites agree on the same zone.
+
+(1) New "Drag Overrides Grow On Rope Hold" checkbox (CLICK group,
+default `true` -- preserves existing behavior exactly, purely
+additive). This is a SEPARATE mechanism from (3) above -- it governs
+the ROPE-hold-triggered "Grow Rope On Rope Hold" checkbox's own
+interaction with Drag Rope (both can currently arm for the same hold
+outside the circle's own zone), not the circle's own always-on
+hold-to-grow. When off, and the SAME hold would also qualify for Grow
+Rope On Rope Hold (the exact condition that timer itself already
+checks, reusing `hit`, not the substitute-point `dragHit`, so both
+agree on the same press-time data), Drag Rope does not arm for this
+hold -- falls through to the ordinary charging branch, while Grow Rope
+On Rope Hold's own already-independent timer proceeds completely
+unaffected (it was never gated on whether Drag armed in the first
+place).
+
+(2) New "Drag Max Distance" slider (CLICK group, `%vmin`, default =
+its own max of 150 -- a deliberate no-op until lowered) adds an
+OPTIONAL, TIGHTER cap on top of (never instead of) the existing
+anchor-relative rest-length clamp ("the distance the rope can be
+dragged is determined by the length of the rope between the drag
+point and the rope start" -- an earlier explicit request already
+shipped). `update()`'s own drag-pin clamp now takes
+`Math.min(mainRope.segLen * dragPinIndex, vmin(cfg.dragMaxDistance))`
+instead of the bare natural value -- the natural per-rope-geometry
+ceiling stays the default behavior, this slider only ever pulls it in.
+
+Verified via a temporary debug hook (grep-confirmed removed), working
+around 2 real environment obstacles hit along the way: the sandbox's
+documented ~1-second `setTimeout` floor (waited generously past both
+`HOLD_THRESHOLD_MS` and `doubleClickThreshold` rather than trusting
+their nominal values), and the startup intro animation sitting in
+`introPhase:'waiting'` far longer than expected during this test pass
+(a temporary `forceDone()` hook skipped straight to `'done'` rather
+than waiting out real intro timing, since only the interaction-
+priority logic itself needed exercising, not the intro sequence).
+Confirmed: (a) `isNearCircleCenterForGrow()`'s own boundary -- true
+at/inside Click And Hold Distance from center, false 5px beyond it;
+(b) a press exactly at the circle anchor correctly routes to
+`mode:'circle'` and `growing` becomes true; (c) with "Drag Overrides
+Grow On Rope Hold" ON (default), a hold on a rope point far from the
+circle, with both Drag Rope and Grow Rope On Rope Hold's own distance
+gates satisfied, correctly resolves `dragging:true`; (d) with the
+checkbox OFF, the IDENTICAL hold instead resolves `charging:true` and
+`growing:true`, `dragging` absent entirely -- confirming grow wins and
+drag doesn't arm; (e) the Drag Max Distance formula
+(`Math.min(natural, capped)`) computed the correct, smaller of the 2
+candidate values against real live `segLen`/`dragIndex` numbers (the
+per-frame clamp-APPLICATION code itself is pre-existing, already-
+proven logic this task didn't touch, so verifying the input formula
+was sufficient). `node`-equivalent syntax validation passed after
+every edit.
+
+**Staged as a scoped patch, not a blanket `git add`:** at commit time,
+this SAME file had 2 OTHER concurrent sessions' own substantial,
+unrelated, uncommitted work sitting in the working tree simultaneously
+-- a new "Segment Length" dev slider (replacing the old hardcoded
+`TARGET_SEG_LEN_VH` constant across ~8 call sites) and a Drag Rope
+direction-angle-reference feature (`downInfo.dragAngleRefX/Y`, for
+FLICK MOUSE's own direction selection during a drag). Extracted only
+this task's own 6 hunks via `git diff` + manual hunk selection into a
+patch file, `git apply --cached --check`'d, then applied -- confirmed
+via `grep` that the staged diff contained ZERO Segment Length markers
+and that the Segment Length work remained fully intact and unstaged in
+the working tree afterward. One hunk (the Drag Rope arm-check region)
+was genuinely interleaved at the sub-hunk level with the OTHER
+concurrent session's own `dragAngleRefX/Y` capture code (physically
+adjacent lines in the same function) -- surgically splitting a single
+hunk mid-block risked corrupting either feature, so that small,
+complete, clearly-benign, non-conflicting addition was included as-is
+and disclosed here rather than attempted to be excised, matching this
+project's own established practice for this exact class of situation.
