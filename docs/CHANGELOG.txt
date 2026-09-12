@@ -11823,3 +11823,152 @@ also landed from another concurrent session in that same commit;
 confirmed non-overlapping with this task's own changes via `git diff`
 inspection, left completely untouched, and the combined file still
 parses and loads with 0 console errors after both landed together.
+
+================================================================================
+2026-09-12  -  09:06 AM EDT
+
+4 related requests handled as one continuous task: (1) "I updated
+Front Pinky frames. Update relevant animations." (2)+(3) a real
+annotated dataset (drag-points.json, from DOTFLICKO's own
+drag-point-annotator.html tool) reinterpreted per explicit spec into 3
+interaction "purposes" -- Sciss's own points map 1:1 to double-click
+Cut; Drag's own points map 1:1 to Drag Rope; Tickle's own points are
+NOT the Tickle animation here, they're reused as the Click and
+Click-and-Hold purpose's own points, and the fallback for anything
+else -- used to replace the literal cursor/press position with a
+per-direction annotated "true contact point" everywhere a distance
+slider (Click Distance, Click And Hold Distance, Double Click
+Distance, Drag Rope Hold Distance) gates an interaction: "instead of
+measuring the distance to the cursor location, we are measuring the
+distance to the point i have annotated for each type." (4) Drag's own
+2nd annotated point (frame 48) drives a new render-alignment feature:
+"as the Drag animation sequence runs, the position of the actual
+frames itself will also be displaced. At the end of the sequence, the
+point of frame 48 will align with the point of frame 01."
+
+(1) Front Pinky's own Drag Rope folder was re-supplied under a new
+prefix (`FrontPink Drag`, was `Front Pink Drag`) with its earlier gap
+(missing 20-23, 34) now closed -- 48/48 confirmed via direct
+enumeration, not assumed from the report. Simplified back to plain
+`count:48`, regenerated all 48 WebP files (sharp, quality 90, native
+1920x912 resolution -- matched against an already-synced sibling
+folder rather than guessing dimensions). Verified via a Node script
+checking all 96 expected PNG+WebP paths exist under the new prefix --
+0 missing. Committed/pushed separately (`1c47871`) since it was a
+clean, independent, fast task -- see this same commit's own
+cross-session note below for what else ended up in it.
+
+(2)+(3) New `MOUSE_FLICK_INTERACTION_POINTS`/`MOUSE_FLICK_DRAG_END_
+POINTS` data tables (normalized 0-1 fractions, same convention
+`MOUSE_FLICK_VISIBLE_BOUNDS` already uses, sourced directly from the
+user's real annotated export -- not the annotator tool's own stale
+seed data) plus `mouseFlickInteractionPointWorld(purpose)`, which
+transforms an annotated point into CURRENT world-space canvas
+coordinates via the exact same translate-rotate-wrist-anchor-offset
+math `render()`'s own draw call already uses (generalized from "the
+one wrist-anchor point" to "an arbitrary point in the same normalized
+image space"), and `mouseFlickInteractionPos(realX, realY, purpose)`,
+a convenience wrapper that falls back to the real position whenever
+FLICK MOUSE isn't active/visible or the needed frame/point data isn't
+loaded yet -- every one of the 4 call sites uses this fallback-safe
+wrapper, never the raw lookup, so a disabled/not-yet-visible FLICK
+MOUSE degrades to the OLD cursor-based behavior rather than breaking.
+Each purpose maps to its own reference image (for reading the correct
+natural width/height even when that variant isn't the one currently
+on screen) and its own `MOUSE_FLICK_VISIBLE_BOUNDS` variant (the
+anchor the point is offset from) -- 'cut' uses its own dedicated
+'sciss' bounds entry (a genuine 1:1 match with what was actually
+annotated); 'drag' and 'click' both use 'base' (matching how those
+already render); 'hold' uses 'charge' specifically (a held click-and-
+hold, and Tickle which overrides charge's OWN display without
+changing `mfMode`, both actually render via the 'charge' anchor).
+
+Wired into exactly 4 call sites, matching the 4 distance sliders named
+in the spec, each recomputed FRESH at the actual decision moment
+(matching Click And Hold Distance's own already-established "sample at
+release, not press" precedent) rather than reusing any existing frozen
+press-time hit: the tap/punch arm-check and final decision (Click
+Distance, `onPointerUp`'s quick-tap branch -- both the arm check and
+the final punch decision use the substitute point, recomputed
+independently each time), the charge release check (Click And Hold
+Distance), the double-click cut resolution (Double Click Distance --
+deliberately does NOT change `cutRopeAt`'s own separate `clickX/clickY`
+cut-sweep-direction argument, since only the targeting DISTANCE was
+asked to change, not which side the visual sweep reads as "clicked
+from"), and the Drag Rope arm check (Drag Rope Hold Distance, inside
+`onPointerDown`'s holdTimer callback -- computed as a NEW local
+variable, deliberately NOT overwriting the shared `downInfo.hit` that
+Rope Growth On Rope Hold's own, unrelated distance gate still reads
+unaffected).
+
+(4) `mouseFlickDragAlignmentOffset(t)` computes the WORLD-SPACE
+difference between frame 1's and frame 48's own annotated drag point
+(both evaluated via the entity's live transform, so it's correct
+regardless of current position/rotation) and returns a corrective
+offset that grows from `{0,0}` at t=0 (frame 1, no correction) to
+exactly CANCEL that difference at t=1 (frame 48), linearly
+interpolated in between via `t = mfDragCyclePos / 47` -- applied as an
+ADDITIONAL world-space translate on top of `mfEntityX/Y` specifically
+while rendering either half of the Drag sequence (forward play via a
+new `mfDragSequenceActive` flag, or its `dragRelease` reverse).
+
+Verified via a temporary debug hook (grep-confirmed removed): the
+point-transform math matched an INDEPENDENT hand computation
+bit-for-bit (0 diff in both X and Y, against a real loaded image's
+actual natural dimensions and a non-trivial 90-degree rotation, not
+just an unrotated sanity check); the alignment offset's own boundary
+conditions confirmed exactly as designed -- t=0 gives `{0,0}`, and
+applying the t=1 offset to frame 48's own natural world position
+lands it EXACTLY on frame 1's own world position (both X and Y within
+1e-6); the fallback wrapper confirmed returning the real passed-in
+position whenever the substitute point can't be resolved. `node
+--check`-equivalent syntax validation passed (568,147-char script
+block parses via `new Function()`) and the live page loaded with 0
+JS console errors (only pre-existing 404 noise from an unrelated,
+large, in-progress concurrent asset reorganization -- see below). NOT
+verified via a real dispatched end-to-end gesture (a live double-click
+actually cutting the rope through the new substitute-point path) --
+the isolated transform math is proven exactly correct and the wiring
+at each call site is a minimal, mechanical substitution of the input
+coordinate following the exact pre-existing call pattern, but a full
+live gesture-dispatch confirmation is still outstanding; flagged here
+rather than silently assumed complete.
+
+**Environment note:** the live page took ~56 seconds to leave
+`document.readyState:'loading'` during this task's own verification,
+well beyond this project's previously-documented 10-20s worst case --
+coincided with an unrelated concurrent session's own large, in-
+progress asset-folder reorganization (679+ changed paths across most
+of the FLICK tree observed via `git status` at the time), which very
+likely inflated the synchronous image-preload burden further. Not a
+regression from this task's own changes -- confirmed via `git diff`
+that none of this task's edits touch image-loading/preload code at
+all, and the page did eventually finish loading cleanly.
+
+**Cross-session commit-attribution mixup, BOTH directions this time,
+disclosed rather than silently absorbed (see CLAUDE.md's own gotchas
+for the now-familiar pattern; this is at least the 4th occurrence this
+project has hit):** this task's own items (2)+(3) -- the entire
+interaction-point substitution feature, data tables, helpers, and all
+4 call-site edits -- ended up landing already-committed inside a
+DIFFERENT concurrent session's own commit (`3682673`, titled "Remove
+temporary SNAP direction-fix debug hook," which actually also
+contained 175 insertions beyond its own stated debug-hook removal).
+Confirmed via `git show 3682673 | grep` that the feature's own exact
+code is present and already pushed to `origin/master` -- no content
+lost, no corrective git action taken. In the OTHER direction: this
+task's own item (1) commit (`1c47871`, "Sync Drag Rope frames for
+front-pinky") ended up ALSO containing that SAME concurrent session's
+own SNAP held-phase frame-swap fix (`mfFrozenFrames` re-pointed to the
+new direction's own snap array mid-hold) -- confirmed via `git show
+1c47871 | grep` that the swept-in code matches their own independently
+documented fix exactly, not garbage. Likely mechanism, consistent with
+every prior occurrence: a blanket `git add index.html` stages the
+file's ENTIRE current content, not a diff scoped to the calling
+session's own edits -- when 2 sessions' uncommitted edits are both
+sitting in the same working tree at commit time, whichever session
+commits first sweeps in the other's work too, regardless of which
+session's own commit message describes it accurately. Item (4)'s own
+commit (`613a055`) was staged via a fresh, verified `git diff --stat`
+immediately before `git add`, confirming it contained ONLY this task's
+own remaining code at that point -- no further mixing occurred.

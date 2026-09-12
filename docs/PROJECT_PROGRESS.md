@@ -1099,6 +1099,42 @@ work) that circle hold-to-grow and the new Drag Rope Hold Distance
 slider both work correctly -- a circle press still reliably grows the
 rope, and a hold far from the rope now charges instead of dragging.
 
+**Added (2026-09-12): FLICK MOUSE interaction points -- annotated
+contact points replace the literal cursor position for every distance
+gate, plus a Drag frame-48-to-frame-1 alignment feature.** Per a real
+annotated dataset (`drag-points.json`, from DOTFLICKO's own
+drag-point-annotator.html) reinterpreted per explicit spec: Sciss's
+points -> Cut (double-click); Drag's points -> Drag Rope; Tickle's
+points -> Click and Click-and-Hold (NOT the Tickle animation itself)
+plus the default fallback. New `mouseFlickInteractionPointWorld(purpose)`
+transforms an annotated normalized point into current world-space
+canvas coordinates via the same translate-rotate-wrist-anchor math
+`render()`'s own draw call already uses, generalized to an arbitrary
+point; `mouseFlickInteractionPos()` wraps it with a fallback to the
+real cursor position whenever FLICK MOUSE isn't active/visible. Wired
+into all 4 named distance sliders (Click Distance, Click And Hold
+Distance, Double Click Distance, Drag Rope Hold Distance), each
+recomputed fresh at the actual decision moment. Also: Drag's own
+frame-48 point drives a new render-alignment feature
+(`mouseFlickDragAlignmentOffset()`) that keeps the annotated contact
+point visually pinned across the whole Drag sequence, converging
+frame 48 back onto frame 1's own point exactly, per explicit spec.
+Verified via a temporary debug hook (grep-confirmed removed): the
+point-transform matched an independent hand computation bit-for-bit;
+the alignment offset's boundary conditions (t=0 -> no correction, t=1
+-> exact convergence) confirmed exactly as designed. NOT yet verified
+via a real dispatched end-to-end gesture (the isolated math is proven
+correct, but a live double-click-cut through the new path hasn't been
+watched running). Also included in this pass: Front Pinky's own Drag
+Rope frame gap closed (re-supplied 48/48 under a new prefix,
+`FrontPink Drag`). **A 4th, bidirectional occurrence of this session's
+commit-attribution mixup** -- the interaction-point feature landed via
+a concurrent session's own commit (`3682673`), and that SAME session's
+SNAP held-phase fix (the entry just above) landed via this task's own
+front-pinky commit (`1c47871`) -- both confirmed intact and correct via
+`git show | grep`, no content lost either direction; see
+CHANGELOG.txt for the full account.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

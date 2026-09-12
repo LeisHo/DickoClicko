@@ -891,3 +891,69 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   snap) need no equivalent guard, since they're one-shot sequences
   that always complete on their own regardless of button state. Don't
   remove `mfLeftDown` thinking an existing flag already covers it.
+- **FLICK MOUSE "interaction points" (2026-09-12) replace the literal
+  cursor position with an annotated per-direction contact point for
+  EVERY distance-gated interaction** -- Click Distance, Click And Hold
+  Distance, Double Click Distance, Drag Rope Hold Distance. Per
+  explicit spec: "instead of measuring the distance to the cursor
+  location, we are measuring the distance to the point i have
+  annotated for each type." `mouseFlickInteractionPointWorld(purpose)`
+  (purpose ∈ 'click'/'hold'/'cut'/'drag') transforms
+  `MOUSE_FLICK_INTERACTION_POINTS`'s own normalized (0-1) point through
+  the SAME translate-rotate-wrist-anchor math `render()`'s own draw
+  call uses for the wrist anchor itself -- generalized to an arbitrary
+  point in that same normalized image space, not just the anchor.
+  **Always call `mouseFlickInteractionPos(realX, realY, purpose)`, the
+  fallback-safe wrapper, at a new call site -- never
+  `mouseFlickInteractionPointWorld()` directly** -- it returns `null`
+  whenever FLICK MOUSE isn't active/visible or the needed frame/point
+  data isn't loaded yet, and every one of the 4 existing call sites
+  relies on the wrapper's fallback to the real cursor position for
+  that case; using the raw function directly would silently break
+  interaction targeting the moment FLICK MOUSE is disabled.
+  Recomputed FRESH at the actual decision moment at every call site
+  (never reusing a frozen press-time hit) -- matches Click And Hold
+  Distance's own pre-existing "sample at release, not press"
+  precedent (see that gotcha above), now extended to all 4. The
+  Drag Rope arm check computes its own NEW local hit rather than
+  overwriting the shared `downInfo.hit` -- Rope Growth On Rope Hold's
+  own, unrelated distance gate still reads that shared value
+  unaffected; don't fold the 2 back together. `'tickle'` is NOT one of
+  the 4 purposes -- Tickle's own annotated points are reused as the
+  `'click'`/`'hold'` purposes' own data (`MOUSE_FLICK_INTERACTION_
+  POINTS.default`), a deliberate remapping per the spec, not a typo.
+- Drag's own frame-48 annotated point drives a SEPARATE feature,
+  `mouseFlickDragAlignmentOffset(t)` (2026-09-12) -- NOT a distance
+  gate, a render-time correction. Per explicit spec: "as the Drag
+  animation sequence runs, the position of the actual frames itself
+  will also be displaced. At the end of the sequence, the point of
+  frame 48 will align with the point of frame 01." Computes the
+  WORLD-SPACE difference between frame 1's and frame 48's own
+  annotated point (both evaluated via the entity's CURRENT live
+  transform) and returns a corrective offset growing from `{0,0}` at
+  t=0 to exactly cancel that difference at t=1, applied as an
+  ADDITIONAL translate on top of `mfEntityX/Y` specifically while
+  `mfDragSequenceActive` is true (either half of the Drag sequence --
+  forward play, or its `dragRelease` reverse). `t = mfDragCyclePos /
+  47` -- if the Drag sequence's own frame count ever changes from 48,
+  this divisor must change to match (`lastIndex`, not the frame
+  count itself), or t=1 will never actually align at the real last
+  frame. Verified bit-for-bit against an independent hand computation
+  (both the transform itself and the t=1 convergence identity) -- see
+  CHANGELOG.txt for the numbers.
+- **A 4th, bidirectional occurrence of this project's cross-session
+  commit-attribution mixup (2026-09-12):** the interaction-points
+  feature above landed via a DIFFERENT concurrent session's own commit
+  (`3682673`, titled as a debug-hook removal but actually containing
+  175 insertions), while that SAME session's own SNAP held-phase fix
+  landed via THIS session's own front-pinky-sync commit (`1c47871`) --
+  confirmed both directions via `git show <hash> | grep` before
+  trusting either, no content lost either way. Same root cause as
+  every prior occurrence: `git add <file>` stages the whole file's
+  CURRENT content, not a diff scoped to one session's own edits, so
+  whichever of 2 concurrent sessions commits first sweeps in the
+  other's uncommitted work too, regardless of that commit's own
+  message. Before trusting a commit's message describes its full
+  scope, check `git show <hash> --stat` against what the message
+  claims -- a mismatch (as `3682673`'s "cleanup only, no functional
+  changes" vs. its real 175 insertions) is the tell.
