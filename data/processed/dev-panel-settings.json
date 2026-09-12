@@ -11,8 +11,8 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 4.6,
-    "ropeLength": 29.16005024565134,
-    "ropeDefaultLength": 29,
+    "ropeLength": 23.57894736842108,
+    "ropeDefaultLength": 18,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -96,19 +96,19 @@
       }
     ],
     "arcSeamOverlapPx": 2.8,
-    "clickIntensity": 1.1,
-    "holdDistance": 28.5,
+    "clickIntensity": 3,
+    "holdDistance": 24,
     "bendStiffness": 0.01,
-    "ropeAnimSpeed": 1.2,
-    "gravityStrength": 1.7,
-    "damping": 0.986,
-    "constraintIterations": 1,
+    "ropeAnimSpeed": 1.8,
+    "gravityStrength": 0.9,
+    "damping": 0.988,
+    "constraintIterations": 3,
     "ropeGrowthRate": 12,
-    "clickHoldMaxDuration": 800,
-    "intensityCeiling": 8.4,
+    "clickHoldMaxDuration": 2000,
+    "intensityCeiling": 25,
     "minRopeLength": 3,
-    "clickDistance": 30,
-    "doubleClickDistance": 32,
+    "clickDistance": 25,
+    "doubleClickDistance": 29,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.1,
@@ -379,7 +379,7 @@
           },
           {
             "key": "ROPE GROWTH",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "ropeGrowthRate"
             ],
@@ -390,17 +390,14 @@
       {
         "key": "New Group (6)",
         "collapsed": false,
-        "settings": [
-          "intensityCeiling",
-          "clickHoldMaxDuration"
-        ],
+        "settings": [],
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "clickIntensity",
-              "holdDistance"
+              "clickDistance"
             ],
             "subgroups": []
           },
@@ -416,10 +413,11 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
-              "flickHoldMaxSpeed",
-              "flickHoldMaxDuration"
+              "holdDistance",
+              "clickHoldMaxDuration",
+              "intensityCeiling"
             ],
             "subgroups": []
           },
@@ -428,7 +426,6 @@
             "collapsed": true,
             "settings": [
               "doubleClickDistance",
-              "clickDistance",
               "doubleClickThreshold",
               "ropeFallSpeed",
               "cutSpeed",
@@ -476,7 +473,10 @@
       {
         "key": "New Group",
         "collapsed": true,
-        "settings": [],
+        "settings": [
+          "flickHoldMaxDuration",
+          "flickHoldMaxSpeed"
+        ],
         "subgroups": [
           {
             "key": "FLICK ANIMATION",
