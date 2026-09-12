@@ -830,3 +830,41 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   frames. Any FUTURE change to this lock must keep held-vs-tail as 2
   separate states for SNAP specifically; click/sciss/dragRelease have
   no hold phase at all and stay simple always-locked exclusions.
+  **Corrected further, 2026-09-12 (same day, round 2) -- this fixed
+  the LOCK's own SCOPE (when direction is allowed to update) but not
+  its own ANGLE SOURCE, which had a separate, real bug -- see the next
+  gotcha below.**
+- Direction-bucket selection (`update()`, the `mfTargetDirKey`/
+  `mfDirectionSourceAngle` computation) must use a genuinely FIXED
+  origin -- the rope's own ANCHOR (`mainRope.points[0]`) -- not the
+  sprite's own smoothed rotation angle. The OLD approach
+  (`mfPointingAngle = mfEntityAngleDeg + 180`) derived direction from
+  where the sprite visually points, which for Cursor Target Mode
+  'rope' means the NEAREST POINT ON THE ROPE -- a genuinely moving
+  reference once the rope isn't hanging straight down. A straight-
+  hanging rope's nearest point to anything above/beside it happens to
+  BE the anchor, which is why a simple at-rest test of this exact area
+  can pass cleanly while the real bug survives untouched -- **any
+  future testing of direction-bucket behavior must bend/swing the rope
+  first (e.g. via Drag Rope) before trusting a passing result**, not
+  just test against a rope at rest. Real, reported, reproduced bug
+  (2026-09-12: "I think it may be because you are measuring angle
+  based on the cursor and the rope's local origin... I want that
+  rotation angle measurement to be measured according to a fixed angle
+  origin. So IE, whenever the cursor is directly above the rope, the
+  animation type should always be Behind"). Fixed via
+  `mfDirectionSourceAngle = mouseFlickAngleFromCenter(mfX, mfY,
+  mainRope.points[0].x, mainRope.points[0].y) + 180` -- RAW cursor
+  position (`mfX`/`mfY`, NOT the smoothed `mfEntityX/Y`) relative to
+  the anchor specifically, with the same "+180" convention the old
+  formula used so the existing, already-tuned `mouseFlickAngleOffset`
+  slider (live value 180) needed no recalibration -- verified by hand
+  before touching any config: with offset=180, cursor directly above
+  the anchor resolves to 'behind', directly right resolves to
+  'side-thumb', matching the spec's own 2 worked examples exactly.
+  `mfPointingAngle` no longer exists anywhere in this file -- don't
+  reintroduce sprite-rotation-based direction selection without
+  re-reading this entire gotcha and the 2026-09-11/2026-09-12 history
+  it summarizes; this is the 3rd distinct design this exact mechanism
+  has gone through this project, each one a real, explicit correction
+  of the one before it, not an arbitrary preference.

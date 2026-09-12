@@ -1005,22 +1005,38 @@ Rope On Rope Hold's own distance gate), checked at ARM time. Verified
 live: a hold on the circle still grows; a hold far from the rope now
 charges instead of dragging; a hold on the rope still drags.
 
-**Fixed (2026-09-12): SNAP's own direction lock incorrectly covered its
-held phase, not just its end-sequence tail.** Reported (ambiguous
-wording at first, resolved via a direct question plus live testing
-rather than guessed): "when i do right click and hold, during the
-hold, [direction should] respond to the cursor position." Unlike
-click/sciss (fire once, no hold phase), SNAP has a genuine held state
-before its end sequence plays out -- the 2026-09-11 direction-lock
-exclusion list treated bare `mfMode==='snap'` as always-locked,
-incorrectly silencing the held phase too. Fixed with `mfSnapHeld =
-mfMode==='snap' && (mfRightDown || mfTripleHeld)`: direction now stays
-responsive for as long as the hold is actually active, locking only
-once SNAP is genuinely playing out its remaining frames after release.
-Verified live via a real dispatched right-click-hold + cursor move
-(direction correctly switched mid-hold). A separate "Grab Animation
-Speed" request in the same message was deferred at the user's own
-request -- not built.
+**Fixed (2026-09-12, 2 rounds): SNAP's own direction-bucket selection,
+first its hold-vs-tail lock scope, then its angle SOURCE.** Round 1:
+the 2026-09-11 direction-lock exclusion list treated bare
+`mfMode==='snap'` as always-locked, incorrectly silencing SNAP's own
+held phase (not just its post-release end-sequence tail, which is what
+the lock was actually meant for) -- fixed with `mfSnapHeld =
+mfMode==='snap' && (mfRightDown || mfTripleHeld)`. Round 2, reported as
+"still not fixed" with a concrete diagnosis and spec ("I want that
+rotation angle measurement to be measured according to a fixed angle
+origin. So IE, whenever the cursor is directly above the rope, the
+animation type should always be Behind... Just like the regular non
+click waiting state"): a simple at-rest test of round 1's own fix
+passed cleanly, masking the real remaining bug -- the angle SOURCE
+itself (`mfPointingAngle`, derived from the sprite's own rotation
+toward the nearest point on the rope) is a genuinely moving reference
+once the rope isn't hanging straight down, since a straight-hanging
+rope's nearest point to anything above/beside it just happens to BE
+the anchor. Confirmed by bending the rope via Drag Rope first, then
+retesting -- direction-bucket selection now uses `mfDirectionSourceAngle`,
+computed from the RAW cursor position relative to the rope's own
+ANCHOR specifically (a genuinely fixed reference regardless of rope
+shape or Cursor Target Mode), reusing the exact same "+180" convention
+so the existing tuned `mouseFlickAngleOffset` slider needed no
+recalibration. Verified live with the rope deliberately bent off a
+straight hang: cursor above the anchor still resolves 'behind', right
+of the anchor still resolves 'side-thumb'. This fix's own code landed
+already-committed inside a concurrent session's unrelated commit
+(`38f2f15`, a 3rd occurrence of this session's commit-attribution
+mixup) -- already confirmed live on `origin/master`, no action needed,
+see CHANGELOG.txt for the full account. A separate "Grab Animation
+Speed" request in the same original message was deferred at the
+user's own request -- not built.
 
 **Added (2026-09-12): native cursor hides while FLICK MOUSE is
 showing.** `render()` syncs `canvas.style.cursor` to `'none'` whenever

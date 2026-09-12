@@ -11633,3 +11633,69 @@ Committed/pushed code (38f2f15) -- 363 files (index.html + the full
 PNG+WebP delete/rename/create set for both folders), fast-forward, no
 divergence -- then this doc pass as a separate follow-up, per the
 standing instruction.
+
+================================================================================
+2026-09-12  -  08:05 AM EDT
+
+"the issue with the right click and hold animation type transition is
+still not fixed. I think it may be because you are measuring angle
+based on the cursor and the rope's local origin? I want that rotation
+angle measurement to be measured according to a fixed angle origin. So
+IE, whenever the cursor is directly above the rope, the animation type
+should always be Behind. Whenever the cursor is directly right of the
+rope, the animation type is Side Thumb. Just like the regular non
+clicks waiting state." Investigated rather than assumed: a straight-
+hanging rope's own "nearest point on rope" (what Cursor Target Mode
+'rope' actually points the sprite toward) happens to coincide with the
+anchor for anything above/beside it, so a simple at-rest test of the
+immediately-preceding SNAP fix passed cleanly (idle and held both
+correctly gave 'behind'/'side-thumb') without exposing the real
+problem. Re-tested with the rope pulled to one side via Drag Rope
+first (a genuinely bent shape, tip clearly displaced from a straight
+hang) -- confirmed the user's own diagnosis was right: the OLD
+mfPointingAngle approach derives direction from the sprite's own
+smoothed ROTATION, which for 'rope' target mode points at the nearest
+rope point specifically -- a moving reference once the rope isn't
+hanging straight down, pulling direction-bucket selection away from
+what a fixed-origin reading would give.
+
+Replaced the direction-bucket angle source entirely: `mfDirectionSourceAngle
+= mouseFlickAngleFromCenter(mfX, mfY, mainRope.points[0].x,
+mainRope.points[0].y) + 180` -- RAW cursor position (not the smoothed
+entity position) relative to the rope's own ANCHOR specifically (not
+the dynamic nearest-rope-point), with the same "+180" convention the
+old mfPointingAngle already used so the existing, already-tuned
+`mouseFlickAngleOffset` slider (live value: 180) continues to mean the
+same thing with zero settings migration needed -- verified by hand
+before touching cfg: with offset=180, cursor directly above the anchor
+resolves to index 0 ('behind'), directly right resolves to index 2
+('side-thumb'), exactly matching the spec's own 2 worked examples.
+This makes idle/charge/SNAP-held all read from the IDENTICAL formula
+now (previously they merely happened to agree at rest), so "just like
+the regular non click waiting state" is now literally true rather than
+coincidentally true for simple cases.
+
+Verified live via a temporary debug hook (grep-confirmed removed):
+grew the rope, pulled a mid-rope point via Drag Rope to bend it well
+off a straight hang, then with the bent shape still in place, held
+right-click at a screen position directly above the anchor (`dir:
+'behind'`) and directly right of the anchor (`dir: 'side-thumb'`) --
+both correct despite the rope's own tip sitting well off to one side,
+confirming the fix is robust to rope shape, not just correct at rest.
+
+**A 3rd occurrence of this same session's commit-attribution mixup,
+disclosed rather than silently absorbed:** while staging this fix
+(scoped patch, `git apply --cached --3way` after the plain 2-hunk
+extraction failed on line-number drift from 2 unrelated hunks earlier
+in the same diff), `git diff --cached` came back completely empty --
+investigation showed the concurrent session's own commit `38f2f15`
+("Sync Drag Rope frames for behind-thumb and behind-pinky...", see the
+entry directly above) had ALREADY swept this fix's own working-tree
+changes into itself before this session got to stage anything,
+confirmed via `git show 38f2f15 | grep '^+.*mfDirectionSourceAngle'`
+returning real matches. No action needed -- `git fetch` confirmed
+`38f2f15` is already on `origin/master`, so this fix is already live;
+this is purely a documentation/attribution note; recorded here for the
+same reason the 2 earlier occurrences were (2026-09-11 Drag Rope,
+2026-09-12 this same morning) -- a future `git log -p` search for this
+fix's own commit message won't find one, since it never got its own.
