@@ -6424,6 +6424,45 @@ let pendingClick = null; // {hit,timer}
 // user testing the app, so the panel display is the primary surface this
 // was actually requested for.
 const CLICK_LOG_MAX_ENTRIES = 200;
+// HH:MM:SS.mmm wall-clock timestamp for each click-log line (2026-09-12,
+// per explicit request) -- deliberately real wall-clock time (not
+// performance.now()/elapsed-since-load), since the point is "what time
+// did I actually do this" when reading the panel back later.
+function formatClickLogTime(d){
+  const pad2 = n => String(n).padStart(2, '0');
+  const pad3 = n => String(n).padStart(3, '0');
+  return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()) + '.' + pad3(d.getMilliseconds());
+}
+// Maps each logClick() event string to a short note describing what it
+// means for the ROPE'S OWN PHYSICAL behavior (2026-09-12, per explicit
+// request: "a note about what physics function type it triggered
+// (flick, charge, cut). This note should be in regards the behaviour
+// of the rope and not the cursor animation type itself") -- FLICK
+// MOUSE's own cursor-animation type (mfMode/mfDirectionKey) is a
+// separate, purely cosmetic overlay system and deliberately has no
+// bearing on this note. 'none' for every arm-only, failed-attempt, or
+// purely informational event that doesn't itself apply any physics
+// effect to the rope/a piece -- only an event that actually DOES
+// something gets a real category. 'attract'/'drag (end)' go beyond the
+// 3 examples named in the request (flick/charge/cut) for completeness
+// -- Rope Attraction and Drag Rope both genuinely affect the rope's
+// live physics too, and leaving them blank with no obvious reason
+// would be a confusing, arbitrary gap in an otherwise-complete note.
+const CLICK_LOG_PHYSICS_NOTE = {
+  'hold:grow-start': 'grow',
+  'hold:grow-start-from-rope': 'grow',
+  'hold:drag-start': 'drag',
+  'up:drag-end': 'drag (end)',
+  'up:hold-release-punch': 'charge',
+  'up:tap-punch': 'flick',
+  'up:double-click': 'cut',
+  'up:double-click-on-circle': 'cut (full detach)',
+  'down:rope-attraction': 'attract (start)',
+  'up:rope-attraction': 'attract (end)',
+};
+function clickLogPhysicsNote(event){
+  return CLICK_LOG_PHYSICS_NOTE[event] || 'none';
+}
 function logClick(event, data){
   if (!DEV_MODE) return;
   console.log('[click]', event, data);
@@ -6433,7 +6472,9 @@ function logClick(event, data){
   if (empty) empty.remove();
   const line = document.createElement('div');
   const dataStr = Object.entries(data || {}).map(([k, v]) => k + ':' + (typeof v === 'number' ? round(v, 2) : v)).join(' ');
-  line.textContent = event + '  ' + dataStr;
+  const time = formatClickLogTime(new Date());
+  const note = clickLogPhysicsNote(event);
+  line.textContent = time + '  [' + note + ']  ' + event + '  ' + dataStr;
   el.appendChild(line);
   while (el.children.length > CLICK_LOG_MAX_ENTRIES) el.removeChild(el.firstChild);
   el.scrollTop = el.scrollHeight;
