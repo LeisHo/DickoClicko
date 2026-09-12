@@ -10606,3 +10606,69 @@ Committed/pushed (6fd1365) -- fetch found 6 intervening remote
 confirmed touching only that JSON file, merged cleanly, pushed the
 merge (9ded9ab) -- then this doc pass as a separate follow-up, per
 the standing instruction.
+
+================================================================================
+2026-09-11  -  08:08 PM EDT
+
+"for Click and Hold flick, let me clarify. the click and hold max
+duration determines a timelength which the flick intensity will grow.
+So at 2000 (ms), if the click and hold is held for 2000ms, the flick
+strength will be whatever i set Intensity Ceiling to. Regular Click
+will be the regular click intensity. So the intensity will scale
+depending on the hold time" -- a clarification of the existing rope
+punch-charging mechanic (Click Hold Max Duration / Intensity Ceiling,
+onPointerUp's own `info.charging` branch), read against the CURRENT
+code before assuming anything needed to change.
+
+Found the current formula was genuinely different from this
+clarification: `intensity = clickIntensity + t * intensityCeiling`
+(t = heldMs/clickHoldMaxDuration, clamped to 1) -- meaning a FULL hold
+reached Click Intensity PLUS Intensity Ceiling, not Intensity Ceiling
+alone. This was itself a documented, deliberate choice from an earlier
+round (a comment explicitly said "Intensity Ceiling stacks ON TOP of
+Click Intensity, not in place of it... reaching Click Intensity +
+Intensity Ceiling exactly at Click Hold Max Duration") -- surfaced
+this discrepancy directly to the user before touching the code, rather
+than silently overwriting a previously-deliberate design decision or
+assuming the old comment was simply wrong.
+
+Changed the formula to a standard linear interpolation FROM
+clickIntensity TO intensityCeiling itself:
+`intensity = clickIntensity + t * (intensityCeiling - clickIntensity)`.
+At t=0 (an immediate release) this still equals exactly clickIntensity,
+matching "Regular Click will be the regular click intensity" (this
+part of the old behavior was already correct and needed no change);
+at t=1 (held the full Click Hold Max Duration) it now equals exactly
+intensityCeiling, matching the new spec; values in between scale
+linearly across that range, matching "the intensity will scale
+depending on the hold time."
+
+Verified live via a temporary debug hook (grep-confirmed removed)
+driving the REAL production onPointerDown/onPointerUp handlers
+directly, not a reimplementation: dispatched a real pointerdown on
+the rope, force-armed `downInfo.charging` and rewound its own
+`startTime` by a controlled amount (avoiding both a real wait and this
+sandbox's own documented setTimeout throttling), then dispatched a
+real pointerup at the same point and read the exact `{heldMs, t,
+intensity}` values `logClick()` recorded to the dev panel's own click
+log. With clickIntensity=1, clickHoldMaxDuration=2000,
+intensityCeiling=10 (matching the user's own example numbers): a
+simulated ~0ms hold logged intensity≈1.01-1.04 (effectively
+clickIntensity, tiny residual dispatch-timing jitter); a simulated
+1000ms hold (t=0.5) logged intensity=5.51, matching the expected
+midpoint (1 + 0.5*9 = 5.5) exactly within rounding; a simulated 2000ms
+hold (t=1) logged intensity=10 -- EXACTLY intensityCeiling, not 11 as
+the old formula would have produced; a simulated 3000ms hold (beyond
+the max, correctly clamped to t=1) also logged intensity=10, confirming
+the clamp still caps at the ceiling rather than continuing to scale
+past it. One test-setup snag along the way, not a code issue: an
+initial test point happened to land `startedInCircle:true` (the
+press-and-hold-in-circle exclusion this project's own CLAUDE.md
+already documents), which correctly routed to a completely different
+code path (`up:circle`) instead of the punch-charge branch being
+tested -- switched to a test point further down the rope (confirmed
+`startedInCircle:false` in the logged down-event) for a representative
+test of the actual punch-intensity code path.
+
+Committed/pushed (ea07740) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.

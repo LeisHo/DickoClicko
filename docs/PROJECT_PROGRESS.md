@@ -766,8 +766,12 @@ additions. Current state of each subsystem:
 
 - **Core interactions**: click/punch (deforms the rope), hold-to-grow
   (starting on/near the circle), hold-to-charge-punch (starting on the
-  rope; intensity stacks Click Intensity + Intensity Ceiling over Click
-  Hold Max Duration), double-click-to-cut (works on the main rope and on
+  rope; intensity linearly scales from Click Intensity at release to
+  exactly Intensity Ceiling at Click Hold Max Duration held (2026-09-11
+  correction -- an earlier round had this stacking Click Intensity +
+  Intensity Ceiling instead, per explicit clarification that a full
+  hold should reach Intensity Ceiling itself, not that sum)),
+  double-click-to-cut (works on the main rope and on
   already-fallen pieces, splitting one into two, and now also works while
   mainRope is mid-scripted-growth right after a boot or a full detach,
   not just once that growth finishes). **A cut that would leave the
