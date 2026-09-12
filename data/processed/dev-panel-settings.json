@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
-    "ropeLength": 38.009080377006185,
+    "ropeLength": 20.48238589774371,
     "ropeDefaultLength": 38,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -99,6 +99,7 @@
     "clickIntensity": 3,
     "holdDistance": 24,
     "dragRopeEnabled": true,
+    "dragRopeHoldDistance": 20,
     "bendStiffness": 0.01,
     "ropeAnimSpeed": 1.8,
     "gravityStrength": 0.9,
@@ -228,7 +229,7 @@
     "groups": [
       {
         "key": "CUT SPLATTER",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "cutSplatterEnabled",
           "cutSplatterColor",
@@ -438,6 +439,7 @@
             "key": "CLICK",
             "collapsed": true,
             "settings": [
+              "dragRopeHoldDistance",
               "dragRopeEnabled",
               "clickIntensity",
               "clickDistance"
