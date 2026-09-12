@@ -360,6 +360,64 @@ live result) for both center and rope modes. Corrected the CLAUDE.md
 gotcha this reverses, documented as a correction rather than a silent
 overwrite.
 
+**Added (2026-09-11): Tickle animation, plays while actively hold-to-
+growing the rope.** Per explicit spec: "on rope growth click and hold,
+you begin the sequence. As long as the click is held (rope is
+growing), you continue to play the sequence as follows -- 1. begin
+from frame 1 to frame 48. 2. reverse sequence from frame 48 to frame
+13. 3. back to normal sequence starting from 13 to 48. 4. repeats."
+Implemented as an override INSIDE the existing charge-mode display
+(not a new mfMode) -- gated on `growing` being actively driven by a
+REAL user press (`downInfo.mode` 'circle' or 'rope', covering both
+the circle's own hold-to-grow and the "Grow Rope On Rope Hold"
+checkbox above), not the scripted boot/detach intro extension, which
+also sets `growing` but has no user hold behind it at all. Sequence
+built as a single precomputed 118-frame array (48 forward + 35
+reverse + 35 forward again), excluding the duplicate frame at each
+turnaround (48 and 13 each show once, not twice) -- the same "no
+duplicate peak" principle this file's own click sequence already
+uses, applied to a mid-range ping-pong instead of a full-range one.
+Advances at a plain constant rate (Mouse Flick Anim Speed, the same
+control click/sciss/snap already use), deliberately NOT charge's own
+hold-duration ramp, since the spec describes a constant repeating
+cycle. Frame numbers resolve to array indices via the existing
+nearest-number lookup (`mouseFlickNearestIndex`) rather than a
+hardcoded offset, so a gap in any direction's frame set degrades
+gracefully to the nearest surviving frame instead of desyncing every
+later frame or throwing -- exercised for real during development
+against a genuine, since-resolved gap in one direction's frame set
+(SIDE THUMB was briefly missing frame 42; also had its files fully
+re-supplied under a different filename convention partway through
+this same task, along with FRONT THUMB's own folder -- both re-synced
+to their real on-disk filenames directly, not assumed to share a
+convention with the others). All 8 directions now have tickle art
+(the initial request covered 3; the user added the remaining 5 mid-
+task). Falls back to the normal charge display, unaffected, for any
+direction without tickle art or whenever growing isn't actively held.
+Known, disclosed limitation: the wrist-anchor point (`MOUSE_FLICK_
+VISIBLE_BOUNDS`) still uses each direction's CHARGE bounds while
+Tickle is showing, not a Tickle-specific recompute -- not requested,
+and the charge art is visually close enough that this wasn't flagged
+as urgent, but worth a real anchor recompute if the cursor looks
+slightly off during Tickle playback. Verified live via a temporary
+debug hook (grep-confirmed removed): the sequence's own forward/
+reverse/forward structure traced frame-by-frame across a full cycle
+including the wraparound back into the repeating tail; confirmed
+switching correctly between Tickle and normal charge display as
+growing starts/stops mid-hold; confirmed both growth-trigger paths
+(circle hold, rope hold) correctly show Tickle; confirmed the
+nearest-frame fallback resolves to the expected adjacent frame for a
+direction with a gap. One real test-methodology snag hit and
+resolved along the way: direction-bucket selection now re-derives
+itself every tick from the entity's own live pointing angle (see the
+change above), so a plain one-time `mfDirectionKey` assignment in the
+test hook got silently overwritten on the very next tick -- fixed by
+placing the mouse at a real angle that resolves to the target
+direction instead (and separately catching that `cfg.
+mouseFlickAngleOffset`, a live calibration slider, was non-zero at
+test time and needed neutralizing for a clean, offset-independent
+test -- not a bug in the feature itself).
+
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
 from `resetSettings()`'s own async settings fetch, which resolves

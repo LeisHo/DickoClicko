@@ -10822,3 +10822,137 @@ commit time) still fully intact afterward.
 
 Committed/pushed (8c3013f) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-11  -  09:40 PM EDT
+
+"I added new animation frame folders with the word Tickle in it.
+These will only be triggered when rope growth is triggered. It will
+only apply to the 3 relevant animation types. So on rope growth click
+and hold, you begin the sequence. As long as the click is held (rope
+is growing), you will continue to play the sequence as follows -- 1.
+begin from frame 1 to frame 48. 2. reverse sequence from frame 48 to
+frame 13. 3. back to normal sequence starting from 13 to 48. 4.
+repeats." Mid-task follow-ups: "actually, i added the tickle frames
+for all 8 animation types. implement" (scope expanded from 3 to all
+8 directions), "i replaced the side thumb frames. filled teh gap"
+and "i updated SideThumb Frames" (2 further replacements of that same
+folder's files, the 2nd under a different filename convention),
+"which frame is missing from Side Thumb" (answered directly: 42).
+
+Investigated the new folders directly before writing any code:
+confirmed all 8 (`BEHIND-TICKLE`, `BEHIND THUMB-TICKLE`, `BEHIND
+PINKY-TICKLE`, `FRONT - TICKLE`, `FRONT PINK - TICKLE`, `FRONT THUMB
+- TICKLE`, `SIDE PINKY - TICKLE`, `SIDE THUMB - TICKLE`) map to
+existing FLICK MOUSE direction keys, and that -- unlike every other
+FLICK variant in this file -- their frames sit directly in the
+direction folder with no "/A" subfolder. Added a `noSubfolder` flag to
+`mouseFlickFrameUrl()` rather than special-casing tickle's URL
+construction separately.
+
+Root-caused the exact trigger condition rather than guessing: "rope
+growth is triggered" maps to the `growing` module flag, but that flag
+is ALSO true during the scripted boot/detach intro extension (no user
+hold involved at all) -- narrowed to `growing && downInfo &&
+(downInfo.mode==='circle' || downInfo.mode==='rope')`, which is only
+ever true for a REAL user press currently driving growth (confirmed
+via direct code reading: downInfo is null during the scripted path,
+and is set to exactly one of those 2 shapes by the 2 real growth-
+triggering timers). Extended this mid-task once a CONCURRENT session's
+own "Grow Rope On Rope Hold" checkbox landed in the same file
+(discovered via `git diff` after a routine scope-check) -- the
+original gate only covered the circle's own hold-to-grow
+(`downInfo.mode==='circle'`); added the `'rope'` case once that
+sibling feature's own mechanics were read and confirmed to also flow
+through the same `growing` flag via its own dedicated timer.
+
+Designed the sequence as a single precomputed 118-frame array (48
+forward + 35 reverse + 35 forward again) rather than a live phase-
+tracking state machine, mirroring this file's own established "click"
+sequence convention. One interpretive call, flagged rather than
+silently assumed: the literal spec would show frame 48 and frame 13
+twice each (once at the end of one phase, again at the start of the
+next) -- excluded here instead, matching the SAME "no duplicate peak"
+principle already used by the click sequence's own forward+reverse
+construction. Wrote a new generalized `mouseFlickLoopTailIndex(pos,
+totalLen, prefixLen)` rather than duplicating charge's own existing
+loop-tail formula with a different hardcoded prefix -- charge's
+formula turns out to be exactly this same function called with
+prefixLen=1, confirmed by direct comparison before writing the
+generalization. Speed deliberately reuses the existing Mouse Flick
+Anim Speed control (constant rate) rather than charge's own hold-
+duration ramp, since the spec describes a constant repeating cycle
+with no acceleration language.
+
+Handled a real, disclosed data gap rather than silently working
+around or ignoring it: SIDE THUMB's folder was missing frame 42 (47
+files present, not 48) for most of this task. Rather than hardcode
+`(frameNumber-1)` as the array index (valid only for a genuinely
+contiguous set), wrote `mouseFlickTickleFrameIndex()` to resolve
+every direction's frame numbers through the EXISTING
+`mouseFlickVariantNumbers()`/`mouseFlickNearestIndex()` helpers
+already built for mid-sequence direction switching -- costs nothing
+for the 7 directions with no gap (exact match every time), and
+degrades gracefully to the nearest surviving frame for the one that
+did. This fallback was live-verified directly (frame 41 and 43 both
+resolve correctly, frame 42 falls back to 41's own index) BEFORE the
+user's own later fix landed, then simplified back to a plain
+`count:48` (and the now-unnecessary fallback array removed as dead
+code, not left in place) once the gap was genuinely closed --
+verified via direct enumeration each time, never assumed from the
+user's own status report alone, since 2 earlier "check again" rounds
+this same session already established that assets can lag behind a
+verbal update.
+
+**Caught a real filename-convention change mid-task, not assumed
+unchanged:** after being told the SIDE THUMB gap was filled, a fresh
+enumeration showed the ENTIRE folder had been re-supplied under a
+different prefix (`Directhumb Tickle`, space instead of hyphen, no
+longer capitalizing the T in Thumb) -- a different convention than
+the original partial set (`DirectThumb-Tickle`). Re-scanning ALL 8
+folders at that point (not just the one flagged) caught a SECOND,
+otherwise-silent mismatch: FRONT THUMB's own folder had also been
+re-supplied, under yet another convention (`FrontThumb Tickle`,
+space, different capitalization) -- confirmed live via a broken-image
+count (48/48 frames failing to load, a genuine 404 on every single
+FRONT THUMB tickle frame) before fixing it, not caught by code
+review alone. Converted 384 PNG frames (8 x 48) to WebP via the
+established sharp pipeline, re-converting SIDE THUMB's own 48 after
+its filename change invalidated the earlier conversion for that
+folder.
+
+Verified live via a temporary debug hook (grep-confirmed removed,
+twice -- once for the sequence/trigger logic, once for a final broken-
+image sweep after the 2 filename-convention fixes): traced the full
+sequence frame-by-frame across a complete cycle including the
+wraparound; confirmed Tickle correctly stops showing the instant
+growing stops while charge continues; confirmed both growth-trigger
+paths (circle hold, the sibling session's own rope-hold checkbox)
+correctly show Tickle; confirmed the SIDE THUMB fallback resolved
+correctly before its gap closed; confirmed all 8 directions load
+exactly 48 complete, non-broken frames after the final filename
+fixes. One test-methodology issue hit and correctly diagnosed as such
+(not a code bug): direction-bucket selection now re-derives itself
+from the entity's own live pointing angle every tick (this same
+session's own earlier change), so a plain one-time `mfDirectionKey`
+assignment in the test hook was silently overwritten on the very next
+tick -- fixed by placing the mouse at a real angle that resolves to
+the target direction instead, and separately discovering mid-
+debugging that the live `Mouse Flick Angle Offset` calibration slider
+was non-zero at test time and needed neutralizing for a clean,
+offset-independent test.
+
+Real cross-session collision, same handling as every prior round:
+this task ran concurrently with another session's own "Grow Rope On
+Rope Hold" + FLICK-suppression work in the same file (see above) --
+confirmed via direct reading of that session's own commit that its
+release-time suppression fix is fully orthogonal to Tickle (Tickle
+only reads `mfMode==='charge'` DURING a hold; the other fix only
+changes what happens ON release), so no interaction was needed beyond
+extending the trigger gate to cover the new rope-hold path. Diff
+reviewed clean before committing (`git diff` showed only this task's
+own insertions once the other session's own work had already landed
+in a separate, already-pushed commit).
+
+Committed/pushed (2144ef2) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.
