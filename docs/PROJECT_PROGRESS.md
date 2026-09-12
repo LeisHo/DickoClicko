@@ -1203,6 +1203,21 @@ logic bugs. Flagged back to the user with a concrete next step (hard
 refresh / private window) rather than guessing at unverified code
 changes. See CHANGELOG.txt for the full test account.
 
+**Added (2026-09-12): ClickLog panel now shows a timestamp and a
+rope-physics-behavior note per entry.** Per explicit request: "include
+a timestamp as well as a note about what physics function type it
+triggered (flick, charge, cut). This note should be in regards the
+behaviour of the rope and not the cursor animation type itself." New
+`formatClickLogTime()` prepends a real wall-clock `HH:MM:SS.mmm`; new
+`CLICK_LOG_PHYSICS_NOTE` maps each `logClick()` event to `flick`/
+`charge`/`cut`/`drag`/`drag (end)`/`attract (start)`/`attract (end)`/
+`none` -- deliberately independent of FLICK MOUSE's own cosmetic
+`mfMode`, per the request's own exclusion. Verified live via real
+dispatched pointer events against the local dev server: flick, drag,
+grow, drag-end, and cut all confirmed showing correctly in the actual
+panel. Staged as a scoped 2-hunk patch around another concurrent
+session's own unrelated in-progress work in the same file.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

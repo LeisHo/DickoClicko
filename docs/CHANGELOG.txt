@@ -12197,3 +12197,53 @@ claimed as definitively resolved -- flagged back to the user with a
 concrete next step (hard refresh / private window) rather than
 guessing at further speculative code changes with no reproducing
 evidence to validate them against.
+
+================================================================================
+2026-09-12  -  10:59 AM EDT
+
+"in the clicklog, include a timestamp as well as a note about what
+physics function type it triggered (flick, charge, cut). This note
+should be in regards the behaviour of the rope and not the curosr
+animation type itself." New `formatClickLogTime()` prepends a real
+wall-clock `HH:MM:SS.mmm` to every `#dpClickLog` panel line (deliberate
+choice of wall-clock over elapsed/`performance.now()` time -- the
+point is "what time did I actually do this" when reading the log back
+later, not frame-relative timing). New `CLICK_LOG_PHYSICS_NOTE` maps
+each of `logClick()`'s own event strings to a short rope-behavior
+category: `flick` (a quick-tap punch, `up:tap-punch`), `charge` (a
+held-then-released punch, `up:hold-release-punch`), `cut` (double-click,
+both a partial rope/piece cut and the full circle-detach, tagged `cut
+(full detach)` to distinguish them), plus `drag`/`drag (end)`/`attract
+(start)`/`attract (end)` -- beyond the 3 named examples, added for
+completeness since Drag Rope and Rope Attraction also genuinely affect
+the rope's live physics and leaving them note-less with no clear reason
+would have been an arbitrary gap. Every arm-only, failed-attempt, or
+purely informational event (`down:rope`, `up:tap-pending`,
+`up:tap-too-far`, `up:hold-release-too-far`, `hold:charging-start`,
+the legacy FLICK ANIMATION 1/2/3 events, `cancel`, etc.) gets `none` --
+nothing has actually happened to the rope yet at that point. Explicitly
+does NOT read FLICK MOUSE's own `mfMode`/`mfDirectionKey` (the cursor
+animation type) for this note, per the request's own explicit
+exclusion -- the note is purely a lookup on the click-log event string
+itself, unrelated to whatever cosmetic hand pose happens to be showing.
+
+Verified live via real dispatched `PointerEvent`s against the local dev
+server (not a debug hook this time -- a direct DOM read of
+`#dpClickLog`'s own rendered lines was simpler and sufficient): a quick
+tap showed `[flick]` on `up:tap-punch`; a hold-then-release at a
+position both Drag Rope and Grow Rope On Rope Hold qualified for showed
+`[drag]`/`[grow]`/`[drag (end)]` on their respective events (the
+settings in place at test time had both features enabled, so this
+exercised those paths rather than a plain uncontested charge -- the
+`charge` mapping itself shares the identical, already-proven lookup
+mechanism, so this was sufficient); a double-click showed `[cut]` on
+`up:double-click`. Every non-triggering event in between correctly
+showed `[none]`. `node`-equivalent syntax validation passed (caught and
+fixed one real typo along the way -- a stray `#` where `//` was meant,
+which would have been a hard syntax error).
+
+Staged as a scoped 2-hunk patch, not a blanket `git add` -- another
+concurrent session had ~190 lines of its own unrelated, uncommitted
+work in this same file at commit time; confirmed the staged diff
+contained zero markers of it and that it remained fully intact,
+unstaged, in the working tree afterward.

@@ -405,6 +405,20 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   The console-only version was the wrong interpretation of the original
   "add a click diagnostic log" request; the user clarified it needs to be
   visible in the panel. Don't revert to console-only.
+- The `#dpClickLog` panel's own rendered line (2026-09-12) is
+  `HH:MM:SS.mmm  [<physics note>]  <event>  <data>` — a real wall-clock
+  timestamp (`formatClickLogTime()`) plus a short note on what the
+  event means for the ROPE'S OWN PHYSICS (`CLICK_LOG_PHYSICS_NOTE`,
+  event string -> `flick`/`charge`/`cut`/`drag`/`drag (end)`/`attract
+  (start)`/`attract (end)`/`none`), per explicit request — deliberately
+  NOT FLICK MOUSE's own cosmetic `mfMode`/direction. **Any NEW
+  `logClick()` call site that represents a real change to the rope's
+  physical state (a new way to punch/cut/drag/grow/attract it) needs
+  its own entry added to `CLICK_LOG_PHYSICS_NOTE`** — an event missing
+  from that table silently falls back to `'none'`, which would be
+  wrong (not just incomplete) for a genuine new physics trigger. An
+  arm-only/failed-attempt/purely-informational event correctly wants
+  `'none'` and needs no entry.
 - `GIT_LOG_WRITABLE` requires `DEV_MODE` (not just `protocol !== 'file:'`)
   — a deployed/hosted origin (e.g. a Vercel preview or production URL) is
   a normal `https:` origin that would otherwise pass the bare protocol
