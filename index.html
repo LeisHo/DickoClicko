@@ -425,6 +425,15 @@ const DEV_GROUPS = [
   { title:'CLICK', controls:[
     { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.1 },
     { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:22 },
+    // Per explicit request: click-and-drag the rope, anchored at the
+    // point clicked, overriding the Click-And-Hold charge/punch above
+    // (mutually exclusive per hold -- see onPointerDown's own holdTimer
+    // branch). The rope start stays confined to the circle exactly as
+    // before; the drag point itself can never be pulled farther from
+    // the anchor than the real rope length between them (see update()'s
+    // own drag-clamp, mirroring Rope Attraction's identical anchor-
+    // relative rest-length clamp).
+    { key:'dragRopeEnabled', label:'Drag Rope', type:'checkbox', def:false },
   ]},
   { title:'ROPE ANIMATION', controls:[
     { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0 },
@@ -444,6 +453,17 @@ const DEV_GROUPS = [
     // `growing` flag/rate the circle's own hold-to-grow already drives
     // -- see onPointerDown()'s own comment for the timing/gating detail.
     { key:'ropeGrowthOnRopeHold', label:'Grow Rope On Rope Hold', type:'checkbox', def:false },
+    // Bounds the checkbox above (2026-09-11, per explicit request) --
+    // previously ANY hold anywhere on screen (except one that started
+    // inside the circle) counted as "on the rope" here, since
+    // nearestPointOnRope() always returns SOME hit regardless of how
+    // far away it actually was. This is the proximity gate that makes
+    // "on the rope" mean what it sounds like: only a hold that lands
+    // within this distance of the rope's nearest point arms rope
+    // growth; a hold further out falls through to the ordinary
+    // click-and-hold FLICK charge gesture instead. Same %vmin-of-hit-
+    // distance convention as Click And Hold Distance above.
+    { key:'ropeGrowthHoldDistance', label:'Rope Growth Hold Distance', type:'slider', unit:'%vmin', min:1, max:60, step:0.5, def:20 },
     { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
     { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:10 },
   ]},
@@ -735,8 +755,18 @@ const DEV_GROUPS = [
   ]},
   { title:'FLICK MOUSE', controls:[
     { key:'mouseFlickEnabled',           label:'Mouse Flick Enabled',            type:'checkbox', def:true },
+    // Separate from the checkbox above -- Mouse Flick Enabled is the
+    // dev-facing master switch (still respected in dev mode too, see
+    // mouseFlickActive()); this one only matters for a NON-dev visitor,
+    // per explicit request ("a checkbox to turn on and off the cursor
+    // animations for non dev mode"). Lets a dev keep tuning/testing the
+    // cursor animation locally while shipping it turned off for real
+    // players (or vice versa) via one Save Settings write, without the
+    // two toggles fighting over the same boolean.
+    { key:'mouseFlickEnabledLiveMode',   label:'Cursor Animations Enabled (Live Mode)', type:'checkbox', def:true },
     { key:'mouseFlickScale',             label:'Mouse Flick Scale',              type:'slider', unit:'%vmin', min:1,    max:60,  step:0.5,  def:50 },
     { key:'mouseFlickAnimSpeed',         label:'Mouse Flick Anim Speed',         type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
+    { key:'mouseFlickTickleSpeed',       label:'Tickle Animation Speed',         type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
     { key:'mouseFlickPositionSmoothing', label:'Mouse Flick Position Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
     { key:'mouseFlickRotationSmoothing', label:'Mouse Flick Rotation Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
     { key:'mouseFlickAngleOffset',       label:'Mouse Flick Angle Offset',       type:'slider', unit:'deg',   min:-180, max:180, step:1,    def:0 },
@@ -760,6 +790,12 @@ const DEV_GROUPS = [
     ] },
     { key:'mouseFlickTargetPoint', label:'Follow Point In Rope Position', type:'slider', unit:'', min:0, max:1, step:0.01, def:0.5 },
     { key:'mouseFlickRandomInterval', label:'Random Target Change Interval', type:'slider', unit:'s', min:0.5, max:30, step:0.1, def:3 },
+    // SNAP Repeat (2026-09-11, per explicit request) -- while right-
+    // click/triple-tap-hold keeps SNAP frozen at its pause frame, an
+    // extra detour (frame 21->28, then 7->37, then back to pause) fires
+    // every this-many seconds. See SNAP_REPEAT_B/C_START/END_INDEX and
+    // the mfSnapPaused state block in update() for the full mechanism.
+    { key:'snapRepeatDuration', label:'Snap Repeat Duration', type:'slider', unit:'s', min:0.5, max:30, step:0.5, def:5 },
   ]},
 ];
 
@@ -3213,6 +3249,24 @@ let mfRightDown = false;
 // and completely unchanged; touch input never touches mfPendingClick.
 let mfTripleHeld = false;
 let mfTouchTapCount = 0, mfTouchTapTime = 0, mfTouchTapTimer = null;
+// SNAP Repeat (2026-09-11, per explicit request) -- while SNAP is frozen
+// at SNAP_FREEZE_INDEX (the existing "pause state" while right-click/
+// triple-tap is held), an extra "fidget" detour now fires every Snap
+// Repeat Duration seconds: play frame 21->28, then frame 7->37, then
+// return to the pause state and start counting again. mfSnapPaused is a
+// LATCH, not re-derived from mfIdx every frame -- the detour itself
+// plays frames well BELOW SNAP_FREEZE_INDEX, so "are we frozen" can't be
+// inferred from "is mfIdx >= SNAP_FREEZE_INDEX" while a detour is live.
+// It latches true the first time the main forward play reaches the
+// freeze point (while still held) and only clears on release, same
+// "still held" condition (mfRightDown || mfTripleHeld) the freeze itself
+// already keys off. mfSnapRepeatPhase is null while merely paused
+// (counting toward the next repeat), 'toB' while playing 21->28, 'toC'
+// while playing 7->37.
+let mfSnapPaused = false;
+let mfSnapRepeatTimer = 0;
+let mfSnapRepeatPhase = null;
+let mfSnapRepeatFrameAccum = 0;
 
 function mouseFlickDirection(){ return MOUSE_FLICK_DIRECTIONS.find(d => d.key === mfDirectionKey) || MOUSE_FLICK_DIRECTIONS[0]; }
 // "Up" (0°) = directly above viewport center, angle increases clockwise
@@ -3282,6 +3336,17 @@ function mouseFlickPointOnRope(t){
 // an EARLIER piece than the most recent one -- this simplification
 // doesn't track that lineage precisely, flagged here rather than
 // silently assumed correct.
+// Single gate for whether FLICK MOUSE actually runs at all -- replaces
+// the old bare `cfg.mouseFlickEnabled` check at every call site.
+// cfg.mouseFlickEnabled is the dev-facing master switch and stays
+// effective in dev mode regardless of the live-mode checkbox below, so
+// a dev can keep testing/tuning it locally even while it's turned off
+// for real players; cfg.mouseFlickEnabledLiveMode only matters for a
+// non-dev visitor (2026-09-11, per explicit request for a way to
+// disable the cursor animation for live/non-dev players specifically).
+function mouseFlickActive(){
+  return cfg.mouseFlickEnabled && (DEV_MODE || cfg.mouseFlickEnabledLiveMode);
+}
 function mouseFlickEndcapTarget(){
   const points = mainRope.points;
   const nearMinimum = mainRope.totalLength <= vh(cfg.minRopeLength) + mainRope.segLen;
@@ -3313,9 +3378,9 @@ function mouseFlickTargetPosition(){
 // The real frame-NUMBER array a variant's forward-ordered frames
 // correspond to (not array index) -- variant.nums when present
 // (non-contiguous sets, e.g. base's own trimmed sets), else the
-// implied contiguous 1..count range. Used by mouseFlickRemapSequence()
-// below to preserve "same frame number, nearest if missing" across a
-// mid-sequence direction switch (explicit spec, point 3).
+// implied contiguous 1..count range. Used by the Tickle sequence and
+// SNAP_FREEZE_INDEX below to resolve a real frame number to its
+// nearest surviving array index.
 function mouseFlickVariantNumbers(variant){
   return variant.nums || Array.from({ length: variant.count }, (_, i) => i + 1);
 }
@@ -3338,6 +3403,17 @@ function mouseFlickNearestIndex(numbers, target){
 // as of this writing (re-verify if SNAP ever goes per-direction like
 // base/click already has).
 const SNAP_FREEZE_INDEX = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 41);
+// SNAP Repeat's own detour frame range, same nearest-number-lookup
+// convention as SNAP_FREEZE_INDEX above so a future SNAP frame trim
+// re-resolves these automatically instead of going stale. Per explicit
+// spec: "1. Frame 21 to Frame 28  2. Frame 07 to Frame 37" -- both
+// spans play forward through SNAP_A_FRAME_NUMBERS' own array order
+// (which is already ascending by frame number), so "21 to 28" and
+// "7 to 37" are just the array-index spans between those two numbers.
+const SNAP_REPEAT_B_START_INDEX = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 21);
+const SNAP_REPEAT_B_END_INDEX   = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 28);
+const SNAP_REPEAT_C_START_INDEX = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 7);
+const SNAP_REPEAT_C_END_INDEX   = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 37);
 
 // Per-direction, per-VARIANT visible-content anchor point -- ported
 // directly from DotFlicko's own VISIBLE_BOUNDS_BY_DIRECTION (per
@@ -3395,49 +3471,6 @@ function mouseFlickVisibleBounds(directionKey, variantKey){
 function mouseFlickVariantKeyForMode(mode){
   if (mode === 'sciss' || mode === 'snap' || mode === 'charge') return mode;
   return 'base';
-}
-// Mid-sequence direction switch for click/sciss/snap (charge needs no
-// equivalent -- see its own comment at the mfMode==='charge' direction-
-// switch call site for why). Per explicit spec: continue the sequence
-// in the new direction "from the same frame number; if that exact
-// frame number does not exist...use the next closest frame number,"
-// and this applies even mid-sequence, not just while idle.
-//
-// click's own forward-then-mirrored-reverse shape needs to know which
-// half of the sequence the current position falls in (so the NEW
-// position mirrors correctly too); sciss/snap are plain forward-only,
-// no mirroring. Preserves the sub-frame fractional part of
-// mfFrameAccum so playback speed doesn't visibly stutter at the switch
-// instant.
-function mouseFlickRemapSequence(newKey){
-  const oldDir = mouseFlickDirection();
-  const newDir = MOUSE_FLICK_DIRECTIONS.find(d => d.key === newKey);
-  if (!newDir) return;
-  const variantKey = mfMode === 'click' ? 'base' : mfMode;
-  const oldNumbers = mouseFlickVariantNumbers(oldDir[variantKey]);
-  const newNumbers = mouseFlickVariantNumbers(newDir[variantKey]);
-  const newFrames = mouseFlickFramesByDirection[newKey] && mouseFlickFramesByDirection[newKey][mfMode];
-  if (!newFrames || !newFrames.length || !oldNumbers.length || !newNumbers.length) return;
-  const p = Math.floor(mfFrameAccum);
-  const frac = mfFrameAccum - p;
-  let currentNumber, forwardHalf = true;
-  if (mfMode === 'click'){
-    const n = oldNumbers.length;
-    if (p < n){ currentNumber = oldNumbers[p]; forwardHalf = true; }
-    else { currentNumber = oldNumbers[Math.max(0, Math.min(n - 1, 2 * n - 2 - p))]; forwardHalf = false; }
-  } else {
-    currentNumber = oldNumbers[Math.max(0, Math.min(oldNumbers.length - 1, p))];
-  }
-  const newIdx = mouseFlickNearestIndex(newNumbers, currentNumber);
-  let newPos;
-  if (mfMode === 'click' && !forwardHalf){
-    const n2 = newNumbers.length;
-    newPos = Math.max(0, 2 * n2 - 2 - newIdx);
-  } else {
-    newPos = newIdx;
-  }
-  mfFrameAccum = newPos + frac;
-  mfFrozenFrames = newFrames;
 }
 // Starts a fresh click/sciss/snap play (forward, or forward+reverse for
 // click) -- ignored if a mode is already active, same "in-progress
@@ -6238,6 +6271,20 @@ function onPointerDown(e){
   // startedInCircle -- see that flag's own comment.
   holdTimer = setTimeout(() => {
     if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
+    // Drag Rope (per explicit request) overrides Click-And-Hold entirely --
+    // the same hold-recognition timer that would otherwise arm charging
+    // instead arms dragging, anchored at the rope point closest to the
+    // ORIGINAL press (downInfo.hit, frozen at pointerdown -- "anchored by
+    // the point on the rope that is clicked"). Index 0 (the anchor itself)
+    // is excluded -- dragging it would fight its own separate circle-
+    // boundary confinement -- clamped up to the first real, draggable point.
+    if (cfg.dragRopeEnabled){
+      downInfo.dragging = true;
+      downInfo.dragIndex = Math.max(1, downInfo.hit.index);
+      mfSuppressClickFromGrowth = true;
+      logClick('hold:drag-start', { x, y, index: downInfo.dragIndex });
+      return;
+    }
     downInfo.charging = true;
     logClick('hold:charging-start', { x, y });
   }, cfg.doubleClickThreshold);
@@ -6253,8 +6300,13 @@ function onPointerDown(e){
   // need, since 'growing' is the scripted startup animation's own
   // in-progress state -- letting a rope hold ALSO drive `growing` then
   // would fight that scripted extension rather than adding a genuine
-  // user-triggered grow.
-  if (cfg.ropeGrowthOnRopeHold && introPhase === 'done' && !startedInCircle){
+  // user-triggered grow. Also requires `hit.dist` to fall within Rope
+  // Growth Hold Distance (2026-09-11, per explicit request) -- without
+  // this, nearestPointOnRope() always returning SOME hit meant this
+  // armed for literally any hold anywhere on screen once the checkbox
+  // was on; now it only overrides the click-and-hold FLICK charge
+  // gesture when the cursor is actually near the rope.
+  if (cfg.ropeGrowthOnRopeHold && introPhase === 'done' && !startedInCircle && hit.dist <= vmin(cfg.ropeGrowthHoldDistance)){
     growthOnRopeHoldTimer = setTimeout(() => {
       if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
       growing = true;
@@ -6381,6 +6433,17 @@ function onPointerUp(e){
     return;
   }
 
+  if (info.dragging){
+    // Drag Rope release -- no punch fires (dragging fully replaces the
+    // charge+punch outcome for this hold, per "override the Click on
+    // Rope to Hold function"). update()'s own per-frame drag clamp
+    // already stops touching the point the instant downInfo is nulled
+    // just above, so releasing simply lets normal physics resume from
+    // wherever the point was last dragged to.
+    logClick('up:drag-end', { x: e.clientX, y: e.clientY, index: info.dragIndex });
+    return;
+  }
+
   if (info.charging){
     // a genuine hold — not limited by Click Distance (press down anywhere);
     // gated instead by its own, more generous Click And Hold Distance,
@@ -6461,7 +6524,7 @@ window.addEventListener('pointermove', e => {
   mfHasMouse = true;
 });
 canvas.addEventListener('pointerdown', e => {
-  if (!cfg.mouseFlickEnabled) return;
+  if (!mouseFlickActive()) return;
   if (e.button === 2){
     // Right click OR right-click-hold: per explicit request, both TRIGGER
     // the same way (fires once per press, ignored while busy) -- what
@@ -6497,7 +6560,7 @@ canvas.addEventListener('pointerdown', e => {
   mfHoldTimer = setTimeout(() => { mouseFlickStartCharge(); }, cfg.doubleClickThreshold);
 });
 window.addEventListener('pointerup', e => {
-  if (!cfg.mouseFlickEnabled) return;
+  if (!mouseFlickActive()) return;
   if (e.button === 2){
     // Release of a held right-click -- if SNAP is currently frozen at
     // frame 42 (see update()'s own comment), this is what lets it
@@ -6994,11 +7057,44 @@ function update(rawDt){
   // constraint reads independent of radius), so Anchor Weight isn't lost
   // during the unsettled window.
   const circleR = vmin(cfg.circleSize) / 2;
+  // Drag Rope (per explicit request): while a hold armed by onPointerDown's
+  // own holdTimer branch is actively dragging, the grabbed point is
+  // repositioned DIRECTLY every frame (kinematic, like positionGrowingTip()'s
+  // own tip placement) toward the live mouse position, clamped so it can
+  // never be pulled farther from the anchor than the rope's own real rest
+  // length between anchor and that point -- "the distance the rope can be
+  // dragged is determined by the length of the rope between the drag point
+  // and the rope start," the exact same anchor-relative rest-length clamp
+  // Rope Attraction already uses for its own tip pin, just scoped to the
+  // grabbed point's own sub-chain length (segLen * dragIndex) rather than
+  // the whole rope. oldx/oldy are snapped to match so the point carries no
+  // implied velocity while actively held, the same convention every other
+  // kinematically-positioned point in this file (growing tip, tip-pinning
+  // neighbor) already follows. dragPinIndex feeds integrateChain() below as
+  // its pinnedIndex, so neither the distance nor bend constraint can move
+  // this point out from under the drag -- everything between it and the
+  // anchor gets pulled taut toward it, and everything between it and the
+  // tip hangs from it, exactly like Rope Attraction's own tip case but
+  // centered on an interior point instead of the last one.
+  let dragPinIndex = -1;
+  if (downInfo && downInfo.mode === 'rope' && downInfo.dragging){
+    dragPinIndex = downInfo.dragIndex;
+    const anchor = mainRope.points[0];
+    const maxDragDist = mainRope.segLen * dragPinIndex;
+    let dx = mouseX - anchor.x, dy = mouseY - anchor.y;
+    const ddist = Math.hypot(dx, dy) || 1e-6;
+    if (ddist > maxDragDist){ dx *= maxDragDist / ddist; dy *= maxDragDist / ddist; }
+    const dragPoint = mainRope.points[dragPinIndex];
+    dragPoint.x = anchor.x + dx;
+    dragPoint.y = anchor.y + dy;
+    dragPoint.oldx = dragPoint.x;
+    dragPoint.oldy = dragPoint.y;
+  }
   // attractionEffSegLen (set just above, only while ropeAttractionActive)
   // temporarily shrinks the rest length THIS solve targets -- see that
   // block's own comment -- without ever touching mainRope.segLen itself,
   // so growth/display/every other reader of segLen is unaffected.
-  integrateChain(mainRope.points, ropeAttractionActive ? mainRope.attractionEffSegLen : mainRope.segLen, dt, gravityAccel, -1, hasPartialTip,
+  integrateChain(mainRope.points, ropeAttractionActive ? mainRope.attractionEffSegLen : mainRope.segLen, dt, gravityAccel, dragPinIndex, hasPartialTip,
     { index: 0, center: circleAnchor(), radius: introUnsettled ? circleR : anchorBoundaryRadius(), weightMult: cfg.anchorWeight },
     ropeAttractionActive ? { x: mainRope.attractionPinX, y: mainRope.attractionPinY } : null);
   // Pins the tip's own IMMEDIATE neighbor exactly on the ray from the tip
@@ -7318,7 +7414,7 @@ function update(rawDt){
   // bucket recompute, and per-mode frame-index advance -- adopted
   // directly from DotFlicko's own update() (see that project's
   // index.html for the original this was ported from).
-  if (cfg.mouseFlickEnabled){
+  if (mouseFlickActive()){
     const mfCx = viewportW() / 2, mfCy = viewportH() / 2;
     if (!mfHasMouse){ mfX = mfCx; mfY = mfCy; mfEntityX = mfCx; mfEntityY = mfCy; }
     const mfPosFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickPositionSmoothing, rawDt);
@@ -7376,24 +7472,24 @@ function update(rawDt){
       : mfTargetAngle;
     const mfRotFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickRotationSmoothing, rawDt);
     mfEntityAngleDeg = mouseFlickAngleLerp(mfEntityAngleDeg, mfRotationTargetAngle, mfRotFactor);
-    // Direction bucket switches EVERY frame now, even mid-sequence/hold
-    // (per explicit spec, point 3: "angle thresholds apply even during
-    // mid animation sequence") -- no longer idle-only. While idle, this
-    // is a plain reassignment (nothing else to preserve). While a
-    // click/sciss/snap sequence is playing, mouseFlickRemapSequence()
-    // re-targets mfFrozenFrames/mfFrameAccum onto the new direction's
-    // own array at the SAME REAL FRAME NUMBER (nearest available if
-    // that exact number doesn't exist there -- point 3's own spec),
-    // preserving the sub-frame fraction so playback speed doesn't
-    // visibly stutter at the switch instant. charge needs no equivalent
-    // remap call: charge frame counts are uniform (8, contiguous) across
-    // every direction as of this writing, so simply swapping which
-    // direction's array mfHoldCyclePos indexes into already preserves
-    // position AND already satisfies "never repeat frame 0" for free --
-    // the existing chargeIdx formula below only ever resolves to 0
-    // during the very first fractional frame of the WHOLE hold
-    // (mfHoldCyclePos in [0,1)), which is direction-independent by
-    // construction, not something a mid-hold switch could re-trigger.
+    // Direction bucket switches by angle while idle or actively charging
+    // (click-and-hold) -- but LOCKS for the duration of the click/sciss/
+    // snap end sequence that plays after a click or a hold release.
+    // Corrected 2026-09-11 (see below for the prior, opposite behavior):
+    // per explicit clarification -- "while the click is held, the
+    // animation will change types according to angle, but not during
+    // the end sequence" -- direction no longer re-targets mid-sequence.
+    // charge itself still updates every frame (a plain reassignment,
+    // nothing to preserve: charge frame counts are uniform/contiguous
+    // across every direction, so swapping which direction's array
+    // mfHoldCyclePos indexes into needs no remap). The now-removed
+    // mouseFlickRemapSequence() used to re-target mfFrozenFrames/
+    // mfFrameAccum mid-click/sciss/snap onto the new direction's array
+    // at the same real frame number -- that mechanism is gone along
+    // with the mid-sequence switch it existed to support; a prior
+    // version of this comment described switching every frame including
+    // mid-sequence, per an earlier spec ("point 3") that has since been
+    // superseded by the clarification above.
     //
     // mfPointingAngle (2026-09-11, per explicit clarification: "the
     // image 'points' [from] the center of the bottom edge, to the
@@ -7413,10 +7509,7 @@ function update(rawDt){
     // the lerp's own smoothing delay.
     const mfPointingAngle = mfEntityAngleDeg + 180;
     const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfPointingAngle)].key;
-    if (mfTargetDirKey !== mfDirectionKey){
-      if (mfMode === 'click' || mfMode === 'sciss' || mfMode === 'snap'){
-        mouseFlickRemapSequence(mfTargetDirKey);
-      }
+    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'snap'){
       mfDirectionKey = mfTargetDirKey;
     }
     if (mfMode === 'charge'){
@@ -7436,13 +7529,15 @@ function update(rawDt){
       // and downInfo is only ever {mode:'circle'} or {mode:'rope',...},
       // so this covers every real user-triggered growth source without
       // needing to separately check cfg.ropeGrowthOnRopeHold here).
-      // Advances at a plain constant rate (Mouse Flick Anim Speed, same
-      // control click/sciss/snap already use) -- deliberately NOT
-      // mfHoldRate (the ramping charge speed above), since the spec
-      // describes a constant repeating cycle with no mention of
-      // accelerating the longer growth continues.
+      // Advances at its own constant rate (Tickle Animation Speed,
+      // 2026-09-11 -- previously shared cfg.mouseFlickAnimSpeed with
+      // click/sciss/snap; split into its own slider per explicit
+      // request so Tickle's pace can be tuned independently) --
+      // deliberately NOT mfHoldRate (the ramping charge speed above),
+      // since the spec describes a constant repeating cycle with no
+      // mention of accelerating the longer growth continues.
       const mfGrowHolding = growing && downInfo && (downInfo.mode === 'circle' || downInfo.mode === 'rope');
-      if (mfGrowHolding) mfTickleCyclePos += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
+      if (mfGrowHolding) mfTickleCyclePos += rawDt * FLICK_BASE_FPS * cfg.mouseFlickTickleSpeed;
     } else if (mfMode !== 'idle' && mfFrozenFrames){
       // Same "pause on a still-loading frame instead of racing past it"
       // guard the other 3 FLICK animations already use (isFrameBlocking(),
@@ -7472,8 +7567,49 @@ function update(rawDt){
         // and mobile triple-click-hold flags (see mfTripleHeld's own
         // comment) both feed this SAME freeze condition, since they're
         // the same gesture's 2 input-specific triggers.
-        const mfSnapFrozen = mfMode === 'snap' && (mfRightDown || mfTripleHeld) && mfFrozenFrames.length > SNAP_FREEZE_INDEX && mfIdx >= SNAP_FREEZE_INDEX;
-        if (!mfSnapFrozen){
+        const mfSnapHeld = mfRightDown || mfTripleHeld;
+        if (mfMode === 'snap'){
+          if (!mfSnapHeld){
+            mfSnapPaused = false;
+            mfSnapRepeatPhase = null;
+            mfSnapRepeatTimer = 0;
+          } else if (!mfSnapPaused && mfFrozenFrames.length > SNAP_FREEZE_INDEX && mfIdx >= SNAP_FREEZE_INDEX){
+            mfSnapPaused = true;
+          }
+        }
+        const mfSnapFrozen = mfMode === 'snap' && mfSnapPaused;
+        if (mfSnapFrozen){
+          // SNAP Repeat (2026-09-11): while paused/held, an extra
+          // fidget detour fires every Snap Repeat Duration seconds --
+          // frame 21->28 (mfSnapRepeatPhase 'toB'), then frame 7->37
+          // ('toC'), then back to the pause frame. Advances mfFrameAccum
+          // directly (rather than letting the normal advance branch run)
+          // so the existing render-side mfIdx lookup just works.
+          if (mfSnapRepeatPhase){
+            mfSnapRepeatFrameAccum += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
+            const repStart = mfSnapRepeatPhase === 'toB' ? SNAP_REPEAT_B_START_INDEX : SNAP_REPEAT_C_START_INDEX;
+            const repEnd   = mfSnapRepeatPhase === 'toB' ? SNAP_REPEAT_B_END_INDEX   : SNAP_REPEAT_C_END_INDEX;
+            const repSpan  = Math.max(1, repEnd - repStart);
+            mfFrameAccum = Math.min(repEnd, repStart + Math.floor(mfSnapRepeatFrameAccum));
+            if (mfSnapRepeatFrameAccum >= repSpan){
+              if (mfSnapRepeatPhase === 'toB'){
+                mfSnapRepeatPhase = 'toC';
+                mfSnapRepeatFrameAccum = 0;
+              } else {
+                mfSnapRepeatPhase = null;
+                mfSnapRepeatFrameAccum = 0;
+                mfFrameAccum = SNAP_FREEZE_INDEX;
+                mfSnapRepeatTimer = 0;
+              }
+            }
+          } else {
+            mfSnapRepeatTimer += rawDt;
+            if (mfSnapRepeatTimer >= cfg.snapRepeatDuration){
+              mfSnapRepeatPhase = 'toB';
+              mfSnapRepeatFrameAccum = 0;
+            }
+          }
+        } else {
           mfFrameAccum += rawDt * FLICK_BASE_FPS * cfg.mouseFlickAnimSpeed;
           if (Math.floor(mfFrameAccum) >= mfFrozenFrames.length){
             mfMode = 'idle';
@@ -8604,7 +8740,7 @@ function render(){
     // origin). No hit-test rect: this entity isn't clicked ON, its own
     // gestures are global window/canvas listeners (see their own
     // comment above onPointerDown/onPointerUp).
-    if (cfg.mouseFlickEnabled){
+    if (mouseFlickActive()){
       const mfFramesForDir = mouseFlickFramesByDirection[mfDirectionKey];
       let mfImg;
       if (mfMode === 'charge'){
@@ -8771,6 +8907,21 @@ resetSettings(); // load last-saved values/order/geometry, if any (falls back to
 // genuine catch-up burst (e.g. after a backgrounded tab).
 lastTime = performance.now();
 requestAnimationFrame(loop);
+
+if (DEV_MODE){
+  window.__testDrag = {
+    tick: (n=1) => { for (let i=0;i<n;i++){ update(FIXED_DT); } render(); },
+    forceRopeDrag: (idx) => { downInfo = { mode:'rope', hit:{index:idx, dist:0}, startTime: performance.now(), charging:false, startedInCircle:false, dragging:true, dragIndex:idx }; },
+    endDown: () => { downInfo = null; },
+    downInfoState: () => downInfo,
+    ropePoint: (i) => ({ x: mainRope.points[i].x, y: mainRope.points[i].y }),
+    ropePointCount: () => mainRope.points.length,
+    ropeSegLen: () => mainRope.segLen,
+    anchor: () => ({ x: mainRope.points[0].x, y: mainRope.points[0].y }),
+    setRopeLen: (vhVal) => { setMainRopeTotalLength(vh(vhVal)); },
+    setMouse: (x, y) => { mouseX = x; mouseY = y; },
+  };
+}
 
 })();
 </script>
