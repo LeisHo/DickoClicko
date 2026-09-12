@@ -337,6 +337,23 @@ const DEV_GROUPS = [
     { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1.45 },
     { key:'tipSegmentShapeEnabled', label:'Tip Segment Shape', type:'checkbox', def:false },
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:10 },
+    // Segment Length (2026-09-12, per explicit request: "do i have a
+    // slider that sets the amount of segments? If not, add that
+    // slider") -- was a hardcoded TARGET_SEG_LEN_VH constant, now the
+    // single live source every segment-density computation reads
+    // (resetMainRope()'s initial chain, setMainRopeTotalLength()'s own
+    // point add/remove during growth/cuts). Segment COUNT itself isn't
+    // directly settable -- it's always current rope length / this
+    // value + 1 -- so this is the direct, actually-controllable knob
+    // that determines it: smaller = more/finer segments, larger =
+    // fewer/coarser ones. onChange re-decimates the CURRENT rope at
+    // its own existing total length (same "if (mainRope && introPhase
+    // === 'done')" guard Rope Length's own onChange uses, for the same
+    // reason -- skip while the startup animation is still managing
+    // mainRope's length itself) so a drag gives immediate visual
+    // feedback instead of only affecting future growth.
+    { key:'segmentLength',  label:'Segment Length',    type:'slider', unit:'%vh', min:0.5, max:10, step:0.05, def:45/19,
+      onChange: () => { if (mainRope && introPhase === 'done') setMainRopeTotalLength(mainRope.totalLength); } },
     { key:'ropeLength',     label:'Rope Length',       type:'slider', unit:'%vh',   min:3,   max:120.19262130177428, step:1, def:3.4615384615384612,
       // Skipped while the startup animation is actively managing mainRope's
       // own length (introPhase !== 'done') -- otherwise resetSettings()
@@ -3886,16 +3903,19 @@ const POINT_COUNT = 20;
 const HOLD_THRESHOLD_MS = 180;
 const MAX_FALLEN_PIECES = 60;
 const MAX_SPLATTER_PARTICLES = 400; // see splatterParticles' own comment
-// target segment length (as %vh, matching the default rope's own density) —
-// growth/manual-length-change ADD points to hold roughly this density rather
-// than stretching a fixed point count further apart. A fixed point count
-// over a growing length gets sparser and sparser, which both looks and
-// behaves like a stiff stick instead of a rope (too few joints to bend at),
-// and — since hit-testing walks the same straight-line segments — makes the
+// Target segment length (as %vh) -- growth/manual-length-change ADD
+// points to hold roughly this density rather than stretching a fixed
+// point count further apart. A fixed point count over a growing length
+// gets sparser and sparser, which both looks and behaves like a stiff
+// stick instead of a rope (too few joints to bend at), and — since
+// hit-testing walks the same straight-line segments — makes the
 // visually-curved (smoothed) rope increasingly miss its own hit-test
 // geometry the longer/sparser it gets, which is why an extended piece
-// stopped being cuttable.
-const TARGET_SEG_LEN_VH = 45 / (POINT_COUNT - 1);
+// stopped being cuttable. Was a hardcoded constant; now the live
+// cfg.segmentLength dev slider (ROPE group, 2026-09-12) -- every site
+// that used to read this constant now reads cfg.segmentLength instead,
+// so the whole file has exactly one source of truth for segment
+// density, live-tunable rather than baked in.
 
 function makeChain(n, x, y, segLen){
   const pts = [];
@@ -3977,7 +3997,7 @@ function resetBgRope(startX, startY){
   const anchor = circleAnchor();
   const sx = startX !== undefined ? startX : anchor.x;
   const sy = startY !== undefined ? startY : anchor.y;
-  const targetSeg = vh(TARGET_SEG_LEN_VH);
+  const targetSeg = vh(cfg.segmentLength);
   const pointCount = Math.max(2, Math.round(vh(cfg.ropeDefaultLength) / targetSeg) + 1);
   bgRope = { points: makeChain(pointCount, sx, sy, targetSeg), segLen: targetSeg };
 }
@@ -4025,17 +4045,20 @@ function resetMainRope(startingLengthPx){
   const anchor = circleAnchor();
   const totalLen = startingLengthPx !== undefined ? startingLengthPx : vh(cfg.ropeDefaultLength);
   // Must build with the SAME segLen (targetSeg) that setMainRopeTotalLength()
-  // pins everything to, not a POINT_COUNT-derived one -- those two used to
-  // disagree whenever cfg.ropeDefaultLength's default no longer matched the
-  // fixed 45%vh TARGET_SEG_LEN_VH was originally computed from (it was, until
-  // a later "set defaults" round changed Rope Length's default without also
-  // updating this constant). The mismatch left the rope built at one segLen
-  // and then, the moment anything called setMainRopeTotalLength() (e.g. a
-  // saved settings reload firing ropeLength's onChange), silently
-  // overwritten to targetSeg for every point at once -- a whole-chain
-  // rest-length jump the constraint solver had to violently correct,
-  // reading as a bounce/glitch on load or on the slider's first touch.
-  const targetSeg = vh(TARGET_SEG_LEN_VH);
+  // pins everything to, not a POINT_COUNT-derived one -- these two used to
+  // read from 2 SEPARATE sources of truth (a hardcoded TARGET_SEG_LEN_VH
+  // constant vs. cfg.ropeDefaultLength's own default), which could disagree
+  // whenever one changed without the other following -- the rope would
+  // build at one segLen, then the moment anything called
+  // setMainRopeTotalLength() (e.g. a saved settings reload firing
+  // ropeLength's onChange), silently get overwritten to targetSeg for
+  // every point at once -- a whole-chain rest-length jump the constraint
+  // solver had to violently correct, reading as a bounce/glitch on load or
+  // on the slider's first touch. Both now read the SAME live
+  // cfg.segmentLength (2026-09-12), so this specific drift can no longer
+  // happen -- kept as a real, worked example of why this function can
+  // never derive its own segLen independently.
+  const targetSeg = vh(cfg.segmentLength);
   const pointCount = Math.max(2, Math.round(totalLen / targetSeg) + 1);
   mainRope = {
     points: makeChain(pointCount, anchor.x, anchor.y, targetSeg),
@@ -4070,7 +4093,7 @@ function resetMainRope(startingLengthPx){
 }
 
 function setMainRopeTotalLength(newTotalPx){
-  const targetSeg = vh(TARGET_SEG_LEN_VH);
+  const targetSeg = vh(cfg.segmentLength);
   const desiredCount = Math.max(2, Math.round(newTotalPx / targetSeg) + 1);
   const pts = mainRope.points;
   if (desiredCount > pts.length){
@@ -5653,7 +5676,7 @@ function detachEntireRopeAndRestartIntro(){
     fallenPieces.push(piece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
   }
-  resetMainRope(vh(TARGET_SEG_LEN_VH));
+  resetMainRope(vh(cfg.segmentLength));
   // Boot's own version of this restart also rebuilds bgRope from scratch
   // (see resetBgRope() at Boot) -- this path used to skip that entirely,
   // leaving bgRope's OWN chain (points[1] onward; point 0 alone gets
@@ -5845,7 +5868,7 @@ function positionGrowingTip(){
 // currentIntroExtendRate()) so its pacing is independently tunable from
 // manual hold-to-grow, per explicit request.
 function growRope(dtSeconds, ratePerSecVh){
-  const targetSeg = vh(TARGET_SEG_LEN_VH);
+  const targetSeg = vh(cfg.segmentLength);
   const rate = ratePerSecVh !== undefined ? ratePerSecVh : cfg.ropeGrowthRate;
   const growth = vh(rate) * dtSeconds;
   // accumulate from the persisted real total (mainRope.totalLength), not
@@ -8000,7 +8023,24 @@ function update(rawDt){
     // and SNAP's held phase per mfSnapHeld below) -- unlike the old
     // approach, this is now IDENTICAL to what idle already computes, not
     // a separate formula that merely happened to agree at rest.
-    const mfAnchorPt = mainRope.points[0];
+    // Drag Rope override (2026-09-12, per explicit request): "During the
+    // drag sequence, the animation type shown will be determined by the
+    // angle threshold, but instead of using the default measure method
+    // (rope, point in rope, etc), it will be determined by the angle
+    // between the cursor and the drag point on the rope." Uses the
+    // FROZEN pre-drag position captured once at arm time
+    // (downInfo.dragAngleRefX/Y, set in onPointerDown's own drag-arm
+    // branch), not the point's live position -- see that capture site's
+    // own comment for why live can't work here (update()'s drag-follow
+    // code keeps the point permanently colinear with the anchor and the
+    // cursor, making a live cursor-to-point angle either identical to
+    // the existing anchor-based one or fully degenerate). Everything
+    // else about the formula (raw cursor position, the same +180
+    // convention, the same mouseFlickAngleOffset calibration) is
+    // unchanged -- purely a reference-point substitution, not a new
+    // angle system.
+    const mfDragActiveForAngle = downInfo && downInfo.mode === 'rope' && downInfo.dragging;
+    const mfAnchorPt = mfDragActiveForAngle ? { x: downInfo.dragAngleRefX, y: downInfo.dragAngleRefY } : mainRope.points[0];
     const mfDirectionSourceAngle = mouseFlickAngleFromCenter(mfX, mfY, mfAnchorPt.x, mfAnchorPt.y) + 180;
     const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfDirectionSourceAngle)].key;
     // Corrected 2026-09-12, per explicit report: "when i do right click
@@ -9465,7 +9505,7 @@ function loop(now){
 // there hidden through 'waiting' -- updateIntro() explicitly repositions
 // it to the circle's bottom edge the instant 'rising' begins, the same
 // frame bgRope first becomes visible, so this isn't a visible jump.
-resetMainRope(vh(TARGET_SEG_LEN_VH));
+resetMainRope(vh(cfg.segmentLength));
 resetBgRope();
 introPhase = 'waiting';
 introTimer = 0;
