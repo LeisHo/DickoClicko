@@ -1271,6 +1271,31 @@ landed via a concurrent session's differently-themed commit before
 this task's own remaining code was committed -- confirmed intact, no
 content lost; see CHANGELOG.txt.
 
+**Fixed (2026-09-12): FLICK MOUSE never actually showed for a real,
+non-dev visitor -- accidentally nested inside `if (DEV_MODE)`.**
+Reported directly: "https://dicko-clicko.vercel.app/ still doesnt show
+the cursor animation frames, even when turned on. It shows up in
+.../?dev=1." Root-caused on the LIVE site itself (config/gate logic
+both looked correct on inspection alone): confirmed both enable flags
+genuinely `true` in the live settings file, confirmed a real frame
+asset returns 200, confirmed the served HTML is byte-identical between
+the plain URL and `?dev=1` (ruling out a stale Vercel cache), then
+monkey-patched `ctx.drawImage` on the live non-dev page -- zero calls
+fired on a real dispatched `pointermove`, proving the draw code was
+never even reached. Actual cause: FLICK MOUSE's entire draw block sat
+physically inside the `if (DEV_MODE)` braces opened for FLICK ANIMATION
+1/2/3 (correctly dev-only, per an unrelated earlier request) -- so
+`mouseFlickActive()`'s own already-correct Live Mode check could never
+be reached for a non-dev visitor at all. Fixed by closing that block
+right after FLICK3's own code and moving FLICK MOUSE's own check out
+to a sibling position -- zero behavior change for FLICK ANIMATION
+1/2/3. Verified via a local dev-mode regression check (unaffected);
+production re-verification pending Vercel's redeploy. **Follow-up
+audit** (per explicit request) re-read every one of this file's 23
+`DEV_MODE` occurrences end-to-end -- found no other accidentally-nested
+case; everything else remaining is either a self-contained function/
+early-return or a block whose entire contents are genuinely dev-only.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

@@ -12468,3 +12468,72 @@ contains only what hadn't yet landed (the Copy button + its handler,
 and the actual `CLICK_LOG_POSITION_KEYS` filter logic in `logClick()`
 itself) -- confirmed via a fresh `git diff` immediately before staging
 that nothing else was mixed in either direction this time.
+
+================================================================================
+2026-09-12  -  11:45 AM EDT
+
+"https://dicko-clicko.vercel.app/ still doesnt show the cursor
+animation frames, even when turned on. It shows up in
+.../?dev=1." Root-caused via direct testing on the LIVE deployed site
+rather than code-reading alone (config values and gate logic both
+looked correct on inspection, which is what made this worth digging
+into empirically): confirmed via a direct `fetch()` of the live
+`dev-panel-settings.json` that `mouseFlickEnabled`/
+`mouseFlickEnabledLiveMode` were both genuinely `true`; confirmed via
+a direct `fetch()` of a real FLICK MOUSE frame URL that the asset
+itself returns 200; confirmed the served HTML is byte-identical
+between the plain URL and `?dev=1` (ruling out a stale/divergent
+Vercel cache between the two); then monkey-patched
+`ctx.drawImage` on the live non-dev page and dispatched a real
+`pointermove` -- zero `drawImage` calls fired at all, proving the
+FLICK MOUSE draw code path was never even being REACHED on production,
+not a data/config problem.
+
+Root cause, found by re-reading `render()`'s actual brace structure
+line-by-line rather than trusting the visual indentation: FLICK
+MOUSE's entire draw block sat ACCIDENTALLY NESTED inside the `if
+(DEV_MODE)` block opened for FLICK ANIMATION 1/2/3 (correctly,
+deliberately dev-only per an earlier, unrelated explicit request --
+"make the animations are only visible in dev mode"). The FLICK MOUSE
+code itself was written correctly (`if (mouseFlickActive())`, which
+already accounts for `cfg.mouseFlickEnabledLiveMode` for a non-dev
+visitor per its own 2026-09-11 design) -- but because it physically
+sat inside the OUTER `if (DEV_MODE){...}` block's braces, that inner
+check could never even be evaluated unless `DEV_MODE` was ALSO true,
+silently defeating the entire point of the Live Mode checkbox for
+every real, non-dev visitor since the day it shipped. Fixed by closing
+the `DEV_MODE` block immediately after FLICK3's own code (so FLICK
+ANIMATION 1/2/3 remain exactly as dev-only as before -- zero behavior
+change there) and moving FLICK MOUSE's own `if (mouseFlickActive())`
+out to be a sibling at the same level, gated only by that function.
+"Show Interaction Points" (a genuinely dev-only debug overlay) keeps
+its own separate, correct `DEV_MODE &&` check, now nested one level
+INSIDE `if (mouseFlickActive())` where it always was -- unaffected.
+
+Verified: `node`-equivalent syntax validation passed; a local dev-mode
+regression check (real dispatched `pointermove`, screenshot) confirmed
+FLICK MOUSE still renders exactly as before in dev mode -- zero
+regression from the restructuring. Production re-verification against
+the live URL is pending Vercel's own redeploy of this commit.
+
+Staged as a scoped 2-hunk patch, not a blanket add -- 2 OTHER
+concurrent sessions had unrelated uncommitted work sitting in this
+same file at commit time (a Drag Rope target-point change routing
+through `mouseFlickInteractionPos()`, and their own temporary
+`window.__testDragPoint` debug hook) -- confirmed zero markers of
+either in the staged diff and both remained fully intact, unstaged,
+afterward.
+
+**Follow-up audit (per explicit request, "check if anything else is
+incorrectly nested within Dev Mode"):** re-read every one of this
+file's `if (DEV_MODE)`/`DEV_MODE &&` conditionals (23 total
+occurrences, comments included) end-to-end rather than spot-checking.
+Found nothing else mis-scoped -- every remaining instance is either a
+standalone self-contained function/early-return (`spawnCutSplatter()`,
+`logClick()`, the FPS-counter update in `loop()`) or a block whose
+ENTIRE contents are genuinely, deliberately dev-only (the rebuilt FLICK
+1/2/3 block now containing only flick1/2/3 and nothing else; the
+`debugShowRiseClearOffset` debug line; the full dev-panel-construction
+block, `resetSettings()` already confirmed to sit OUTSIDE it per an
+earlier, separately-documented fix; `GIT_LOG_WRITABLE`'s own
+const-level gate). No other accidental-nesting case found.

@@ -1046,3 +1046,29 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   markers of the recent change, e.g. a new function/config-key name,
   to rule out a stale deployment too) before trusting a negative
   result as proof nothing is wrong on the user's end.
+- **A real, shipped, silent bug class this project has now hit once:
+  a feature's own draw/logic block gets accidentally left INSIDE
+  another feature's `if (DEV_MODE){...}` braces after being written or
+  edited nearby.** FLICK MOUSE's entire `render()` draw block sat
+  nested inside the block opened for FLICK ANIMATION 1/2/3 (correctly,
+  deliberately dev-only) -- so `mouseFlickActive()`'s own already-
+  correct `cfg.mouseFlickEnabledLiveMode` check for a non-dev visitor
+  could never even be REACHED, silently defeating Live Mode for every
+  real player since the feature shipped (2026-09-12, reported directly
+  against the live production URL: "still doesnt show the cursor
+  animation frames, even when turned on. It shows up in .../?dev=1").
+  The code inside was itself correct -- this was purely a BRACE-SCOPING
+  mistake, invisible to a normal read-through since the logic "looked
+  right" in isolation; only tracing the actual `{`/`}` nesting line by
+  line (or testing the real non-dev URL directly) revealed it. **When
+  adding new code physically near an existing `if (DEV_MODE)` block in
+  `render()`/`update()`, always verify by brace-counting (or an
+  editor's own bracket-match) whether the new code is actually INSIDE
+  or OUTSIDE that block before assuming its own `if` conditions alone
+  will govern its visibility** -- a block's own gate only applies if
+  the code is actually inside its braces, and this file's `render()`
+  is long and deeply nested enough that visual indentation alone isn't
+  reliable evidence either way (the drift here was invisible in a
+  normal scroll-through). Audited ALL 23 `DEV_MODE` occurrences in this
+  file the same day and found no OTHER instance of this mistake -- see
+  CHANGELOG.txt for the full account of what was checked.
