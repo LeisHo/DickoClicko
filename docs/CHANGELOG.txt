@@ -12247,3 +12247,56 @@ concurrent session had ~190 lines of its own unrelated, uncommitted
 work in this same file at commit time; confirmed the staged diff
 contained zero markers of it and that it remained fully intact,
 unstaged, in the working tree afterward.
+
+================================================================================
+2026-09-12  -  11:14 AM EDT
+
+"remove the Tip Segment Shape feature completely." Removed the
+checkbox (`cfg.tipSegmentShapeEnabled`, ROPE group), the
+`TIP_SEGMENT_SHAPE` constant (parsed once at boot from `data/Rope/
+RopeEG.svg`'s own path data), `drawTipSegmentShape()`, and
+`pointsExcludingTipSegmentShape()` -- plus every call site: the
+tip-arc-mult computation (`computeTipArcMult` no longer OR's in
+`cfg.tipSegmentShapeEnabled`), both `strokePoints`/`mainStrokePoints`
+derivations (now plain `piece.points`/`mainRope.points` reads instead
+of routing through the now-deleted helper), and the shape's own 2
+draw calls (the whole `if (cfg.tipSegmentShapeEnabled){...}` block in
+`render()`). `mainEffectiveArcMult` -- a variable that existed only to
+conditionally zero out `mainArcMult` when this feature was on -- was
+removed as a now-redundant alias for `mainArcMult` itself, its one
+call site updated accordingly.
+
+The source SVG (`data/Rope/RopeEG.svg`) was deliberately left on disk,
+unreferenced by any code -- per this project's own "nothing gets
+deleted by default" convention (workspace `CLAUDE.md` §11), a
+deliberate choice, not an oversight left to clean up later.
+
+Verified: `node`-equivalent syntax validation passed; the live page
+(cache-busted reload) loaded with 0 console errors; a direct DOM query
+confirmed no dev-panel label anywhere contains "Tip Segment Shape";
+and a screenshot confirmed the rope still renders correctly with a
+plain round-cap end -- no visual regression from the removal.
+
+Also updated `docs/CODE_SUMMARY.md` (removed the ~95-line Tip Segment
+Shape architecture/development-history section entirely, plus fixed 3
+scattered stale references -- a dangling cross-reference to the
+removed section, a now-3-item draw-call list that had shrunk to 2, and
+a parenthetical test-setup note naming the now-gone feature) and
+`docs/PROJECT_PROGRESS.md` (removed it from the "Rope styling"
+feature-summary bullet) so neither live doc still describes removed
+code as current. Left one genuinely historical `PROJECT_PROGRESS.md`
+mention alone (a past note about concurrent-session activity that
+merely NAMES this feature as an example of what was being worked on
+at the time) -- that's accurate history, not a claim about current
+architecture, and per that doc's own append-vs-historical distinction
+doesn't need correcting the way a "here's what exists" claim would.
+
+Staged as a scoped 8-hunk patch (git apply --cached), not a blanket
+add -- another concurrent session had substantial unrelated
+uncommitted work in this same file at commit time; confirmed the
+staged diff contained zero markers of it and it remained fully
+intact, unstaged, afterward. The subsequent push required a real
+merge (git merge, not stash+rebase, specifically to avoid touching the
+concurrent session's own uncommitted working-tree changes at all) --
+origin had advanced by 2 settings-save commits in the meantime, both
+confirmed to touch only dev-panel-settings.json before merging.

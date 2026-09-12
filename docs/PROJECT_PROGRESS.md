@@ -1302,8 +1302,7 @@ additions. Current state of each subsystem:
   than true polygon collision (a deliberate simplification for a
   decorative feature). Endcaps on fallen pieces no longer visibly overlap
   other pieces or their endcaps.
-- **Rope styling**: optional Tip Segment Shape (a vase-like forked
-  decorative shape near the endcap), Rope Top/End Curve Arc (half-ellipse,
+- **Rope styling**: Rope Top/End Curve Arc (half-ellipse,
   0 = flat to 1 = full semicircle), and a draggable-stop rope gradient
   editor (click a stop to open a native color picker, right-click or
   double-click to delete one). The plain round-cap end/start arc has its

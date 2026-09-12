@@ -428,25 +428,19 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   native file-save prompt. `DEV_MODE` alone isn't sufficient either (it
   still allows `file:`), so both conditions stay layered together, not
   merged into one.
-- **Tip Segment Shape** (`cfg.tipSegmentShapeEnabled`, ROPE group) draws a
-  user-supplied shape (`TIP_SEGMENT_SHAPE`, from `data/Rope/RopeEG.svg`)
-  anchored bottom-up at the tip, same convention as the endcap. It is
-  **scaled uniformly from rope thickness alone** (`drawTipSegmentShape()`),
-  never stretched to fit exactly one physics segment's length — an earlier
-  version did that and it squashed the shape (natural aspect ratio ~2.5:1
-  tall, one segment only ~9% of its natural height) into an unrecognizable
-  flat blob. Don't revert to segment-length-matched scaling without
-  re-measuring; see `docs/CODE_SUMMARY.md` Gotchas for the numbers.
-- Because the shape isn't segment-length-matched, it usually reaches
-  further back up the chain than just the last segment. **The plain rope
-  stroke must stop short of the shape's own scaled height**
-  (`pointsExcludingTipSegmentShape()`, called before every
-  `strokeRopeCurve()` for mainRope/pieces) — both render in the exact same
-  `cfg.ropeColor`, so without this, the full-width stroke underneath fills
-  in exactly where the shape's own narrower silhouette (waist, fork)
-  should show as a visible cutout, making the shape invisible against its
-  own backdrop. Don't add a new stroke call for mainRope/a piece without
-  routing it through this helper first when Tip Segment Shape might be on.
+- **Removed 2026-09-12 (per explicit request, "remove the Tip Segment
+  Shape feature completely"):** the Tip Segment Shape checkbox
+  (`cfg.tipSegmentShapeEnabled`), `TIP_SEGMENT_SHAPE`, `drawTipSegmentShape()`,
+  and `pointsExcludingTipSegmentShape()` no longer exist anywhere in
+  `index.html` -- every call site (the tip-arc-mult computation, both
+  `strokePoints`/`mainStrokePoints` derivations, the shape's own draw
+  calls) was removed or inlined back to plain `points` array reads.
+  The source SVG (`data/Rope/RopeEG.svg`) was deliberately LEFT on disk,
+  unreferenced -- per this project's own "nothing gets deleted by
+  default" convention (workspace `CLAUDE.md` §11), not an oversight.
+  Don't reintroduce a feature keyed on this exact config name/asset
+  without first confirming the user actually wants it rebuilt, not
+  just re-added by habit because the file still exists.
 - `ENDCAP_DESIGNS` keys track their SOURCE FILENAME (`data/Rope/
   End_Form<N>-<M>.svg` → key `form<N>-<M>`), not a fixed "this shape always
   lives at this key" assumption — the user has re-numbered/replaced
