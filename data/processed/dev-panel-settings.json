@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
-    "ropeLength": 18.011447839331506,
+    "ropeLength": 24.861634132811158,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -98,6 +98,7 @@
     "arcSeamOverlapPx": 2.8,
     "clickIntensity": 3,
     "holdDistance": 24,
+    "dragRopeEnabled": false,
     "bendStiffness": 0.01,
     "ropeAnimSpeed": 1.8,
     "gravityStrength": 0.9,
@@ -105,6 +106,7 @@
     "constraintIterations": 2,
     "ropeGrowthRate": 12,
     "ropeGrowthOnRopeHold": false,
+    "ropeGrowthHoldDistance": 20,
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
     "minRopeLength": 2.8,
@@ -206,8 +208,10 @@
     "ropeAttractionSpeed": 23,
     "ropeAttractionMaxReach": 64,
     "mouseFlickEnabled": true,
-    "mouseFlickScale": 60,
+    "mouseFlickEnabledLiveMode": true,
+    "mouseFlickScale": 80,
     "mouseFlickAnimSpeed": 3.2,
+    "mouseFlickTickleSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
     "mouseFlickRotationSmoothing": 1,
     "mouseFlickAngleOffset": 180,
@@ -215,7 +219,8 @@
     "mouseFlickHoldMaxDuration": 1.5,
     "mouseFlickTargetMode": "rope",
     "mouseFlickTargetPoint": 0.5,
-    "mouseFlickRandomInterval": 1.1
+    "mouseFlickRandomInterval": 1.1,
+    "snapRepeatDuration": 5
   },
   "order": {
     "ungrouped": [],
@@ -289,8 +294,11 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
+          "mouseFlickEnabledLiveMode",
+          "mouseFlickTickleSpeed",
+          "snapRepeatDuration",
           "mouseFlickTargetMode",
           "mouseFlickTargetPoint",
           "mouseFlickRandomInterval",
@@ -411,6 +419,7 @@
             "key": "ROPE GROWTH",
             "collapsed": true,
             "settings": [
+              "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
             ],
@@ -427,6 +436,7 @@
             "key": "CLICK",
             "collapsed": false,
             "settings": [
+              "dragRopeEnabled",
               "clickIntensity",
               "clickDistance"
             ],
