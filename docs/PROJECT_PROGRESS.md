@@ -1022,6 +1022,12 @@ Verified live via a real dispatched right-click-hold + cursor move
 Speed" request in the same message was deferred at the user's own
 request -- not built.
 
+**Added (2026-09-12): native cursor hides while FLICK MOUSE is
+showing.** `render()` syncs `canvas.style.cursor` to `'none'` whenever
+`mouseFlickActive()` is true, `''` otherwise -- re-synced every frame
+so it tracks correctly through the checkbox, Live Mode, or DEV_MODE
+itself. Verified live via the real dev-panel checkbox toggle.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

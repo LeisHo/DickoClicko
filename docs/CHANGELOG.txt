@@ -11564,3 +11564,21 @@ the held case, not a separate untested code path). Committed/pushed
 A separate `*D* Grab Animation Speed` request in the same message was
 deferred at the user's own request ("nvm ignore tat for now") -- not
 built, not clarified further, revisit when asked again.
+
+================================================================================
+2026-09-12  -  07:49 AM EDT
+
+"also make it so that when the cursor animation is turned on and
+showing, you hide the default mouse icon thing." Small, self-
+contained addition: `render()` now syncs `canvas.style.cursor` to
+`'none'` whenever `mouseFlickActive()` is true, restoring it to the
+default (`''`) otherwise -- re-synced every frame (an unchanged style
+write is a no-op, negligible cost) rather than only on toggle, so it
+tracks correctly through every way that gate can change (the Mouse
+Flick Enabled checkbox, the separate Live Mode checkbox for non-dev
+visitors, or DEV_MODE itself on a fresh page load). Verified live via
+the REAL dev-panel checkbox (not a debug hook) -- unchecking "Mouse
+Flick Enabled" immediately restored the native cursor
+(`canvas.style.cursor` -> `''`), re-checking it hid it again (-> `'none'`).
+Committed/pushed (fd1df8c), merged against one intervening routine
+Save-Settings auto-commit, no real divergence.
