@@ -12080,3 +12080,69 @@ hunk mid-block risked corrupting either feature, so that small,
 complete, clearly-benign, non-conflicting addition was included as-is
 and disclosed here rather than attempted to be excised, matching this
 project's own established practice for this exact class of situation.
+
+--------------------------------------------------------------------------------
+2026-09-12  -  09:23 AM - 09:xx AM EDT
+
+Segment Length dev slider; Drag Rope direction now measured from the
+drag point instead of the anchor.
+
+"do i have a slider that sets the amount of segments? If not, add
+that slider to the Rope group" -- checked first rather than assuming:
+no such control existed, segment density was governed entirely by a
+hardcoded `TARGET_SEG_LEN_VH` constant (`45 / (POINT_COUNT - 1)`).
+Answered directly (no, ROPE group didn't have one) then added it:
+new "Segment Length" slider (ROPE group, %vh, same default value the
+old constant computed), now the single live source every
+segment-density computation reads (`resetMainRope()`'s initial chain,
+`setMainRopeTotalLength()`'s own point add/remove during growth/cuts)
+-- every one of the 8 old `TARGET_SEG_LEN_VH` call sites now reads
+`cfg.segmentLength` instead. Segment COUNT itself still isn't a
+directly-settable number (it's always current rope length / segment
+length + 1, since the rope's own point count is density-driven, not
+fixed -- see CLAUDE.md's own established gotcha on this), so this
+slider is the actual, correct lever: smaller = more/finer segments,
+larger = fewer/coarser. Given an `onChange` that re-decimates the
+CURRENT rope at its own existing total length (same `introPhase===
+'done'` guard Rope Length's own onChange already uses) rather than
+only affecting future growth, so dragging it gives real-time visual
+feedback.
+
+"During the drag sequence, the animation type shown will be
+determined by the angle threshold, but instead of using the default
+measure method (rope, point in rope, etc), it will be determined by
+the angle between the cursor and the drag point on the rope."
+Investigated the geometry before implementing naively: the OBVIOUS
+reading (measure against the dragged point's LIVE position every
+frame) turns out to be mathematically broken, because `update()`'s own
+drag-follow code always repositions that point to exactly
+`anchor + clamp(mouse - anchor)` -- which keeps the point permanently
+COLINEAR with the anchor and the cursor. A live cursor-to-point angle
+under that constraint is either IDENTICAL to the existing anchor-based
+angle (whenever the drag is distance-clamped, the common case) or
+fully DEGENERATE (a zero-length vector, whenever the point is close
+enough to sit exactly on the cursor) -- neither produces the
+distinct, meaningful behavior actually being asked for. Implemented
+instead against the dragged point's position FROZEN at the exact
+moment the drag arms (new `downInfo.dragAngleRefX/Y`, captured in
+`onPointerDown`'s own drag-arm branch before any kinematic override
+touches that point) -- a real, stable reference point elsewhere on
+the rope that the cursor genuinely swings around for the whole
+gesture, unrelated to the anchor.
+
+Verified live via a temporary debug hook (grep-confirmed removed):
+Segment Length confirmed to live-resize the current rope's own point
+count (17->39 points for a ~3x smaller segment length, same total
+rope length preserved to within rounding) the instant the slider
+moves. The angle fix confirmed with a direct side-by-side: forced a
+drag on a point deliberately displaced away from the anchor, pointed
+the cursor directly above the drag point's own frozen start
+position -- resolved to 'behind'; cleared the drag with the cursor
+left in the EXACT same screen position -- resolved to 'behind-pinky'
+instead (the correct anchor-based answer for that same raw position).
+Same cursor position, genuinely different result depending on drag
+state, confirming the reference-point substitution is real and not a
+no-op. 0 console errors.
+
+Committed/pushed (`aff528b`) -- fetch confirmed no divergence; this
+doc pass as a separate follow-up, per the standing instruction.

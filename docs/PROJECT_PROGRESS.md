@@ -1166,6 +1166,25 @@ feature was unavoidably interleaved with this task's own drag-arm
 edit and included as-is (disclosed, not silently absorbed) -- see
 CHANGELOG.txt for the full account.
 
+**Added (2026-09-12): Segment Length slider (ROPE group).** No such
+control existed before -- segment density was a hardcoded constant.
+Now `cfg.segmentLength` (%vh) is the single live source every
+segment-density computation reads; `onChange` re-decimates the
+current rope immediately at the same total length. Segment count
+itself still isn't directly settable (it's rope length / this value,
+always density-driven), but this is the real, correct lever for it.
+
+**Fixed (2026-09-12): FLICK MOUSE direction during Drag Rope now
+measures against the drag point, not the anchor.** The literal "live
+drag point" reading turned out to be mathematically broken -- the
+drag-follow code keeps the dragged point permanently colinear with
+the anchor and cursor, so a live angle would be either identical to
+the anchor-based one or degenerate. Fixed by freezing the reference
+at the point's own pre-drag position (`downInfo.dragAngleRefX/Y`,
+captured once at drag-arm time) -- verified live that the same cursor
+position resolves to a genuinely different direction depending on
+whether a drag is active.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since
