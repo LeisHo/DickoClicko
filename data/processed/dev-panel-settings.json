@@ -6,12 +6,12 @@
     "circleY": 18,
     "circleColor": "#111023",
     "circleBoundaryOffset": 1.5,
-    "anchorWeight": 0.4,
+    "anchorWeight": 0,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 4.6,
-    "ropeLength": 23.57894736842108,
+    "ropeLength": 18.011447839331506,
     "ropeDefaultLength": 18,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -102,8 +102,9 @@
     "ropeAnimSpeed": 1.8,
     "gravityStrength": 0.9,
     "damping": 0.988,
-    "constraintIterations": 3,
+    "constraintIterations": 2,
     "ropeGrowthRate": 12,
+    "ropeGrowthOnRopeHold": false,
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
     "minRopeLength": 3,
@@ -288,7 +289,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -302,7 +303,7 @@
         "subgroups": [
           {
             "key": "ANCHOR PHYSICS",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "circleBoundaryOffset",
               "anchorWeight"
@@ -311,7 +312,7 @@
           },
           {
             "key": "ROPE ANIMATION",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
@@ -381,6 +382,7 @@
             "key": "ROPE GROWTH",
             "collapsed": true,
             "settings": [
+              "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
             ],
             "subgroups": []
@@ -389,7 +391,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [],
         "subgroups": [
           {
