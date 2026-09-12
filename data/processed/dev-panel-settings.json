@@ -209,7 +209,7 @@
     "ropeAttractionMaxReach": 64,
     "mouseFlickEnabled": true,
     "mouseFlickEnabledLiveMode": true,
-    "mouseFlickScale": 80,
+    "mouseFlickScale": 69.5,
     "mouseFlickAnimSpeed": 3.2,
     "mouseFlickTickleSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
@@ -294,7 +294,7 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "mouseFlickEnabledLiveMode",
           "mouseFlickTickleSpeed",
@@ -326,7 +326,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -429,12 +429,12 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [],
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "dragRopeEnabled",
               "clickIntensity",
@@ -454,7 +454,7 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "holdDistance",
               "clickHoldMaxDuration",
@@ -575,16 +575,16 @@
     ]
   },
   "panelGeometry": {
-    "mobile": {
-      "left": 36.9523811340332,
-      "top": 305.56549072265625,
-      "width": 229,
-      "height": 439.0238037109375,
+    "desktop": {
+      "left": 1242.4625244140625,
+      "top": 62.900001525878906,
+      "width": 293.5249938964844,
+      "height": 570.0125122070312,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
-        "groupFontSize": 11,
-        "labelFontSize": 11,
+        "groupFontSize": 14,
+        "labelFontSize": 10,
         "opacity": 0.94,
         "titleColor": "#e8e8f0",
         "bodyFontSize": 12,
@@ -607,16 +607,16 @@
         "textEditMode": false
       }
     },
-    "desktop": {
-      "left": 1242.4625244140625,
-      "top": 62.900001525878906,
-      "width": 293.5249938964844,
-      "height": 570.0125122070312,
+    "mobile": {
+      "left": 36.9523811340332,
+      "top": 305.56549072265625,
+      "width": 229,
+      "height": 439.0238037109375,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
-        "groupFontSize": 14,
-        "labelFontSize": 10,
+        "groupFontSize": 11,
+        "labelFontSize": 11,
         "opacity": 0.94,
         "titleColor": "#e8e8f0",
         "bodyFontSize": 12,
