@@ -11,8 +11,8 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 4.6,
-    "ropeLength": 10.01259628734212,
-    "ropeDefaultLength": 10,
+    "ropeLength": 29.16005024565134,
+    "ropeDefaultLength": 29,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -102,13 +102,13 @@
     "ropeAnimSpeed": 1.2,
     "gravityStrength": 1.7,
     "damping": 0.986,
-    "constraintIterations": 9,
+    "constraintIterations": 1,
     "ropeGrowthRate": 12,
     "clickHoldMaxDuration": 800,
     "intensityCeiling": 8.4,
-    "minRopeLength": 2.6,
-    "clickDistance": 20,
-    "doubleClickDistance": 20,
+    "minRopeLength": 3,
+    "clickDistance": 30,
+    "doubleClickDistance": 32,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.1,
@@ -194,7 +194,7 @@
     "ropeAttractionSpeed": 23,
     "ropeAttractionMaxReach": 64,
     "mouseFlickEnabled": true,
-    "mouseFlickScale": 50,
+    "mouseFlickScale": 60,
     "mouseFlickAnimSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
     "mouseFlickRotationSmoothing": 1,
@@ -203,7 +203,7 @@
     "mouseFlickHoldMaxDuration": 1.5,
     "mouseFlickTargetMode": "rope",
     "mouseFlickTargetPoint": 0.5,
-    "mouseFlickRandomInterval": 3
+    "mouseFlickRandomInterval": 1.1
   },
   "order": {
     "ungrouped": [],
@@ -288,7 +288,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -296,27 +296,28 @@
           "ropeGradientEnabled",
           "ropeGradientColors",
           "ropeColor",
+          "minRopeLength",
           "tipSegmentShapeEnabled"
         ],
         "subgroups": [
           {
             "key": "ANCHOR PHYSICS",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
-              "circleBoundaryOffset"
+              "circleBoundaryOffset",
+              "anchorWeight"
             ],
             "subgroups": []
           },
           {
             "key": "ROPE ANIMATION",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
               "damping",
               "constraintIterations",
-              "bendStiffness",
-              "anchorWeight"
+              "bendStiffness"
             ],
             "subgroups": []
           },
@@ -395,6 +396,15 @@
         ],
         "subgroups": [
           {
+            "key": "CLICK",
+            "collapsed": true,
+            "settings": [
+              "clickIntensity",
+              "holdDistance"
+            ],
+            "subgroups": []
+          },
+          {
             "key": "RIGHT CLICK",
             "collapsed": true,
             "settings": [
@@ -406,7 +416,7 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "flickHoldMaxSpeed",
               "flickHoldMaxDuration"
@@ -427,17 +437,7 @@
               "cutSweepThickness",
               "pieceDecayDelay",
               "pieceDecaySpeed",
-              "pieceMinThickness",
-              "minRopeLength"
-            ],
-            "subgroups": []
-          },
-          {
-            "key": "CLICK",
-            "collapsed": true,
-            "settings": [
-              "clickIntensity",
-              "holdDistance"
+              "pieceMinThickness"
             ],
             "subgroups": []
           }
@@ -535,9 +535,9 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 869.6625366210938,
+      "left": 1242.4625244140625,
       "top": 62.900001525878906,
-      "width": 666.3375244140625,
+      "width": 293.5249938964844,
       "height": 570.0125122070312,
       "style": {
         "titleFontSize": 13,
@@ -608,6 +608,8 @@
     "group:New Group (5)": "BACKGROUND ROPE",
     "group:RIGHT CLICK": "RIGHT CLICK-ATTRACT",
     "group:FLICK HOLD": "CLICK HOLD-CHARGE",
-    "group:New Group (6)": "CLICK FUNCTIONS"
+    "group:New Group (6)": "CLICK FUNCTIONS",
+    "group:ROPE CUT": "DOUBLE CLICK-CUT",
+    "group:CLICK": "CLICK-FLICK"
   }
 }
