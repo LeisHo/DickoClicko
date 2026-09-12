@@ -435,6 +435,15 @@ const DEV_GROUPS = [
   ]},
   { title:'ROPE GROWTH', controls:[
     { key:'ropeGrowthRate', label:'Rope Growth Rate', type:'slider', unit:'%vh/s', min:1, max:100, step:1, def:12 },
+    // Per explicit request ("provide a checkbox... When selected, rope
+    // growth will be also be triggered when the user click and holds
+    // on the rope itself") -- ADDITIVE, not a replacement: a hold on
+    // the rope still charges punch intensity exactly as before (see
+    // Click Hold Max Duration/Intensity Ceiling below), this just ALSO
+    // starts the rope growing at the same time, reusing the exact same
+    // `growing` flag/rate the circle's own hold-to-grow already drives
+    // -- see onPointerDown()'s own comment for the timing/gating detail.
+    { key:'ropeGrowthOnRopeHold', label:'Grow Rope On Rope Hold', type:'checkbox', def:false },
     { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
     { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:10 },
   ]},
@@ -5097,6 +5106,10 @@ function detachEntireRopeAndRestartIntro(){
    Growth / cut / punch actions
 --------------------------------------------------------------------- */
 let growing = false;
+// Separate from `holdTimer` (already used by the SAME rope-hold press
+// for the charging-arm timer, at a different delay) -- see Grow Rope
+// On Rope Hold's own onPointerDown comment.
+let growthOnRopeHoldTimer = null;
 
 // direction to extend the tip in: the settled rope's own local tangent
 // (from the point BEFORE prev, to prev) -- deliberately not derived from the
@@ -5875,6 +5888,7 @@ function onPointerDown(e){
   // that later click as a false hold, silently swallowing it. Clearing here
   // guarantees at most one holdTimer is ever live at a time.
   clearTimeout(holdTimer);
+  clearTimeout(growthOnRopeHoldTimer);
 
   // introPhase === 'done' required here (not just isOnCircle) -- during
   // 'growing' the circle-press path below would either fight the intro's
@@ -5929,6 +5943,26 @@ function onPointerDown(e){
     downInfo.charging = true;
     logClick('hold:charging-start', { x, y });
   }, cfg.doubleClickThreshold);
+  // Grow Rope On Rope Hold (per explicit request) -- ADDITIVE to the
+  // charging timer just above, not a replacement: reuses the exact
+  // same `growing` flag + HOLD_THRESHOLD_MS timing the circle's own
+  // hold-to-grow branch uses (see that timer earlier in this
+  // function), just armed from a press that started on the ROPE
+  // instead. Gated the same way as charging above (never for
+  // startedInCircle -- a hold that started in the circle must never
+  // behave like a rope interaction, per that flag's own comment) PLUS
+  // an extra `introPhase === 'done'` requirement charging doesn't
+  // need, since 'growing' is the scripted startup animation's own
+  // in-progress state -- letting a rope hold ALSO drive `growing` then
+  // would fight that scripted extension rather than adding a genuine
+  // user-triggered grow.
+  if (cfg.ropeGrowthOnRopeHold && introPhase === 'done' && !startedInCircle){
+    growthOnRopeHoldTimer = setTimeout(() => {
+      if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
+      growing = true;
+      logClick('hold:grow-start-from-rope', { x, y });
+    }, HOLD_THRESHOLD_MS);
+  }
 }
 
 function onPointerUp(e){
@@ -5977,6 +6011,7 @@ function onPointerUp(e){
   }
   if (!downInfo) return;
   clearTimeout(holdTimer);
+  clearTimeout(growthOnRopeHoldTimer);
   const info = downInfo;
   downInfo = null;
 
@@ -6024,6 +6059,13 @@ function onPointerUp(e){
     pendingClick = { time: now, timer: setTimeout(() => { pendingClick = null; }, cfg.doubleClickThreshold) };
     return;
   }
+
+  // Ends a Grow Rope On Rope Hold growth that started from THIS press
+  // (see onPointerDown's own comment) -- unconditional and harmless if
+  // it was never armed (growing is already false, or was armed/ended
+  // by the circle path instead, mutually exclusive per gesture since
+  // only one downInfo is ever live at a time).
+  growing = false;
 
   if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
     clearTimeout(pendingClick.timer);
@@ -6101,7 +6143,7 @@ function onPointerUp(e){
 
 canvas.addEventListener('pointerdown', onPointerDown);
 window.addEventListener('pointerup', onPointerUp);
-window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); holdingFlick = null; ropeAttractionActive = false; });
+window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); clearTimeout(growthOnRopeHoldTimer); holdingFlick = null; ropeAttractionActive = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 // ---------------------------------------------------------------------
