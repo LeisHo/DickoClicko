@@ -6058,12 +6058,18 @@ function onPointerUp(e){
       return;
     }
     const t = Math.min(1, heldMs / cfg.clickHoldMaxDuration);
-    const intensity = cfg.clickIntensity + t * cfg.intensityCeiling;
+    // Linear interpolation FROM Click Intensity TO Intensity Ceiling
+    // itself (not stacked on top of it) -- per explicit correction:
+    // "at 2000 (ms), if the click and hold is held for 2000ms, the
+    // flick strength will be whatever i set Intensity Ceiling to...
+    // Regular Click will be the regular click intensity." A quick
+    // release (t=0) still produces exactly Click Intensity, matching a
+    // regular tap; a hold to the full Click Hold Max Duration (t=1)
+    // now produces exactly Intensity Ceiling, not Click Intensity +
+    // Intensity Ceiling as an earlier round had this. Held durations
+    // in between scale linearly across that same range.
+    const intensity = cfg.clickIntensity + t * (cfg.intensityCeiling - cfg.clickIntensity);
     logClick('up:hold-release-punch', { x: e.clientX, y: e.clientY, releaseDist: releaseHit.dist, heldMs, t, intensity });
-    // Intensity Ceiling stacks ON TOP of Click Intensity, not in place of it
-    // -- a hold starts at the same intensity a quick tap would produce and
-    // rises from there, reaching Click Intensity + Intensity Ceiling exactly
-    // at Click Hold Max Duration.
     applyPunch(mainRope.points, releaseHit, e.clientX, e.clientY, intensity, 0, mainRope.segLen);
     return;
   }
