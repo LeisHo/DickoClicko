@@ -7621,7 +7621,24 @@ function update(rawDt){
     // the lerp's own smoothing delay.
     const mfPointingAngle = mfEntityAngleDeg + 180;
     const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfPointingAngle)].key;
-    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'snap' && mfMode !== 'dragRelease'){
+    // Corrected 2026-09-12, per explicit report: "when i do right click
+    // and hold, during the hold, [direction should] respond to the
+    // cursor position... Its only on a non hold sequence [that it]
+    // choose[s] not to change types." SNAP is unlike click/sciss (which
+    // fire once with no hold phase at all) -- it has its own genuine
+    // HELD state (right-click-and-hold, or the mobile triple-tap-hold
+    // equivalent) before its end-sequence plays out, and the ORIGINAL
+    // 2026-09-11 clarification this whole lock exists for ("while the
+    // click is held... changes... but not during the end sequence")
+    // already says a held state should stay responsive -- lumping bare
+    // `mfMode !== 'snap'` into the same exclusion as click/sciss/
+    // dragRelease incorrectly locked SNAP's own held phase too, not
+    // just its post-release completion tail. mfSnapHeld distinguishes
+    // the two: direction now stays responsive for as long as the
+    // button/touch is actually down, and only locks once SNAP is
+    // genuinely playing out its remaining frames after release.
+    const mfSnapHeld = mfMode === 'snap' && (mfRightDown || mfTripleHeld);
+    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'dragRelease' && (mfMode !== 'snap' || mfSnapHeld)){
       mfDirectionKey = mfTargetDirKey;
     }
     if (mfMode === 'charge'){
