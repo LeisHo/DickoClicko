@@ -446,6 +446,32 @@ const DEV_GROUPS = [
     // ARM time (not release), so a hold that starts too far from the
     // rope falls through to the ordinary charge behavior instead.
     { key:'dragRopeHoldDistance', label:'Drag Rope Hold Distance', type:'slider', unit:'%vmin', min:1, max:60, step:0.5, def:20 },
+    // Per explicit request ("provide a checkbox to turn off the Drag
+    // trigger overriding the Click Hold to Grow trigger") -- default
+    // TRUE preserves the existing behavior (Drag Rope arming takes
+    // priority over Grow Rope On Rope Hold whenever a hold qualifies
+    // for both), so this is purely additive, no default-behavior
+    // change. Checked in onPointerDown's own holdTimer callback right
+    // alongside the Drag Rope arm condition -- see that comment for
+    // the exact gating. Does NOT affect the circle's own hold-to-grow
+    // (isNearCircleCenterForGrow) -- that one always trumps both charge
+    // and drag unconditionally, per a separate explicit request; this
+    // checkbox is scoped to the ROPE-hold-triggered grow checkbox
+    // above only.
+    { key:'dragOverridesGrowOnRopeHold', label:'Drag Overrides Grow On Rope Hold', type:'checkbox', def:true },
+    // Per explicit request ("provide a drag distance slider") -- caps
+    // how far the grabbed point can be pulled from the anchor, ON TOP
+    // OF (never instead of) the existing anchor-relative rest-length
+    // clamp ("the distance the rope can be dragged is determined by
+    // the length of the rope between the drag point and the rope
+    // start" -- an earlier explicit request this project already
+    // shipped, see update()'s own drag-clamp comment). Defaulted to
+    // the slider's own max (150%vmin, comfortably beyond any realistic
+    // anchor-to-point rest length at default settings) so this is a
+    // pure no-op until the user actually lowers it -- no default-
+    // behavior change. See update()'s own `Math.min(...)` call for
+    // exactly how the 2 clamps combine.
+    { key:'dragMaxDistance', label:'Drag Max Distance', type:'slider', unit:'%vmin', min:5, max:150, step:1, def:150 },
   ]},
   { title:'ROPE ANIMATION', controls:[
     { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0 },
@@ -6407,6 +6433,30 @@ function isOnCircle(x, y){
   return Math.hypot(x - anchor.x, y - anchor.y) <= circleExclusionRadius();
 }
 
+// Circle hold-to-grow's OWN trigger zone (2026-09-12, per explicit
+// correction: "I think its currently some boundary based thing.
+// Instead, i want you to do it as simply a proximity measurement from
+// the cursor measurement point to the center of the circle. The Click
+// and Hold distance will determine that threshold at which the grow
+// sequence is triggered.") -- a plain distance-from-CENTER check
+// against the EXISTING Click And Hold Distance slider, replacing
+// isOnCircle()'s own boundary-based (circleExclusionRadius) test for
+// hold-to-grow specifically. Deliberately NOT a change to isOnCircle()
+// itself -- that function's own radius is explicitly shared with
+// cutRopeAt()'s Circle Cut Distance floor (see circleExclusionRadius's
+// own comment: "whatever counts as 'on the circle' for growing must
+// also always count as 'too close to cut'"), a coupling this request
+// never asked to touch. Used for BOTH onPointerDown's circle-branch
+// gate AND `startedInCircle` -- the latter already suppresses BOTH
+// charging and Drag Rope arming for any press that qualifies (see
+// their own holdTimer callbacks), so "grow always trumps charge and
+// drag within this distance" falls out for free from using the SAME
+// zone definition in both places, no separate priority logic needed.
+function isNearCircleCenterForGrow(x, y){
+  const anchor = circleAnchor();
+  return Math.hypot(x - anchor.x, y - anchor.y) <= vmin(cfg.holdDistance);
+}
+
 function hitTestRope(x, y, maxDist){
   if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
   if (isOnCircle(x, y)) return null; // clicking the circle itself never counts as a rope hit
@@ -6556,7 +6606,7 @@ function onPointerDown(e){
   // neither of which this round's "allow cutting during growth" request
   // asked for. A press over the circle during 'growing' falls through to
   // the ordinary rope hit-test below instead.
-  if (introPhase === 'done' && isOnCircle(x, y)){
+  if (introPhase === 'done' && isNearCircleCenterForGrow(x, y)){
     downInfo = { mode: 'circle' };
     logClick('down:circle', { x, y });
     holdTimer = setTimeout(() => {
@@ -6587,7 +6637,7 @@ function onPointerDown(e){
   // charged punch the user never intended as a rope interaction -- they
   // were pressing the CIRCLE, same gesture that means "grow" once
   // introPhase reaches 'done'.
-  const startedInCircle = isOnCircle(x, y);
+  const startedInCircle = isNearCircleCenterForGrow(x, y);
   downInfo = { mode: 'rope', x, y, hit, startTime: performance.now(), charging: false, startedInCircle };
   logClick('down:rope', { x, y, hitDist: hit.dist, hitIndex: hit.index, startedInCircle });
   // Charging only becomes eligible after a FULL doubleClickThreshold of
@@ -6620,9 +6670,39 @@ function onPointerDown(e){
     // already only fires after doubleClickThreshold has elapsed.
     const dragPos = mouseFlickInteractionPos(x, y, 'drag');
     const dragHit = nearestPointOnRope(dragPos.x, dragPos.y, mainRope.points);
-    if (cfg.dragRopeEnabled && dragHit.dist <= vmin(cfg.dragRopeHoldDistance)){
+    // Drag Overrides Grow On Rope Hold (per explicit request: "provide
+    // a checkbox to turn off the Drag trigger overriding the Click
+    // Hold to Grow trigger") -- default true preserves the existing
+    // behavior below unchanged. When false, and this SAME hold would
+    // also qualify for Grow Rope On Rope Hold (the exact condition
+    // that timer itself checks further down -- reusing `hit`, not
+    // `dragHit`, so both checks agree on the same press-time data),
+    // Drag Rope does not arm at all for this hold -- falls through to
+    // the ordinary charging branch below, and Grow Rope On Rope Hold's
+    // own already-independent timer proceeds unaffected.
+    const wouldAlsoGrow = cfg.ropeGrowthOnRopeHold && introPhase === 'done' && !startedInCircle && hit.dist <= vmin(cfg.ropeGrowthHoldDistance);
+    if (cfg.dragRopeEnabled && dragHit.dist <= vmin(cfg.dragRopeHoldDistance) && (cfg.dragOverridesGrowOnRopeHold || !wouldAlsoGrow)){
       downInfo.dragging = true;
       downInfo.dragIndex = Math.max(1, dragHit.index);
+      // Direction-angle reference point for this drag (2026-09-12, per
+      // explicit request) -- captured ONCE here, at the grabbed point's
+      // own position BEFORE any kinematic override moves it, not read
+      // live during the drag. Live would NOT work: update()'s own drag-
+      // follow code always repositions this point to exactly
+      // anchor + clamp(mouse-anchor), which puts the point, the anchor,
+      // and the cursor permanently COLINEAR -- so a live "angle between
+      // cursor and drag point" would either be mathematically identical
+      // to the existing anchor-based angle (whenever the drag is
+      // distance-clamped) or fully degenerate/undefined (a zero-length
+      // vector, whenever it isn't -- the point sits exactly ON the
+      // cursor once close enough). Freezing it at the pre-drag position
+      // gives a real, stable, DIFFERENT-from-anchor reference the cursor
+      // actually swings around for the whole gesture, matching "the
+      // angle between the cursor and the drag point" as an actually
+      // meaningful, non-degenerate measurement.
+      const dragPt = mainRope.points[downInfo.dragIndex];
+      downInfo.dragAngleRefX = dragPt.x;
+      downInfo.dragAngleRefY = dragPt.y;
       mfSuppressClickFromGrowth = true;
       // Drag Rope hand animation (2026-09-11): reset the forward-play
       // position for whichever direction ends up active during this drag
@@ -7470,7 +7550,14 @@ function update(rawDt){
   if (downInfo && downInfo.mode === 'rope' && downInfo.dragging){
     dragPinIndex = downInfo.dragIndex;
     const anchor = mainRope.points[0];
-    const maxDragDist = mainRope.segLen * dragPinIndex;
+    // Drag Max Distance (per explicit request: "provide a drag distance
+    // slider") -- an ADDITIONAL cap on top of the anchor-relative
+    // rest-length clamp above, never a replacement for it (that clamp
+    // stays the default/natural ceiling; this slider only ever pulls
+    // the effective max distance IN, via Math.min, never out beyond
+    // what the rope's own real length between anchor and drag point
+    // physically allows).
+    const maxDragDist = Math.min(mainRope.segLen * dragPinIndex, vmin(cfg.dragMaxDistance));
     let dx = mouseX - anchor.x, dy = mouseY - anchor.y;
     const ddist = Math.hypot(dx, dy) || 1e-6;
     if (ddist > maxDragDist){ dx *= maxDragDist / ddist; dy *= maxDragDist / ddist; }
