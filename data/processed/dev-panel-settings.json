@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
-    "ropeLength": 15.0616341328112,
+    "ropeLength": 9.58854530939996,
     "ropeDefaultLength": 15,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -105,7 +105,7 @@
     "damping": 0.988,
     "constraintIterations": 2,
     "ropeGrowthRate": 12,
-    "ropeGrowthOnRopeHold": false,
+    "ropeGrowthOnRopeHold": true,
     "ropeGrowthHoldDistance": 20,
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
@@ -121,9 +121,9 @@
     "pieceDecayDelay": 10,
     "pieceDecaySpeed": 0.5,
     "pieceMinThickness": 1.2,
-    "cutSplatterEnabled": false,
-    "cutSplatterColor": "#8b0000",
-    "cutSplatterHorizontalSpread": 60,
+    "cutSplatterEnabled": true,
+    "cutSplatterColor": "#ffffff",
+    "cutSplatterHorizontalSpread": 150,
     "cutSplatterVerticalSpread": 80,
     "cutSplatterParticleCount": 16,
     "cutSplatterParticleSize": 1.1,
@@ -212,6 +212,7 @@
     "mouseFlickScale": 69.5,
     "mouseFlickAnimSpeed": 3.2,
     "mouseFlickTickleSpeed": 3.2,
+    "mouseFlickDragSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
     "mouseFlickRotationSmoothing": 1,
     "mouseFlickAngleOffset": 180,
@@ -296,6 +297,7 @@
         "key": "FLICK MOUSE",
         "collapsed": true,
         "settings": [
+          "mouseFlickDragSpeed",
           "mouseFlickEnabledLiveMode",
           "mouseFlickTickleSpeed",
           "snapRepeatDuration",
@@ -315,7 +317,7 @@
       },
       {
         "key": "CIRCLE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "circleSize",
           "circleX",
@@ -326,7 +328,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -429,7 +431,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [],
         "subgroups": [
           {
@@ -575,16 +577,16 @@
     ]
   },
   "panelGeometry": {
-    "desktop": {
-      "left": 1242.4625244140625,
-      "top": 62.900001525878906,
-      "width": 293.5249938964844,
-      "height": 570.0125122070312,
+    "mobile": {
+      "left": 25.291667938232422,
+      "top": 0,
+      "width": 229,
+      "height": 439.0238037109375,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
-        "groupFontSize": 14,
-        "labelFontSize": 10,
+        "groupFontSize": 11,
+        "labelFontSize": 11,
         "opacity": 0.94,
         "titleColor": "#e8e8f0",
         "bodyFontSize": 12,
@@ -607,16 +609,16 @@
         "textEditMode": false
       }
     },
-    "mobile": {
-      "left": 36.9523811340332,
-      "top": 305.56549072265625,
-      "width": 229,
-      "height": 439.0238037109375,
+    "desktop": {
+      "left": 1242.4625244140625,
+      "top": 62.900001525878906,
+      "width": 293.5249938964844,
+      "height": 570.0125122070312,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
-        "groupFontSize": 11,
-        "labelFontSize": 11,
+        "groupFontSize": 14,
+        "labelFontSize": 10,
         "opacity": 0.94,
         "titleColor": "#e8e8f0",
         "bodyFontSize": 12,
