@@ -11035,3 +11035,114 @@ Settings" auto-commits from another session/device touching only
 `dev-panel-settings.json`) -- fetch confirmed the only real index.html
 difference was this task's own addition -- then this doc pass as a
 separate follow-up, per the standing instruction.
+
+--------------------------------------------------------------------------------
+2026-09-11  -  9:59 PM - 10:15 PM EDT
+
+FLICK MOUSE: direction locks during the click/sciss/snap end sequence;
+Tickle Animation Speed slider; Rope Growth Hold Distance slider; Cursor
+Animations Enabled (Live Mode) checkbox; SNAP Repeat Duration fidget
+detour.
+
+Changed:
+- Direction-bucket (hand-pose) selection now only re-targets by angle
+  while FLICK MOUSE is idle or actively charging (click-and-hold) --
+  per explicit clarification ("while the click is held, the animation
+  will change types according to angle, but not during the end
+  sequence"). Once release starts the click/sciss/snap playback
+  sequence, the direction bucket LOCKS at whatever it was at that
+  instant and no longer changes, even if the mouse moves to a very
+  different angle mid-sequence; it resumes tracking the angle again
+  the moment the sequence finishes (mode returns to idle). This
+  reverses the previous "switches every frame, even mid-sequence"
+  behavior from an earlier spec ("point 3") that the new clarification
+  supersedes. The now-unreachable `mouseFlickRemapSequence()` helper
+  (which used to re-target the in-flight sequence onto a new
+  direction's own frame array mid-playback) was removed along with
+  its call site, since nothing can trigger a mid-sequence direction
+  switch anymore.
+- `cfg.mouseFlickAnimSpeed` no longer doubles as Tickle's own playback
+  rate -- split into its own `mouseFlickTickleSpeed` / "Tickle
+  Animation Speed" slider (FLICK MOUSE group), so Tickle's pace can be
+  tuned independently of click/sciss/snap's shared speed.
+- "Grow Rope On Rope Hold" (ROPE GROWTH group) is now bounded by a new
+  "Rope Growth Hold Distance" slider (%vmin). Previously this checkbox
+  armed rope growth for a hold ANYWHERE on screen (except one starting
+  inside the circle) once enabled, since `nearestPointOnRope()` always
+  returns some hit regardless of how far away the press actually
+  landed -- there was no distance check at all. Now a hold only counts
+  as "on the rope" (and so only overrides the ordinary click-and-hold
+  FLICK charge gesture) when it lands within this configurable
+  distance of the rope's nearest point.
+
+Added:
+- "Cursor Animations Enabled (Live Mode)" checkbox (FLICK MOUSE group).
+  Separate from the existing "Mouse Flick Enabled" master switch: that
+  one still fully governs FLICK MOUSE in dev mode regardless of this
+  new checkbox (so a dev can keep testing/tuning it locally), but for
+  a non-dev visitor FLICK MOUSE now also requires this checkbox to be
+  on. New shared `mouseFlickActive()` helper
+  (`cfg.mouseFlickEnabled && (DEV_MODE || cfg.mouseFlickEnabledLiveMode)`)
+  replaces the previous bare `cfg.mouseFlickEnabled` check at all 4
+  call sites (both canvas/window gesture listeners, the update() block,
+  the render() block).
+- SNAP Repeat: while right-click-hold (or mobile triple-tap-hold) keeps
+  SNAP frozen at its existing pause frame, a "fidget" detour now fires
+  every "Snap Repeat Duration" seconds (FLICK MOUSE group, default 5s):
+  plays frame 21->28, then frame 7->37, then returns to the pause frame
+  and starts counting again -- per explicit spec. New
+  `SNAP_REPEAT_B/C_START/END_INDEX` constants resolve those real frame
+  numbers to their current array positions the same nearest-number-
+  lookup way `SNAP_FREEZE_INDEX` already does, so a future SNAP frame
+  trim re-resolves them automatically. The frozen/paused state is now
+  tracked with an explicit latch (`mfSnapPaused`, cleared on release)
+  rather than re-derived from "is the current frame index at/past the
+  freeze point" every frame, since the repeat detour itself plays
+  frames well before that point -- inferring "frozen" from frame
+  position alone would have broken the moment the detour started.
+  Releasing mid-detour still lets it play out and fall through to
+  natural completion exactly like releasing during the plain freeze
+  used to.
+
+Investigated but no code change needed: a reported regression ("rope
+growth should be triggered by both click and hold on the rope AND
+within the circle... the circle trigger stopped... and the Rope Growth
+on Hold checkbox doesnt do anything"). Live-tested both hold-to-grow
+paths (circle press, and a rope press with Grow Rope On Rope Hold
+checked) via a temporary debug hook driving real `PointerEvent`
+dispatch + real waits past the hold threshold + manual frame ticking:
+both correctly flipped `growing` to true and grew `mainRope.totalLength`
+by the expected amount (delta 92.16 over 60 ticks, identical for both
+paths). The underlying mechanism was already working correctly by the
+time this was re-tested -- the regression was most likely already
+fixed by unrelated concurrent work landing in `index.html` between the
+report and this re-test (this file saw substantial concurrent editing
+from another session throughout the same window, including the
+now-committed Cut Splatter feature). No fix commit was needed; the
+temporary debug hook was removed (grep-confirmed 0 matches) without
+being committed.
+
+Verified live via a temporary debug hook (`window.__testVerify`,
+grep-confirmed removed after, 0 matches): direction-lock confirmed by
+starting a click sequence, moving the mouse to the opposite angle
+mid-sequence, and confirming the direction bucket stayed put until the
+sequence returned to idle, then updated on the very next tick;
+Rope Growth Hold Distance confirmed by dispatching a hold far from the
+rope (no growth) and a hold near the rope (growth, delta 46.08 over 30
+ticks) with the same checkbox state; SNAP Repeat confirmed by ticking
+through a full pause -> repeat-detour -> pause cycle (observed
+`mfFrameAccum` advancing frame-by-frame through the 7->37 detour
+before returning to the exact pause index) and confirming a mid-detour
+release still falls through to natural forward completion. The Live
+Mode checkbox's actual effect on a non-dev visitor couldn't be driven
+end-to-end in this dev-mode test session (DEV_MODE is fixed true for
+the whole page load) -- verified instead by confirming the checkbox's
+own on/off state toggles correctly and by code inspection of the
+one-line `mouseFlickActive()` gate.
+
+Note: `index.html` had substantial concurrent, unrelated edits land
+mid-task from another session (a new "Drag Rope" interaction, touching
+`onPointerUp()` and `update()` in locations well away from anything
+this task changed) -- left completely untouched per standing policy,
+confirmed via `git diff` hunk-by-hunk inspection that none of it
+overlaps this task's own changes before committing.

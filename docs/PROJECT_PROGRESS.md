@@ -841,6 +841,38 @@ commit it ended up landing in. If something looks like it's missing or
 reverted, check `git log -p` for the actual commit that touched it before
 assuming it never shipped.
 
+**New (2026-09-11): FLICK MOUSE direction-lock, Tickle Animation Speed
+slider, Rope Growth Hold Distance slider, Cursor Animations Enabled
+(Live Mode) checkbox, SNAP Repeat Duration.** Direction-bucket
+(hand-pose) selection now only re-targets by mouse angle while FLICK
+MOUSE is idle or actively charging (click-and-hold) -- it LOCKS for
+the duration of the click/sciss/snap release sequence and resumes
+tracking once that sequence returns to idle, per explicit
+clarification superseding an earlier spec that had it switching every
+frame including mid-sequence. Tickle now has its own speed slider
+(`mouseFlickTickleSpeed`) instead of sharing `mouseFlickAnimSpeed`.
+"Grow Rope On Rope Hold" is now bounded by a new "Rope Growth Hold
+Distance" slider (%vmin) -- previously it armed for a hold anywhere on
+screen once enabled, with no distance check at all. A new "Cursor
+Animations Enabled (Live Mode)" checkbox lets a non-dev visitor's
+FLICK MOUSE be turned off independently of dev mode's own always-on
+"Mouse Flick Enabled" master switch (`mouseFlickActive()` gates all 4
+call sites now). SNAP got a "fidget" repeat detour: while right-click/
+triple-tap-hold keeps it frozen at its pause frame, it now plays frame
+21->28 then 7->37 every "Snap Repeat Duration" seconds before
+returning to the pause frame. All 5 verified live via a temporary
+debug hook (removed before commit, grep-confirmed 0 matches) -- see
+CHANGELOG.txt for the full verification detail.
+
+Also investigated the same session's regression report ("the circle
+[hold-to-grow] trigger stopped... and the Rope Growth on Hold checkbox
+doesnt do anything") -- re-tested live and found both hold-to-grow
+paths already working correctly (rope length genuinely increasing
+while held, identical delta for both paths), most likely already
+fixed by unrelated concurrent edits that landed in `index.html`
+between the report and the re-test. No code change was needed or made
+for that investigation.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since
