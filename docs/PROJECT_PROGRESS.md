@@ -418,6 +418,62 @@ mouseFlickAngleOffset`, a live calibration slider, was non-zero at
 test time and needed neutralizing for a clean, offset-independent
 test -- not a bug in the feature itself).
 
+**Added (2026-09-11): Drag Rope -- click-and-drag any rope point, anchored
+where clicked, overriding Click-And-Hold.** New `Drag Rope` checkbox
+(CLICK group, default off). Reuses 3 existing mechanisms rather than
+building new ones: the same hold-recognition timer that already arms
+Click-And-Hold's charging now arms dragging instead when the checkbox is
+on (mutually exclusive per hold, same pattern as charging vs. the
+circle's hold-to-grow); `integrateChain()`'s existing, already-generic
+`pinnedIndex` parameter (previously always -1 for mainRope) pins the
+grabbed point during the constraint solve with zero solver changes;
+the anchor-relative rest-length clamp is the same pattern Rope
+Attraction already uses for its own tip pin, scoped to the grabbed
+point's own sub-chain length instead of the whole rope -- "the distance
+the rope can be dragged is determined by the length of the rope between
+the drag point and the rope start." The grabbed point is repositioned
+directly (kinematic, no easing) for a literal 1:1 drag; everything
+between it and the tip hangs from it under normal physics with no extra
+code. Proactively reuses `mfSuppressClickFromGrowth` (built for the
+identical "FLICK MOUSE's own independent hold-timer fires an unwanted
+flick after an unrelated rope hold" problem, already fixed twice this
+project) so a drag release doesn't also trigger a flick sequence.
+Verified live via a temporary debug hook (grep-confirmed removed): the
+anchor-relative clamp held under a deliberately-overreaching drag
+target, the tip-ward sub-chain hung stably under gravity across 210
+driven frames, a real dispatched-PointerEvent gesture sequence
+confirmed `down:rope -> hold:drag-start -> up:drag-end` fires no punch,
+and an ordinary quick tap on the same rope still punches normally with
+Drag Rope enabled (confirming the override is scoped to holds only).
+**A genuine commit-attribution mixup, not a code issue:** this
+feature's code landed already-committed inside a concurrent session's
+own unrelated FLICK MOUSE commit (`2b93c94`) despite that commit's
+message claiming it was left untouched -- see CHANGELOG.txt's own
+2026-09-11 10:25 PM entry for the full account (confirmed via `git
+show` that 10 of that commit's own added lines match this feature's
+markers). No code was lost; this session's own remaining contribution
+was removing a leftover debug hook (`ed35245`) and merging/pushing.
+
+**Investigated (2026-09-11): reported "Cursor Animations Enabled (Live
+Mode) checkbox doesn't work -- checked, but the cursor animation still
+doesn't show in live mode."** Traced `mouseFlickActive()`'s own gate
+(`cfg.mouseFlickEnabled && (DEV_MODE || cfg.mouseFlickEnabledLiveMode)`)
+and all 4 of its call sites (pointerdown/pointerup listeners, update(),
+render()) -- logic is correct by inspection, and confirmed live: with
+the actual current saved settings (`mouseFlickEnabled: true`,
+`mouseFlickEnabledLiveMode: true`), directly simulating the non-dev
+branch of this exact gate (bypassing `DEV_MODE` specifically) returns
+`true`, meaning a real non-dev visitor with these settings WOULD see
+the cursor animation. No code bug found or fixed -- most likely
+explanations, not yet confirmed with the user: (1) `Mouse Flick
+Enabled` (the OTHER, separate master checkbox in the same FLICK MOUSE
+group) is off in their actual test session -- Live Mode only adds a
+non-dev-visitor path on TOP of that master switch, it doesn't replace
+it; or (2) they're testing a deployed URL that hasn't picked up this
+brand-new checkbox yet. Needs the user's own confirmation of exactly
+what they tested (local dev-panel toggle vs. a deployed URL, and
+whether Mouse Flick Enabled is also checked) to close out.
+
 **Added (2026-09-11): Cut Splatter -- a particle burst at the cut point,
 dev-only.** Answered a "how hard is fluid/liquid sim for a blood-splatter
 effect" question directly (user then said "dont implement"); implemented

@@ -11146,3 +11146,107 @@ mid-task from another session (a new "Drag Rope" interaction, touching
 this task changed) -- left completely untouched per standing policy,
 confirmed via `git diff` hunk-by-hunk inspection that none of it
 overlaps this task's own changes before committing.
+
+================================================================================
+2026-09-11  -  10:25 PM EDT
+
+Drag Rope: "*D*Drag Rope*Checkbox* When turned on, this will allow the
+function of click and dragging the rope. The rope will be moved by
+this drag, anchored by the point on the rope that is clicked. When
+this is turned on, it will override the Click on Rope to Hold
+function. The rope start will still be limited to within the circle.
+The distance that the rope can be dragged is determined by the length
+of the rope between the drag point and the rope start." New `Drag
+Rope` checkbox (CLICK group, default off).
+
+Implementation reuses 3 existing mechanisms rather than building new
+ones: (1) the SAME hold-recognition timer that already arms Click-And-
+Hold's charging (`cfg.doubleClickThreshold` after a rope-mode press)
+now branches on `cfg.dragRopeEnabled` -- when on, it arms dragging
+instead of charging, which is what "override" means here: the two are
+mutually exclusive per hold, exactly like charging and the circle's
+own hold-to-grow already are. The grabbed point is
+`downInfo.hit.index` (frozen at the ORIGINAL press, matching "anchored
+by the point on the rope that is clicked"), clamped to a minimum of 1
+so the anchor point itself (index 0) is never draggable -- it's
+already confined by its own separate circle-boundary clamp. (2)
+`integrateChain()`'s existing, already-fully-generic `pinnedIndex`
+parameter (previously always `-1` for mainRope, since the anchor uses
+`boundaryConstraint` instead) pins the grabbed point in place during
+the constraint solve -- both the distance and bend constraints already
+correctly exclude ANY index from being moved, not just 0 or the tip,
+so this needed zero solver changes, just passing a different index
+through. (3) The anchor-relative rest-length clamp is the same
+pattern Rope Attraction already uses for its own tip pin
+(`totalRestLen`), just scoped to the sub-chain between the anchor and
+the grabbed point (`segLen * dragIndex`) instead of the whole rope --
+"the distance the rope can be dragged is determined by the length of
+the rope between the drag point and the rope start," implemented as a
+literal clamp on the mouse-target distance from the anchor's own
+current position. The grabbed point is repositioned directly
+(kinematic, oldx/oldy snapped to match, same convention as the
+growing tip and Rope Attraction's own tip-neighbor placement) rather
+than fed into the solver as a moving target -- direct 1:1 dragging,
+no easing/speed-limiting, since the request describes a literal grab-
+and-move, not an eased attraction pull. Everything between the
+grabbed point and the tip is left as an ordinary, unpinned sub-chain,
+so it hangs/swings from the drag point under normal physics with no
+extra code -- confirmed live rather than assumed.
+
+One proactive addition beyond the literal spec, flagged rather than
+silent: `mfSuppressClickFromGrowth` (the existing flag built for this
+exact class of problem -- FLICK MOUSE has its own fully independent,
+position-blind hold-timer that fires a click/charge sequence on
+release regardless of what the rope-side gesture meant) is now also
+set the moment dragging arms. Without it, releasing a drag would have
+triggered the same "unwanted flick plays after an unrelated rope
+hold" bug already found and fixed twice this project (the circle's
+hold-to-grow, and the Grow-Rope-On-Rope-Hold checkbox) -- reusing the
+already-built, already-tested suppression mechanism rather than
+re-deriving a new one for a 3rd occurrence of the identical root cause.
+
+Verified live via a temporary debug hook extending `update()`/
+`render()` with a manual frame-driver (grep-confirmed removed after,
+0 matches) plus real dispatched PointerEvents for the actual gesture
+path (not just the physics in isolation): the anchor-relative clamp
+held a dragged point within its computed max distance (162.96px
+actual vs. 164.37px max, index 10 on a 26-point/16.44px-segLen rope);
+the sub-chain between anchor and drag point pulled taut toward the
+target while the tip-ward sub-chain hung stably under gravity with no
+NaN/instability across 210 driven frames of continuous dragging;
+releasing resumed normal physics cleanly; the real gesture sequence
+(`down:rope` -> `hold:drag-start` -> `up:drag-end`, via `logClick()`)
+confirmed no punch fires on a drag release, while an ordinary quick
+tap on the same rope with Drag Rope still enabled resolved to a
+normal `up:tap-punch` exactly as before (confirming "override" is
+scoped to the HOLD outcome only, not quick taps); a press landing
+exactly at the anchor position confirmed it routes to the pre-existing
+`mode:'circle'` branch rather than the rope-drag path at all,
+covering the index-0 edge case by construction rather than requiring
+a live drag-at-index-0 reproduction.
+
+**A genuine, disclosed commit-attribution mixup, not a code problem:**
+this feature's own code landed already-committed in `2b93c94` (the
+concurrent FLICK MOUSE session's own commit, made while this task's
+edits were still uncommitted in the same shared working tree) --
+`git show 2b93c94` confirms 10 added (`+`) lines matching this
+feature's own markers (`dragRopeEnabled`, `dragPinIndex`, `hold:drag-
+start`, `up:drag-end`), despite that commit's own message explicitly
+stating "a new Drag Rope interaction... left untouched, confirmed
+non-overlapping via git diff hunk inspection." The likely mechanism:
+a blanket `git add`/commit run against the shared working tree while
+this task's own changes were sitting there uncommitted, with their
+own hunk-inspection check apparently missing the overlap (see
+`CLAUDE.md`'s §9 warning about exactly this class of mistake). No
+code was lost, corrupted, or needs re-doing -- the feature's content
+is correct and already live on `origin/master` under that commit;
+this session's own contribution from this point was: removing a
+temporary debug hook (`window.__testDrag`) that had been added AFTER
+their commit and so was never swept in, committed separately as
+`ed35245`, merged against `origin/master` (5 intervening commits, all
+either their FLICK MOUSE bundle or routine Save-Settings auto-commits
+touching only `dev-panel-settings.json`), and pushed (`910ca5a`) with
+no real conflict. Recorded here in full because the actual commit
+history now attributes this feature to an unrelated commit message --
+a future session searching for "Drag Rope" in `git log -p` needs this
+note to understand why `2b93c94`'s own message never mentions it.

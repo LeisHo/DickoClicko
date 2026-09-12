@@ -660,3 +660,52 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   hitting Save Settings, would otherwise ship it turned on for every
   real visitor too. Don't remove the `!DEV_MODE` half of this check
   thinking the checkbox default alone is sufficient protection.
+- Drag Rope (`cfg.dragRopeEnabled`) reuses `integrateChain()`'s
+  `pinnedIndex` parameter for an INTERIOR chain point, not just index 0
+  or the last point -- it was already fully generic (both the distance
+  and bend constraints already excluded ANY index passed in, not
+  hardcoded to the anchor/tip), so this needed zero solver changes. If
+  a future change to `integrateChain()` ever special-cases `pinnedIndex
+  === 0` or assumes it's only ever the last index, it will silently
+  break Drag Rope -- keep it index-agnostic.
+- Drag Rope overrides Click-And-Hold via the SAME `holdTimer` callback
+  charging already uses (`onPointerDown`'s rope branch) -- when
+  `cfg.dragRopeEnabled` is on, that callback arms `downInfo.dragging`/
+  `downInfo.dragIndex` instead of `downInfo.charging`, so the two are
+  mutually exclusive per hold by construction (never both). A quick tap
+  (no hold) still punches normally either way -- only the HOLD outcome
+  is overridden, not `pendingClick`'s own tap/double-click resolution,
+  which this feature doesn't touch at all. Also sets
+  `mfSuppressClickFromGrowth` the moment dragging arms, reusing the
+  same flag built for hold-to-grow -- without it, releasing a drag
+  would ALSO trigger an unwanted FLICK MOUSE click/charge sequence, the
+  identical bug already fixed twice for the circle's own hold-to-grow
+  and the "Grow Rope On Rope Hold" checkbox (see that gotcha above).
+  Any FUTURE rope-side hold gesture needs to set this same flag too.
+- The dragged point's index is clamped to a minimum of 1
+  (`Math.max(1, downInfo.hit.index)`) -- index 0 is the anchor itself,
+  already confined by its own separate circle-boundary clamp
+  (`boundaryConstraint`), and pinning it via `pinnedIndex` at the same
+  time would fight that mechanism. In practice a press that lands
+  exactly on/near the anchor position routes to the pre-existing
+  `mode:'circle'` branch before ever reaching the rope hit-test at all
+  (confirmed live), so this clamp is a defensive fallback for a narrow
+  edge case (a press landing just outside the circle's own margin but
+  still closest to point 0), not the primary gate.
+- 2026-09-11: this file's own `index.html` saw a real cross-session
+  commit-attribution mixup, not just a working-tree collision -- a
+  concurrent FLICK MOUSE session's commit (`2b93c94`) ended up
+  containing this same day's separately-developed "Drag Rope" feature
+  (10 of that commit's own added lines match Drag Rope's markers),
+  despite that commit's own message explicitly stating the two were
+  kept separate via hunk inspection. Most likely mechanism: a blanket
+  `git add`/commit against the shared working tree while Drag Rope's
+  own edits were sitting there uncommitted, with the hunk-inspection
+  check either run at the wrong moment or not actually excluding the
+  overlap. No code was lost -- see `docs/CHANGELOG.txt`'s 2026-09-11
+  10:25 PM entry for the full account. Take away: hunk-by-hunk
+  inspection before staging (CLAUDE.md §9's own guidance) is necessary
+  but not sufficient on its own if performed carelessly or against a
+  stale diff -- re-run `git diff` immediately before the actual
+  `git add`/`commit`, not earlier in the task, when checking for
+  another session's concurrent work in this file.
