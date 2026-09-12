@@ -3595,6 +3595,135 @@ function mouseFlickVariantKeyForMode(mode){
   if (mode === 'sciss' || mode === 'snap' || mode === 'charge') return mode;
   return 'base';
 }
+
+// ---------------------------------------------------------------------
+// Per-direction, per-PURPOSE interaction point (2026-09-12) -- the TRUE
+// contact/aim point for a gesture, distinct from MOUSE_FLICK_VISIBLE_
+// BOUNDS's own wrist anchor above. Per explicit spec/data drop: "What
+// the points show is the proxy for the cursor location, which is
+// relevant in regards to our distance sliders (click distance, click
+// and hold distance, etc). So instead of measuring the distance to the
+// cursor location, we are measuring the distance to the point i have
+// annotated for each type." Sourced from a real annotated export
+// (drag-points.json, DOTFLICKO's drag-point-annotator.html tool),
+// frame 1 of each category -- normalized (0-1) fractions of that
+// category's own frame-1 image, same convention MOUSE_FLICK_VISIBLE_
+// BOUNDS already uses. Per explicit mapping: the annotator's own
+// "sciss"/"drag" categories map 1:1 to the 'cut' (double-click) and
+// 'drag' (Drag Rope) purposes; "tickle" is NOT the Tickle animation
+// here -- its points are reused as the 'click' and 'click-and-hold'
+// purpose's own points, AND as the fallback for any future purpose
+// this table doesn't otherwise address (see MOUSE_FLICK_INTERACTION_
+// REF_IMAGE/VARIANT below, which route 'click'/'hold' at the 'tickle'
+// category).
+const MOUSE_FLICK_INTERACTION_POINTS = {
+  cut: {
+    'behind':       { x: 0.527, y: 0.298 },
+    'behind-thumb': { x: 0.467, y: 0.315 },
+    'side-thumb':   { x: 0.457, y: 0.309 },
+    'front-thumb':  { x: 0.485, y: 0.269 },
+    'front':        { x: 0.489, y: 0.272 },
+    'front-pinky':  { x: 0.504, y: 0.286 },
+    'side-pinky':   { x: 0.531, y: 0.292 },
+    'behind-pinky': { x: 0.529, y: 0.298 },
+  },
+  // 'tickle' category, doubling as the 'click'/'hold' interaction point
+  // (and the default fallback) -- per explicit spec, not the actual
+  // Tickle animation's own frames.
+  default: {
+    'behind':       { x: 0.521, y: 0.24 },
+    'behind-thumb': { x: 0.501, y: 0.237 },
+    'side-thumb':   { x: 0.468, y: 0.231 },
+    'front-thumb':  { x: 0.471, y: 0.249 },
+    'front':        { x: 0.478, y: 0.231 },
+    'front-pinky':  { x: 0.558, y: 0.249 },
+    'side-pinky':   { x: 0.564, y: 0.249 },
+    'behind-pinky': { x: 0.546, y: 0.249 },
+  },
+  // Drag's own frame 1 point (gating/aim) -- frame 48's point lives in
+  // MOUSE_FLICK_DRAG_END_POINTS below, used only by the frame-48-to-
+  // frame-1 render-alignment feature, not by any distance gate.
+  drag: {
+    'behind':       { x: 0.522, y: 0.345 },
+    'behind-thumb': { x: 0.462, y: 0.33 },
+    'side-thumb':   { x: 0.457, y: 0.357 },
+    'front-thumb':  { x: 0.455, y: 0.309 },
+    'front':        { x: 0.481, y: 0.351 },
+    'front-pinky':  { x: 0.465, y: 0.324 },
+    'side-pinky':   { x: 0.568, y: 0.345 },
+    'behind-pinky': { x: 0.572, y: 0.309 },
+  },
+};
+// Drag's own frame 48 point -- see mouseFlickDragAlignmentOffset()'s own
+// comment for how this is used to keep the annotated contact point
+// visually pinned across the whole Drag sequence, converging back onto
+// MOUSE_FLICK_INTERACTION_POINTS.drag's own frame-1 point by frame 48.
+const MOUSE_FLICK_DRAG_END_POINTS = {
+  'behind':       { x: 0.492, y: 0.474 },
+  'behind-thumb': { x: 0.411, y: 0.525 },
+  'side-thumb':   { x: 0.385, y: 0.528 },
+  'front-thumb':  { x: 0.425, y: 0.534 },
+  'front':        { x: 0.512, y: 0.543 },
+  'front-pinky':  { x: 0.43,  y: 0.546 },
+  'side-pinky':   { x: 0.619, y: 0.531 },
+  'behind-pinky': { x: 0.596, y: 0.534 },
+};
+// Which already-loaded frame array (mouseFlickFramesByDirection[dir][?])
+// supplies frame 1's own naturalWidth/naturalHeight for each purpose's
+// own point (needed to reproduce render()'s exact drawW/drawH math even
+// when that category isn't the one currently on screen), and which
+// MOUSE_FLICK_VISIBLE_BOUNDS variant supplies the wrist-anchor origin
+// that point is offset from -- 'cut' uses its own dedicated 'sciss'
+// bounds entry (a genuine 1:1 match with what was actually annotated);
+// 'drag' and 'default'/click share 'base' (Drag/Tickle/plain-click all
+// already render pinned to the 'base' wrist anchor, same as render()'s
+// own mouseFlickVariantKeyForMode mapping); 'default'/hold uses 'charge'
+// specifically, since a held click-and-hold (and Tickle, which overrides
+// charge's OWN display without changing mfMode) both actually render
+// via the 'charge' wrist anchor.
+const MOUSE_FLICK_INTERACTION_REF_IMAGE = { click: 'tickle', hold: 'tickle', cut: 'sciss', drag: 'drag' };
+const MOUSE_FLICK_INTERACTION_VARIANT   = { click: 'base',   hold: 'charge', cut: 'sciss', drag: 'base' };
+const MOUSE_FLICK_INTERACTION_POINT_KEY = { click: 'default', hold: 'default', cut: 'cut', drag: 'drag' };
+// World-space (canvas coordinate) position of purpose's own annotated
+// interaction point, transformed through FLICK MOUSE's CURRENT live
+// entity transform (mfEntityX/Y, mfEntityAngleDeg, mfDirectionKey) --
+// the exact same translate+rotate+wrist-anchor-offset math render()
+// uses to draw the sprite (see its own comment), just solved for an
+// arbitrary annotated point instead of the wrist anchor itself. Returns
+// null whenever FLICK MOUSE isn't active/visible, or the needed point/
+// reference-image data isn't available (a not-yet-loaded frame) --
+// every caller must fall back to the real cursor position in that case,
+// never treat null as "the point is at the origin."
+function mouseFlickInteractionPointWorld(purpose){
+  if (!mouseFlickActive()) return null;
+  const dirKey = mfDirectionKey;
+  const pointKey = MOUSE_FLICK_INTERACTION_POINT_KEY[purpose];
+  const pt = MOUSE_FLICK_INTERACTION_POINTS[pointKey] && MOUSE_FLICK_INTERACTION_POINTS[pointKey][dirKey];
+  if (!pt) return null;
+  const refVariant = MOUSE_FLICK_INTERACTION_REF_IMAGE[purpose];
+  const framesForDir = mouseFlickFramesByDirection[dirKey];
+  const img = framesForDir && framesForDir[refVariant] && framesForDir[refVariant][0];
+  if (!img || !img.complete || !img.naturalWidth) return null;
+  const drawW = vmin(cfg.mouseFlickScale);
+  const drawH = drawW * (img.naturalHeight / img.naturalWidth);
+  const vb = mouseFlickVisibleBounds(dirKey, MOUSE_FLICK_INTERACTION_VARIANT[purpose]);
+  const localX = drawW * (pt.x - vb.centerX);
+  const localY = drawH * (pt.y - vb.bottomY);
+  const rad = (mfEntityAngleDeg + 180) * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  return {
+    x: mfEntityX + localX * cos - localY * sin,
+    y: mfEntityY + localX * sin + localY * cos,
+  };
+}
+// Convenience wrapper -- returns the annotated interaction point's world
+// position when available, else the real (realX,realY) position passed
+// in, so every call site gets a usable coordinate unconditionally
+// without repeating the same null-check/fallback logic 4 times over.
+function mouseFlickInteractionPos(realX, realY, purpose){
+  return mouseFlickInteractionPointWorld(purpose) || { x: realX, y: realY };
+}
+
 // Starts a fresh click/sciss/snap play (forward, or forward+reverse for
 // click) -- an in-progress sequence still can't be INTERRUPTED, but per
 // explicit request (2026-09-12) a trigger that arrives while busy is
@@ -6425,9 +6554,20 @@ function onPointerDown(e){
     // the point on the rope that is clicked"). Index 0 (the anchor itself)
     // is excluded -- dragging it would fight its own separate circle-
     // boundary confinement -- clamped up to the first real, draggable point.
-    if (cfg.dragRopeEnabled && downInfo.hit.dist <= vmin(cfg.dragRopeHoldDistance)){
+    // Drag Rope Hold Distance is measured against FLICK MOUSE's own
+    // annotated 'drag' interaction point (2026-09-12, per explicit
+    // spec), not the literal press position -- falls back to the real
+    // (x,y) via mouseFlickInteractionPos() whenever FLICK MOUSE isn't
+    // active/visible or the point/frame data isn't ready yet. Computed
+    // fresh here (not reusing downInfo.hit, which stays untouched --
+    // Rope Growth On Rope Hold's own distance gate further below still
+    // reads it, unaffected by this substitution) since this callback
+    // already only fires after doubleClickThreshold has elapsed.
+    const dragPos = mouseFlickInteractionPos(x, y, 'drag');
+    const dragHit = nearestPointOnRope(dragPos.x, dragPos.y, mainRope.points);
+    if (cfg.dragRopeEnabled && dragHit.dist <= vmin(cfg.dragRopeHoldDistance)){
       downInfo.dragging = true;
-      downInfo.dragIndex = Math.max(1, downInfo.hit.index);
+      downInfo.dragIndex = Math.max(1, dragHit.index);
       mfSuppressClickFromGrowth = true;
       // Drag Rope hand animation (2026-09-11): reset the forward-play
       // position for whichever direction ends up active during this drag
@@ -6576,7 +6716,18 @@ function onPointerUp(e){
     // re-resolve against CURRENT positions at release time -- the rope and
     // any fallen piece may both have moved since the press, and a double
     // click can be aimed at either (cuts the rope, or splits a piece).
-    const target = hitTestAny(e.clientX, e.clientY, vmin(cfg.doubleClickDistance));
+    // Double Click Distance is measured against FLICK MOUSE's own
+    // annotated 'cut' interaction point (2026-09-12, per explicit spec:
+    // "when measuring Cut (double click) distance, you will be
+    // measuring to the point provided by me as opposed to the true
+    // cursor location"), falling back to the real release position when
+    // FLICK MOUSE isn't active/visible. The cut sweep's own direction
+    // (cutRopeAt's clickX/clickY) intentionally still uses the REAL
+    // release position, not this substitute -- only the targeting
+    // DISTANCE was asked to change, not which side the visual sweep
+    // reads as "clicked from."
+    const cutPos = mouseFlickInteractionPos(e.clientX, e.clientY, 'cut');
+    const target = hitTestAny(cutPos.x, cutPos.y, vmin(cfg.doubleClickDistance));
     logClick('up:double-click', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
     if (target){
       if (target.target === 'rope') cutRopeAt(target, e.clientX, e.clientY);
@@ -6621,7 +6772,12 @@ function onPointerUp(e){
     // during the hold had no effect at all — a hold that started too far
     // from the rope stayed stuck failing even after being dragged right
     // over it, matching the reported "click and hold doesn't work."
-    const releaseHit = nearestPointOnRope(e.clientX, e.clientY, mainRope.points);
+    // Click And Hold Distance is measured against FLICK MOUSE's own
+    // annotated 'hold' interaction point (2026-09-12, per explicit
+    // spec), not the literal release position -- falls back to the
+    // real release position when FLICK MOUSE isn't active/visible.
+    const holdPos = mouseFlickInteractionPos(e.clientX, e.clientY, 'hold');
+    const releaseHit = nearestPointOnRope(holdPos.x, holdPos.y, mainRope.points);
     const heldMs = now - info.startTime;
     if (releaseHit.dist > vmin(cfg.holdDistance)){
       logClick('up:hold-release-too-far', { x: e.clientX, y: e.clientY, releaseDist: releaseHit.dist, heldMs });
@@ -6650,7 +6806,16 @@ function onPointerUp(e){
   // timeout — punching stays rope-only (unchanged scope), still keyed off
   // the original press-time rope hit (info.hit), same as before pieces
   // became double-click-cuttable.
-  const nearAny = hitTestAny(info.x, info.y);
+  // Click Distance is measured against FLICK MOUSE's own annotated
+  // 'click' interaction point (2026-09-12, per explicit spec), not the
+  // literal tap position -- falls back to the real tap position when
+  // FLICK MOUSE isn't active/visible. Recomputed fresh both here (arm
+  // check) and again inside the pending-click timeout below (final
+  // check), rather than reusing one frozen value, matching how Click
+  // And Hold Distance already samples at decision time rather than
+  // press time.
+  const clickArmPos = mouseFlickInteractionPos(info.x, info.y, 'click');
+  const nearAny = hitTestAny(clickArmPos.x, clickArmPos.y);
   if (!nearAny){
     logClick('up:tap-too-far', { x: info.x, y: info.y, hitDist: info.hit.dist });
     return;
@@ -6660,9 +6825,11 @@ function onPointerUp(e){
   pendingClick = {
     time: now,
     timer: setTimeout(() => {
-      if (info.hit.dist <= vmin(cfg.clickDistance)){
-        logClick('up:tap-punch', { x: info.x, y: info.y, hitDist: info.hit.dist, intensity: cfg.clickIntensity });
-        applyPunch(mainRope.points, info.hit, info.x, info.y, cfg.clickIntensity, 0, mainRope.segLen);
+      const clickPos = mouseFlickInteractionPos(info.x, info.y, 'click');
+      const clickHit = nearestPointOnRope(clickPos.x, clickPos.y, mainRope.points);
+      if (clickHit.dist <= vmin(cfg.clickDistance)){
+        logClick('up:tap-punch', { x: info.x, y: info.y, hitDist: clickHit.dist, intensity: cfg.clickIntensity });
+        applyPunch(mainRope.points, clickHit, clickPos.x, clickPos.y, cfg.clickIntensity, 0, mainRope.segLen);
       }
       pendingClick = null;
     }, cfg.doubleClickThreshold),
@@ -9191,25 +9358,6 @@ resetSettings(); // load last-saved values/order/geometry, if any (falls back to
 // genuine catch-up burst (e.g. after a backgrounded tab).
 lastTime = performance.now();
 requestAnimationFrame(loop);
-
-if (DEV_MODE){
-  window.__testGrowFix = {
-    tick: (n=1) => { for (let i=0;i<n;i++){ update(FIXED_DT); } render(); },
-    circleXY: () => circleAnchor(),
-    setIntroDone: () => { introPhase = 'done'; },
-    growing: () => growing,
-    downInfoState: () => downInfo,
-    holdTimerActive: () => holdTimer !== null && holdTimer !== undefined,
-    ropeLen: () => mainRope.totalLength,
-    dragRopeEnabled: () => cfg.dragRopeEnabled,
-    mfMode: () => mfMode,
-    mfDirectionKey: () => mfDirectionKey,
-    mfFrameAccum: () => mfFrameAccum,
-    mfRightDown: () => mfRightDown,
-    setMfRightDown: (v) => { mfRightDown = v; },
-    startPlaySnap: () => { mfMode='idle'; mfRightDown = true; mouseFlickStartPlay('snap'); },
-  };
-}
 
 })();
 </script>
