@@ -3074,16 +3074,17 @@ const MOUSE_FLICK_DIRECTIONS = [
     // not a hyphen before Tickle), not a typo to silently correct --
     // per this project's own established convention of syncing to
     // whatever the real filename is, not inferred intent.
-    tickle:{ folder:'FRONT - TICKLE',  prefix:'FRON Tickle',       count:48, noSubfolder:true } },
-    // NOTE: no `drag` entry for this direction -- "FRONT DRAG" and
-    // "FRONT DRAG - Copy" are both genuinely empty (0 files) on disk as
-    // of this writing, confirmed via direct enumeration, not assumed.
-    // mouseFlickFramesByDirection['front'].drag will be undefined, and
-    // every drag-frame render/update site already checks for that before
-    // using it (same `dir.drag ? load(dir.drag) : undefined` pattern
-    // Tickle established) -- a drag on this direction just shows the
-    // ordinary charge frames instead, no crash. Add a `drag:{...}` entry
-    // here once real frames exist for this direction.
+    tickle:{ folder:'FRONT - TICKLE',  prefix:'FRON Tickle',       count:48, noSubfolder:true },
+    // Drag Rope hand animation (2026-09-12) -- "FRONT DRAG" was empty on
+    // disk when this direction was first built (see the CLAUDE.md gotcha
+    // this entry resolves); real frames have since been added. 48/48
+    // frames, contiguous, confirmed via direct enumeration -- no gaps,
+    // so a plain count:48 (not an explicit nums array) is correct here,
+    // same as 'behind'/'front-thumb'/'side-thumb'/'side-pinky'. Prefix
+    // has a literal " - " around "Drag" ("Front - Drag") -- confirmed via
+    // direct enumeration, not adjusted to match another direction's
+    // differently-spaced prefix.
+    drag:{ folder:'FRONT DRAG', prefix:'Front - Drag', count:48, noSubfolder:true } },
   { key:'front-pinky',
     base:{   folder:'FRONT PINKY',           prefix:'2T -SidePink',           nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'FRONT PINKY -CHARGE',   prefix:'2T FrontPink-CHARGE',    count:8 },
