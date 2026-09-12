@@ -12,7 +12,7 @@
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
     "segmentLength": 1.65,
-    "ropeLength": 49.15778345088922,
+    "ropeLength": 33.550000000000054,
     "ropeDefaultLength": 30,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -125,14 +125,14 @@
     "pieceDecayDelay": 10,
     "pieceDecaySpeed": 0.5,
     "pieceMinThickness": 1.2,
-    "cutSplatterEnabled": false,
+    "cutSplatterEnabled": true,
     "cutSplatterColor": "#ffffff",
-    "cutSplatterHorizontalSpread": 51,
-    "cutSplatterVerticalSpread": 28,
-    "cutSplatterParticleCount": 49,
-    "cutSplatterParticleSize": 0.6,
-    "cutSplatterSizeVariance": 1,
-    "cutSplatterGravity": 1.7,
+    "cutSplatterHorizontalSpread": 46,
+    "cutSplatterVerticalSpread": 135,
+    "cutSplatterParticleCount": 130,
+    "cutSplatterParticleSize": 0.5,
+    "cutSplatterSizeVariance": 0.15,
+    "cutSplatterGravity": 10,
     "cutSplatterFlightDuration": 0.25,
     "cutSplatterFadeTime": 30,
     "cutSplatterOpacity": 1,
@@ -228,11 +228,13 @@
     "snapRepeatDuration": 1.5
   },
   "order": {
-    "ungrouped": [],
+    "ungrouped": [
+      "textEditMode"
+    ],
     "groups": [
       {
         "key": "CUT SPLATTER",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "cutSplatterEnabled",
           "cutSplatterColor",
@@ -262,7 +264,6 @@
         "key": "DEV PANEL",
         "collapsed": true,
         "settings": [
-          "textEditMode",
           "accentColor",
           "sliderColor",
           "fontFamily",
@@ -332,7 +333,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "segmentLength",
           "ropeDefaultLength",
@@ -421,22 +422,12 @@
               "endEmergeTweening"
             ],
             "subgroups": []
-          },
-          {
-            "key": "ROPE GROWTH",
-            "collapsed": true,
-            "settings": [
-              "ropeGrowthHoldDistance",
-              "ropeGrowthOnRopeHold",
-              "ropeGrowthRate"
-            ],
-            "subgroups": []
           }
         ]
       },
       {
         "key": "New Group (6)",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [],
         "subgroups": [
           {
@@ -449,6 +440,23 @@
               "dragRopeEnabled",
               "clickIntensity",
               "clickDistance"
+            ],
+            "subgroups": []
+          },
+          {
+            "key": "ROPE CUT",
+            "collapsed": true,
+            "settings": [
+              "doubleClickDistance",
+              "doubleClickThreshold",
+              "ropeFallSpeed",
+              "cutSpeed",
+              "endcapAtCutEnd",
+              "cutSweepColor",
+              "cutSweepThickness",
+              "pieceDecayDelay",
+              "pieceDecaySpeed",
+              "pieceMinThickness"
             ],
             "subgroups": []
           },
@@ -473,19 +481,12 @@
             "subgroups": []
           },
           {
-            "key": "ROPE CUT",
-            "collapsed": false,
+            "key": "ROPE GROWTH",
+            "collapsed": true,
             "settings": [
-              "doubleClickDistance",
-              "doubleClickThreshold",
-              "ropeFallSpeed",
-              "cutSpeed",
-              "endcapAtCutEnd",
-              "cutSweepColor",
-              "cutSweepThickness",
-              "pieceDecayDelay",
-              "pieceDecaySpeed",
-              "pieceMinThickness"
+              "ropeGrowthHoldDistance",
+              "ropeGrowthOnRopeHold",
+              "ropeGrowthRate"
             ],
             "subgroups": []
           }
@@ -661,6 +662,7 @@
     "group:FLICK HOLD": "CLICK HOLD-CHARGE",
     "group:New Group (6)": "CLICK FUNCTIONS",
     "group:ROPE CUT": "DOUBLE CLICK-CUT",
-    "group:CLICK": "CLICK-FLICK"
+    "group:CLICK": "CLICK-FLICK",
+    "group:ROPE GROWTH": "CLICK-HOLD-GROW"
   }
 }
