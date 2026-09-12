@@ -466,6 +466,52 @@ const DEV_GROUPS = [
     { key:'pieceDecaySpeed',   label:'Piece Decay Speed',      type:'slider', unit:'%vmin/s', min:0, max:5,  step:0.05, def:0.5 },
     { key:'pieceMinThickness', label:'Piece Minimum Thickness', type:'slider', unit:'%vmin',  min:0.1, max:10, step:0.1, def:1 },
   ]},
+  { title:'CUT SPLATTER', controls:[
+    // "blood splatter on the background" when a cut actually separates
+    // the rope (main rope OR an already-fallen piece) -- a burst of
+    // small colored particles that fly outward/upward from the cut
+    // point, arc under their own gravity, then settle in place and
+    // fade out, painted onto the BACKGROUND layer (drawn first in
+    // render(), before the rope/pieces/circle) so the rope visually
+    // passes in front of the splatter, matching "on the background."
+    //
+    // Deliberately gated on DEV_MODE too, not just this checkbox, at
+    // the actual trigger site (see spawnCutSplatter()) -- per explicit
+    // request ("by default hide it in non dev mode"). Save Settings
+    // writes to a SHARED git-tracked settings file every visitor's cfg
+    // loads from equally (not per-user) -- without this extra gate, a
+    // dev turning this on to test it and hitting Save would silently
+    // turn it on for real players too, the instant that saved file is
+    // fetched by their own page load. The checkbox's own on/off state
+    // still round-trips through Save/Copy/Reset normally either way;
+    // this only gates whether it's ever actually DRAWN/triggered.
+    { key:'cutSplatterEnabled', label:'Splatter On And Off', type:'checkbox', def:false },
+    { key:'cutSplatterColor', label:'Splatter Color', type:'color', def:'#8b0000' },
+    // Max initial launch speed along each axis -- not a literal final
+    // resting distance (gravity and flight duration both also affect
+    // how far a particle actually travels before landing), but the
+    // dominant, most direct control over how far the spray REACHES.
+    { key:'cutSplatterHorizontalSpread', label:'Splatter Horizontal Spray Distance', type:'slider', unit:'%vmin/s', min:0, max:150, step:1, def:60 },
+    { key:'cutSplatterVerticalSpread',   label:'Splatter Vertical Spray Distance',   type:'slider', unit:'%vmin/s', min:0, max:150, step:1, def:80 },
+    // Everything below is additional decomposition per the standing
+    // "more precisely-named sliders over fewer, cleverer ones"
+    // philosophy (workspace CLAUDE.md §12n), not explicitly asked for
+    // by name but invited ("provide any other sliders you think would
+    // allow me better editing of the splatter").
+    { key:'cutSplatterParticleCount', label:'Splatter Particle Count', type:'slider', unit:'', min:1, max:60, step:1, def:16 },
+    { key:'cutSplatterParticleSize', label:'Splatter Particle Size', type:'slider', unit:'%vmin', min:0.2, max:5, step:0.1, def:1.1 },
+    // Each particle's own actual size is randomized within +/- this
+    // fraction of Particle Size, so a full burst reads as organic
+    // droplets rather than uniform identical dots.
+    { key:'cutSplatterSizeVariance', label:'Splatter Size Variance', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0.6 },
+    // Same "x against a fixed base" convention as Gravity Strength
+    // above -- how hard the particles' own short flight arcs downward
+    // before landing (0 = a straight-line spray with no arc at all).
+    { key:'cutSplatterGravity', label:'Splatter Gravity', type:'slider', unit:'x', min:0, max:10, step:0.1, def:2.5 },
+    { key:'cutSplatterFlightDuration', label:'Splatter Flight Duration', type:'slider', unit:'s', min:0, max:2, step:0.05, def:0.4 },
+    { key:'cutSplatterFadeTime', label:'Splatter Fade Time', type:'slider', unit:'s', min:0.5, max:30, step:0.5, def:6 },
+    { key:'cutSplatterOpacity', label:'Splatter Max Opacity', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.85 },
+  ]},
   { title:'END EMERGE', controls:[
     { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:true },
     { key:'endcapStartingScale', label:'Endcap Starting Scale', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.1 },
@@ -3451,6 +3497,7 @@ resizeCanvas();
 const POINT_COUNT = 20;
 const HOLD_THRESHOLD_MS = 180;
 const MAX_FALLEN_PIECES = 60;
+const MAX_SPLATTER_PARTICLES = 400; // see splatterParticles' own comment
 // target segment length (as %vh, matching the default rope's own density) —
 // growth/manual-length-change ADD points to hold roughly this density rather
 // than stretching a fixed point count further apart. A fixed point count
@@ -3506,6 +3553,19 @@ function makeChain(n, x, y, segLen){
 let mainRope = null;
 let fallenPieces = [];
 let bgRope = null;
+// Cut Splatter (CUT SPLATTER dev group) -- {x,y,vx,vy,size,life}. life
+// counts DOWN from (flightDuration+fadeTime) at spawn; while life is
+// still above fadeTime the particle is "flying" (position/velocity
+// updated each frame, drawn opaque); once life drops to/below fadeTime
+// it's "landed" (position frozen, opacity = life/fadeTime, fading out);
+// removed once life<=0. A single array + a derived phase (not 2
+// separate lists, or an explicit landed flag) keeps spawn/update/
+// render each a single simple loop. Capped the same way fallenPieces
+// is (MAX_SPLATTER_PARTICLES, below) as a defensive safety net against
+// unbounded growth from rapid repeated cuts with a long Fade Time --
+// not something the user asked for as a slider, just a fixed ceiling
+// matching this project's own established MAX_FALLEN_PIECES pattern.
+let splatterParticles = [];
 
 // Background "peeking" rope: a second, permanently non-interactive chain
 // -- never cut, never grown, never clicked -- that exists purely to be
@@ -5672,6 +5732,83 @@ function cutRopeAt(hit, clickX, clickY){
   mainRope.pendingCut = { idx, delay: cutThroughDuration() };
 }
 
+/* ---------------------------------------------------------------------
+   Cut Splatter (CUT SPLATTER dev group) -- see that group's own
+   comment for the full design/gating rationale.
+--------------------------------------------------------------------- */
+// Spawns a burst of splatter particles at (x,y) -- called from every
+// real cut-separation site (performMainRopeSplit/performPieceSplit
+// below). Deliberately gated on DEV_MODE here, at the ONE shared spawn
+// point, rather than at each individual call site -- a single place
+// to enforce "never actually fires for a real, non-dev visitor" no
+// matter how many future call sites end up calling this.
+function spawnCutSplatter(x, y){
+  if (!cfg.cutSplatterEnabled || !DEV_MODE) return;
+  const n = Math.round(cfg.cutSplatterParticleCount);
+  for (let i = 0; i < n; i++){
+    // Spray direction is fully random per-axis (not a fixed cone) --
+    // a real splatter has no single preferred direction, it's however
+    // the severed rope's own internal pressure happened to release.
+    const vx = (Math.random() * 2 - 1) * vmin(cfg.cutSplatterHorizontalSpread);
+    // Biased upward-or-level (never starts already falling) so Splatter
+    // Gravity has something real to arc back down against -- a purely
+    // symmetric random vy would let half the burst start already
+    // heading down, reading as a much weaker/asymmetric spray for the
+    // same slider value.
+    const vy = -Math.random() * vmin(cfg.cutSplatterVerticalSpread);
+    const sizeMult = 1 + (Math.random() * 2 - 1) * cfg.cutSplatterSizeVariance;
+    const flight = cfg.cutSplatterFlightDuration;
+    const fade = cfg.cutSplatterFadeTime;
+    splatterParticles.push({
+      x, y, vx, vy,
+      size: vmin(cfg.cutSplatterParticleSize) * Math.max(0.1, sizeMult),
+      life: flight + fade,
+      fade, // this particle's OWN fade duration, captured at spawn time
+            // -- so a later change to the slider mid-flight doesn't
+            // retroactively rescale an already-fading particle's timeline.
+    });
+  }
+  if (splatterParticles.length > MAX_SPLATTER_PARTICLES){
+    splatterParticles.splice(0, splatterParticles.length - MAX_SPLATTER_PARTICLES);
+  }
+}
+// Advances every splatter particle by one tick -- called from update().
+// "Flying" (life > this particle's own fade) integrates position under
+// Splatter Gravity, same vh(90)-based-unit convention cfg.gravityStrength
+// itself uses (see integrateChain()'s own gravityAccel) so the 2 "x"
+// sliders read on a comparable scale. "Landed" (life <= fade) freezes
+// position entirely -- it's a stain now, not a moving droplet.
+function updateSplatterParticles(dt){
+  if (splatterParticles.length === 0) return;
+  const gravityAccel = vh(90) * cfg.cutSplatterGravity;
+  for (let i = splatterParticles.length - 1; i >= 0; i--){
+    const p = splatterParticles[i];
+    p.life -= dt;
+    if (p.life <= 0){ splatterParticles.splice(i, 1); continue; }
+    if (p.life > p.fade){
+      p.vy += gravityAccel * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+}
+// Drawn from render() right after the background fill (before the
+// circle/rope/pieces) so the splatter reads as painted ON the
+// background wall, with everything else correctly passing in front of
+// it -- per explicit request ("blood splatter on the background").
+function renderSplatterParticles(){
+  for (const p of splatterParticles){
+    const opacity = Math.max(0, Math.min(1, p.life / p.fade)) * cfg.cutSplatterOpacity;
+    if (opacity <= 0) continue;
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = cfg.cutSplatterColor;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
 // Actually separates mainRope at idx into the remaining (anchor-side) rope
 // and a new fallen piece -- called immediately from cutRopeAt() when Fall
 // Delay is 0, or from update() once a pendingCut's delay has elapsed.
@@ -5682,6 +5819,10 @@ function performMainRopeSplit(idx){
   // physics point, whenever the cut lands mid-growth.
   const hadPartialTip = mainRope.tipGrowLen < mainRope.segLen;
   const lowerPoints = mainRope.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
+  // The exact real-separation point, regardless of whether a viable
+  // trailing piece results below (lowerPoints.length >= 2) -- a cut
+  // that severs right at the very tip still deserves splatter.
+  spawnCutSplatter(lowerPoints[0].x, lowerPoints[0].y);
   mainRope.points = mainRope.points.slice(0, idx + 1);
   // Zero the remaining chain's own implied velocity right at the split --
   // reported repeatedly, even after 2 rounds of collision-focused fixes:
@@ -5809,6 +5950,8 @@ function cutPieceAt(pieceIndex, hit, clickX, clickY){
 // identical role for mainRope.
 function performPieceSplit(piece, idx){
   const lowerPoints = piece.points.slice(idx).map(p => ({ x:p.x, y:p.y, oldx:p.oldx, oldy:p.oldy }));
+  // See performMainRopeSplit()'s identical call -- same reasoning.
+  spawnCutSplatter(lowerPoints[0].x, lowerPoints[0].y);
   piece.points = piece.points.slice(0, idx + 1);
   // Zero the remaining half's own implied velocity -- see
   // performMainRopeSplit()'s identical fix/comment for the full
@@ -6467,6 +6610,11 @@ window.addEventListener('pointercancel', () => {
 function floorY(){ return viewportH() - vh(cfg.floorHeight); }
 
 function update(rawDt){
+  // Cut Splatter's own per-frame tick -- self-contained (reads/writes
+  // only splatterParticles), so placed first and unconditionally; the
+  // array is simply always empty when the feature's never been
+  // triggered (DEV_MODE-gated at spawn time, see spawnCutSplatter()).
+  updateSplatterParticles(rawDt);
   // Both FLICK animations play exactly one sequence per click, then stop
   // until clicked again -- per explicit request. "One sequence" for
   // animation 1 is one full ping-pong period (1->17->1, matching its own
@@ -8050,6 +8198,12 @@ function renderCutSweep(entity){
 function render(){
   ctx.fillStyle = cfg.backgroundColor;
   ctx.fillRect(0, 0, viewportW(), viewportH());
+
+  // Drawn immediately after the background fill, before anything else
+  // (floor/circle/rope/pieces) -- per explicit request ("blood splatter
+  // on the background"), so it reads as painted on the wall behind
+  // everything rather than floating in front of it.
+  renderSplatterParticles();
 
   if (cfg.floorEnabled){
     const fY = floorY();
