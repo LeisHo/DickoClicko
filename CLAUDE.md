@@ -1009,3 +1009,17 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   bypass it when touching this slider; the 2 are meant to combine,
   with this slider only ever pulling the effective max distance IN,
   never letting it exceed what the rope's own real geometry allows.
+- **A user report that a feature "can't be triggered at all" may be a
+  STALE BROWSER CACHE, not a code bug** -- confirmed twice in one
+  session (2026-09-12): a `?dev=1` reload against this project's own
+  local dev server intermittently served a cached `index.html` missing
+  a debug hook added moments earlier (`document.readyState:'complete'`
+  immediately, with none of the just-added code present); only a
+  cache-busting query param (`&cb=<anything>`) forced a genuinely fresh
+  load. Before concluding a reported-broken interaction is a real code
+  bug, especially one that was recently changed, verify via BOTH (a) a
+  cache-busted reload (or an equivalent fresh fetch) and (b) if
+  possible, the LIVE DEPLOYED site directly (check its served HTML for
+  markers of the recent change, e.g. a new function/config-key name,
+  to rule out a stale deployment too) before trusting a negative
+  result as proof nothing is wrong on the user's end.

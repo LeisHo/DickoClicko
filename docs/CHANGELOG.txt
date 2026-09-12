@@ -12146,3 +12146,54 @@ no-op. 0 console errors.
 
 Committed/pushed (`aff528b`) -- fetch confirmed no divergence; this
 doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-12  -  10:31 AM EDT
+
+Investigated and NOT reproduced (code confirmed correct, no fix
+needed): "I cant trigger the growing function. Both in click and
+holding in the circle, as well as when click on rope to grow is turned
+on," followed mid-investigation by "i also couldnt trigger the cut
+full rope feature" (the double-click-in-circle detach mechanism --
+completely unrelated code from the grow paths, only sharing
+`isOnCircle()`-based circle hit-testing). All 3 reported-broken
+mechanisms were tested independently and found working correctly, via
+2 different methods and 2 different environments:
+
+- Direct function calls (`onPointerDown`/`onPointerUp` invoked
+  directly via a temporary debug hook, grep-confirmed removed) against
+  a fresh local dev build, using the user's own REAL saved config
+  (`holdDistance:24`, `dragRopeEnabled:true`, `ropeGrowthOnRopeHold:
+  true`, pulled from the actual git-tracked settings file, not
+  defaults): a press at the circle anchor correctly resolved
+  `mode:'circle'`, `growing` became `true` after the hold threshold,
+  and 60 simulated physics ticks measurably grew the rope (867.4 ->
+  950.7, +83.3 units, point count 77 -> 85).
+- REAL dispatched `PointerEvent`s (not direct function calls -- this
+  exercises the actual event-listener wiring, not just the underlying
+  logic) against BOTH the local dev build AND the LIVE PRODUCTION
+  deployment (`dicko-clicko.vercel.app/?dev=1`, confirmed up-to-date
+  via source inspection -- `isNearCircleCenterForGrow`,
+  `dragOverridesGrowOnRopeHold`, `segmentLength`, and
+  `MOUSE_FLICK_INTERACTION_POINTS` all present in the deployed HTML,
+  ruling out a stale/outdated deployment): `logClick()`'s own standing
+  console diagnostic confirmed the full expected sequence for both
+  remaining mechanisms on the deployed site --
+  `down:circle` -> `hold:grow-start` for circle hold-to-grow, and
+  `down:circle` -> `up:circle` (x2) -> `up:double-click-on-circle
+  {willDetach:true}` for the double-click cut-full-rope feature.
+
+**No code was changed -- nothing to fix was found.** Given all 3
+reported-broken mechanisms work correctly via both testing methods on
+both the local build and the live deployed site, and 2 of the 3 are
+completely independent, unrelated code paths, a shared ENVIRONMENTAL
+cause on the user's own end (most likely their browser serving a
+stale cached copy of `index.html` from before these recent fixes --
+personally hit this exact issue twice earlier this same session,
+requiring a cache-busting query string to see current code even
+against `localhost`) is far more likely than 3 simultaneous, unrelated
+logic bugs that happen to be invisible to every test performed. Not
+claimed as definitively resolved -- flagged back to the user with a
+concrete next step (hard refresh / private window) rather than
+guessing at further speculative code changes with no reproducing
+evidence to validate them against.

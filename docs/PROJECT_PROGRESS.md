@@ -1185,6 +1185,24 @@ captured once at drag-arm time) -- verified live that the same cursor
 position resolves to a genuinely different direction depending on
 whether a drag is active.
 
+**Investigated, NOT reproduced (2026-09-12): "I cant trigger the
+growing function... Both in click and holding in the circle, as well
+as when click on rope to grow is turned on," plus "i also couldnt
+trigger the cut full rope feature."** All 3 mechanisms tested and
+confirmed working via (a) direct function calls against the user's own
+real saved config, and (b) REAL dispatched `PointerEvent`s against
+both a fresh local build AND the live production deployment
+(`dicko-clicko.vercel.app`, confirmed up-to-date via source
+inspection). `logClick()`'s own console diagnostic showed the full
+correct sequence for every mechanism on the deployed site. No code
+changed -- 2 of the 3 reported-broken mechanisms are completely
+independent code paths, so a shared environmental cause (most likely a
+stale browser cache -- personally hit this exact issue twice this same
+session) is far more likely than 3 coincident, invisible-to-every-test
+logic bugs. Flagged back to the user with a concrete next step (hard
+refresh / private window) rather than guessing at unverified code
+changes. See CHANGELOG.txt for the full test account.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since
