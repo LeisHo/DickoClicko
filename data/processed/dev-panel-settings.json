@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 4.6,
-    "ropeLength": 29.16005024565134,
+    "ropeLength": 23.57894736842108,
     "ropeDefaultLength": 18,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -107,8 +107,8 @@
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
     "minRopeLength": 3,
-    "clickDistance": 30,
-    "doubleClickDistance": 32,
+    "clickDistance": 25,
+    "doubleClickDistance": 29,
     "doubleClickThreshold": 180,
     "ropeFallSpeed": 0.3,
     "cutSpeed": 1.1,
@@ -288,7 +288,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "ropeThickness",
@@ -394,9 +394,10 @@
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
-              "clickIntensity"
+              "clickIntensity",
+              "clickDistance"
             ],
             "subgroups": []
           },
@@ -425,7 +426,6 @@
             "collapsed": true,
             "settings": [
               "doubleClickDistance",
-              "clickDistance",
               "doubleClickThreshold",
               "ropeFallSpeed",
               "cutSpeed",
