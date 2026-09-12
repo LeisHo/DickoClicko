@@ -11306,3 +11306,103 @@ player may mostly see a static, center-parked hand rather than one
 that visibly follows -- worth remembering if "the cursor feels static
 on mobile" is ever reported, but out of scope for this investigation
 since it wasn't what was reported.
+
+--------------------------------------------------------------------------------
+2026-09-11  -  10:57 PM - 11:15 PM EDT
+
+FLICK MOUSE: Drag Rope hand animation (forward, pause on last frame,
+reverse on release).
+
+Added:
+- Per explicit request ("during click and hold dragging of the rope
+  you use that animation. run in sequence. while holding, pause on
+  the last frame. Then on release, run the frames in reverse order"),
+  following the user's own prior instruction to wait until the new
+  "Drag" frame folders were actually added to disk before touching
+  any code.
+- Enumerated the new folders directly rather than assuming a naming
+  convention (this project's own established discipline, per the
+  Tickle/SNAP asset sagas): 7 of the 8 direction folders
+  ("BEHIND DRAG", "BEHHIND THUMB DRAG", "SIDE THUMB DRAG",
+  "FRONT THUMB DRAG", "FRONT PINKY DRAG", "SIDE PINKY DRAG",
+  "BEHHIND PINK DRAG") have real PNG frames on disk (43-48 each);
+  "FRONT DRAG" and a stray "FRONT DRAG - Copy" are both genuinely
+  empty (0 files) -- confirmed via direct enumeration, not assumed.
+  3 of the 7 populated folders have real internal gaps (behind-thumb
+  missing frame 24; front-pinky missing 20-23,34; behind-pinky
+  missing 17-20,41) -- given explicit `nums:` arrays on their
+  MOUSE_FLICK_DIRECTIONS `drag` entries (
+  `Array.from({length:48},(_,i)=>i+1).filter(...)`) so the existing
+  `mouseFlickNearestIndex()` fallback (already proven for Tickle and
+  SNAP) degrades to the nearest surviving frame instead of requesting
+  a 404. New `mouseFlickDragFrameIndex(dirKey, frameNumber)` resolver,
+  the same pattern as `mouseFlickTickleFrameIndex()`, returning `null`
+  when the direction has no drag art at all (the 'front' gap) so
+  callers can fall back cleanly.
+- Converted all 325 new PNG frames to WebP (`sharp`, `resize({width:
+  1400}).webp({quality:90})` -- this project's established asset
+  pipeline, verified via a fresh Node script since no prior conversion
+  script survived from the Tickle task).
+- New `mfMode: 'dragRelease'` state for the reverse playback (distinct
+  from 'charge', which the FORWARD drag animation overrides the
+  display of -- exactly the same "override charge's own draw" pattern
+  Tickle already established, gated on `downInfo.mode==='rope' &&
+  downInfo.dragging` instead of Tickle's own `mfGrowHolding`, and
+  mutually exclusive with Tickle by construction since dragging and
+  hold-to-grow are already 2 separate, non-overlapping gestures at
+  the `onPointerDown` level). `mfDragCyclePos` advances 0..47 while
+  dragging, CLAMPED at 47 (not looped) once the last frame is reached
+  -- per explicit spec ("pause on the last frame"), unlike Tickle's
+  own repeating tail. On release (`onPointerUp`'s existing
+  `info.dragging` branch), `mfMode` switches to 'dragRelease' -- but
+  ONLY if the active direction actually has drag art AND FLICK MOUSE
+  was genuinely in 'charge' at that moment (the state being
+  overridden); otherwise falls through to the pre-existing
+  `mfSuppressClickFromGrowth` reset-to-idle path unchanged (this is
+  exactly what happens for the 'front' gap: no reverse animation to
+  play, so it just cleanly returns to idle, verified live). Reverse
+  playback counts `mfDragCyclePos` back down from WHEREVER the forward
+  play actually stopped (not always assumed to be 47) to 0, then
+  returns to idle -- verified live releasing mid-forward-play (a real
+  drag-and-release well before reaching the last frame) reverses from
+  its own real stopping point, not from the end.
+- New `mouseFlickDragSpeed` / "Drag Animation Speed" slider (FLICK
+  MOUSE group), independent of Mouse Flick Anim Speed and Tickle
+  Animation Speed -- per this project's own established "each
+  variant gets its own speed slider" pattern (just applied to Tickle
+  earlier this same session).
+- `mfMode !== 'dragRelease'` added to the same direction-lock
+  exclusion list as click/sciss/snap (the fix made earlier this
+  session) -- the reverse-play sequence locks its direction bucket
+  for its own duration too, same reasoning as those 3.
+
+No visible-bounds (wrist-anchor) data was added for the `drag`/
+`dragRelease` variants -- `mouseFlickVariantKeyForMode()` already
+falls back to 'charge' bounds for 'charge' mode (which the forward
+drag animation runs under) and to 'base' bounds for anything else
+('dragRelease'), matching the exact fallback Tickle already relies on
+(Tickle has no dedicated visible-bounds entry either). A minor,
+disclosed cosmetic simplification, not a functional gap -- add real
+`{centerX,bottomY}` entries for 'drag'/'dragRelease' later if the
+wrist anchor point turns out to visibly drift for this variant.
+
+Verified live via a temporary debug hook (`window.__testDragAnim`,
+grep-confirmed removed before commit, 0 matches): confirmed all 7
+populated directions' drag frames load with real 200 OK responses
+(48/48, or 47/47 and 43/43 for the 2 gappy ones actually queried);
+drove a real drag gesture end-to-end (PointerEvent dispatch + a real
+wait past the hold threshold) and observed `mfDragCyclePos` advance
+forward, clamp at exactly 47, and stay there under continued holding;
+released mid-forward-play (position 19.2, direction 'behind-pinky' --
+one of the 3 gappy directions) and confirmed `mfMode` switched to
+'dragRelease' at that SAME position (not reset to 47) and counted back
+down to 0 over 25 further ticks before returning to 'idle'; confirmed
+the 'front' gap (no drag art) advances `mfDragCyclePos` harmlessly in
+the background but never displays a broken image and releases straight
+to 'idle' with no reverse animation, matching the intended fallback.
+0 console errors across the full test sequence.
+
+Committed/pushed (f78470d, 651 files -- 1 code + 325 new PNG + 325
+new WebP frames across the 7 populated Drag folders; fast-forward, no
+divergence) -- this doc pass as a separate follow-up, per the
+standing instruction.

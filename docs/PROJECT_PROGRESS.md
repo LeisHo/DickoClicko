@@ -946,6 +946,25 @@ fixed by unrelated concurrent edits that landed in `index.html`
 between the report and the re-test. No code change was needed or made
 for that investigation.
 
+**New (2026-09-11): Drag Rope hand animation.** While actively
+dragging a rope point (the "Drag Rope" interaction another concurrent
+session built earlier the same day), FLICK MOUSE now plays a new
+"Drag" hand-pose frame set forward and pauses on the last reached
+frame; on release it plays the same frames back in reverse from
+wherever it actually stopped. New `drag` variant on
+MOUSE_FLICK_DIRECTIONS for the 7 directions with real frame folders on
+disk (behind, behind-thumb, side-thumb, front-thumb, front-pinky,
+side-pinky, behind-pinky) -- 3 have real internal gaps (behind-thumb
+missing frame 24; front-pinky missing 20-23,34; behind-pinky missing
+17-20,41), handled via the same nearest-frame-number fallback Tickle
+and SNAP already use. The 'front' direction has no Drag frames at all
+yet (both "FRONT DRAG" and "FRONT DRAG - Copy" are empty on disk) --
+falls back cleanly to the ordinary charge display, a real gap to fill
+once frames exist for that direction. New `mfMode:'dragRelease'` state
+for the reverse playback and a dedicated "Drag Animation Speed"
+slider. Verified live via a temporary debug hook (removed before
+commit) -- see CHANGELOG.txt for the full verification detail.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

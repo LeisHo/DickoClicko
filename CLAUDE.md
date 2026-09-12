@@ -709,3 +709,31 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   stale diff -- re-run `git diff` immediately before the actual
   `git add`/`commit`, not earlier in the task, when checking for
   another session's concurrent work in this file.
+- Drag Rope's own hand animation (`mfMode:'dragRelease'`, 2026-09-11)
+  overrides charge's display while `downInfo.mode==='rope' &&
+  downInfo.dragging` is true, the same "override charge's own draw"
+  pattern Tickle already established -- `mfDragCyclePos` advances
+  0..47 but CLAMPS at 47 instead of looping (per explicit spec: "pause
+  on the last frame"), unlike Tickle's own repeating tail. On release,
+  it counts back DOWN from WHEREVER it actually stopped (not always
+  47) to 0 -- a quick drag-and-release well before reaching the last
+  frame reverses from its own real stopping point, verified live. The
+  'front' direction has NO drag frames on disk yet (both "FRONT DRAG"
+  and "FRONT DRAG - Copy" are empty, confirmed via direct enumeration)
+  -- `mouseFlickDragFrameIndex()` returns `null` for a direction with
+  no drag art, and both `onPointerUp`'s release check and render()'s
+  own draw both gate on this before ever indexing into
+  `mfFramesForDir.drag`, so this direction just shows the ordinary
+  charge/idle display with zero crash risk. Add a `drag:{...}` entry
+  to this direction's MOUSE_FLICK_DIRECTIONS object once real frames
+  exist -- don't assume the existing fallback is "good enough
+  forever," it's a gap to close, not a design choice.
+- 3 of the 7 real Drag Rope frame folders have internal gaps
+  (behind-thumb missing frame 24; front-pinky missing 20-23,34;
+  behind-pinky missing 17-20,41) -- given explicit `nums:` arrays
+  (not plain `count:48`) on their `drag` entries, same
+  `mouseFlickNearestIndex()` fallback Tickle/SNAP already rely on. If
+  any of these folders' frames are ever replaced/re-supplied, verify
+  the gap is actually closed via direct enumeration (same "check
+  again" discipline the Tickle SIDE THUMB saga already established)
+  before simplifying back to a plain `count:48`.
