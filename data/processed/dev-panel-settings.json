@@ -11,8 +11,8 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
-    "ropeLength": 15.0616341328112,
-    "ropeDefaultLength": 15,
+    "ropeLength": 38.009080377006185,
+    "ropeDefaultLength": 38,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -122,16 +122,16 @@
     "pieceDecaySpeed": 0.5,
     "pieceMinThickness": 1.2,
     "cutSplatterEnabled": false,
-    "cutSplatterColor": "#8b0000",
-    "cutSplatterHorizontalSpread": 60,
-    "cutSplatterVerticalSpread": 80,
-    "cutSplatterParticleCount": 16,
-    "cutSplatterParticleSize": 1.1,
-    "cutSplatterSizeVariance": 0.6,
-    "cutSplatterGravity": 2.5,
-    "cutSplatterFlightDuration": 0.4,
-    "cutSplatterFadeTime": 6,
-    "cutSplatterOpacity": 0.85,
+    "cutSplatterColor": "#ffffff",
+    "cutSplatterHorizontalSpread": 51,
+    "cutSplatterVerticalSpread": 28,
+    "cutSplatterParticleCount": 49,
+    "cutSplatterParticleSize": 0.6,
+    "cutSplatterSizeVariance": 1,
+    "cutSplatterGravity": 1.7,
+    "cutSplatterFlightDuration": 0.25,
+    "cutSplatterFadeTime": 30,
+    "cutSplatterOpacity": 1,
     "endEmergeEnabled": true,
     "endcapStartingScale": 0.1,
     "endcapStartingScaleWidth": 0.88,
@@ -212,6 +212,7 @@
     "mouseFlickScale": 69.5,
     "mouseFlickAnimSpeed": 3.2,
     "mouseFlickTickleSpeed": 3.2,
+    "mouseFlickDragSpeed": 3.2,
     "mouseFlickPositionSmoothing": 1,
     "mouseFlickRotationSmoothing": 1,
     "mouseFlickAngleOffset": 180,
@@ -227,7 +228,7 @@
     "groups": [
       {
         "key": "CUT SPLATTER",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "cutSplatterEnabled",
           "cutSplatterColor",
@@ -296,6 +297,7 @@
         "key": "FLICK MOUSE",
         "collapsed": true,
         "settings": [
+          "mouseFlickDragSpeed",
           "mouseFlickEnabledLiveMode",
           "mouseFlickTickleSpeed",
           "snapRepeatDuration",
@@ -429,7 +431,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [],
         "subgroups": [
           {
@@ -608,10 +610,10 @@
       }
     },
     "mobile": {
-      "left": 36.9523811340332,
-      "top": 305.56549072265625,
+      "left": 182,
+      "top": 452.3571472167969,
       "width": 229,
-      "height": 439.0238037109375,
+      "height": 332.63690185546875,
       "style": {
         "titleFontSize": 13,
         "tabFontSize": 11,
