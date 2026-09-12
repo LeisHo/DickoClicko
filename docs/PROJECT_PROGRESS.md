@@ -1085,6 +1085,20 @@ released is correctly dropped, never reaching `mfMode:'charge'`; (3) a
 queued charge with the button still held correctly fires. Committed/
 pushed (`0934cf0`).
 
+**Fixed (2026-09-12): SNAP held-phase now actually swaps the visible
+animation, not just internal state.** The prior same-day fix let
+`mfDirectionKey` update during a held SNAP, but `mfFrozenFrames` (what
+`render()` actually draws from) still pointed at the OLD direction's
+array -- re-pointing it to the new direction's own snap array the
+moment the held direction changes fixes this, keeping the same frame
+NUMBER (`mfFrameAccum` untouched) since `SNAP_A_FRAME_NUMBERS` is
+shared across all 8 directions. Verified live: switching direction
+mid-hold now visibly swaps the rendered pose while staying on the same
+frame. Separately confirmed (not fixed, already done by concurrent
+work) that circle hold-to-grow and the new Drag Rope Hold Distance
+slider both work correctly -- a circle press still reliably grows the
+rope, and a hold far from the rope now charges instead of dragging.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

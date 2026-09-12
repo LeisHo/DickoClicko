@@ -11749,3 +11749,77 @@ settling on `'idle'`, never `'charge'`, no stuck state. (3) Queued a
 'charge' with `mfLeftDown` true -- confirmed it fired correctly the
 instant the busy sequence finished. All 3 outcomes matched the design
 exactly. Committed/pushed (0934cf0) -- no divergence.
+
+--------------------------------------------------------------------------------
+2026-09-12  -  08:34 AM - 09:xx AM EDT
+
+3-item follow-on: SNAP held-phase now swaps animation TYPE (not just
+internal state); circle hold-to-grow and Drag Rope Hold Distance
+confirmed already fixed by concurrent work.
+
+(1) "whilst right click and hold is holding, i would still like the
+animation type to change based on the angle threshold. so it would
+transition to the new animation type, but same frame number, and
+continue to function as the right click hold." The immediately-prior
+SNAP-held-direction fix (64b35f7, same day) updated `mfDirectionKey`
+during a held SNAP, but had NO visible effect -- render() draws from
+`mfFrozenFrames`, a plain array reference snapshotted once when the
+SNAP sequence started, which still pointed at the OLD direction's own
+array regardless of `mfDirectionKey` changing (that fix's own live
+verification only checked the STATE variable, not the rendered
+image). Fixed by re-pointing `mfFrozenFrames` to the new direction's
+own snap array the moment the held phase's direction actually
+changes, leaving `mfFrameAccum` untouched -- since it's already
+pinned at `SNAP_FREEZE_INDEX` by the freeze logic, and
+`SNAP_A_FRAME_NUMBERS` is shared/contiguous across all 8 directions,
+the same array INDEX always means the same frame NUMBER, so no
+nearest-frame remap is needed here (unlike Tickle/Drag's own gappy
+sets). Verified live via a temporary debug hook: held SNAP paused on
+BEHIND's frame_041; moved the cursor to a different angle bucket
+mid-hold; direction switched to FRONT-THUMB (mfDirectionKey) AND the
+actual rendered frame switched to FRONT-THUMB's own frame_041 at the
+exact same instant; releasing resumed natural forward playback from
+FRONT-THUMB correctly.
+
+(2)+(3): "Click and hold within the circle still doesnt trigger
+growth. This overrides ALL other function triggers within the circle
+boundary" and "*D* Drag distance, IE max distance from rope at which
+the click and hold triggers the grab function/animation sequence" --
+both investigated and found ALREADY FIXED by a concurrent session's
+own commit (3339d61, same morning, ~1h24m before this request
+arrived): that commit's own message diagnosed the exact same root
+cause independently ("the original implementation armed dragging
+unconditionally whenever dragRopeEnabled was on, with no proximity
+gate... Circle hold-to-grow itself was never actually broken --
+isOnCircle() already takes precedence -- but any hold that missed the
+circle's own hit-zone... was being swallowed into a drag instead of
+falling through to charging") and added the exact slider requested
+("Drag Rope Hold Distance", CLICK group). Re-verified both live
+rather than trusting the commit message alone: a press dead-center on
+the circle still correctly grows the rope (delta 46.08 over 30
+ticks); a press far from both the circle and the rope now correctly
+arms `charging` instead of `dragging`. Also directly reproduced, then
+explained, a MISLEADING false-positive while chasing this on the
+deployed Vercel URL: an early manual test there appeared to show
+"no growth," but the actual `logClick()` output revealed the dispatched
+press had landed ~131px from the real circle anchor due to a bad
+manual coordinate guess (an 800x600 screenshot vs. the page's real
+1024x768 CSS-pixel viewport) -- not a real reproduction, corrected by
+reading `cfg.circleX`/`circleY` directly off the live dev panel and
+recomputing the real anchor position.
+
+Cross-session note: this task's own SNAP fix (item 1) ended up
+committed under a DIFFERENT concurrent session's own commit message
+(1c47871, "Sync Drag Rope frames for front-pinky") -- the same
+commit-attribution-mixup class already documented in CLAUDE.md's own
+gotchas, not a new failure mode. No content was lost; confirmed via
+`git show HEAD:index.html | grep` that the fix's own exact code is
+present and pushed. This session's own remaining contribution was
+committing the removal of its temporary debug hook separately
+(3682673) once that was confirmed. A separate, substantial, unrelated
+feature (per-purpose FLICK MOUSE "interaction points" replacing the
+raw cursor position for every distance gate -- click/hold/cut/drag)
+also landed from another concurrent session in that same commit;
+confirmed non-overlapping with this task's own changes via `git diff`
+inspection, left completely untouched, and the combined file still
+parses and loads with 0 console errors after both landed together.
