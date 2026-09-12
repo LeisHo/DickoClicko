@@ -134,9 +134,22 @@ collapsible group fits best (per §12g); create a new group only if none fit.
 - Hold-to-grow only triggers for a hold that *starts* on the circle
   (`isOnCircle()`, checked once at pointerdown) — a hold starting on the
   rope charges punch intensity instead (fires on release, scaled by hold
-  duration up to Intensity Ceiling at Click Hold Max Duration). The two are
-  mutually exclusive per gesture by design, per explicit clarification from
-  the user after the original spec read as ambiguous between them.
+  duration up to Intensity Ceiling at Click Hold Max Duration). These 2
+  were originally mutually exclusive per gesture by design, per explicit
+  clarification from the user after the original spec read as ambiguous
+  between them. **Corrected 2026-09-11:** a hold on the rope can now
+  ALSO grow the rope at the same time (`cfg.ropeGrowthOnRopeHold`, ROPE
+  GROWTH group, off by default) — per explicit request this is ADDITIVE
+  to charging, not a replacement for the old exclusivity: with the
+  checkbox on, a rope hold both charges intensity (fires on release,
+  unchanged) AND grows the rope while held (`growthOnRopeHoldTimer`, a
+  SEPARATE timer from `holdTimer` — that one's already used by the same
+  branch for the charging-arm timer at a different delay, so don't
+  reuse it for this too). The circle's own hold-to-grow is still
+  mutually exclusive with charging (a hold that starts in the circle
+  never charges, per `startedInCircle`'s own comment) — only the
+  ROPE side of the exclusivity was relaxed, and only when this
+  checkbox is explicitly turned on.
 - Charging-eligibility uses `cfg.doubleClickThreshold` as its hold-duration
   gate, not the original (shorter) `HOLD_THRESHOLD_MS` — this is what makes
   it provably impossible for charging to hijack a real double-click into an
@@ -610,3 +623,28 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   and this fix both do -- don't compute a "before" quantity from a
   variable that's already been reassigned to its "after" value on an
   earlier line of the same block.
+- FLICK MOUSE (the cursor-follow hand overlay) has its OWN, completely
+  SEPARATE pointerdown/pointerup listeners from the rope's own
+  (`onPointerDown`/`onPointerUp`) -- its own hold-timer arms a charge
+  after `cfg.doubleClickThreshold` on EVERY left-press with NO position
+  gating at all (it doesn't check whether the press landed on the
+  rope, the circle, or empty space). This means ANY rope-side hold
+  gesture ALSO, completely independently, drives FLICK MOUSE's own
+  charge/click state machine on the exact same press/release pair --
+  a real, previously-unnoticed gap (2026-09-11): a hold that grows the
+  rope (the circle's own hold-to-grow, or the "Grow Rope On Rope Hold"
+  checkbox) was ALSO triggering FLICK's own click sequence on release,
+  since `mouseFlickEndCharge()`'s own "always plays click on release"
+  convention doesn't know or care what the SAME release meant for the
+  rope. Fixed via `mfSuppressClickFromGrowth`, set true the moment
+  `growing` becomes true in EITHER hold-to-grow timer callback and
+  consumed at the top of FLICK's own pointerup handler -- a SEPARATE
+  flag, not a direct read of `growing`, because the rope's own
+  `onPointerUp` (registered earlier in the file, so it always runs
+  FIRST for the same event) has already reset `growing` to false by
+  the time FLICK's handler runs. **Any FUTURE rope-side gesture that
+  should suppress FLICK MOUSE's own independent click/charge trigger
+  needs to set this same flag** -- don't assume the 2 systems will
+  naturally stay in sync just because they're triggered by the same
+  physical click, they're wired through entirely separate listeners
+  with no shared gating.

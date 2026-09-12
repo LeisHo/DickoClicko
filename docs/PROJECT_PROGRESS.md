@@ -770,8 +770,18 @@ additions. Current state of each subsystem:
   exactly Intensity Ceiling at Click Hold Max Duration held (2026-09-11
   correction -- an earlier round had this stacking Click Intensity +
   Intensity Ceiling instead, per explicit clarification that a full
-  hold should reach Intensity Ceiling itself, not that sum)),
-  double-click-to-cut (works on the main rope and on
+  hold should reach Intensity Ceiling itself, not that sum); a new
+  "Grow Rope On Rope Hold" checkbox (2026-09-11, ROPE GROWTH group,
+  off by default) makes a rope-hold ALSO grow the rope at the same
+  time, additively -- charging still fires on release exactly as
+  before either way. **A hold that grows the rope (either this new
+  checkbox or the circle's own long-standing hold-to-grow) never ALSO
+  plays a FLICK MOUSE click/charge sequence on release (2026-09-11
+  fix)** -- FLICK MOUSE has its own completely separate, position-
+  independent hold-timer that was firing its own flick on the same
+  release regardless of the rope's own mechanics; a real gap in the
+  circle path too, just more visible once the new checkbox added a
+  2nd way to trigger it), double-click-to-cut (works on the main rope and on
   already-fallen pieces, splitting one into two, and now also works while
   mainRope is mid-scripted-growth right after a boot or a full detach,
   not just once that growth finishes). **A cut that would leave the

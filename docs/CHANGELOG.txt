@@ -10672,3 +10672,153 @@ test of the actual punch-intensity code path.
 
 Committed/pushed (ea07740) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-11  -  09:10 PM EDT
+
+"provide a checkbox in the Rope Growth group. When selected, rope
+growth will be also be triggered when the user click and holds on the
+rope itself." Read the existing hold-to-grow (circle) and hold-to-
+charge-punch (rope) code first, since this project's own CLAUDE.md
+already documents these as deliberately mutually exclusive by design
+("Hold-to-grow only triggers for a hold that starts on the circle...
+a hold starting on the rope charges punch intensity instead"). The
+request's own wording ("ALSO be triggered") confirmed this should be
+ADDITIVE -- growth alongside the existing charge, not a replacement
+for it on the rope -- so implemented it that way rather than assuming
+growth should now take over rope-holds entirely.
+
+New `ropeGrowthOnRopeHold` checkbox (def:false, so nothing changes for
+anyone who doesn't touch it) in the ROPE GROWTH group. In
+`onPointerDown()`'s existing rope branch, added a SECOND timer
+(`growthOnRopeHoldTimer`, a new variable -- `holdTimer` is already
+used by that same branch for the charging-arm timer, at a different
+delay, so reusing it would have clobbered one or the other) that, when
+the checkbox is on, arms `growing = true` after the exact same
+`HOLD_THRESHOLD_MS` the circle's own hold-to-grow branch already uses
+-- reusing the SAME global `growing` flag and the SAME per-frame
+`growRope()` call site in `update()` (`if (growing) growRope(...)`),
+so no new growth mechanism was needed, just a new way to arm the
+existing one. Gated identically to charging (never for a hold that
+started in the circle) plus one extra condition charging doesn't need:
+`introPhase === 'done', since `growing` is ALSO the scripted startup/
+detach intro's own in-progress flag, and letting a rope hold drive it
+during that phase would fight the scripted extension rather than
+adding a genuine user-triggered grow. On release (or pointercancel),
+`growing = false` unconditionally in the rope-mode path -- harmless if
+it was never armed, and the charge-punch's own existing release logic
+(recompute release position, apply intensity per the formula fixed
+earlier this session) runs completely unchanged right alongside it.
+
+Verified live via a temporary debug hook (grep-confirmed removed)
+driving the real onPointerDown/onPointerUp handlers directly:
+checkbox OFF -- held on the rope for ~1.8s, confirmed `growing` stayed
+false throughout and `mainRope.totalLength` never changed, while
+`downInfo.charging` still correctly became true (byte-for-byte
+regression check against the pre-existing behavior); checkbox ON --
+held on the rope the same way, confirmed `growing` became true AND
+`totalLength` measurably increased (202.37 -> 244.01) DURING the hold,
+`downInfo.charging` ALSO became true simultaneously (both mechanisms
+genuinely additive, not one silently overriding the other), and on
+release `growing` correctly returned to false while the click log
+still showed a normal `up:hold-release-punch` with a real, correctly-
+scaled intensity. Also regression-checked the CIRCLE's own hold-to-
+grow path (unrelated to this change) still works exactly as before --
+held on the circle, confirmed `growing:true` + real length growth
+during the hold, `growing:false` after release.
+
+**Cross-session note:** another concurrent session was mid-way through
+building a substantial new FLICK MOUSE "Tickle" gesture in this same
+file throughout this task (uncommitted the whole time). Their own code
+independently referenced this task's new `ropeGrowthOnRopeHold`
+checkbox by name in their own comments (checking `downInfo.mode ===
+'rope'` generically rather than circle-only, specifically so Tickle's
+own display would activate correctly for growth triggered either way)
+-- confirms both sessions' work is mutually compatible without either
+needing to change anything for the other. Handled the same way as
+every prior cross-session collision this session: built a scoped patch
+via `git diff` + manual hunk selection (7 hunks, all cleanly separable
+-- confirmed via direct inspection that none of my own hunks contained
+any Tickle content and vice versa) + `git apply --cached`, verified
+zero cross-contamination before committing, confirmed their work (63
+Tickle references) fully intact afterward. Pushing hit a genuine
+(not fast-forwardable) divergence this time -- 3 intervening remote
+Save-Settings auto-commits meant `git pull --ff-only` was refused
+outright (diverging branches) rather than just needing a fetch-and-
+check; confirmed via `git diff --stat HEAD origin/master` that the
+only real content difference was the settings JSON (index.html's own
+diff there was just "my commit isn't on their side yet," not a
+conflicting edit) before running an actual `git merge`, which
+completed cleanly touching only that JSON file, then pushed.
+
+Committed/pushed (c2198a7, merge 78f0f95) -- then this doc pass as a
+separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-11  -  09:22 PM EDT
+
+Follow-up correction, arriving mid-turn while the docs pass above was
+still in progress: "be sure that when click and hold triggers a rope
+growth, on release it does not trigger a flick."
+
+Investigated rather than assumed: FLICK MOUSE (the cursor-follow hand
+overlay) has its OWN, completely separate pointerdown/pointerup
+listeners from the rope's -- its own hold timer arms a charge after
+`doubleClickThreshold` on EVERY left-press, with no position gating at
+all (it doesn't know or care whether the press landed on the rope, the
+circle, or empty space). This meant a hold that grew the rope --
+whether via the circle's own long-standing hold-to-grow, or the new
+checkbox from the entry above -- was ALSO, completely independently,
+arming FLICK's own charge, which (per this project's own established
+"release always plays the click sequence" convention) would then play
+an unrelated flick animation on release, at the same time the rope
+punch/growth mechanics were doing their own thing. A pre-existing gap
+for the circle path too, not something the new checkbox introduced,
+just made more noticeable by adding a second way to trigger it.
+
+Fixed with a new `mfSuppressClickFromGrowth` flag: set to true the
+MOMENT `growing` actually becomes true, in BOTH hold-to-grow timer
+callbacks (the circle's existing one, and the new rope-hold one from
+the entry above) -- then checked (and reset) at the very top of FLICK
+MOUSE's own pointerup handler, before its own charge-end/click-pairing
+logic runs. Deliberately a SEPARATE flag rather than having FLICK's
+handler check `growing` directly: the rope's own `onPointerUp` is
+registered earlier in the file than FLICK's own pointerup listener, so
+for the same physical release event, the rope's handler ALWAYS runs
+first and already resets `growing` back to false before FLICK's
+handler ever gets a chance to look at it -- reading `growing` there
+would always see it as false, uselessly. When the suppression fires
+and FLICK's own `mfMode` happened to already be `'charge'`, it's reset
+directly to `'idle'` rather than through `mouseFlickEndCharge()` --
+that function's own unconditional "always plays click on release" is
+exactly the behavior being suppressed, so calling it would defeat the
+whole fix; resetting mfMode directly still returns the cursor cleanly
+to idle instead of leaving it stuck mid-charge-animation forever.
+
+Verified live via a temporary debug hook (grep-confirmed removed)
+driving the real production handlers: with the rope-hold checkbox on,
+held on the rope -- confirmed FLICK's own `mfMode` DID independently
+reach `'charge'` during the hold (as expected, unrelated to the rope
+mechanics) and `mfSuppressClickFromGrowth` was true; on release,
+`mfMode` went straight to `'idle'`, not `'click'` -- confirmed across
+60 further ticks that it never LATER became `'click'` either, ruling
+out a merely-delayed trigger. Separately re-confirmed growth itself
+still works correctly alongside this fix (explicit ticks during a held
+press measurably grew `mainRope.totalLength`). Regression-checked 2
+cases: a normal charge-only hold with growth OFF still correctly
+transitioned to `mfMode:'click'` on release, confirming the suppression
+is scoped to growth-triggering holds only, not a blanket suppression;
+the circle's own hold-to-grow was confirmed to set
+`mfSuppressClickFromGrowth` correctly too (its own release path
+already returns early before reaching FLICK's logic regardless, but
+the flag itself is now armed for it exactly like the rope path).
+
+Same cross-session handling as the entry above (the Tickle work was
+still uncommitted and in-progress the entire time) -- built a 2nd
+scoped patch (4 hunks this round, all cleanly separable from Tickle's
+own further-expanded changes) via `git apply --cached`, verified zero
+cross-contamination, confirmed their work (63 Tickle references at
+commit time) still fully intact afterward.
+
+Committed/pushed (8c3013f) -- fetch confirmed no divergence -- then
+this doc pass as a separate follow-up, per the standing instruction.
