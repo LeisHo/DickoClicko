@@ -3295,10 +3295,32 @@ let mfRandomTargetPoint = 0.5;
 let mfRandomTargetTimer = 0;
 let mfDirectionKey = MOUSE_FLICK_DIRECTIONS[0].key;
 // mode: 'idle' | 'click' | 'sciss' | 'snap' | 'charge'. A press of any
-// kind is ignored while a mode other than 'idle' is active -- same
-// "don't interrupt an in-progress sequence" rule the other 3 FLICK
-// animations already use.
+// kind never INTERRUPTS an in-progress sequence -- same rule the other
+// 3 FLICK animations already use. Corrected 2026-09-12, per explicit
+// request ("when an animation sequence is running, and the user
+// triggers another animation sequence, run the 2nd animation sequence
+// AND triggered reaction after the 1st sequence is finished"): a
+// trigger that arrives while busy is no longer silently DROPPED, it's
+// queued (mfQueuedTrigger below) and fires automatically the moment
+// the current sequence naturally completes.
 let mfMode = 'idle';
+// Holds at most ONE pending trigger ({type:'play', mode} or
+// {type:'charge'}), overwritten by whichever trigger arrives most
+// recently while busy -- "the 2nd sequence" in the user's own request
+// is singular, so a later 3rd attempt before the 2nd even gets a
+// chance to play replaces it rather than queuing indefinitely.
+// Consumed by mouseFlickFireQueuedTrigger(), called once at the exact
+// point click/sciss/snap naturally finish (see that function's own
+// comment for why 'charge' needs its own extra guard there).
+let mfQueuedTrigger = null;
+// Tracks the LEFT button/touch specifically (mfRightDown/mfTripleHeld
+// already cover the right-click/triple-tap gestures) -- needed so a
+// queued 'charge' trigger can check whether the button is even still
+// held by the time it's about to fire. A charge that started playing
+// with the button ALREADY released would have nothing left to ever
+// end it (mouseFlickEndCharge() only runs from a real pointerup, which
+// already happened) and would sit stuck mid-charge forever.
+let mfLeftDown = false;
 let mfFrameAccum = 0;
 let mfFrozenFrames = null; // the click/sciss/snap frame array captured at trigger time
 let mfHoldCyclePos = 0, mfHoldTime = 0;
@@ -3572,10 +3594,12 @@ function mouseFlickVariantKeyForMode(mode){
   return 'base';
 }
 // Starts a fresh click/sciss/snap play (forward, or forward+reverse for
-// click) -- ignored if a mode is already active, same "in-progress
-// sequence can't be interrupted" rule the other 3 FLICK animations use.
+// click) -- an in-progress sequence still can't be INTERRUPTED, but per
+// explicit request (2026-09-12) a trigger that arrives while busy is
+// now QUEUED (see mfQueuedTrigger's own comment) instead of dropped,
+// and fires automatically once the current sequence finishes.
 function mouseFlickStartPlay(mode){
-  if (mfMode !== 'idle') return;
+  if (mfMode !== 'idle'){ mfQueuedTrigger = { type: 'play', mode }; return; }
   const frames = mouseFlickFramesByDirection[mfDirectionKey][mode];
   if (!frames || !frames.length) return;
   mfMode = mode;
@@ -3583,11 +3607,31 @@ function mouseFlickStartPlay(mode){
   mfFrozenFrames = frames;
 }
 function mouseFlickStartCharge(){
-  if (mfMode !== 'idle') return;
+  if (mfMode !== 'idle'){ mfQueuedTrigger = { type: 'charge' }; return; }
   mfMode = 'charge';
   mfHoldCyclePos = 0;
   mfHoldTime = 0;
   mfTickleCyclePos = 0;
+}
+// Fires whatever's queued (mfQueuedTrigger), if anything -- called once
+// at the exact moment click/sciss/snap naturally finish (mfMode is
+// already back to 'idle' by then, so the mouseFlickStartPlay()/
+// mouseFlickStartCharge() calls below succeed immediately rather than
+// re-queuing). A queued 'charge' gets one extra guard mfLeftDown's own
+// comment already explains: if the button was released sometime while
+// the 1st sequence was still playing, starting a charge now would have
+// nothing left to ever end it (a real pointerup already happened) and
+// would sit stuck mid-charge forever -- silently dropped instead, same
+// as if the trigger had never queued at all.
+function mouseFlickFireQueuedTrigger(){
+  if (!mfQueuedTrigger) return;
+  const q = mfQueuedTrigger;
+  mfQueuedTrigger = null;
+  if (q.type === 'charge'){
+    if (mfLeftDown) mouseFlickStartCharge();
+  } else if (q.type === 'play'){
+    mouseFlickStartPlay(q.mode);
+  }
 }
 // Release of a charge hold: per explicit request ("on release, you run
 // the regular click sequence"), always transitions straight into the
@@ -6655,6 +6699,7 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
   if (e.button !== 0) return;
+  mfLeftDown = true;
   // Mobile triple-click-and-hold (see mfTripleHeld's own comment) --
   // this IS the 3rd tap if exactly 2 touch taps already completed
   // within doubleClickThreshold of each other and this press follows
@@ -6690,6 +6735,7 @@ window.addEventListener('pointerup', e => {
     return;
   }
   if (e.button !== 0) return;
+  mfLeftDown = false;
   clearTimeout(mfHoldTimer);
   // Per explicit correction -- a hold that grew the rope (circle's own
   // hold-to-grow, or the Grow Rope On Rope Hold checkbox) must never
@@ -7791,6 +7837,12 @@ function update(rawDt){
             mfMode = 'idle';
             mfFrozenFrames = null;
             mfFrameAccum = 0;
+            // Per explicit request (2026-09-12): a trigger that arrived
+            // while this sequence was playing queued itself instead of
+            // being dropped -- fire it now that mfMode is genuinely
+            // 'idle' again, so it starts immediately rather than waiting
+            // for next frame.
+            mouseFlickFireQueuedTrigger();
           }
         }
       }
