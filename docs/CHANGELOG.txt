@@ -10956,3 +10956,82 @@ in a separate, already-pushed commit).
 
 Committed/pushed (2144ef2) -- fetch confirmed no divergence -- then
 this doc pass as a separate follow-up, per the standing instruction.
+
+================================================================================
+2026-09-11  -  10:00 PM EDT
+
+Cut Splatter: "so how kufid or liquid simulation. lets say when the
+rope is cut, i want 'blood splatter' on the background" -- answered
+directly (full fluid/liquid sim is disproportionate; a lightweight
+particle burst gets the same visual read for far less cost), user
+replied "dont implement." Followed up later: "Ok. Implement it, but
+by default hide it in non dev mode" plus a `*DC*`/`*D*` control spec
+(Cut Splatter group; Splatter Color, Horizontal/Vertical Spray
+Distance sliders spec'd explicitly; "Provide any other sliders you
+think would allow me better editing of the splatter"; Splatter
+on/off checkbox, default off).
+
+New CUT SPLATTER dev group (11 controls): the 3 explicitly requested
+(on/off checkbox default OFF, color, horizontal/vertical spray
+distance) plus 7 more judged useful for editing feel -- particle
+count, particle size, size variance, gravity, flight duration, fade
+time, max opacity.
+
+Implementation: `spawnCutSplatter(x,y)` pushes N particles (each with
+its own random horizontal/vertical velocity, size, and a
+flight+fade lifetime) into a single `splatterParticles` array, called
+at the exact cut point from both `performMainRopeSplit()` (main rope
+cut) and `performPieceSplit()` (fallen-piece cut). `updateSplatterParticles()`
+applies gravity/motion only while `life > fade` (the "flying" phase);
+once `life <= fade` the particle freezes in place and only its
+opacity (life/fade, scaled by Max Opacity) keeps falling until
+removal at `life <= 0` -- a single derived flying-vs-landed phase
+rather than two separate lists or an explicit boolean flag. Capped at
+`MAX_SPLATTER_PARTICLES = 400` (same defensive-cap pattern as
+`MAX_FALLEN_PIECES`), verified under rapid repeated cuts. Rendered by
+`renderSplatterParticles()`, called immediately after the background
+fill in `render()`, before the floor/circle/rope/pieces -- reads as
+painted ON the background wall, per the explicit request, with
+everything else correctly passing in front of it.
+
+Double-gated at the trigger site itself
+(`if (!cfg.cutSplatterEnabled || !DEV_MODE) return;`), not just the
+checkbox's own default-off state -- interpreted and flagged before
+implementing: Save Settings writes to a git-tracked settings file
+that ALL visitors' config loads from equally (not per-user), so a
+dev's own testing+saving could otherwise leak the effect to
+production visitors even with the checkbox defaulting off. Documented
+as a CLAUDE.md gotcha so a future session doesn't remove the
+DEV_MODE check as apparently-redundant with the checkbox.
+
+Verified live via a temporary debug hook, extending the existing
+`window.__testGrow` test object (grep-confirmed removed after,
+0 matches): manually drove `update()`/`render()` frame-by-frame
+(bypassing `requestAnimationFrame`, which the preview tab's
+backgrounded state was blocking entirely) to confirm particles spawn
+at the correct cut point with the configured count; fly outward/
+upward and arc under gravity during the flight phase; freeze in place
+and fade to 0 opacity over the configured fade time, then get
+removed; the checkbox-off path spawns zero particles; and the 400-
+particle cap holds under 15 rapid-fire cuts x 60 particles each (900
+requested, capped at exactly 400). Confirmed visually via screenshot
+that particles render behind the circle/panel, on the background
+layer, matching the intended z-order.
+
+One false alarm during verification, run down and ruled out rather
+than assumed: the preview tab's buffered console history contained
+hundreds of stale `TypeError: Cannot read properties of undefined
+(reading 'key')` errors from `loop()`, from BEFORE this task's edits
+-- initially looked like a live, production-breaking bug blocking
+every frame's render. Confirmed via direct frame-by-frame manual
+ticking (zero exceptions across 500+ driven frames) and a hard cache-
+busted reload that the live page has no such error; the stale
+messages were leftover buffered history the read-console tool doesn't
+clear across navigations, not a current defect. No fix needed, no
+unrelated code touched.
+
+Committed/pushed (f980545, merged cleanly with 3 concurrent "Save
+Settings" auto-commits from another session/device touching only
+`dev-panel-settings.json`) -- fetch confirmed the only real index.html
+difference was this task's own addition -- then this doc pass as a
+separate follow-up, per the standing instruction.

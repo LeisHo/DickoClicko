@@ -418,6 +418,31 @@ mouseFlickAngleOffset`, a live calibration slider, was non-zero at
 test time and needed neutralizing for a clean, offset-independent
 test -- not a bug in the feature itself).
 
+**Added (2026-09-11): Cut Splatter -- a particle burst at the cut point,
+dev-only.** Answered a "how hard is fluid/liquid sim for a blood-splatter
+effect" question directly (user then said "dont implement"); implemented
+once the user came back with an explicit spec plus a `*DC*`/`*D*` control
+list ("hide it in non dev mode" by default). New CUT SPLATTER dev group
+(11 controls: on/off checkbox default OFF, color, horizontal/vertical
+spray distance, plus 7 more -- count/size/variance/gravity/flight
+duration/fade time/max opacity -- added per "provide any other sliders
+you think would allow me better editing"). `spawnCutSplatter()` fires
+from both `performMainRopeSplit()` and `performPieceSplit()` at the exact
+cut point; particles fly under gravity, freeze in place once their flight
+window ends, then fade out and get removed -- capped at 400 total.
+Renders right after the background fill in `render()`, so it reads as
+painted on the background wall behind everything else. Double-gated on
+both the checkbox AND `DEV_MODE` directly at the spawn site (not just the
+checkbox's own off-by-default), since Save Settings writes to a
+git-tracked settings file shared by every visitor -- see CLAUDE.md
+gotchas. Verified live via a temporary debug hook (grep-confirmed
+removed): spawn count/position, flight/freeze/fade lifecycle, the 400-
+particle cap under rapid repeated cuts, and the checkbox-off path all
+confirmed correct; a batch of stale cached `loop() error` console
+messages initially looked like a live crash but was run down and
+confirmed to be leftover buffered history from before this task's edits,
+not a real bug -- no unrelated code touched.
+
 **Fixed (2026-09-10): "Dev panel dissappears in the first seconds of
 startup in dev mode."** Root cause: `applyPanelGeometry()` -- called
 from `resetSettings()`'s own async settings fetch, which resolves

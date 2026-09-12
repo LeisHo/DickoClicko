@@ -648,3 +648,15 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   naturally stay in sync just because they're triggered by the same
   physical click, they're wired through entirely separate listeners
   with no shared gating.
+- Cut Splatter (`spawnCutSplatter()`, called from `performMainRopeSplit()`
+  and `performPieceSplit()`) is gated on BOTH `cfg.cutSplatterEnabled`
+  AND `DEV_MODE` directly at the spawn call site --
+  `if (!cfg.cutSplatterEnabled || !DEV_MODE) return;` -- not just the
+  checkbox's own default-off state. This is deliberate, not redundant:
+  Save Settings writes to the git-tracked settings log
+  (`data/processed/dev-panel-settings.json`), which EVERY visitor's
+  `cfg` loads from equally, not per-user (see the Save/Reset gotcha
+  above). A dev turning the checkbox on locally to test it, then
+  hitting Save Settings, would otherwise ship it turned on for every
+  real visitor too. Don't remove the `!DEV_MODE` half of this check
+  thinking the checkbox default alone is sufficient protection.
