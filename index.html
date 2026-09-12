@@ -5448,11 +5448,24 @@ function cutRopeAt(hit, clickX, clickY){
   // new to cut.
   if (mainRope.pendingCut) return;
   const idx = Math.max(1, Math.min(hit.index, mainRope.points.length - 2));
-  // refuse the cut entirely if it would leave the remaining (anchor-side)
-  // rope shorter than the configured minimum — the rope stays whole rather
-  // than being clamped to some other length the user didn't ask for.
+  // A cut that would leave the remaining (anchor-side) rope shorter than
+  // the configured minimum triggers a FULL rope detach instead of being
+  // silently refused -- per explicit request ("if the user tries to cut
+  // the rope shorter than the minimum length, it triggers a full rope
+  // cut"). Reuses detachEntireRopeAndRestartIntro() verbatim, the exact
+  // same function the double-click-in-circle gesture already calls (see
+  // that call site's own comment) -- the whole rope falls as one piece
+  // and the startup animation replays to grow a fresh one in, rather
+  // than this specific partial cut being clamped to some other length
+  // the user didn't ask for. Must return immediately after -- the rest
+  // of this function sets up a PARTIAL cut's own sweep-mark/pendingCut
+  // state on mainRope, which is meaningless once mainRope is about to be
+  // entirely replaced.
   const remainingLen = idx * mainRope.segLen;
-  if (remainingLen < vh(cfg.minRopeLength)) return;
+  if (remainingLen < vh(cfg.minRopeLength)){
+    detachEntireRopeAndRestartIntro();
+    return;
+  }
   const a = mainRope.points[idx - 1], b = mainRope.points[idx];
   let tx = b.x - a.x, ty = b.y - a.y;
   const tlen = Math.hypot(tx, ty) || 1;
