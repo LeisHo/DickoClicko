@@ -10552,3 +10552,57 @@ Committed/pushed (0a733a6) -- fetch found 4 intervening remote
 confirmed touching only that JSON file, merged cleanly, pushed the
 merge -- then this doc pass as a separate follow-up, per the standing
 instruction.
+
+================================================================================
+2026-09-11  -  08:01 PM EDT
+
+"make it such that if the user tries to cut the rope shorter than the
+minimum length, it triggers a full rope cut."
+
+Read `cutRopeAt()` first and found the existing behavior was a plain
+silent refusal: `if (remainingLen < vh(cfg.minRopeLength)) return;` --
+no visible feedback, the cut just does nothing. Read
+`detachEntireRopeAndRestartIntro()` next (the function the existing
+double-click-in-circle gesture calls) to confirm it was a clean,
+already-proven, parameterless function with exactly one existing call
+site and no extra preconditions to replicate -- it already internally
+guards `mainRope.points.length >= 2` before doing the fall/topple
+work, so calling it unconditionally from the new call site is always
+safe.
+
+Scoped the fix to `cutRopeAt()` only (the MAIN rope, still attached to
+the circle) -- deliberately did NOT touch `cutPieceAt()`'s own,
+separate too-short refusal a bit further down in the same file
+(splitting an already-FALLEN piece into two). A fallen piece has no
+circle to detach from and no growth/regrow state -- "full rope cut" as
+a concept only applies to the one rope still attached to the circle,
+and extending this to piece-splitting wasn't part of the request.
+
+Implemented: `cutRopeAt()`'s too-short branch now calls
+`detachEntireRopeAndRestartIntro()` then returns immediately -- must
+return right after, since the rest of the function sets up a PARTIAL
+cut's own sweep-mark/pendingCut state on `mainRope`, which is
+meaningless once `mainRope` is about to be entirely replaced by the
+detach.
+
+Verified live via a temporary debug hook (grep-confirmed removed
+both times it was added/extended): let the rope fully grow (72.09px,
+6 points, `introPhase 'done'`), then triggered a cut near the anchor
+(remaining length 17.05px, under Minimum Rope Length's 18.72px) --
+confirmed the OLD 6-point rope became a new entry in `fallenPieces`
+(count 0->1) and `mainRope` reset to its fresh spawn shape (2 points,
+17.05px) with `introPhase` flipped back to `'waiting'`, exactly
+matching `detachEntireRopeAndRestartIntro()`'s own already-established
+behavior. Confirmed no regression for a NORMAL (well-above-minimum)
+cut on the same freshly-regrown rope: cutting at the tip (remaining
+length far above the minimum) still went through the ordinary sweep-
+delayed partial-split path -- `introPhase` stayed `'done'` throughout,
+and after the sweep's own delay had elapsed, the rope correctly split
+into a shorter 5-point remainder plus exactly 1 new fallen piece, not
+a full detach.
+
+Committed/pushed (6fd1365) -- fetch found 6 intervening remote
+"Update dev-panel-settings.json via Save Settings" auto-commits,
+confirmed touching only that JSON file, merged cleanly, pushed the
+merge (9ded9ab) -- then this doc pass as a separate follow-up, per
+the standing instruction.

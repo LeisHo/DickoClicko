@@ -770,12 +770,20 @@ additions. Current state of each subsystem:
   Hold Max Duration), double-click-to-cut (works on the main rope and on
   already-fallen pieces, splitting one into two, and now also works while
   mainRope is mid-scripted-growth right after a boot or a full detach,
-  not just once that growth finishes -- still gated by the existing
-  Minimum Rope Length check). Double-clicking ANYWHERE inside the circle
-  (no longer just near where the rope happens to pass) detaches the
-  entire rope and replays the startup animation to regrow a fresh one --
-  regrows to Default Rope Length, a dedicated config value separate from
-  the live/current Rope Length control, so an earlier grow or cut never
+  not just once that growth finishes). **A cut that would leave the
+  remaining rope shorter than Minimum Rope Length (2026-09-11) now
+  triggers a FULL detach instead of being silently refused** -- per
+  explicit request ("if the user tries to cut the rope shorter than the
+  minimum length, it triggers a full rope cut"). `cutRopeAt()` calls
+  `detachEntireRopeAndRestartIntro()` (the exact same function the
+  double-click-in-circle gesture below already uses) the moment it
+  would have refused the cut, then returns immediately -- the whole
+  rope falls as one piece and the startup animation replays to grow a
+  fresh one, rather than the too-short cut doing nothing. Double-
+  clicking ANYWHERE inside the circle (no longer just near where the
+  rope happens to pass) detaches the entire rope the same way -- regrows
+  to Default Rope Length, a dedicated config value separate from the
+  live/current Rope Length control, so an earlier grow or cut never
   changes what a full detach regrows to (see CODE_SUMMARY gotchas). A
   press-and-hold that starts inside the circle during a detach's own
   regrowth ('growing' phase) can never arm the hold-to-charge-punch timer
