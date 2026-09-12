@@ -11,8 +11,9 @@
     "endcapHeight": 1.2,
     "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
-    "ropeLength": 10.705086551198164,
-    "ropeDefaultLength": 38,
+    "segmentLength": 1.65,
+    "ropeLength": 95,
+    "ropeDefaultLength": 82,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
     "ropeGradientColors": [
@@ -100,6 +101,8 @@
     "holdDistance": 24,
     "dragRopeEnabled": true,
     "dragRopeHoldDistance": 20,
+    "dragOverridesGrowOnRopeHold": true,
+    "dragMaxDistance": 150,
     "bendStiffness": 0.05,
     "ropeAnimSpeed": 1.8,
     "gravityStrength": 0.5,
@@ -110,7 +113,7 @@
     "ropeGrowthHoldDistance": 20,
     "clickHoldMaxDuration": 2000,
     "intensityCeiling": 25,
-    "minRopeLength": 2.8,
+    "minRopeLength": 0.8,
     "clickDistance": 25,
     "doubleClickDistance": 29,
     "doubleClickThreshold": 180,
@@ -296,7 +299,7 @@
       },
       {
         "key": "FLICK MOUSE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "mouseFlickDragSpeed",
           "mouseFlickEnabledLiveMode",
@@ -329,8 +332,9 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
+          "segmentLength",
           "ropeDefaultLength",
           "ropeThickness",
           "ropeLength",
@@ -420,7 +424,7 @@
           },
           {
             "key": "ROPE GROWTH",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
@@ -439,6 +443,8 @@
             "key": "CLICK",
             "collapsed": true,
             "settings": [
+              "dragOverridesGrowOnRopeHold",
+              "dragMaxDistance",
               "dragRopeHoldDistance",
               "dragRopeEnabled",
               "clickIntensity",
@@ -468,7 +474,7 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "doubleClickDistance",
               "doubleClickThreshold",
