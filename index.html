@@ -3724,6 +3724,61 @@ function mouseFlickInteractionPos(realX, realY, purpose){
   return mouseFlickInteractionPointWorld(purpose) || { x: realX, y: realY };
 }
 
+// World-space position an arbitrary drag-category normalized point
+// (px,py) would render at RIGHT NOW -- same transform as
+// mouseFlickInteractionPointWorld() above, generalized to any point
+// (not just the frame-1 gating point) and always keyed off drag's own
+// reference image + 'base' wrist-anchor bounds, since that's the only
+// category mouseFlickDragAlignmentOffset() below ever needs. Returns
+// null if drag's own frame 1 isn't loaded yet.
+function mouseFlickDragPointWorld(dirKey, pt){
+  const framesForDir = mouseFlickFramesByDirection[dirKey];
+  const img = framesForDir && framesForDir.drag && framesForDir.drag[0];
+  if (!img || !img.complete || !img.naturalWidth) return null;
+  const drawW = vmin(cfg.mouseFlickScale);
+  const drawH = drawW * (img.naturalHeight / img.naturalWidth);
+  const vb = mouseFlickVisibleBounds(dirKey, 'base');
+  const localX = drawW * (pt.x - vb.centerX);
+  const localY = drawH * (pt.y - vb.bottomY);
+  const rad = (mfEntityAngleDeg + 180) * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  return {
+    x: mfEntityX + localX * cos - localY * sin,
+    y: mfEntityY + localX * sin + localY * cos,
+  };
+}
+// Drag Rope hand animation alignment offset (2026-09-12, per explicit
+// spec): "as the Drag animation sequence runs, the position of the
+// actual frames itself will also be displaced. At the end of the
+// sequence, the point of frame 48 will align with the point of frame
+// 01." Without correction, frame 48's own annotated point naturally
+// renders at a DIFFERENT world position than frame 1's own (the art
+// itself moves across the sequence) -- this computes the WORLD-SPACE
+// difference between the two, evaluated via the CURRENT live entity
+// transform (so it stays correct regardless of the entity's current
+// position/rotation), and returns a per-frame corrective offset that
+// grows from {0,0} at t=0 (frame 1, no correction -- matches ordinary
+// rendering exactly) to exactly CANCEL that difference at t=1 (frame
+// 48), linearly interpolated in between. Applied as an ADDITIONAL
+// world-space translate on top of mfEntityX/Y specifically while
+// rendering a drag/dragRelease frame -- see render()'s own draw call
+// and mfDragSequenceActive. Returns {dx:0,dy:0} (no correction) if
+// either endpoint's own world position can't be computed yet (a frame
+// not loaded), so a missing frame degrades gracefully instead of
+// throwing or drawing at a wildly wrong offset.
+function mouseFlickDragAlignmentOffset(t){
+  const dirKey = mfDirectionKey;
+  const p1 = MOUSE_FLICK_INTERACTION_POINTS.drag[dirKey];
+  const p48 = MOUSE_FLICK_DRAG_END_POINTS[dirKey];
+  if (!p1 || !p48) return { dx: 0, dy: 0 };
+  const w1 = mouseFlickDragPointWorld(dirKey, p1);
+  const w48 = mouseFlickDragPointWorld(dirKey, p48);
+  if (!w1 || !w48) return { dx: 0, dy: 0 };
+  const driftX = w48.x - w1.x, driftY = w48.y - w1.y;
+  const tc = Math.max(0, Math.min(1, t));
+  return { dx: -driftX * tc, dy: -driftY * tc };
+}
+
 // Starts a fresh click/sciss/snap play (forward, or forward+reverse for
 // click) -- an in-progress sequence still can't be INTERRUPTED, but per
 // explicit request (2026-09-12) a trigger that arrives while busy is
@@ -9165,6 +9220,13 @@ function render(){
     if (mouseFlickActive()){
       const mfFramesForDir = mouseFlickFramesByDirection[mfDirectionKey];
       let mfImg;
+      // Set true for either half of the Drag Rope hand animation (forward
+      // play below, or its dragRelease reverse) -- drives
+      // mouseFlickDragAlignmentOffset() at the actual draw call, per the
+      // frame-48-aligns-with-frame-1 spec (see that function's own
+      // comment). Left false for every other mode, which draws with zero
+      // extra offset, identical to before this feature existed.
+      let mfDragSequenceActive = false;
       if (mfMode === 'charge'){
         // Drag Rope hand animation (2026-09-11) overrides charge's own
         // display while actively dragging a rope point -- see update()'s
@@ -9185,6 +9247,7 @@ function render(){
         if (mfDragFrameNumber !== null){
           const mfDragArrIdx = mouseFlickDragFrameIndex(mfDirectionKey, mfDragFrameNumber);
           mfImg = mfFramesForDir.drag[mfDragArrIdx];
+          mfDragSequenceActive = true;
         } else {
           // Tickle overrides charge's own display while actively hold-to-
           // growing the rope, for whichever directions have tickle art
@@ -9219,6 +9282,7 @@ function render(){
         const mfDragReleaseFrameNumber = MOUSE_FLICK_TICKLE_FORWARD[Math.max(0, Math.min(47, Math.floor(mfDragCyclePos)))];
         const mfDragReleaseArrIdx = mouseFlickDragFrameIndex(mfDirectionKey, mfDragReleaseFrameNumber);
         mfImg = mfFramesForDir.drag ? mfFramesForDir.drag[mfDragReleaseArrIdx] : mfFramesForDir.click[0];
+        if (mfFramesForDir.drag) mfDragSequenceActive = true;
       } else if (mfMode !== 'idle' && mfFrozenFrames){
         const mfIdx = Math.min(Math.floor(mfFrameAccum), mfFrozenFrames.length - 1);
         mfImg = mfFrozenFrames[mfIdx];
@@ -9237,8 +9301,17 @@ function render(){
         // that exact wrist point at mfEntityX/mfEntityY (the entity's own
         // translated+rotated origin).
         const mfVb = mouseFlickVisibleBounds(mfDirectionKey, mouseFlickVariantKeyForMode(mfMode));
+        // Drag Rope hand animation alignment offset (2026-09-12) -- see
+        // mouseFlickDragAlignmentOffset()'s own comment. {0,0} for every
+        // mode except the Drag sequence itself, so this is a no-op
+        // everywhere else.
+        let mfAlignDx = 0, mfAlignDy = 0;
+        if (mfDragSequenceActive){
+          const mfAlign = mouseFlickDragAlignmentOffset(mfDragCyclePos / 47);
+          mfAlignDx = mfAlign.dx; mfAlignDy = mfAlign.dy;
+        }
         ctx.save();
-        ctx.translate(mfEntityX, mfEntityY);
+        ctx.translate(mfEntityX + mfAlignDx, mfEntityY + mfAlignDy);
         ctx.rotate(mfRotationRad);
         ctx.drawImage(mfImg, -mfDrawW * mfVb.centerX, -mfDrawH * mfVb.bottomY, mfDrawW, mfDrawH);
         ctx.restore();
