@@ -3041,12 +3041,16 @@ const MOUSE_FLICK_DIRECTIONS = [
     sciss:{  folder:'BEHIND THUMB - SCISS',   prefix:'2T BEHINDTHUMB - SCISS', nums:SCISS_A_FRAME_NUMBERS },
     snap:{   folder:'BEHIND THUMB - SNAP',    prefix:'2T BEHINDTHUB - SNAP', nums:SNAP_A_FRAME_NUMBERS },
     tickle:{ folder:'BEHIND THUMB-TICKLE',  prefix:'BehindThumb-Tickle',  count:48, noSubfolder:true },
-    // Drag Rope -- see 'behind' direction's own comment. This direction's
-    // real folder is missing frame 24 (confirmed via direct enumeration,
-    // 47/48 files) -- explicit nums array (not plain count:48) so the
-    // existing mouseFlickNearestIndex() fallback resolves 24 to the
-    // nearest surviving frame instead of requesting a 404.
-    drag:{ folder:'BEHHIND THUMB DRAG', prefix:'Behind THUMBDrag', nums:Array.from({length:48},(_,i)=>i+1).filter(n=>n!==24), noSubfolder:true } },
+    // Drag Rope -- see 'behind' direction's own comment. 2026-09-12:
+    // folder re-supplied with a full 48/48 set (frame 24's earlier gap
+    // is genuinely closed, confirmed via direct enumeration, not
+    // trusted from the report alone) under a DIFFERENT prefix than the
+    // original partial set ('BehindThumb Drag', not 'Behind THUMBDrag')
+    // -- synced to the real current filename. Simplified back to plain
+    // count:48 now that the gap is closed, per this project's own
+    // established convention (don't leave a dead nums-array workaround
+    // once real coverage exists).
+    drag:{ folder:'BEHHIND THUMB DRAG', prefix:'BehindThumb Drag', count:48, noSubfolder:true } },
   { key:'side-thumb',
     base:{   folder:'SIDE THUMB',           prefix:'2T -DirectThumb',       nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'SIDE THUMB - CHARGE',  prefix:'2T DirectThumb-CHARGE', count:8 },
@@ -3125,11 +3129,15 @@ const MOUSE_FLICK_DIRECTIONS = [
     sciss:{  folder:'BEHIND PINKY - SCISS',   prefix:'2T BEHINDPINK - SCISS', nums:SCISS_A_FRAME_NUMBERS },
     snap:{   folder:'BEHIND PINKY - SNAP',    prefix:'2T BEHINDPINK - SNAP', nums:SNAP_A_FRAME_NUMBERS },
     tickle:{ folder:'BEHIND PINKY-TICKLE',  prefix:'BehindPink-Tickle',   count:48, noSubfolder:true },
-    // Drag Rope -- see 'behind' direction's own comment. This direction's
-    // real folder is missing frames 17-20 and 41 (confirmed via direct
-    // enumeration, 43/48 files) -- explicit nums array so the existing
-    // mouseFlickNearestIndex() fallback degrades gracefully.
-    drag:{ folder:'BEHHIND PINK DRAG', prefix:'Behind Pink Drag', nums:Array.from({length:48},(_,i)=>i+1).filter(n=>![17,18,19,20,41].includes(n)), noSubfolder:true } },
+    // Drag Rope -- see 'behind' direction's own comment. 2026-09-12:
+    // folder re-supplied under a DIFFERENT prefix ('BehindPink Drag',
+    // not 'Behind Pink Drag') -- synced to the real current filename.
+    // The gap moved, not closed: previously missing 17-20/41 (43/48),
+    // now missing 45-47 instead (45/48) -- re-confirmed via direct
+    // enumeration rather than assuming the report meant "fully fixed."
+    // Still an explicit nums array so mouseFlickNearestIndex() degrades
+    // gracefully for the new gap.
+    drag:{ folder:'BEHHIND PINK DRAG', prefix:'BehindPink Drag', nums:Array.from({length:48},(_,i)=>i+1).filter(n=>![45,46,47].includes(n)), noSubfolder:true } },
 ];
 function mouseFlickFrameUrl(variant, n){
   // noSubfolder (Tickle only, as of this writing): frames sit directly in
@@ -7542,10 +7550,14 @@ function update(rawDt){
     // ("the angle of that [pointing] line will determine what
     // animation type to be showing"), direction-bucket selection was
     // switched to read the sprite's own RENDERED pointing angle
-    // instead, for every mode including Center -- see mfPointingAngle
-    // below. Don't revert this without re-reading that clarification;
-    // it deliberately supersedes the earlier "keep them separate"
-    // design documented in CLAUDE.md's own gotchas (also corrected).
+    // instead, for every mode including Center. **Corrected again
+    // 2026-09-12: direction-bucket selection no longer reads the
+    // sprite's rendered pointing angle either** -- see
+    // mfDirectionSourceAngle below for the current (fixed-origin)
+    // approach and why the rendered-angle version was replaced. Don't
+    // revert either correction without re-reading its own clarification;
+    // each supersedes a real, explicitly-corrected design documented in
+    // CLAUDE.md's own gotchas.
     const mfTargetAngle = mouseFlickAngleFromCenter(mfX, mfY, mfCx, mfCy);
     // Random mode's own re-roll timer -- ticks only while actually in
     // 'random' mode, so switching away and back doesn't silently use up
@@ -7603,24 +7615,37 @@ function update(rawDt){
     // mid-sequence, per an earlier spec ("point 3") that has since been
     // superseded by the clarification above.
     //
-    // mfPointingAngle (2026-09-11, per explicit clarification: "the
-    // image 'points' [from] the center of the bottom edge, to the
-    // center of the top edge. and the angle of that line will
-    // determine what animation type to be showing") -- the sprite's
-    // own FINAL RENDERED pointing direction, matching render()'s own
-    // rotation formula exactly (`(mfEntityAngleDeg + 180) * PI/180`),
-    // not the raw mfTargetAngle (mouse-from-center) used previously.
-    // This is the smoothed, already-lerped mfEntityAngleDeg (set just
-    // above), so direction-bucket switching now tracks the SAME
-    // rotation the player actually sees on screen -- including its own
-    // smoothing lag -- rather than an independent, instantly-updating
-    // raw angle. Applies to EVERY Cursor Target Mode, Center included
-    // (explicit choice, not a Center-only carve-out): in Center mode
-    // mfEntityAngleDeg still lerps toward mfTargetAngle exactly as
-    // before, so the two remain numerically close, differing only by
-    // the lerp's own smoothing delay.
-    const mfPointingAngle = mfEntityAngleDeg + 180;
-    const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfPointingAngle)].key;
+    // Corrected 2026-09-12 (supersedes the 2026-09-11 mfPointingAngle
+    // approach described below, kept for context on what changed and
+    // why): per explicit report/spec -- "I want that rotation angle
+    // measurement to be measured according to a fixed angle origin. So
+    // IE, whenever the cursor is directly above the rope, the animation
+    // type should always be Behind... Just like the regular non click
+    // waiting state." The OLD mfPointingAngle approach derived direction
+    // from the sprite's own smoothed rotation, which for Cursor Target
+    // Mode 'rope' points at the NEAREST POINT ON THE ROPE -- a genuinely
+    // moving reference once the rope isn't hanging straight down (a
+    // straight-hanging rope's nearest point to anything "above" or
+    // "beside" it happens to BE the anchor, which is why simple at-rest
+    // testing didn't surface this; a swung/curved rope's nearest point
+    // can sit far from the anchor, pulling direction-bucket selection
+    // along with it). Direction-bucket selection now uses the RAW
+    // cursor position (`mfX`/`mfY`, not the smoothed `mfEntityX/Y`)
+    // relative to the rope's own ANCHOR specifically (`mainRope.
+    // points[0]`) -- a fixed reference regardless of Cursor Target Mode
+    // or the rope's current shape. The own "+180" mirrors mfPointingAngle's
+    // exact convention so the existing, already-tuned `mouseFlickAngleOffset`
+    // calibration value continues to mean the same thing (verified: with
+    // the live offset of 180, cursor directly above the anchor resolves
+    // to 'behind' and directly right resolves to 'side-thumb', matching
+    // the spec's own 2 examples exactly). Applies to every mode this
+    // lock's own exclusion list already allows updating (idle, charge,
+    // and SNAP's held phase per mfSnapHeld below) -- unlike the old
+    // approach, this is now IDENTICAL to what idle already computes, not
+    // a separate formula that merely happened to agree at rest.
+    const mfAnchorPt = mainRope.points[0];
+    const mfDirectionSourceAngle = mouseFlickAngleFromCenter(mfX, mfY, mfAnchorPt.x, mfAnchorPt.y) + 180;
+    const mfTargetDirKey = MOUSE_FLICK_DIRECTIONS[mouseFlickDirectionIndexForAngle(mfDirectionSourceAngle)].key;
     // Corrected 2026-09-12, per explicit report: "when i do right click
     // and hold, during the hold, [direction should] respond to the
     // cursor position... Its only on a non hold sequence [that it]
