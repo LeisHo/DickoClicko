@@ -253,6 +253,7 @@
     <div class="dp-click-log-wrap">
       <div class="dp-click-log-header">
         <span>CLICK LOG</span>
+        <button type="button" id="dpClickLogCopy">Copy</button>
         <button type="button" id="dpClickLogClear">Clear</button>
       </div>
       <div id="dpClickLog" class="dp-click-log"><span class="dp-click-log-empty">(no clicks yet)</span></div>
@@ -2526,6 +2527,29 @@ function copySettings(){
   }
 }
 
+// Copies the ClickLog panel's own current text, one line per entry, in
+// the exact order shown (oldest first, matching top-to-bottom reading
+// order) -- same clipboard mechanism/flash-feedback convention as
+// copySettings() above, per explicit request ("provide a button to
+// copy clicklog text"). Reads the already-rendered DOM lines directly
+// rather than re-deriving them from any underlying log array, since
+// the DOM IS the log (logClick() appends straight to it, capped at
+// CLICK_LOG_MAX_ENTRIES) -- no separate source of truth to keep in
+// sync. The empty-state placeholder (".dp-click-log-empty") copies as
+// its own literal text ("(no clicks yet)") when nothing has logged
+// yet, rather than an empty clipboard with no feedback either way.
+function copyClickLog(){
+  const el = document.getElementById('dpClickLog');
+  const text = Array.from(el.children).map(line => line.textContent).join('\n');
+  const btn = document.getElementById('dpClickLogCopy');
+  const flash = msg => { const orig = btn.textContent; btn.textContent = msg; setTimeout(() => btn.textContent = orig, 900); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => flash('Copied!')).catch(() => flash('Copy failed'));
+  } else {
+    flash('Copy failed');
+  }
+}
+
 function initDeviceTabs(){
   const buttons = document.querySelectorAll('.dp-tab-btn');
   function refreshActive(){
@@ -2544,6 +2568,7 @@ function initDevPanelChrome(){
   document.getElementById('dpCopyBtn').addEventListener('click', copySettings);
   document.getElementById('dpSaveBtn').addEventListener('click', saveSettings);
   document.getElementById('dpResetBtn').addEventListener('click', resetSettings);
+  document.getElementById('dpClickLogCopy').addEventListener('click', copyClickLog);
   document.getElementById('dpClickLogClear').addEventListener('click', () => {
     const el = document.getElementById('dpClickLog');
     el.innerHTML = '<span class="dp-click-log-empty">(no clicks yet)</span>';
@@ -6575,6 +6600,13 @@ const CLICK_LOG_PHYSICS_NOTE = {
 function clickLogPhysicsNote(event){
   return CLICK_LOG_PHYSICS_NOTE[event] || 'none';
 }
+// Which logClick() data keys count as "rope position data" for the Log
+// Rope Position Data checkbox (DEBUG group) -- raw screen coordinates
+// and any distance/index tied to a specific point on the rope. Every
+// OTHER key (intensity, heldMs, t, willCut, willDetach, target,
+// wasGrowing, startedInCircle, etc.) is a non-position outcome/state
+// value and stays visible regardless of this checkbox.
+const CLICK_LOG_POSITION_KEYS = new Set(['x', 'y', 'hitDist', 'hitIndex', 'releaseDist', 'index']);
 function logClick(event, data){
   if (!DEV_MODE) return;
   console.log('[click]', event, data);
@@ -6583,7 +6615,11 @@ function logClick(event, data){
   const empty = el.querySelector('.dp-click-log-empty');
   if (empty) empty.remove();
   const line = document.createElement('div');
-  const dataStr = Object.entries(data || {}).map(([k, v]) => k + ':' + (typeof v === 'number' ? round(v, 2) : v)).join(' ');
+  // Log Rope Position Data (DEBUG group, per explicit request) -- when
+  // off, position-related fields are omitted from the PANEL line only;
+  // console.log above already received the full, untouched data object.
+  const entries = Object.entries(data || {}).filter(([k]) => cfg.clickLogPositionDataEnabled || !CLICK_LOG_POSITION_KEYS.has(k));
+  const dataStr = entries.map(([k, v]) => k + ':' + (typeof v === 'number' ? round(v, 2) : v)).join(' ');
   const time = formatClickLogTime(new Date());
   const note = clickLogPhysicsNote(event);
   line.textContent = time + '  [' + note + ']  ' + event + '  ' + dataStr;
