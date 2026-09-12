@@ -434,6 +434,18 @@ const DEV_GROUPS = [
     // own drag-clamp, mirroring Rope Attraction's identical anchor-
     // relative rest-length clamp).
     { key:'dragRopeEnabled', label:'Drag Rope', type:'checkbox', def:false },
+    // Corrected 2026-09-12, per explicit report: "wherever in the
+    // browser i click and hold, it triggers a drag... Only when i
+    // click and hold ON the rope itself does it trigger. any other
+    // time, click and hold should trigger a charge, or a grow." The
+    // original implementation armed dragging unconditionally whenever
+    // dragRopeEnabled was on, with no proximity gate at all -- unlike
+    // charging, which only fires a punch if release lands within
+    // holdDistance. Same pattern as Grow Rope On Rope Hold's own
+    // ropeGrowthHoldDistance: a dedicated distance slider, checked at
+    // ARM time (not release), so a hold that starts too far from the
+    // rope falls through to the ordinary charge behavior instead.
+    { key:'dragRopeHoldDistance', label:'Drag Rope Hold Distance', type:'slider', unit:'%vmin', min:1, max:60, step:0.5, def:20 },
   ]},
   { title:'ROPE ANIMATION', controls:[
     { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0 },
@@ -6350,14 +6362,16 @@ function onPointerDown(e){
   // startedInCircle -- see that flag's own comment.
   holdTimer = setTimeout(() => {
     if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
-    // Drag Rope (per explicit request) overrides Click-And-Hold entirely --
-    // the same hold-recognition timer that would otherwise arm charging
-    // instead arms dragging, anchored at the rope point closest to the
+    // Drag Rope (per explicit request) overrides Click-And-Hold, but ONLY
+    // for a hold that actually started near the rope -- corrected
+    // 2026-09-12 after a real report that ANY hold anywhere was arming a
+    // drag ("wherever in the browser i click and hold, it triggers a
+    // drag"). dragIndex is anchored at the rope point closest to the
     // ORIGINAL press (downInfo.hit, frozen at pointerdown -- "anchored by
     // the point on the rope that is clicked"). Index 0 (the anchor itself)
     // is excluded -- dragging it would fight its own separate circle-
     // boundary confinement -- clamped up to the first real, draggable point.
-    if (cfg.dragRopeEnabled){
+    if (cfg.dragRopeEnabled && downInfo.hit.dist <= vmin(cfg.dragRopeHoldDistance)){
       downInfo.dragging = true;
       downInfo.dragIndex = Math.max(1, downInfo.hit.index);
       mfSuppressClickFromGrowth = true;
