@@ -3107,11 +3107,13 @@ const MOUSE_FLICK_DIRECTIONS = [
     sciss:{  folder:'FRONT PINKY - SCISS',   prefix:'2T FRONTPINK - SCISS',  nums:SCISS_A_FRAME_NUMBERS },
     snap:{   folder:'FRONT PINKY - SNAP',    prefix:'2T FRONTPINK - SNAP',  nums:SNAP_A_FRAME_NUMBERS },
     tickle:{ folder:'FRONT PINK - TICKLE',  prefix:'FRONTPINKTickle',    count:48, noSubfolder:true },
-    // Drag Rope -- see 'behind' direction's own comment. This direction's
-    // real folder is missing frames 20-23 and 34 (confirmed via direct
-    // enumeration, 43/48 files) -- explicit nums array so the existing
-    // mouseFlickNearestIndex() fallback degrades gracefully.
-    drag:{ folder:'FRONT PINKY DRAG', prefix:'Front Pink Drag', nums:Array.from({length:48},(_,i)=>i+1).filter(n=>![20,21,22,23,34].includes(n)), noSubfolder:true } },
+    // Drag Rope -- see 'behind' direction's own comment. 2026-09-12:
+    // folder re-supplied under a new prefix ('FrontPink Drag', was
+    // 'Front Pink Drag' -- the space before 'Drag' was dropped) and its
+    // earlier gap (missing 20-23, 34) is now closed -- confirmed 48/48
+    // via direct enumeration, not assumed from the report. Simplified
+    // back to plain count:48.
+    drag:{ folder:'FRONT PINKY DRAG', prefix:'FrontPink Drag', count:48, noSubfolder:true } },
   { key:'side-pinky',
     base:{   folder:'SIDE PINKY',           prefix:'2T -DirectPink',        nums:BASE_A_FRAME_NUMBERS },
     charge:{ folder:'SIDE PINKY - CHARGE',  prefix:'2T DirectPink-CHARGE',  count:8 },
@@ -7711,6 +7713,23 @@ function update(rawDt){
     const mfSnapHeld = mfMode === 'snap' && (mfRightDown || mfTripleHeld);
     if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'dragRelease' && (mfMode !== 'snap' || mfSnapHeld)){
       mfDirectionKey = mfTargetDirKey;
+      // 2026-09-12, per explicit follow-up: "whilst right click and hold
+      // is holding, i would still like the animation type to change...
+      // but same frame number, and continue to function as the right
+      // click hold." Updating mfDirectionKey alone (above) has NO visual
+      // effect during a held SNAP -- render() draws from mfFrozenFrames,
+      // a plain array REFERENCE snapshotted once when this SNAP play
+      // started (mouseFlickStartPlay()), which still points at the OLD
+      // direction's own array regardless of mfDirectionKey changing.
+      // Re-point it to the NEW direction's own snap array whenever the
+      // held phase actually changes direction -- mfFrameAccum itself is
+      // left untouched (it's already pinned at SNAP_FREEZE_INDEX by the
+      // freeze logic below), so the SAME frame NUMBER keeps showing,
+      // just from the new direction's array (SNAP_A_FRAME_NUMBERS is
+      // shared/contiguous across all 8 directions, so the same array
+      // INDEX always means the same frame NUMBER here -- no nearest-
+      // frame remap needed, unlike Tickle/Drag's own gappy sets).
+      if (mfSnapHeld) mfFrozenFrames = mouseFlickFramesByDirection[mfDirectionKey].snap;
     }
     if (mfMode === 'charge'){
       mfHoldTime += rawDt;
@@ -9172,6 +9191,25 @@ resetSettings(); // load last-saved values/order/geometry, if any (falls back to
 // genuine catch-up burst (e.g. after a backgrounded tab).
 lastTime = performance.now();
 requestAnimationFrame(loop);
+
+if (DEV_MODE){
+  window.__testGrowFix = {
+    tick: (n=1) => { for (let i=0;i<n;i++){ update(FIXED_DT); } render(); },
+    circleXY: () => circleAnchor(),
+    setIntroDone: () => { introPhase = 'done'; },
+    growing: () => growing,
+    downInfoState: () => downInfo,
+    holdTimerActive: () => holdTimer !== null && holdTimer !== undefined,
+    ropeLen: () => mainRope.totalLength,
+    dragRopeEnabled: () => cfg.dragRopeEnabled,
+    mfMode: () => mfMode,
+    mfDirectionKey: () => mfDirectionKey,
+    mfFrameAccum: () => mfFrameAccum,
+    mfRightDown: () => mfRightDown,
+    setMfRightDown: (v) => { mfRightDown = v; },
+    startPlaySnap: () => { mfMode='idle'; mfRightDown = true; mouseFlickStartPlay('snap'); },
+  };
+}
 
 })();
 </script>
