@@ -9479,13 +9479,35 @@ function render(){
     } else {
       flick3Rect.w = 0; flick3Rect.h = 0;
     }
-    // FLICK MOUSE -- draws rotated/translated to the entity's own
-    // lerped mouse-following position, adopted directly from DotFlicko's
-    // own render() (translate -> rotate -> drawImage centered at
-    // origin). No hit-test rect: this entity isn't clicked ON, its own
-    // gestures are global window/canvas listeners (see their own
-    // comment above onPointerDown/onPointerUp).
-    if (mouseFlickActive()){
+  }
+  // FLICK MOUSE -- draws rotated/translated to the entity's own
+  // lerped mouse-following position, adopted directly from DotFlicko's
+  // own render() (translate -> rotate -> drawImage centered at
+  // origin). No hit-test rect: this entity isn't clicked ON, its own
+  // gestures are global window/canvas listeners (see their own
+  // comment above onPointerDown/onPointerUp).
+  // **Corrected 2026-09-12 (real, reported, reproduced bug):** this
+  // block used to sit ACCIDENTALLY NESTED inside the FLICK-ANIMATION-
+  // 1/2/3 `if (DEV_MODE)` block just above (opened for THAT feature's
+  // own explicit "only visible in dev mode" request), so FLICK MOUSE
+  // itself only ever drew when DEV_MODE was true -- completely
+  // independent of `mouseFlickActive()`'s own already-correct
+  // `cfg.mouseFlickEnabledLiveMode` check, which could never be
+  // reached for a real non-dev visitor at all. Reported directly:
+  // "https://dicko-clicko.vercel.app/ still doesnt show the cursor
+  // animation frames, even when turned on. It shows up in
+  // .../?dev=1." Confirmed via direct dispatched pointermove events
+  // plus a monkey-patched ctx.drawImage on the LIVE deployed site:
+  // zero drawImage calls fired at the non-dev URL despite
+  // `mouseFlickEnabled`/`mouseFlickEnabledLiveMode` both being `true`
+  // in the live settings file -- proving the code path was never even
+  // reached, not a config/data problem. Moved OUT of the DEV_MODE
+  // block (closed one line above) so it's now a sibling, gated ONLY by
+  // `mouseFlickActive()` as originally intended. `Show Interaction
+  // Points` just below keeps its own explicit `DEV_MODE &&` check --
+  // that one genuinely IS meant to be dev-only, unlike the sprite
+  // itself.
+  if (mouseFlickActive()){
       const mfFramesForDir = mouseFlickFramesByDirection[mfDirectionKey];
       let mfImg;
       // Set true for either half of the Drag Rope hand animation (forward
@@ -9604,7 +9626,6 @@ function render(){
         }
       }
     }
-  }
 }
 
 // Fixed-timestep physics: update() always advances by exactly this much,
