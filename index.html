@@ -705,6 +705,70 @@ const DEV_GROUPS = [
     { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
     { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Line', type:'checkbox', def:false },
     { key:'bgRopeClipEnabled', label:'Background Rope Clip Enabled', type:'checkbox', def:true },
+    // Fixes a real reported bug (2026-09-12: "when flicking the main
+    // rope, the background rope seems overly affected by the flick...
+    // sometimes... the background rope seems to fly up far higher than
+    // both the main rope and the main rope start anchor"). Root cause:
+    // bgRope's own per-frame anchor sync (see that block's own comment,
+    // further down in update()) used to SNAP bgRope.points[0] to
+    // mainRope.points[0]'s CURRENT position every frame with no
+    // smoothing at all -- confirmed via direct measurement that a
+    // single strong punch swings mainRope's own anchor by 130+px (its
+    // `Anchor Weight` confinement responds to the constraint solver,
+    // it isn't a 100% rigid pin), and since bgRope's own Verlet
+    // integration derives implied velocity from frame-to-frame position
+    // DELTA, snapping straight to that swung position injected a huge,
+    // instantaneous velocity kick into bgRope's own independent chain,
+    // which its own gravity/constraint solve then swung out into a
+    // large, visible overshoot.
+    //
+    // An exponential-lerp smoothing approach was tried first and
+    // measured ineffective: paired before/after live tests (settled
+    // rest state confirmed via repeated-value convergence, then an
+    // identical punch(1,10)) showed smoothing=1 (old instant-snap)
+    // produced a -197.9px undershoot (tip flies up) / +53.0px
+    // overshoot, while smoothing=0.2 produced -189.8px / +59.7px --
+    // barely different in one direction and WORSE in the other. Root
+    // cause: a lagging exponential tracker doesn't reduce the total
+    // injected velocity, it just spreads/delays it, and that lag can
+    // land out of phase with mainRope's own multi-frame swing-then-
+    // rebound, amplifying the rebound-direction overshoot instead of
+    // damping it.
+    //
+    // This slider instead caps bgRope.points[0]'s own per-frame MOVEMENT
+    // SPEED toward mainRope.points[0] (same maxMove-clamp pattern as
+    // Rope Attraction Speed's `ropeAttractionSpeed` -- see its own call
+    // site), which bounds the injected velocity directly regardless of
+    // how fast mainRope's anchor swings, rather than merely lagging
+    // behind it (the clamp mechanism itself is verified exact: a
+    // maxSpeed of 30 against a measured dt of 0.03 produced a measured
+    // 6.912px max per-frame step, matching vmin(30)*0.03=6.912 to the
+    // full precision shown).
+    //
+    // HONEST LIMITATION, measured via a fixed settle(tick 600)+punch(1,10)
+    // recipe from a fresh load, compared across maxSpeed values 1000
+    // (~unclamped) / 60 / 10: the clamp meaningfully reduces the
+    // REBOUND overshoot in the direction opposite the initial swing
+    // (+60.3px at 1000, +34.8px at 60, +40.6px at 10px -- non-monotonic,
+    // 60 measured best of the 3), but only marginally reduces the
+    // PRIMARY reported symptom itself (the initial upward fly, i.e. the
+    // undershoot toward a smaller Y): -75.1px at 1000, -74.3px at 60,
+    // -70.6px at 10 -- under a 7% reduction even at the most aggressive
+    // clamp tested. This means bgRope's tip flying up right after the
+    // punch is mostly driven by ordinary whip-propagation through the
+    // chain once point 0 starts moving at all, not primarily by the
+    // SPEED of point 0's own motion -- clamping point 0 harder keeps
+    // paying down responsiveness (ordinary, non-punch anchor tracking
+    // gets laggier) without much further reducing the fly-up itself.
+    // A more complete fix would likely need to reduce how far mainRope's
+    // OWN anchor swings on a punch in the first place (cfg.anchorWeight
+    // or a new anchor-side damping mechanism) rather than only bgRope's
+    // own tracking of it -- not attempted here since that changes
+    // mainRope's own already-tuned physics response for every punch,
+    // not just bgRope's reaction to it (see the damping/iterations
+    // tuning history above) -- surfaced to the user as a follow-up
+    // decision rather than made unilaterally.
+    { key:'bgRopeAnchorMaxSpeed', label:'Background Rope Anchor Max Speed', type:'slider', unit:'%vmin/s', min:20, max:400, step:5, def:60 },
     // Per explicit request: bgRope's own climbing start (points[0], the
     // "peek" visible above the circle while rising) gets the same endcap
     // graphic mainRope's own tip uses, visible only while there's nothing
@@ -851,6 +915,29 @@ const DEV_GROUPS = [
     // every this-many seconds. See SNAP_REPEAT_B/C_START/END_INDEX and
     // the mfSnapPaused state block in update() for the full mechanism.
     { key:'snapRepeatDuration', label:'Snap Repeat Duration', type:'slider', unit:'s', min:0.5, max:30, step:0.5, def:5 },
+    // Debug visibility toggle (2026-09-12, per explicit request) for the
+    // annotated "interaction points" (click/hold/cut/drag -- see
+    // MOUSE_FLICK_INTERACTION_POINTS' own comment) that the click/hold/
+    // cut/drag distance gates measure against instead of the raw cursor.
+    // Purely visual -- drawing the dots never changes which point the
+    // gates themselves use, on or off. DEV_MODE-gated at the draw site
+    // (not just default-off) as a real visitor never has a dev panel to
+    // toggle this from anyway, matching this project's own established
+    // pattern for dev-only overlays.
+    { key:'mouseFlickShowInteractionPoints', label:'Show Interaction Points', type:'checkbox', def:false },
+  ]},
+  { title:'DEBUG', controls:[
+    // Per explicit request ("a checkbox in the debug group. It turns
+    // on and off the logging of the rope position data in the click
+    // log") -- default TRUE preserves the ClickLog panel's existing
+    // behavior (every field always shown). When off, logClick() omits
+    // rope-position-related fields (CLICK_LOG_POSITION_KEYS -- x, y,
+    // hitDist, hitIndex, releaseDist, index) from the PANEL line only,
+    // leaving non-position fields (intensity, heldMs, t, willCut,
+    // willDetach, target, wasGrowing, startedInCircle) untouched --
+    // console.log's own output is unaffected either way, still fully
+    // detailed for real console-based debugging.
+    { key:'clickLogPositionDataEnabled', label:'Log Rope Position Data', type:'checkbox', def:true },
   ]},
 ];
 
@@ -3396,6 +3483,32 @@ let mfTickleCyclePos = 0;
 let mfDragCyclePos = 0;
 let mfHoldTimer = null;
 let mfPendingClick = null; // {time, timer} -- same setTimeout-pairing technique as the rope's own double-click-to-cut (see CLAUDE.md gotchas)
+// Cancels a still-pending single click from an EARLIER, separate tap
+// (2026-09-12, real reported bug: "when i trigger a drag, it also
+// triggers some sort of flick effect"). Root cause: mfPendingClick's
+// own timer is armed on every quick tap's release and fires
+// mouseFlickStartPlay('click') doubleClickThreshold later REGARDLESS
+// of what happens in the meantime -- a quick tap immediately followed
+// by a genuine press-and-hold (Drag Rope, the circle's hold-to-grow,
+// or Grow Rope On Rope Hold) starts a hold whose own confirmation
+// fires at that SAME doubleClickThreshold delay, so the earlier tap's
+// click can land squarely in the middle of the new hold, hijacking
+// mfMode (and so the displayed animation) away from whatever the hold
+// itself should be showing (confirmed live: mfMode ended up 'click'
+// while downInfo.dragging was true). Once a hold is confirmed, the
+// press that's actually happening right now can never legitimately
+// pair as this pending click's OWN double-click partner either (that
+// would have required THIS press to be a quick tap, not a hold) -- so
+// there's nothing correct left for the pending click to wait for.
+// Called from every mfSuppressClickFromGrowth call site (same set of
+// "a rope-side hold is taking over" moments that flag already exists
+// for) rather than only suppressing at release time, since this
+// specific failure mode fires mid-hold, not on release.
+function mfCancelPendingClick(){
+  if (!mfPendingClick) return;
+  clearTimeout(mfPendingClick.timer);
+  mfPendingClick = null;
+}
 // Live right-button-down state (distinct from the one-shot SNAP trigger
 // on pointerdown) -- needed for the SNAP freeze-at-frame-42 mechanic
 // (see the pointerup listener and update()'s own SNAP-freeze comment).
@@ -6676,6 +6789,7 @@ function onPointerDown(e){
       if (!downInfo || downInfo.mode !== 'circle') return;
       growing = true;
       mfSuppressClickFromGrowth = true;
+      mfCancelPendingClick();
       logClick('hold:grow-start', { x, y });
     }, HOLD_THRESHOLD_MS);
     return;
@@ -6767,6 +6881,7 @@ function onPointerDown(e){
       downInfo.dragAngleRefX = dragPt.x;
       downInfo.dragAngleRefY = dragPt.y;
       mfSuppressClickFromGrowth = true;
+      mfCancelPendingClick();
       // Drag Rope hand animation (2026-09-11): reset the forward-play
       // position for whichever direction ends up active during this drag
       // -- see mfDragCyclePos's own declaration comment for the full
@@ -6776,6 +6891,15 @@ function onPointerDown(e){
       return;
     }
     downInfo.charging = true;
+    // Same pending-click-hijack fix as the 3 mfSuppressClickFromGrowth
+    // sites above (see mfCancelPendingClick()'s own comment) -- a
+    // leftover single click from an earlier, separate tap can fire
+    // during THIS charge too, interrupting the charge display early
+    // with an unwanted 'click' sequence even though "play click on
+    // release" is already the correct eventual outcome for a plain
+    // charge (mouseFlickEndCharge()) -- the bug is the EARLY, mid-hold
+    // interruption, not the eventual click itself.
+    mfCancelPendingClick();
     logClick('hold:charging-start', { x, y });
   }, cfg.doubleClickThreshold);
   // Grow Rope On Rope Hold (per explicit request) -- ADDITIVE to the
@@ -6801,6 +6925,7 @@ function onPointerDown(e){
       if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
       growing = true;
       mfSuppressClickFromGrowth = true;
+      mfCancelPendingClick();
       logClick('hold:grow-start-from-rope', { x, y });
     }, HOLD_THRESHOLD_MS);
   }
@@ -7154,6 +7279,11 @@ window.addEventListener('pointerup', e => {
     const mfTouchCountAtTap = mfTouchTapCount;
     mfTouchTapTimer = setTimeout(() => {
       mfTouchTapCount = 0;
+      // Same fix as the mouse pending-click timer just below (2026-09-12)
+      // -- a NEW touch already down by the time this fires has no
+      // business being hijacked by a stale tap-count resolution from an
+      // earlier, separate touch sequence.
+      if (mfLeftDown) return;
       mouseFlickStartPlay(mfTouchCountAtTap >= 2 ? 'sciss' : 'click');
     }, cfg.doubleClickThreshold);
     return;
@@ -7173,6 +7303,23 @@ window.addEventListener('pointerup', e => {
     time: mfNow,
     timer: setTimeout(() => {
       mfPendingClick = null;
+      // 2026-09-12, real reported bug ("when i trigger a drag, it also
+      // triggers some sort of flick effect"): this timer and a NEW
+      // press's own hold-confirmation timer (Drag Rope, plain charging)
+      // both use this SAME cfg.doubleClickThreshold delay -- but this
+      // one was armed EARLIER (at the FIRST tap's release), so it
+      // ALWAYS fires first whenever a 2nd press follows quickly,
+      // regardless of how small the gap is. The mfCancelPendingClick()
+      // calls added at each hold-confirmation site can't win that race
+      // for THIS specific pairing (they run too late, after this timer
+      // already fired) -- they still matter for the circle/Grow-Rope-
+      // On-Rope-Hold paths, which confirm on the shorter
+      // HOLD_THRESHOLD_MS and so CAN legitimately preempt this one.
+      // The fix that actually closes this specific race: skip playing
+      // click if a NEW press is already down right now (mfLeftDown) --
+      // this stale tap has no business hijacking mfMode away from
+      // whatever that live press turns out to be.
+      if (mfLeftDown) return;
       mouseFlickStartPlay('click');
     }, cfg.doubleClickThreshold),
   };
@@ -7716,9 +7863,30 @@ function update(rawDt){
   // waiting+rising+pausing duration) every single frame, completely
   // undoing "it stays there for the pause duration" -- bgRope visibly
   // moved off the clear-offset line during the pause instead of holding.
+  // Background Rope Anchor Max Speed (2026-09-12, real reported bug --
+  // see the dev slider's own comment for the full mechanism/measurement
+  // and why an exponential-lerp smoothing approach was tried first and
+  // measured ineffective). Caps bgRope.points[0]'s own per-frame
+  // movement toward mainRope's anchor to a max speed, same maxMove-clamp
+  // pattern as `ropeAttractionSpeed` -- so a sudden swing in mainRope's
+  // own anchor (e.g. the aftermath of a strong punch, which measured up
+  // to 130+px even though the anchor is nominally "pinned") can't inject
+  // more than a bounded, fixed-max velocity into bgRope's own otherwise-
+  // independent chain, regardless of how fast or far mainRope's anchor
+  // itself swings.
   if (introPhase !== 'waiting' && introPhase !== 'rising' && introPhase !== 'pausing'){
-    bgRope.points[0].x = mainRope.points[0].x;
-    bgRope.points[0].y = mainRope.points[0].y;
+    const bgAnchorDx = mainRope.points[0].x - bgRope.points[0].x;
+    const bgAnchorDy = mainRope.points[0].y - bgRope.points[0].y;
+    const bgAnchorDist = Math.hypot(bgAnchorDx, bgAnchorDy);
+    const bgAnchorMaxMove = vmin(cfg.bgRopeAnchorMaxSpeed) * dt;
+    if (bgAnchorDist > bgAnchorMaxMove && bgAnchorDist > 0){
+      const s = bgAnchorMaxMove / bgAnchorDist;
+      bgRope.points[0].x += bgAnchorDx * s;
+      bgRope.points[0].y += bgAnchorDy * s;
+    } else {
+      bgRope.points[0].x = mainRope.points[0].x;
+      bgRope.points[0].y = mainRope.points[0].y;
+    }
   }
   integrateChain(bgRope.points, bgRope.segLen, dt, gravityAccel, 0);
   maintainBgRopeEnd();
@@ -9379,6 +9547,25 @@ function render(){
         ctx.rotate(mfRotationRad);
         ctx.drawImage(mfImg, -mfDrawW * mfVb.centerX, -mfDrawH * mfVb.bottomY, mfDrawW, mfDrawH);
         ctx.restore();
+      }
+      // Show Interaction Points (2026-09-12, per explicit request) --
+      // purely visual, dev-only debug overlay for the annotated points
+      // MOUSE_FLICK_INTERACTION_POINTS supplies for the click/hold/cut/
+      // drag distance gates (see mouseFlickInteractionPointWorld()'s own
+      // comment) -- drawing these dots never changes which point the
+      // gates themselves measure against. One small dot per purpose,
+      // color-coded so overlapping points (common -- click/hold share
+      // the 'default' point key) can still be told apart.
+      if (DEV_MODE && cfg.mouseFlickShowInteractionPoints){
+        const mfIpColors = { click:'#ffeb3b', hold:'#ff9800', cut:'#f44336', drag:'#4caf50' };
+        for (const mfIpPurpose of ['click', 'hold', 'cut', 'drag']){
+          const mfIpPt = mouseFlickInteractionPointWorld(mfIpPurpose);
+          if (!mfIpPt) continue;
+          ctx.beginPath();
+          ctx.arc(mfIpPt.x, mfIpPt.y, vmin(0.6), 0, Math.PI * 2);
+          ctx.fillStyle = mfIpColors[mfIpPurpose];
+          ctx.fill();
+        }
       }
     }
   }
