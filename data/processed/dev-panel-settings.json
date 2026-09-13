@@ -9,10 +9,9 @@
     "anchorWeight": 2.9,
     "endcapDesign": "form1-01",
     "endcapHeight": 1.2,
-    "tipSegmentShapeEnabled": false,
     "ropeThickness": 7.2,
     "segmentLength": 1.65,
-    "ropeLength": 14.588194696105056,
+    "ropeLength": 7.170931702047076,
     "ropeDefaultLength": 30,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -125,7 +124,7 @@
     "pieceDecayDelay": 10,
     "pieceDecaySpeed": 0.5,
     "pieceMinThickness": 1.2,
-    "cutSplatterEnabled": true,
+    "cutSplatterEnabled": false,
     "cutSplatterColor": "#ffffff",
     "cutSplatterHorizontalSpread": 46,
     "cutSplatterVerticalSpread": 88,
@@ -161,6 +160,7 @@
     "introRiseClearOffset": 2.5,
     "debugShowRiseClearOffset": false,
     "bgRopeClipEnabled": true,
+    "bgRopeAnchorMaxSpeed": 60,
     "bgRopeStartEndcapEnabled": true,
     "bgRopeEndcapHeight": 0.85,
     "bgRopeEndcapGradientEnabled": true,
@@ -225,13 +225,23 @@
     "mouseFlickTargetMode": "rope",
     "mouseFlickTargetPoint": 0.5,
     "mouseFlickRandomInterval": 1.1,
-    "snapRepeatDuration": 1.5
+    "snapRepeatDuration": 1.5,
+    "mouseFlickShowInteractionPoints": false,
+    "clickLogPositionDataEnabled": true
   },
   "order": {
     "ungrouped": [
       "textEditMode"
     ],
     "groups": [
+      {
+        "key": "DEBUG",
+        "collapsed": false,
+        "settings": [
+          "clickLogPositionDataEnabled"
+        ],
+        "subgroups": []
+      },
       {
         "key": "CUT SPLATTER",
         "collapsed": false,
@@ -302,6 +312,7 @@
         "key": "FLICK MOUSE",
         "collapsed": true,
         "settings": [
+          "mouseFlickShowInteractionPoints",
           "mouseFlickDragSpeed",
           "mouseFlickEnabledLiveMode",
           "mouseFlickTickleSpeed",
@@ -342,8 +353,7 @@
           "ropeGradientEnabled",
           "ropeGradientColors",
           "ropeColor",
-          "minRopeLength",
-          "tipSegmentShapeEnabled"
+          "minRopeLength"
         ],
         "subgroups": [
           {
@@ -496,6 +506,7 @@
         "key": "STARTUP ANIMATION",
         "collapsed": true,
         "settings": [
+          "bgRopeAnchorMaxSpeed",
           "bgRopeEndcapPauseHeight",
           "mainEndcapGrowSpeed",
           "bgRopeStartEndcapEnabled",
