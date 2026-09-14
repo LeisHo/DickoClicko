@@ -272,7 +272,7 @@
           },
           {
             "key": "PANEL UI",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "bgColor",
               "accentColor",
@@ -283,7 +283,7 @@
           },
           {
             "key": "TEXT",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "fontFamily"
             ],
@@ -304,7 +304,7 @@
               },
               {
                 "key": "Group Title",
-                "collapsed": false,
+                "collapsed": true,
                 "settings": [
                   "groupBold",
                   "capsGroupNames",
@@ -318,7 +318,7 @@
               },
               {
                 "key": "Setting Title",
-                "collapsed": false,
+                "collapsed": true,
                 "settings": [
                   "capsSettingsText",
                   "settingsBold",
@@ -333,7 +333,7 @@
               },
               {
                 "key": "TABS",
-                "collapsed": false,
+                "collapsed": true,
                 "settings": [
                   "tabBold",
                   "capsTabText",
@@ -346,7 +346,7 @@
               },
               {
                 "key": "BUTTONS",
-                "collapsed": false,
+                "collapsed": true,
                 "settings": [
                   "buttonBold",
                   "capsButtonText",
@@ -710,44 +710,44 @@
       "height": 570.0125122070312,
       "style": {
         "titleFontSize": 14,
-        "tabFontSize": 12,
+        "tabFontSize": 13,
         "groupFontSize": 12,
-        "labelFontSize": 12,
+        "labelFontSize": 11,
         "opacity": 1,
         "titleColor": "#ffffff",
         "bgColor": "#000000",
         "textColor": "#ffffff",
-        "accentColor": "#2e4652",
+        "accentColor": "#4b768b",
         "sliderColor": "#ffffff",
         "fontFamily": "Helvetica, Arial, sans-serif",
         "buttonHeight": 21,
         "buttonTextBorder": 0,
         "scrollStrength": 0.2,
-        "capsButtonText": true,
+        "capsButtonText": false,
         "capsTabText": true,
         "capsGroupNames": true,
-        "capsSettingsText": false,
-        "buttonLetterSpacing": 0,
+        "capsSettingsText": true,
+        "buttonLetterSpacing": 1.4,
         "tabLetterSpacing": 0,
         "groupLetterSpacing": 1.1,
-        "settingsLetterSpacing": 0,
+        "settingsLetterSpacing": -0.4,
         "valueFontSize": 12,
         "buttonFontSize": 10,
         "titleLetterSpacing": 4,
         "titleLineHeight": 0.8,
-        "tabLineHeight": 1.2,
+        "tabLineHeight": 2.45,
         "groupLineHeight": 0.3,
-        "settingsLineHeight": 1.2,
-        "buttonLineHeight": 1.2,
+        "settingsLineHeight": 1.25,
+        "buttonLineHeight": 2.2,
         "groupLabelBgColor": "#005f8f",
         "groupTextColor": "#ffffff",
         "buttonTextColor": "#ffffff",
-        "settingNumberColor": "#5cc9ff",
+        "settingNumberColor": "#7cd2fe",
         "tabTextColor": "#ffffff",
         "titleBold": true,
         "groupBold": true,
         "tabBold": true,
-        "buttonBold": true,
+        "buttonBold": false,
         "settingsBold": false,
         "titleCapitalize": true,
         "textEditMode": false
@@ -794,12 +794,12 @@
         "groupLabelBgColor": "#005f8f",
         "groupTextColor": "#ffffff",
         "buttonTextColor": "#ffffff",
-        "settingNumberColor": "#5cc9ff",
+        "settingNumberColor": "#7cd2fe",
         "tabTextColor": "#ffffff",
         "titleBold": true,
         "groupBold": true,
         "tabBold": true,
-        "buttonBold": true,
+        "buttonBold": false,
         "settingsBold": false,
         "titleCapitalize": true
       }
