@@ -1261,7 +1261,14 @@ function devTextOriginalFor(key, currentText){
 // so a live rename-in-progress is never clobbered by this sweep.
 function applyDevTextOverrides(){
   document.querySelectorAll('#dpGroups .dp-group').forEach(g => {
-    const titleSpan = g.querySelector(':scope > .dp-group-header > span:last-child');
+    // '.dp-group-title' (2026-09-13, was `span:last-child`) -- the
+    // independence checkbox (buildGroupIndependenceCheckbox()) is now
+    // appended to the header AFTER the title span, so "last child" no
+    // longer identifies it; see the title span's own creation comment
+    // in createGroupElement() for the full story of this real,
+    // previously-shipped regression (every custom group rename silently
+    // stopped displaying, with no error).
+    const titleSpan = g.querySelector(':scope > .dp-group-header > .dp-group-title');
     if (!titleSpan || titleSpan.querySelector('textarea')) return;
     const key = 'group:' + g.dataset.key;
     const original = devTextOriginalFor(key, titleSpan.textContent);
@@ -1388,7 +1395,20 @@ function createGroupElement(name){
   // shared cursor/color/touch-action styling) must NOT match here too.
   const handle = document.createElement('span'); handle.className = 'dp-group-handle dp-drag-handle'; handle.textContent = '⠿';
   const arrow = document.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '▼';
-  const title = document.createElement('span'); title.textContent = name;
+  // 'dp-group-title' (2026-09-13) -- added the instant the independence
+  // checkbox below became this header's own new LAST child: before that,
+  // applyDevTextOverrides()'s own `:last-child` selector (see its own
+  // definition) safely assumed the title span was always the final
+  // element in `.dp-group-header`. With the checkbox now appended after
+  // it, that selector matched the CHECKBOX instead, silently breaking
+  // group-title text overrides entirely -- every custom group rename
+  // (Text Edit Mode) simply stopped displaying, reverting to raw keys
+  // like "New Group (3)" with no error, no warning, nothing to notice
+  // until a user actually compared the panel against what they'd
+  // previously renamed things to. A dedicated class survives future
+  // children being appended after this one, unlike position-based
+  // selection.
+  const title = document.createElement('span'); title.className = 'dp-group-title'; title.textContent = name;
   h.appendChild(handle); h.appendChild(arrow); h.appendChild(title);
   h.appendChild(buildGroupIndependenceCheckbox(g));
   const gb = document.createElement('div');
