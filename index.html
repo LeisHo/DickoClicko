@@ -1079,6 +1079,16 @@ const DEV_GROUPS = [
     // mfDragToleranceRadius computation for the dead-zone/leash mechanic
     // this actually drives.
     { key:'cursorAnimationDragToleranceMult', label:'Cursor Animation Drag Anchor Tolerance (x Rope Thickness)', type:'slider', unit:'x', min:0, max:5, step:0.05, def:1 },
+    // Corrected 2026-09-14 (see the tolerance clamp's own comment in
+    // update() for the full account) -- separate, dedicated smoothing
+    // for how fast the sprite catches up toward the drag anchor once
+    // outside its tolerance radius. Deliberately NOT reusing Mouse
+    // Flick Position Smoothing (tuned to 1/instant for the pre-existing
+    // exact-anchor-snap behavior) -- at that default, this whole
+    // tolerance feature would show zero visible motion. Lower = more
+    // visible lag/trailing before catching up; 1 = instant (same as no
+    // tolerance feature at all).
+    { key:'cursorAnimationDragCatchUpSmoothing', label:'Cursor Animation Drag Catch-Up Smoothing', type:'slider', unit:'', min:0.02, max:1, step:0.01, def:0.3 },
     { key:'mouseFlickRotationSmoothing', label:'Mouse Flick Rotation Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
     { key:'mouseFlickAngleOffset',       label:'Mouse Flick Angle Offset',       type:'slider', unit:'deg',   min:-180, max:180, step:1,    def:0 },
     { key:'mouseFlickHoldMaxSpeed',      label:'Mouse Flick Hold Max Speed',     type:'slider', unit:'x',     min:1,    max:20,  step:0.5,  def:6 },
@@ -9318,7 +9328,36 @@ function update(rawDt){
     // points feature existed. The cursor-animation sprite's own visual
     // anchoring (position AND rotation both snapping to the live drag
     // point) is completely unaffected by this change and still applies.
-    const dragTargetPos = { x: mouseX, y: mouseY };
+    let dragTargetPos = { x: mouseX, y: mouseY };
+    // Drag by the endcap's own visual TIP (2026-09-14, per explicit
+    // follow-up: "i still cant drag the rope by the endcap tip... It
+    // still defaults to the endcap start, aka, the end point of the
+    // last segment"). The endcap is a purely decorative shape drawn
+    // PAST the last real physics point (mainRope.points[length-1] --
+    // the endcap's own "neck," what the user calls the endcap START) --
+    // there is no simulated point actually AT the endcap's rendered
+    // TIP for the cursor to grab 1:1, so dragging that last point
+    // always only ever moves the neck, never the visual tip beyond it.
+    // Only when dragging that exact last point: pull the raw cursor
+    // target BACKWARD by the endcap's own current extension length
+    // (endcapExtensionPx -- returns 0 for a 'none' design, a natural
+    // no-op) along the direction from the point's own upstream
+    // neighbor toward the cursor, so the underlying PHYSICS point ends
+    // up positioned such that the endcap's own fixed-length extension
+    // beyond it -- drawn in whatever direction that segment currently
+    // points -- reaches the cursor instead of just the neck doing so.
+    if (dragPinIndex === mainRope.points.length - 1){
+      const prevPt = mainRope.points[dragPinIndex - 1];
+      const rdx = dragTargetPos.x - prevPt.x, rdy = dragTargetPos.y - prevPt.y;
+      const rdist = Math.hypot(rdx, rdy);
+      if (rdist > 1e-6){
+        const extension = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
+        const pull = Math.min(extension, rdist - 1);
+        if (pull > 0){
+          dragTargetPos = { x: dragTargetPos.x - (rdx / rdist) * pull, y: dragTargetPos.y - (rdy / rdist) * pull };
+        }
+      }
+    }
     let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
     const ddist = Math.hypot(dx, dy) || 1e-6;
     if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }
@@ -9789,31 +9828,47 @@ function update(rawDt){
     // needed for a smooth pickup.
     const mfDragAnchor = mouseFlickDragAnchorWorld();
     if (mfDragAnchor){
-      // Drag Anchor Tolerance (2026-09-14, per explicit request -- see
-      // cursorAnimationDragToleranceMult's own comment for the full
-      // spec). Dead-zone/"leash" mechanic: mfCurrentAnnotatedWorld is
-      // where the annotated drag point ACTUALLY sits right now (last
-      // frame's transform, read BEFORE this frame's mfEntityX/Y
-      // reassignment below). If that's already within the tolerance
-      // radius of this frame's live anchor, the sprite holds its
-      // current position rather than re-snapping exactly onto the
-      // anchor -- letting it visibly "shift away" by up to the radius
-      // as the rope point moves, instead of rigidly tracking it 1:1.
-      // Once the gap WOULD exceed the radius, the target is pulled back
-      // to exactly the radius's own boundary (never snapped all the way
-      // to the anchor), same clamp a follow-camera dead zone uses.
+      // Drag Anchor Tolerance -- corrected 2026-09-14, per direct
+      // follow-up ("you got the drag point anchor tolerance almost
+      // correct but not quite... the cursor animation frame should be
+      // the one that moves until it hits the drag point tolerance
+      // boundary"). The circle is still centered on the live drag
+      // point (mfDragAnchor) with the annotated point free to sit
+      // anywhere inside it -- that geometry was already correct. What
+      // was wrong: the ORIGINAL version held the sprite perfectly
+      // still whenever inside tolerance and, the instant it would
+      // exceed the radius, TELEPORTED it to the boundary in one frame
+      // (recomputed fresh from that frame's anchor every frame) -- with
+      // no actual per-frame motion, a continuously-moving anchor just
+      // reads as the sprite rigidly welded at a fixed offset the moment
+      // it first goes taut, never visibly "moving toward" anything.
+      // Replaced with a genuine per-frame EASE toward the live anchor
+      // (mfDragCatchUpFactor, a dedicated smoothing constant -- NOT
+      // mfPosFactor, which is tuned to 1/instant specifically for the
+      // already-shipped "snap exactly to the anchor" behavior and would
+      // silently no-op this entire feature at its own default), with
+      // the eased result clamped so it can never end up farther than
+      // the tolerance radius from the anchor. Net effect: slow
+      // dragging lets the sprite track closely (the ease keeps pace);
+      // fast dragging lets the anchor outrun the ease, and the clamp
+      // caps the gap at the radius, giving continuous, visible
+      // "catches up, capped at the boundary" motion instead of a
+      // frozen-then-teleport step.
       const mfDragPt = MOUSE_FLICK_INTERACTION_POINTS.drag[mfDirectionKey];
       const mfCurrentAnnotatedWorld = mfDragPt ? mouseFlickDragPointWorld(mfDirectionKey, mfDragPt) : null;
       let mfDragTargetWorld = mfDragAnchor;
       if (mfCurrentAnnotatedWorld){
         const mfDragToleranceRadius = vmin(cfg.ropeThickness) * 0.5 * cfg.cursorAnimationDragToleranceMult;
-        const tdx = mfCurrentAnnotatedWorld.x - mfDragAnchor.x, tdy = mfCurrentAnnotatedWorld.y - mfDragAnchor.y;
-        const tdist = Math.hypot(tdx, tdy);
-        if (tdist <= mfDragToleranceRadius){
-          mfDragTargetWorld = mfCurrentAnnotatedWorld;
-        } else if (tdist > 0){
-          const s = mfDragToleranceRadius / tdist;
-          mfDragTargetWorld = { x: mfDragAnchor.x + tdx * s, y: mfDragAnchor.y + tdy * s };
+        const mfDragCatchUpFactor = mouseFlickExpSmoothFactor(cfg.cursorAnimationDragCatchUpSmoothing, rawDt);
+        const easedX = mfCurrentAnnotatedWorld.x + (mfDragAnchor.x - mfCurrentAnnotatedWorld.x) * mfDragCatchUpFactor;
+        const easedY = mfCurrentAnnotatedWorld.y + (mfDragAnchor.y - mfCurrentAnnotatedWorld.y) * mfDragCatchUpFactor;
+        const edx = easedX - mfDragAnchor.x, edy = easedY - mfDragAnchor.y;
+        const edist = Math.hypot(edx, edy);
+        if (edist > mfDragToleranceRadius && edist > 0){
+          const s = mfDragToleranceRadius / edist;
+          mfDragTargetWorld = { x: mfDragAnchor.x + edx * s, y: mfDragAnchor.y + edy * s };
+        } else {
+          mfDragTargetWorld = { x: easedX, y: easedY };
         }
       }
       const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mfDragTargetWorld);

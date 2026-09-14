@@ -13293,3 +13293,54 @@ before writing this entry. A temporary debug hook
 fix, then removed (grep-confirmed 0 matches) once the boot stall made
 it unusable.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  07:42 AM - 07:54 AM EDT
+
+2 direct follow-up corrections on the same-day drag work: the
+tolerance feature's own mechanism was backwards, and the endcap-tip
+report turned out to be a separate, real issue the earlier fix never
+actually addressed.
+
+Fixed:
+- Drag Anchor Tolerance's mechanism was wrong, not just untuned:
+  it held the sprite perfectly still inside the tolerance radius, then
+  teleported it to the boundary in one frame the instant it would
+  exceed the radius -- with a continuously-moving anchor during a real
+  drag, this reads as rigidly welded at a fixed offset the moment it
+  first goes taut, never visibly moving. Replaced with a genuine
+  per-frame ease toward the live anchor (new "Cursor Animation Drag
+  Catch-Up Smoothing" slider, def 0.3, via the same exp-smoothing
+  helper every other FLICK MOUSE smoothing control uses), with the
+  eased result clamped to never exceed the tolerance radius -- gives
+  continuous, visible "catches up, capped at the boundary" motion.
+- Dragging by the endcap's own visual TIP (as opposed to the last real
+  physics point, "the endcap start") was never actually fixed by the
+  earlier session's tip-lockup fix -- that addressed a different,
+  narrower bug (positionGrowingTip() fighting an active drag). The
+  endcap is purely decorative, drawn a fixed distance PAST the last
+  physics point with no simulated point there to grab. Fixed via an
+  offset correction (same pattern as positionGrowingTip()/
+  mouseFlickDragAlignmentOffset()'s own "correct via offset, don't add
+  a new point"): while dragging that exact last point, the raw cursor
+  target is pulled backward by endcapExtensionPx() along the direction
+  from the point's upstream neighbor toward the cursor, before the
+  existing anchor-relative clamp runs -- so the endcap's own rendered
+  tip (not just its neck) reaches the cursor. No-ops naturally when no
+  endcap is selected.
+
+Verification: both fixes syntax-checked and verified via Node-level
+simulation of their exact math (a steady-drag/stop/sudden-jump
+3-scenario sim for the tolerance ease; a 4-case sim for the endcap
+pull-back, including a too-close-to-invert edge case). Also attempted
+a live integration test via a temporary debug hook
+(window.__testDrag2 + a temporary tick counter, both grep-confirmed
+removed, 0 matches) -- this DID catch a real environment issue live
+(the rAF loop froze again mid-test, tick counter confirmed 0 new ticks
+even immediately after a wake-click, exactly the previously-documented
+pattern) and confirmed the endcap-offset code runs with zero console
+errors and produces real, correctly-directed rope-tip movement; full
+confirmation of the exact offset magnitude was blocked by the rope
+being only 2 points long on that fresh boot (the pre-existing
+maxDragDist clamp dominated at that length) combined with the tick
+freeze recurring before a longer rope could be grown.
+

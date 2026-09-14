@@ -1427,6 +1427,72 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   in the future, compute it once and reuse it -- don't re-derive the
   clamp twice; `mfDragTargetWorld` is already the single source of
   truth for "where the sprite should actually anchor this frame."**
+- **Corrected 2026-09-14 (same day, round 2) -- the drag-anchor
+  tolerance's own MECHANISM was wrong, not just its parameters.** Per
+  direct follow-up: "you got the drag point anchor tolerance almost
+  correct but not quite... the cursor animation frame should be the
+  one that moves until it hits the drag point tolerance boundary" --
+  i.e. NOT what the round-1 version built. The circle-centered-on-the-
+  drag-point geometry was already right; the bug was that round 1 held
+  the sprite PERFECTLY STILL while inside tolerance and, the instant it
+  would exceed the radius, TELEPORTED it to the boundary in ONE frame
+  (recomputed fresh from that frame's live anchor every frame, with no
+  memory of the sprite's own prior position feeding into the new
+  target's MAGNITUDE, only its direction) -- with a continuously-moving
+  anchor during a real drag, this reads as the sprite rigidly welded at
+  a fixed radius-sized offset the instant it first goes taut, never
+  visibly "moving toward" anything, which is what read as backwards.
+  Fixed by adding a genuine per-frame EASE (new `cursorAnimationDragCatchUpSmoothing`
+  slider, def 0.3, via the same `mouseFlickExpSmoothFactor()` helper
+  every other FLICK MOUSE smoothing control already uses) from the
+  sprite's own current position toward the live anchor, THEN clamping
+  that eased result to never exceed the tolerance radius -- deliberately
+  a SEPARATE dedicated smoothing constant, not a reuse of
+  `mouseFlickPositionSmoothing` (tuned to 1/instant specifically for
+  the pre-existing "snap exactly to the anchor" behavior; reusing it
+  here would silently make this whole feature a no-op at its own
+  default). Verified via a Node-level simulation of a steady fast drag
+  (300px/s anchor, 4px radius, 0.3 smoothing): the sprite continuously
+  trails at exactly the boundary distance every sampled frame (genuine
+  ongoing motion, never a static offset) and fully re-converges to 0
+  distance within ~30 frames once the anchor stops -- confirming both
+  "moves" and "hits the boundary" as continuous, not a snap.
+- **Drag Rope by the endcap's own visual TIP (as opposed to the last
+  real physics point, "the endcap start" per direct user wording) is a
+  render-only extension problem, not something `nearestPointOnRope()`
+  or the arm-time index-selection logic could ever solve on their own
+  -- the endcap graphic is purely decorative, drawn a fixed
+  `endcapExtensionPx()` distance PAST `mainRope.points[length-1]`, with
+  no simulated point actually located there for a hit-test to find.**
+  Real, reported, persistent request (2026-09-14, 2nd report after the
+  first fix only addressed a DIFFERENT bug -- the tip-drag LOCKUP, not
+  this): "i still cant drag the rope by the endcap tip... It still
+  defaults to the endcap start, aka, the end point of the last
+  segment." Fixed with an offset correction in the SAME spirit as
+  `positionGrowingTip()`'s/`mouseFlickDragAlignmentOffset()`'s own
+  "correct via an offset, don't add a new simulated point" pattern:
+  only while `dragPinIndex` is exactly `mainRope.points.length - 1`,
+  the raw cursor target is pulled BACKWARD by `endcapExtensionPx()`
+  along the direction from the point's own upstream neighbor toward
+  the cursor, BEFORE the existing anchor-relative hardLimit clamp runs
+  -- so the underlying physics point ends up positioned such that the
+  endcap's own fixed-length extension beyond it (drawn in whatever
+  direction that segment currently points) reaches the cursor, not
+  just the neck. Clamped so the pull can never invert past the
+  neighbor point (`Math.min(extension, rdist - 1)`). `endcapExtensionPx()`
+  itself already returns 0 for `endcapDesign: 'none'`, so this is a
+  natural no-op with no endcap selected -- no separate guard needed.
+  Verified via a Node-level simulation of the exact pull-back math (4
+  cases: normal pull, a too-close target correctly clamped rather than
+  inverting, a diagonal direction preserving proportional x/y, and the
+  zero-extension no-op) plus a live integration check (armed a real
+  drag on the tip via a temporary debug hook, confirmed the point moved
+  a real, sensibly-directed distance with zero console errors) -- full
+  live confirmation of the exact offset magnitude was blocked by the
+  rope being only 2 points long on a fresh boot (maxDragDist's own
+  pre-existing clamp dominated at that length) combined with this
+  session's now-repeated rAF-tick-freeze environment issue (tick
+  counter confirmed 0 new ticks even immediately after a wake-click).
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as
