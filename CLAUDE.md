@@ -1602,3 +1602,88 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   caused this bug, and the same shape could recur anywhere a future
   cursor-animation override and a game-state target end up pointing at
   each other.
+- **Corrected 2026-09-14 (3rd pass on this feature) -- "anchor the
+  cursor animation to the drag point" means the ANNOTATED 'drag'
+  interaction point (the green dot -- `MOUSE_FLICK_INTERACTION_POINTS.drag`),
+  never the sprite's own WRIST origin (`mfEntityX/Y` directly).** Per
+  explicit clarification: "I meant the cursor image's Interaction
+  Points that I had provided previously. For Drag, it would be the
+  green interaction point, or the point provided at frame 48."
+  `mouseFlickDragEntityOriginForAnchor(anchorWorld)` (new) is the
+  INVERSE of the existing `mouseFlickDragPointWorld()` transform --
+  given a desired WORLD position for the annotated point, it solves for
+  what `mfEntityX/Y` needs to be so that point (not the wrist) actually
+  lands there. Deliberately anchors against FRAME 1's own point only
+  (`MOUSE_FLICK_INTERACTION_POINTS.drag`), never frame 48's
+  (`MOUSE_FLICK_DRAG_END_POINTS`) -- the PRE-EXISTING (2026-09-12)
+  `mouseFlickDragAlignmentOffset()` already keeps frame 48's point
+  visually converged onto frame 1's throughout the whole sequence (its
+  own, already-shipped purpose), so anchoring against frame 1 alone is
+  sufficient to keep EVERY frame's point pinned, with zero new offset-
+  tracking logic layered on top. Verified live: `mouseFlickInteractionPointWorld('drag')`
+  (the green point's own live world position) matched the actual
+  dragged rope point's position to 5 decimal places once the game loop
+  was confirmed genuinely ticking (see the tick-counter gotcha below).
+- **Corrected 2026-09-14 (same pass) -- rotation while dragging must
+  point along the axis from the RAW/TRUE cursor to the drag point, not
+  from the sprite's own current position to the drag point.** Per
+  explicit clarification: "the rotation of the cursor frame should
+  always point at the drag point. So if you draw a line from the true
+  cursor to the drag point, the cursor animation frame will be aligned
+  along that axis." Every OTHER Cursor Target Mode computes its
+  rotation target as the angle FROM the entity's own live position
+  (`mfEntityX/Y`) TOWARD the resolved world target
+  (`mouseFlickAngleFromCenter(target.x, target.y, mfEntityX, mfEntityY)`)
+  -- the drag case is the one deliberate exception, using
+  `mouseFlickAngleFromCenter(dragAnchor.x, dragAnchor.y, mfX, mfY)`
+  instead (the RAW tracked cursor, not the entity's own position, as
+  the origin of the angle). Gated on the same `mfDragAnchor` already
+  resolved for the position override just above, so it takes priority
+  the same way.
+- **Corrected 2026-09-14 (same pass) -- Drag Pickup: the grabbed rope
+  point eases from its own pre-drag resting position toward the live
+  cursor-derived target over `cfg.dragPickupDuration` (def 200ms, a
+  smoothstep curve), instead of snapping there on the drag's very first
+  frame.** Per explicit report: "when i start a drag, the cursor frame
+  jumps to the drag point... and the rope gets physically affected by
+  this jump. I want it to look like a smooth and naturally picking up
+  of a dangling rope without any jittering or jumping." The INSTANT
+  snap wasn't just visually jarring -- it gave the REST of the rope
+  (every point other than the one being dragged) a real, unwanted
+  constraint-solver jolt as the solver yanked them toward the newly-
+  relocated point in one step, rather than the small per-frame
+  correction a gradual approach produces. Captured ONCE at arm time
+  (`downInfo.dragPickupStartX/Y/Time`, alongside the pre-existing
+  `dragAngleRefX/Y` capture in the SAME onPointerDown block) --
+  deliberately NOT re-captured per frame, or the point would never
+  actually finish easing in. The cursor-animation sprite needs NO
+  separate easing of its own: since `mouseFlickDragEntityOriginForAnchor()`
+  solves against the drag point's own CURRENT (possibly still-easing)
+  position every frame, the sprite naturally eases in right alongside
+  it. `mainRope.overstretchPx` (Rope Overstretch, above) is measured
+  from the point's own FINAL post-pickup-easing position, not the raw
+  clamped cursor target, so overstretch correctly reads as inactive
+  during the pickup window even if the ultimate target would have been
+  past the rest limit.
+- **This environment's Browser pane can go long stretches with ZERO
+  `requestAnimationFrame` ticks even after the documented "click to
+  wake a suspended tab" workaround, with no error and no visible sign
+  anything is wrong** -- discovered while verifying the 3 fixes above:
+  a debug-hook test read back a completely frozen `mfEntityX/Y` (bit-
+  for-bit identical across multiple, differently-parameterized test
+  runs) and a hand-rolled per-tick counter confirmed 0 ticks over a
+  1.3-second real-time window, despite an immediately-preceding
+  `computer` click and despite the SAME test methodology working
+  correctly in a prior task this same session. The fix that actually
+  worked: wait for the rope to visibly finish growing (confirms the
+  intro sequence, and therefore the whole boot sequence, has genuinely
+  completed) AND issue a fresh click IMMEDIATELY before the test, in
+  back-to-back tool calls with nothing in between (not several calls
+  earlier). **Before trusting a "frozen"/unresponsive live-test result
+  in this project again, add a one-line tick counter
+  (`if (DEV_MODE && window.__mfTickCounter !== undefined) window.__mfTickCounter++`
+  at the very top of `update()`, or equivalent) and confirm it's
+  actually incrementing before concluding the CODE itself is broken** --
+  this cost real time chasing what looked like a position/rotation bug
+  before the tick counter revealed the loop simply wasn't running at
+  all during those specific test windows.

@@ -13126,3 +13126,41 @@ moved in the correct direction (right when mouse moved right, left when
 mouse moved left) -- previously stuck at the same position regardless
 of mouse movement, now genuinely responsive.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  05:23 AM - 05:43 AM EDT
+
+Corrected the Drag Rope cursor-animation feature per explicit
+clarification (3rd pass): which point anchors, which axis rotation
+follows, and a smooth pickup instead of an instant snap.
+
+Fixed:
+- Anchoring now pins the ANNOTATED 'drag' interaction point (the green
+  dot) to the drag point, not the sprite's own wrist origin -- new
+  mouseFlickDragEntityOriginForAnchor(), the inverse of the existing
+  mouseFlickDragPointWorld() transform, solves for what mfEntityX/Y
+  needs to be so the annotated point (not the wrist) lands exactly on
+  the drag anchor. Reuses the existing frame-1-to-frame-48 alignment
+  offset for free -- no new per-frame offset tracking needed.
+- Rotation while dragging now points along the axis from the TRUE
+  cursor to the drag point (not from the sprite's own position to the
+  drag point, which every other Cursor Target Mode uses).
+- Drag Pickup: the grabbed point now eases from its own pre-drag
+  resting position toward the live cursor target over a new Drag
+  Pickup Duration slider (def 200ms, smoothstep curve) instead of
+  snapping there instantly -- fixes both the visual "jump" and the
+  real physics jolt the rest of the rope felt from the old instant
+  reposition. The cursor-animation sprite needs no separate easing of
+  its own since it anchors against the drag point's own (now-easing)
+  live position every frame.
+
+Verified live: the green interaction point's world position matched
+the actual dragged rope point to 5 decimal places; the point stayed at
+its pre-drag position at t=30ms then moved by t=1030ms (confirming a
+real ease, not an instant jump). Hit a real environment obstacle along
+the way -- the Browser pane went long stretches with zero
+requestAnimationFrame ticks despite the documented wake-click
+workaround, with no visible error; a one-line tick counter confirmed
+this before it wasted more time being misread as a code bug (see
+CLAUDE.md's own new gotcha for the full account and the fix that
+actually worked).
+
