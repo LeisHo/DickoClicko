@@ -11,8 +11,8 @@
       "endcapDesign": "form1-01",
       "endcapHeight": 1.2,
       "ropeThickness": 7.2,
-      "segmentLength": 0.9,
-      "ropeLength": 30.01000313664755,
+      "segmentLength": 1.3,
+      "ropeLength": 27.000000000000025,
       "ropeDefaultLength": 13,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -148,8 +148,8 @@
       "floorColor": "#ffffff",
       "floorThickness": 10,
       "floorHeight": 6,
-      "floorFriction": 0.72,
-      "pieceFriction": 0.71,
+      "floorFriction": 0.95,
+      "pieceFriction": 0.31,
       "wallEnabled": true,
       "wallFriction": 0,
       "wallBounciness": 0,
@@ -227,7 +227,7 @@
       "mouseFlickTargetPoint": 0.5,
       "mouseFlickRandomInterval": 1.1,
       "snapRepeatDuration": 1.5,
-      "mouseFlickShowInteractionPoints": false,
+      "mouseFlickShowInteractionPoints": true,
       "clickLogPositionDataEnabled": true,
       "overstretchEnabled": false,
       "overstretchTolerance": 15,
@@ -372,24 +372,6 @@
         "subgroups": []
       },
       {
-        "key": "CUT SPLATTER",
-        "collapsed": true,
-        "settings": [
-          "cutSplatterEnabled",
-          "cutSplatterColor",
-          "cutSplatterHorizontalSpread",
-          "cutSplatterVerticalSpread",
-          "cutSplatterParticleCount",
-          "cutSplatterParticleSize",
-          "cutSplatterSizeVariance",
-          "cutSplatterGravity",
-          "cutSplatterFlightDuration",
-          "cutSplatterFadeTime",
-          "cutSplatterOpacity"
-        ],
-        "subgroups": []
-      },
-      {
         "key": "WALLS",
         "collapsed": true,
         "settings": [
@@ -411,8 +393,6 @@
         "key": "CURSOR ANIMATION",
         "collapsed": true,
         "settings": [
-          "mouseFlickShowInteractionPoints",
-          "mouseFlickDragSpeed",
           "mouseFlickEnabledLiveMode",
           "mouseFlickTickleSpeed",
           "snapRepeatDuration",
@@ -443,7 +423,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "segmentLength",
           "ropeDefaultLength",
@@ -466,7 +446,7 @@
           },
           {
             "key": "ROPE ANIMATION",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
@@ -607,6 +587,15 @@
               "ropeGrowthRate"
             ],
             "subgroups": []
+          },
+          {
+            "key": "New Group (7)",
+            "collapsed": false,
+            "settings": [
+              "mouseFlickShowInteractionPoints",
+              "mouseFlickDragSpeed"
+            ],
+            "subgroups": []
           }
         ]
       },
@@ -699,6 +688,24 @@
           "floorColor",
           "floorThickness",
           "floorHeight"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "CUT SPLATTER",
+        "collapsed": true,
+        "settings": [
+          "cutSplatterEnabled",
+          "cutSplatterColor",
+          "cutSplatterHorizontalSpread",
+          "cutSplatterVerticalSpread",
+          "cutSplatterParticleCount",
+          "cutSplatterParticleSize",
+          "cutSplatterSizeVariance",
+          "cutSplatterGravity",
+          "cutSplatterFlightDuration",
+          "cutSplatterFadeTime",
+          "cutSplatterOpacity"
         ],
         "subgroups": []
       }
@@ -819,6 +826,8 @@
     "group:New Group (6)": "CLICK FUNCTIONS",
     "group:ROPE CUT": "DOUBLE CLICK-CUT",
     "group:CLICK": "CLICK-FLICK",
-    "group:ROPE GROWTH": "CLICK-HOLD-GROW"
+    "group:ROPE GROWTH": "CLICK-HOLD-GROW",
+    "group:New Group (7)": "CLICK HOLD-DRAG",
+    "group:UI": null
   }
 }
