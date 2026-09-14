@@ -6824,6 +6824,13 @@ function onPointerDown(e){
     holdTimer = setTimeout(() => {
       if (!downInfo || downInfo.mode !== 'circle') return;
       growing = true;
+      // Marks THIS press as the one that actually armed `growing` -- see
+      // onPointerUp/pointercancel's own comment for why this is now
+      // required before either is allowed to reset the flag back to
+      // false (2026-09-13 fix for a real, reproduced permanent-stuck
+      // bug: a plain rope tap during the intro's own scripted 'growing'
+      // phase used to unconditionally stomp this same shared flag).
+      downInfo.armedGrowth = true;
       mfSuppressClickFromGrowth = true;
       mfCancelPendingClick();
       logClick('hold:grow-start', { x, y });
@@ -6960,6 +6967,10 @@ function onPointerDown(e){
     growthOnRopeHoldTimer = setTimeout(() => {
       if (!downInfo || downInfo.mode !== 'rope' || downInfo.startedInCircle) return;
       growing = true;
+      // See the circle branch's identical comment above -- marks THIS
+      // press as the one that armed `growing`, required before release
+      // is allowed to reset it.
+      downInfo.armedGrowth = true;
       mfSuppressClickFromGrowth = true;
       mfCancelPendingClick();
       logClick('hold:grow-start-from-rope', { x, y });
@@ -7021,7 +7032,30 @@ function onPointerUp(e){
 
   if (info.mode === 'circle'){
     logClick('up:circle', { wasGrowing: growing });
-    growing = false;
+    // Real, reproduced bug (2026-09-13: "Hold to grow within the circle
+    // doesnt work, neither does hold to grow on the rope itself... I am
+    // unable to cut the rope fully" -- root-caused via a click-log trace
+    // the user provided plus live reproduction): this used to reset
+    // `growing` UNCONDITIONALLY on every circle release, including a
+    // release that never actually armed growth at all (e.g. a quick tap
+    // whose holdTimer never fired). `growing` is the SAME shared flag
+    // the intro's own scripted 'growing' phase drives (see updateIntro())
+    // -- a plain tap/release on the circle (or the rope, see the other
+    // reset below) DURING that phase stomped it back to false the
+    // instant ANY release happened, permanently freezing
+    // mainRope.totalLength short of introTargetLengthPx and stranding
+    // introPhase at 'growing' forever (confirmed live: totalLength and
+    // introPhase both provably frozen across 300+ subsequent simulated
+    // frames after exactly this sequence). Everything gated on
+    // introPhase==='done' -- hold-to-grow arming, the circle's own
+    // double-click-detach branch -- then silently fails forever, while
+    // ordinary punches/flicks (which don't depend on introPhase) keep
+    // working, matching the user's own "flicks still work regardless."
+    // Only reset the flag now if THIS press is the one that actually
+    // armed it (`downInfo.armedGrowth`, set in the circle holdTimer
+    // above) -- never touch a `growing` some OTHER concurrent driver
+    // (the intro sequence) might currently own.
+    if (info.armedGrowth) growing = false;
     // A double-click landing inside the circle's own exclusion zone still
     // needs to be able to cut the rope near the anchor -- previously,
     // isOnCircle() routed EVERY press starting there into this 'circle'
@@ -7063,11 +7097,26 @@ function onPointerUp(e){
   }
 
   // Ends a Grow Rope On Rope Hold growth that started from THIS press
-  // (see onPointerDown's own comment) -- unconditional and harmless if
-  // it was never armed (growing is already false, or was armed/ended
-  // by the circle path instead, mutually exclusive per gesture since
-  // only one downInfo is ever live at a time).
-  growing = false;
+  // (see onPointerDown's own comment). Corrected 2026-09-13 -- this used
+  // to be an unconditional `growing = false;`, on the (wrong) assumption
+  // that it was "harmless if it was never armed." It is NOT harmless:
+  // `growing` is the SAME shared flag the intro's own scripted 'growing'
+  // phase drives (updateIntro()), and this line ran on the release of
+  // EVERY rope-mode press, including a plain tap/cut/drag/flick that
+  // never armed growth at all. A press-release during the intro's own
+  // regrow (after boot, or after any detach) stomped this flag back to
+  // false the instant ANY such release happened, permanently freezing
+  // mainRope.totalLength short of introTargetLengthPx -- see the
+  // circle-branch reset's own comment above for the full reproduction
+  // and confirmed symptoms. Per explicit follow-up request ("allow me to
+  // interrupt [growth after spawn] with any of the cut, flick, or drag
+  // sequences[;] it should still continue [to] grow to the default
+  // length even if i interrupt it"), only reset the flag when THIS press
+  // is the one that actually armed it (`info.armedGrowth`, set in the
+  // growthOnRopeHoldTimer callback above) -- an interrupting cut/flick/
+  // drag never touches it, so the intro's own regrow keeps running
+  // uninterrupted underneath.
+  if (info.armedGrowth) growing = false;
 
   if (pendingClick && (now - pendingClick.time) <= cfg.doubleClickThreshold){
     clearTimeout(pendingClick.timer);
@@ -7197,7 +7246,19 @@ function onPointerUp(e){
 
 canvas.addEventListener('pointerdown', onPointerDown);
 window.addEventListener('pointerup', onPointerUp);
-window.addEventListener('pointercancel', () => { logClick('cancel', { wasGrowing: growing }); downInfo = null; growing = false; clearTimeout(holdTimer); clearTimeout(growthOnRopeHoldTimer); holdingFlick = null; ropeAttractionActive = false; });
+window.addEventListener('pointercancel', () => {
+  logClick('cancel', { wasGrowing: growing });
+  // Same armedGrowth-gated reset as onPointerUp's own 2 sites -- see
+  // their shared comment for the full reproduction. A cancelled press
+  // that never armed growth (e.g. one landing during the intro's own
+  // regrow) must not stomp a `growing` the intro sequence currently owns.
+  if (downInfo && downInfo.armedGrowth) growing = false;
+  downInfo = null;
+  clearTimeout(holdTimer);
+  clearTimeout(growthOnRopeHoldTimer);
+  holdingFlick = null;
+  ropeAttractionActive = false;
+});
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 // ---------------------------------------------------------------------
