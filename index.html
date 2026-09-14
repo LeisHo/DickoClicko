@@ -278,17 +278,29 @@
          personal, local scratch space, not the shared source of truth
          Save Settings writes to -- see saveNamedDevPanelState()'s own
          comment for why that's the right call here specifically, unlike
-         the rest of this project's git-tracked-only persistence). -->
-    <div class="dp-click-log-wrap">
-      <div class="dp-click-log-header"><span>SAVED DEV SETTINGS</span></div>
-      <div class="dp-row">
-        <select id="dpSavedStatesSelect" class="dp-dropdown" style="flex:1 1 auto;"></select>
-      </div>
-      <div class="dp-actions">
-        <button type="button" id="dpSavedStatesSaveBtn">Save</button>
-        <button type="button" id="dpSavedStatesUseBtn">Use</button>
-        <button type="button" id="dpSavedStatesSetDefaultBtn">Set Default</button>
-        <button type="button" id="dpSavedStatesDeleteBtn">Delete</button>
+         the rest of this project's git-tracked-only persistence).
+         Collapsible (2026-09-14, matching the template's own "Saved Dev
+         Settings" wrapper) -- reuses the plain .dp-group/-header/-body
+         classes for visual consistency (arrow rotation, collapsed-state
+         hiding all already styled) WITHOUT calling createGroupElement():
+         no drag-handle, no independence/visibility checkboxes, and -- by
+         sitting outside #dpGroups entirely -- naturally excluded from the
+         group-drag/reorder system, same as the template's own version
+         ("deliberately NOT part of the per-tab reorderable group system").
+         A single, panel-level section (not one per device tab) -- a saved
+         state snapshot covers the whole panel across all 3 tabs at once. -->
+    <div class="dp-group" id="dpSavedStatesGroup">
+      <div class="dp-group-header" id="dpSavedStatesHeader"><span class="arrow">▼</span><span class="dp-group-title">Saved Dev Settings</span></div>
+      <div class="dp-group-body">
+        <div class="dp-row">
+          <select id="dpSavedStatesSelect" class="dp-dropdown" style="flex:1 1 auto;"></select>
+        </div>
+        <div class="dp-actions">
+          <button type="button" id="dpSavedStatesSaveBtn">Save</button>
+          <button type="button" id="dpSavedStatesUseBtn">Use</button>
+          <button type="button" id="dpSavedStatesSetDefaultBtn">Set Default</button>
+          <button type="button" id="dpSavedStatesDeleteBtn">Delete</button>
+        </div>
       </div>
     </div>
     <button type="button" id="dpAddGroupBtn" class="dp-add-group-btn">+ Add Group</button>
@@ -1127,20 +1139,21 @@ DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = Array.isArray(c.def
 // hardcoded 12px in CSS instead of a dedicated control -- see that
 // rule's own comment.
 const PANEL_STYLE_CONTROLS = [
-  { key:'titleFontSize', type:'slider', label:'Dev Panel Title Font Size',          min:9,  max:22, step:1,    def:13 },
-  { key:'tabFontSize',   type:'slider', label:'Desktop/Mobile Tab Font Size',       min:8,  max:18, step:1,    def:11 },
-  { key:'groupFontSize', type:'slider', label:'Collapsible Group Title Font Size',  min:8,  max:18, step:1,    def:11 },
-  { key:'labelFontSize', type:'slider', label:'Settings Title Font Size',           min:8,  max:18, step:1,    def:11 },
-  { key:'opacity',       type:'slider', label:'Dev Panel Opacity',                  min:0.2,max:1,  step:0.02, def:0.94 },
-  { key:'titleColor',    type:'color',  label:'Dev Panel Title Text Color',      def:'#e8e8f0' },
-  { key:'bgColor',       type:'color',  label:'Dev Panel Background Color',      def:'#12121e' },
-  { key:'textColor',     type:'color',  label:'Dev Panel Non-Title Text Color',  def:'#c9c9d8' },
-  { key:'accentColor',   type:'color',  label:'Dev Panel Accent Color',          def:'#5b85c8' },
-  { key:'sliderColor',   type:'color',  label:'Dev Panel Slider Color',          def:'#5b85c8' },
-  { key:'fontFamily',    type:'dropdown', label:'Dev Panel Font (All Text)', def:'Verdana, Geneva, sans-serif', options:[
+  { key:'titleFontSize', type:'slider', label:'Dev Panel Title Font Size',          min:9,  max:22, step:1,    def:17 },
+  { key:'tabFontSize',   type:'slider', label:'Desktop/Mobile Tab Font Size',       min:8,  max:18, step:1,    def:12 },
+  { key:'groupFontSize', type:'slider', label:'Collapsible Group Title Font Size',  min:8,  max:18, step:1,    def:14 },
+  { key:'labelFontSize', type:'slider', label:'Settings Title Font Size',           min:8,  max:18, step:1,    def:12 },
+  { key:'opacity',       type:'slider', label:'Dev Panel Opacity',                  min:0.2,max:1,  step:0.02, def:1 },
+  { key:'titleColor',    type:'color',  label:'Dev Panel Title Text Color',      def:'#ffffff' },
+  { key:'bgColor',       type:'color',  label:'Dev Panel Background Color',      def:'#000000' },
+  { key:'textColor',     type:'color',  label:'Dev Panel Non-Title Text Color',  def:'#ffffff' },
+  { key:'accentColor',   type:'color',  label:'Dev Panel Accent Color',          def:'#005f8f' },
+  { key:'sliderColor',   type:'color',  label:'Dev Panel Slider Color',          def:'#ffffff' },
+  { key:'fontFamily',    type:'dropdown', label:'Dev Panel Font (All Text)', def:'Helvetica, Arial, sans-serif', options:[
     { value:'-apple-system, Segoe UI, Roboto, sans-serif', label:'System Default' },
     { value:'monospace', label:'Monospace' },
     { value:'Arial, Helvetica, sans-serif', label:'Arial' },
+    { value:'Helvetica, Arial, sans-serif', label:'Helvetica' },
     { value:'Verdana, Geneva, sans-serif', label:'Verdana' },
     { value:"'Trebuchet MS', Arial, sans-serif", label:'Trebuchet MS' },
     { value:'Calibri, Arial, sans-serif', label:'Calibri' },
@@ -1154,7 +1167,7 @@ const PANEL_STYLE_CONTROLS = [
   { key:'capsSettingsText',    type:'checkbox', label:'Capitalize Settings Text',         def:false },
   { key:'buttonLetterSpacing', type:'slider', label:'Dev Panel Button Letter Spacing',    min:-1, max:4,  step:0.1, def:0 },
   { key:'tabLetterSpacing',    type:'slider', label:'Dev Panel Tab Letter Spacing',       min:-1, max:4,  step:0.1, def:0 },
-  { key:'groupLetterSpacing',  type:'slider', label:'Dev Panel Group Letter Spacing',     min:-1, max:4,  step:0.1, def:0 },
+  { key:'groupLetterSpacing',  type:'slider', label:'Dev Panel Group Letter Spacing',     min:-1, max:4,  step:0.1, def:0.8 },
   { key:'settingsLetterSpacing', type:'slider', label:'Dev Panel Settings Letter Spacing', min:-1, max:4, step:0.1, def:0 },
   // 19 fields below (2026-09-14) ported from TEMPLATE_DEV_PANEL.html's own
   // [JS-12] section, which itself just adopted this exact battery
@@ -1163,33 +1176,40 @@ const PANEL_STYLE_CONTROLS = [
   // group in sync with the shared template again. Per-tab (device-
   // independent, like every field above) vs shared-across-tabs
   // (PANEL_STYLE_SHARED_KEYS below) exactly matches the template's own
-  // DEV_PANEL_STYLE_SHARED_KEYS split. Every default below was chosen to
-  // reproduce this project's CURRENT hardcoded look exactly (so nothing
-  // visually changes the moment these fields exist) rather than blindly
-  // reusing the template's own defaults -- see each field's own note for
-  // the one genuine exception (titleBold/groupBold true, buttonBold/
-  // tabBold/settingsBold false, chosen to match which elements are
-  // ALREADY bold today; buttonBold=false is the one small, deliberate
-  // cosmetic change -- the hide/collapse icon buttons lose an incidental
-  // inherited bold they got only as a side effect of font-weight living
-  // on their container, not because it was ever a deliberate style).
-  { key:'valueFontSize',    type:'slider', label:'Dev Panel Setting Number Font Size', min:6,  max:20, step:1,   def:10 },
-  { key:'buttonFontSize',   type:'slider', label:'Dev Panel Button Text Font Size',    min:6,  max:20, step:1,   def:11 },
-  { key:'titleLetterSpacing', type:'slider', label:'Dev Panel Title Letter Spacing',   min:-1, max:4,  step:0.1, def:0.78 },
+  // DEV_PANEL_STYLE_SHARED_KEYS split.
+  //
+  // Corrected 2026-09-14 (2nd pass, direct request: "reread the Dev
+  // Panel Template Dev Panel group's exact values for sliders,
+  // checkboxes, colors, etc. Port those"): ALL 39 fields in this whole
+  // array (these 19 AND the 20 pre-existing ones above, minus
+  // bodyFontSize/textEditMode which have no template equivalent) now
+  // use TEMPLATE_DEV_PANEL.html's own live `devPanelStyle` values
+  // EXACTLY, superseding this comment's own earlier "preserve this
+  // project's current look instead" reasoning -- re-read fresh from the
+  // template rather than reused from the first pass, since the
+  // template's own values had already drifted since then (tabBold/
+  // buttonBold flipped false->true, groupLetterSpacing 0->0.8,
+  // titleLetterSpacing/valueFontSize/buttonFontSize all changed, and
+  // every color/font-family value changed too). If the template's own
+  // Dev Panel defaults change again, re-sync this whole array the same
+  // way -- don't assume only the newest fields need checking.
+  { key:'valueFontSize',    type:'slider', label:'Dev Panel Setting Number Font Size', min:6,  max:20, step:1,   def:12 },
+  { key:'buttonFontSize',   type:'slider', label:'Dev Panel Button Text Font Size',    min:6,  max:20, step:1,   def:10 },
+  { key:'titleLetterSpacing', type:'slider', label:'Dev Panel Title Letter Spacing',   min:-1, max:4,  step:0.1, def:2.3 },
   { key:'titleLineHeight',    type:'slider', label:'Dev Panel Title Line Spacing (x)', min:0.8,max:3,  step:0.05,def:1.2 },
   { key:'tabLineHeight',      type:'slider', label:'Dev Panel Tab Line Spacing (x)',   min:0.8,max:3,  step:0.05,def:1.2 },
   { key:'groupLineHeight',    type:'slider', label:'Dev Panel Group Line Spacing (x)', min:0.8,max:3,  step:0.05,def:1.2 },
   { key:'settingsLineHeight', type:'slider', label:'Dev Panel Settings Line Spacing (x)', min:0.8,max:3, step:0.05, def:1.2 },
   { key:'buttonLineHeight',   type:'slider', label:'Dev Panel Button Line Spacing (x)', min:0.8,max:3,  step:0.05,def:1.2 },
-  { key:'groupLabelBgColor', type:'color', label:'Dev Panel Group Label Background Color', def:'#12121e' },
-  { key:'groupTextColor',    type:'color', label:'Dev Panel Group Text Color',       def:'#c9c9d8' },
-  { key:'buttonTextColor',   type:'color', label:'Dev Panel Button Text Color',      def:'#e8e8f0' },
-  { key:'settingNumberColor',type:'color', label:'Dev Panel Setting Number Text Color', def:'#e8e8f0' },
-  { key:'tabTextColor',      type:'color', label:'Dev Panel Tab Text Color',         def:'#9a9ab0' },
+  { key:'groupLabelBgColor', type:'color', label:'Dev Panel Group Label Background Color', def:'#005f8f' },
+  { key:'groupTextColor',    type:'color', label:'Dev Panel Group Text Color',       def:'#ffffff' },
+  { key:'buttonTextColor',   type:'color', label:'Dev Panel Button Text Color',      def:'#ffffff' },
+  { key:'settingNumberColor',type:'color', label:'Dev Panel Setting Number Text Color', def:'#5cc9ff' },
+  { key:'tabTextColor',      type:'color', label:'Dev Panel Tab Text Color',         def:'#ffffff' },
   { key:'titleBold',    type:'checkbox', label:'Bold Dev Panel Title',    def:true },
   { key:'groupBold',    type:'checkbox', label:'Bold Group Text',         def:true },
-  { key:'tabBold',      type:'checkbox', label:'Bold Tab Text',           def:false },
-  { key:'buttonBold',   type:'checkbox', label:'Bold Button Text',        def:false },
+  { key:'tabBold',      type:'checkbox', label:'Bold Tab Text',           def:true },
+  { key:'buttonBold',   type:'checkbox', label:'Bold Button Text',        def:true },
   { key:'settingsBold', type:'checkbox', label:'Bold Settings Text',      def:false },
   { key:'titleCapitalize', type:'checkbox', label:'Capitalize Dev Panel Title', def:false },
   // Text Edit Mode (§12-adjacent, ported from the template's own
@@ -1231,9 +1251,10 @@ function hexToRgba(hex, alpha){
 const PANEL_CAPS_CLASS_MAP = {
   capsButtonText: 'dp-caps-button-text', capsTabText: 'dp-caps-tab-text',
   capsGroupNames: 'dp-caps-group-names', capsSettingsText: 'dp-caps-settings-text',
-  // 2026-09-14 additions -- see PANEL_STYLE_CONTROLS' own comment for
-  // why titleBold/groupBold default true and tabBold/buttonBold/
-  // settingsBold default false.
+  // 2026-09-14 additions -- see PANEL_STYLE_CONTROLS' own comment; all
+  // defaults now match TEMPLATE_DEV_PANEL.html's own devPanelStyle
+  // exactly (titleBold/groupBold/tabBold/buttonBold true, settingsBold/
+  // titleCapitalize false).
   titleCapitalize: 'dp-caps-title-text', titleBold: 'dp-bold-title',
   tabBold: 'dp-bold-tab', buttonBold: 'dp-bold-button',
   settingsBold: 'dp-bold-settings', groupBold: 'dp-bold-group',
@@ -3262,6 +3283,13 @@ function initSavedDevPanelStates(){
   document.getElementById('dpSavedStatesUseBtn').addEventListener('click', useNamedDevPanelState);
   document.getElementById('dpSavedStatesSetDefaultBtn').addEventListener('click', setNamedDevPanelStateAsDefault);
   document.getElementById('dpSavedStatesDeleteBtn').addEventListener('click', deleteNamedDevPanelState);
+  // Plain collapse/expand -- same '.dp-group.collapsed' convention every
+  // other group uses (CSS already hides '.dp-group-body' for free), just
+  // without createGroupElement()'s drag-handle/independence-checkbox
+  // machinery, since this section is deliberately outside that system.
+  document.getElementById('dpSavedStatesHeader').addEventListener('click', () => {
+    document.getElementById('dpSavedStatesGroup').classList.toggle('collapsed');
+  });
   renderSavedDevPanelStatesList();
 }
 

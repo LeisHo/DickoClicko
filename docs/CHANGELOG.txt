@@ -13063,3 +13063,31 @@ see CLAUDE.md's own new gotcha for the "wake the tab with a click"
 workaround this session re-confirmed, and for why direct mouseX/mouseY
 poking doesn't drive the drag target while FLICK MOUSE is active).
 
+--------------------------------------------------------------------------------
+2026-09-14  -  03:42 AM - 03:49 AM EDT
+
+Re-synced the built-in "Dev Panel" group's defaults against
+TEMPLATE_DEV_PANEL.html's own current values exactly (all 39 fields, not
+just the 19 newest ones), and made "Saved Dev Settings" collapsible.
+
+Changed:
+- All 39 PANEL_STYLE_CONTROLS defaults now match the template's live
+  devPanelStyle object exactly -- black background, blue accent
+  (#005f8f), white slider/text, Helvetica font, bold title/group/tab/
+  button text, 0.8px group letter spacing, 2.3px title letter spacing,
+  and every other field the template currently ships. Updated both the
+  code defaults AND data/processed/dev-panel-settings.json's own saved
+  desktop/mobile style blocks (a code default alone doesn't affect a
+  key that's already present in the saved file).
+- "Saved Dev Settings" (Named Setting States) is now a collapsible
+  section matching the template's own wrapper, via a plain hand-rolled
+  collapse (not createGroupElement() -- this stays outside the per-tab
+  reorderable group system, same as the template's own version).
+
+Verified live: every spot-checked CSS custom property/class (--dp-bg,
+--dp-accent, --dp-slider-color, --dp-font-family, --dp-title-size,
+--dp-group-letter-spacing, --dp-title-letter-spacing, dp-bold-tab,
+dp-bold-button) matches the template's values exactly; Saved Dev
+Settings' collapse toggle confirmed working both directions; no console
+errors.
+

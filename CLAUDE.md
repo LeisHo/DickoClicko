@@ -1536,3 +1536,32 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     genuinely perturbs real rope points end-to-end through the actual
     render()/update() code path, which is what a pure Node simulation
     of the formula alone could never confirm on its own.
+- **All 39 `PANEL_STYLE_CONTROLS` defaults (not just the 19 newest ones)
+  now match `TEMPLATE_DEV_PANEL.html`'s own live `devPanelStyle` object
+  exactly** (2026-09-14, 2nd pass, direct request: "reread the Dev
+  Panel Template Dev Panel group's exact values... Port those"),
+  superseding the first pass's "preserve this project's current
+  look" choice for the 19 newest fields specifically. The template's
+  own values had ALSO drifted since the first pass (tabBold/buttonBold
+  false->true, groupLetterSpacing 0->0.8, titleLetterSpacing/
+  valueFontSize/buttonFontSize all changed, every color and the font
+  family changed) — always re-read the template fresh when asked to
+  re-sync, never assume the first pass's captured values are still
+  current. Updated in 2 places, not just code: `PANEL_STYLE_CONTROLS`'
+  own `def:` fallbacks, AND `data/processed/dev-panel-settings.json`'s
+  own `panelGeometry.desktop/mobile.style` (a `def:` change alone does
+  nothing for a key that's already present in the saved file — the
+  saved value always wins over the code default once anything's been
+  saved). `bodyFontSize`/`textEditMode` have no template equivalent
+  and were left untouched, per the array's own comment.
+- **"Saved Dev Settings" (Named Setting States) is now collapsible**
+  (2026-09-14, matching the template's own wrapper), implemented as a
+  plain hand-rolled `.dp-group`/`.dp-group-header`/`.dp-group-body`
+  structure (reusing the existing collapse CSS) rather than
+  `createGroupElement()` — deliberately NO drag-handle and NO
+  independence/visibility checkboxes, since (like the template's own
+  version) this is a single panel-level section outside the per-tab
+  reorderable group system, not one of the 3 device tabs' own
+  settings. Sitting outside `#dpGroups` entirely already keeps it out
+  of `makeReorderable()`'s own delegated group-drag listener with no
+  extra exclusion code needed.
