@@ -12,7 +12,7 @@
       "endcapHeight": 1.2,
       "ropeThickness": 7.2,
       "segmentLength": 1.3,
-      "ropeLength": 27.000000000000025,
+      "ropeLength": 55.399999999999785,
       "ropeDefaultLength": 13,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -229,15 +229,15 @@
       "snapRepeatDuration": 1.5,
       "mouseFlickShowInteractionPoints": true,
       "clickLogPositionDataEnabled": true,
-      "overstretchEnabled": false,
-      "overstretchTolerance": 15,
+      "overstretchEnabled": true,
+      "overstretchTolerance": 11,
       "overstretchThinningEnabled": true,
-      "overstretchMaxThinDepth": 0.6,
-      "overstretchThinningSharpness": 1,
-      "overstretchBounceStiffness": 18,
-      "overstretchBounceDamping": 4,
+      "overstretchMaxThinDepth": 0.63,
+      "overstretchThinningSharpness": 1.15,
+      "overstretchBounceStiffness": 50,
+      "overstretchBounceDamping": 19.7,
       "overstretchBounceMinAmplitude": 1,
-      "dragPickupDuration": 200
+      "dragPickupDuration": 720
     },
     "mobile": {},
     "landscape": {}
@@ -521,7 +521,7 @@
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "overstretchEnabled",
               "overstretchTolerance",
