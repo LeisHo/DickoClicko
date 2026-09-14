@@ -872,7 +872,7 @@ const DEV_GROUPS = [
     { key:'ropeAttractionSpeed',     label:'Rope Attraction Speed',     type:'slider', unit:'%vmin/s', min:5, max:200, step:5, def:60 },
     { key:'ropeAttractionMaxReach',  label:'Max Reach Distance',        type:'slider', unit:'%vmin', min:5, max:100, step:1, def:40 },
   ]},
-  { title:'FLICK MOUSE', controls:[
+  { title:'CURSOR ANIMATION', controls:[
     { key:'mouseFlickEnabled',           label:'Mouse Flick Enabled',            type:'checkbox', def:true },
     // Separate from the checkbox above -- Mouse Flick Enabled is the
     // dev-facing master switch (still respected in dev mode too, see
@@ -3668,7 +3668,34 @@ function mouseFlickEndcapTarget(){
 function mouseFlickResolvedTargetMode(){
   return cfg.mouseFlickTargetMode === 'random' ? mfRandomTargetMode : cfg.mouseFlickTargetMode;
 }
+// Drag Rope's own live anchor point for FLICK MOUSE (2026-09-13, per 2
+// explicit requests: "if i move the cursor too far away while
+// dragging, the cursor animation will stay anchored to the drag
+// point... Only when i release of the drag does the cursor animation
+// return to the cursors real position" and, separately, "while
+// dragging, the cursor target mode should just point at the drag point
+// on the rope"). Returns the CURRENT world position of the rope point
+// actively being dragged, or null when no drag is active -- every
+// caller falls back to its own normal (real-cursor-based) behavior in
+// that case. Deliberately the LIVE position (not the frozen
+// downInfo.dragAngleRefX/Y direction-bucket reference a few lines
+// below, which exists for a completely different reason -- see that
+// field's own comment) since both requests above are about visually
+// FOLLOWING the drag point as it swings, not about a stable angle
+// reference.
+function mouseFlickDragAnchorWorld(){
+  if (!(downInfo && downInfo.mode === 'rope' && downInfo.dragging)) return null;
+  const p = mainRope.points[downInfo.dragIndex];
+  return p ? { x: p.x, y: p.y } : null;
+}
 function mouseFlickTargetPosition(){
+  // Drag Rope override: while actively dragging, the sprite's own
+  // rotation always points at the drag point, regardless of whatever
+  // cfg.mouseFlickTargetMode is otherwise set to (including 'center',
+  // which normally returns null here) -- checked first, before the
+  // mode switch below, so it takes priority over every mode.
+  const dragAnchor = mouseFlickDragAnchorWorld();
+  if (dragAnchor) return dragAnchor;
   const mode = mouseFlickResolvedTargetMode();
   if (mode === 'endcap') return mouseFlickEndcapTarget();
   if (mode === 'point'){
@@ -6903,7 +6930,26 @@ function onPointerDown(e){
     const wouldAlsoGrow = cfg.ropeGrowthOnRopeHold && introPhase === 'done' && !startedInCircle && hit.dist <= vmin(cfg.ropeGrowthHoldDistance);
     if (cfg.dragRopeEnabled && dragHit.dist <= vmin(cfg.dragRopeHoldDistance) && (cfg.dragOverridesGrowOnRopeHold || !wouldAlsoGrow)){
       downInfo.dragging = true;
-      downInfo.dragIndex = Math.max(1, dragHit.index);
+      // Real, reported bug (2026-09-13: "allow me to drag the rope by
+      // the end of the endcap as well. right now it seems to default to
+      // the last segment joint as the last draggable point"). Root
+      // cause: this used to read `dragHit.index` -- the annotated
+      // 'drag' point's OWN hit-test, computed above ONLY for the
+      // Drag Rope Hold Distance gate just above (per its own comment:
+      // "Drag Rope Hold Distance is measured against FLICK MOUSE's own
+      // annotated 'drag' interaction point... not the literal press
+      // position") -- but that substituted point sits at a fixed
+      // anatomical spot on the hand sprite's own artwork, which rarely
+      // lines up with the rope's true tip; confirmed live that pressing
+      // exactly on the tip (nearestPointOnRope resolving index 36 of 37
+      // points) still armed dragIndex 25 via dragHit. `hit` (this
+      // press's own real hit-test, computed and frozen into downInfo at
+      // pointerdown -- see this comment's own original claim, "anchored
+      // by the point on the rope that is clicked," which the code had
+      // stopped actually doing) is the correct source for WHICH point
+      // gets grabbed; dragHit stays exactly as before for the distance
+      // gate only.
+      downInfo.dragIndex = Math.max(1, hit.index);
       // Direction-angle reference point for this drag (2026-09-12, per
       // explicit request) -- captured ONCE here, at the grabbed point's
       // own position BEFORE any kinematic override moves it, not read
@@ -7636,7 +7682,18 @@ function update(rawDt){
   // During the startup animation's own 'growing' phase, extension paces
   // off Startup Extension Speed (or its tween) instead of the manual
   // Rope Growth Rate -- independently tunable, per explicit request.
-  if (growing) growRope(rawDt, introPhase === 'growing' ? currentIntroExtendRate() : undefined);
+  // Per explicit request ("while im dragging, the rope should not be
+  // growing"): any growth in progress -- the player's own hold-to-grow,
+  // OR the intro's own scripted regrow (2026-09-13's own fix made an
+  // interrupting drag stop RESETTING `growing`, so without this, the
+  // intro's regrow would keep silently extending the rope underneath an
+  // active drag, which is exactly the visible growth this request
+  // objects to) -- is paused for the duration of an active Drag Rope
+  // hold, then resumes automatically once the drag ends (this only
+  // skips growRope()'s own call, it never touches the `growing` flag
+  // itself, so nothing here needs undoing on release).
+  const dragRopeActive = downInfo && downInfo.mode === 'rope' && downInfo.dragging;
+  if (growing && !dragRopeActive) growRope(rawDt, introPhase === 'growing' ? currentIntroExtendRate() : undefined);
   // Rope Attraction: eases mainRope.attractionPin{X,Y} -- a single moving
   // point, persisted on mainRope so it carries over frame to frame rather
   // than being recomputed from scratch -- toward the mouse each frame,
@@ -8237,8 +8294,23 @@ function update(rawDt){
     const mfCx = viewportW() / 2, mfCy = viewportH() / 2;
     if (!mfHasMouse){ mfX = mfCx; mfY = mfCy; mfEntityX = mfCx; mfEntityY = mfCy; }
     const mfPosFactor = mouseFlickExpSmoothFactor(cfg.mouseFlickPositionSmoothing, rawDt);
-    mfEntityX += (mfX - mfEntityX) * mfPosFactor;
-    mfEntityY += (mfY - mfEntityY) * mfPosFactor;
+    // Drag Rope override (2026-09-13, per explicit request): "if i move
+    // the cursor too far away while dragging, the cursor animation will
+    // stay anchored to the drag point... Only when i release of the
+    // drag does the cursor animation return to the cursors real
+    // position." Without this, the sprite kept smoothing toward the
+    // real (mfX,mfY) cursor regardless of dragging -- since the actual
+    // dragged rope point is itself clamped to a max distance from the
+    // anchor (see update()'s own drag-pin block), a cursor moved far
+    // beyond that clamp visibly detached the sprite from the rope it's
+    // supposedly holding. Position (this lerp target) and rotation
+    // (mouseFlickTargetPosition()'s own drag override, above) both
+    // switch to the same live drag-point anchor together.
+    const mfDragAnchor = mouseFlickDragAnchorWorld();
+    const mfPosTargetX = mfDragAnchor ? mfDragAnchor.x : mfX;
+    const mfPosTargetY = mfDragAnchor ? mfDragAnchor.y : mfY;
+    mfEntityX += (mfPosTargetX - mfEntityX) * mfPosFactor;
+    mfEntityY += (mfPosTargetY - mfEntityY) * mfPosFactor;
     // mfTargetAngle (the mouse's own angle from viewport center) feeds
     // the rotation LERP TARGET for 'center' mode only now (see
     // mfRotationTargetAngle's own comment a few lines down) -- it no
