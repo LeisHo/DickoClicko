@@ -13091,3 +13091,38 @@ dp-bold-button) matches the template's values exactly; Saved Dev
 Settings' collapse toggle confirmed working both directions; no console
 errors.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  04:10 AM - 04:14 AM EDT
+
+Fixed a real regression reported directly ("i currently still cant drag
+the rope. its stuck to where the drag point is originally") -- caused by
+this same session's own earlier "cursor animation stays anchored to the
+drag point" fix.
+
+Fixed:
+- update()'s per-frame Drag Rope target used to read
+  mouseFlickInteractionPos(mouseX, mouseY, 'drag') -- FLICK MOUSE's own
+  annotated point, transformed through the sprite's CURRENT position/
+  rotation -- instead of the raw cursor. Combined with the earlier fix
+  (which makes the sprite's own position snap exactly to the live drag
+  point every frame), this closed a real feedback loop: drag point ->
+  sprite position -> annotated point's world transform -> new drag point
+  target -> ... which converges to a fixed point almost instantly and
+  stops responding to the real cursor entirely. The loop existed in
+  latent form even before today's snap fix (the original smoothed
+  version would eventually reach the same stuck state, just gradually
+  enough that a normal short drag rarely hit it) -- the snap fix made it
+  instant and therefore always visible. Fixed by using the raw
+  mouseX/mouseY directly as the drag target, which structurally can't
+  depend on the sprite's own rendered position. The arm-time distance
+  gate (onPointerDown, a one-shot press-time check) and the cursor
+  sprite's own visual anchoring are both unaffected -- only the
+  continuous per-frame drag target changed.
+
+Verified live via a temporary debug hook (grep-confirmed removed):
+forced a drag, drove the mouse through several distinct positions,
+confirmed the dragged rope point's own position differed each time and
+moved in the correct direction (right when mouse moved right, left when
+mouse moved left) -- previously stuck at the same position regardless
+of mouse movement, now genuinely responsive.
+

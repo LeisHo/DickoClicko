@@ -9160,7 +9160,36 @@ function update(rawDt){
     // byte-for-byte identical to before this feature existed).
     const overstretchTol = cfg.overstretchEnabled ? vmin(cfg.overstretchTolerance) : 0;
     const hardLimit = maxDragDist + overstretchTol;
-    const dragTargetPos = mouseFlickInteractionPos(mouseX, mouseY, 'drag');
+    // Corrected 2026-09-14 -- REGRESSION FIX. This used to read
+    // `mouseFlickInteractionPos(mouseX, mouseY, 'drag')` (FLICK MOUSE's
+    // own annotated 'drag' point, transformed through the sprite's
+    // CURRENT live position/rotation), the same substitution the 2026-
+    // 09-12 "interaction points" feature uses for the 3 genuine
+    // DISTANCE gates (click/hold/cut) plus this drag's own ARM-TIME
+    // distance check (onPointerDown, a one-time press-time measurement,
+    // untouched). Reusing it here too, as a literal PER-FRAME POSITION
+    // TARGET while actively dragging, created a real closed feedback
+    // loop once combined with the 2026-09-13/09-14 "cursor animation
+    // stays anchored to the drag point" fix: the sprite's own position
+    // (mfEntityX/Y) is kept equal to the CURRENT drag point
+    // (mouseFlickDragAnchorWorld()), and this line then fed the
+    // sprite's own resulting transform BACK IN as the drag point's next
+    // target -- a fixed point the loop converges to almost immediately,
+    // completely deaf to the real cursor from then on. Reported
+    // directly ("i currently still cant drag the rope. its stuck to
+    // where the drag point is originally") -- confirmed by tracing the
+    // dependency chain, not just guessed. The distance-gated purposes
+    // (click/hold/cut, and this same 'drag' purpose's own ARM-TIME use)
+    // are safe because they're one-shot measurements, never fed back
+    // into the very state they measure against. Fixed by using the raw
+    // live cursor position directly -- `mouseX`/`mouseY`, updated only
+    // by a real `pointermove` listener, structurally incapable of
+    // depending on the sprite's own rendered position -- as the drag's
+    // own continuous target, same as before the 2026-09-12 interaction-
+    // points feature existed. The cursor-animation sprite's own visual
+    // anchoring (position AND rotation both snapping to the live drag
+    // point) is completely unaffected by this change and still applies.
+    const dragTargetPos = { x: mouseX, y: mouseY };
     let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
     const ddist = Math.hypot(dx, dy) || 1e-6;
     if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }

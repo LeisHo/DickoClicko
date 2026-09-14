@@ -1565,3 +1565,40 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   settings. Sitting outside `#dpGroups` entirely already keeps it out
   of `makeReorderable()`'s own delegated group-drag listener with no
   extra exclusion code needed.
+- **Drag Rope's own continuous per-frame drag TARGET must always be the
+  raw live cursor (`mouseX`/`mouseY`), never `mouseFlickInteractionPos(...,
+  'drag')` (FLICK MOUSE's own annotated point, transformed through the
+  sprite's CURRENT position/rotation).** Real, reported, root-caused
+  regression (2026-09-14: "i currently still cant drag the rope. its
+  stuck to where the drag point is originally"), introduced by combining
+  2 previously-fine pieces: (1) the 2026-09-12 "interaction points"
+  feature substituted the annotated 'drag' point for the raw cursor at
+  `update()`'s own per-frame drag-pin block (not just the 3 genuine
+  DISTANCE gates it was built for, nor Drag Rope's own ARM-TIME distance
+  check -- both of those are one-shot measurements and stay correct);
+  (2) the SAME day's "cursor animation stays anchored to the drag point"
+  fix made the sprite's own position (`mfEntityX/Y`) SNAP exactly to the
+  live drag point every frame. Combined, this closes a real feedback
+  loop: drag point -> sprite position (via the snap) -> annotated point's
+  world-space transform -> NEW drag point target -> ... -- which
+  converges to a fixed point almost immediately and stops responding to
+  the real cursor AT ALL, regardless of how far the mouse actually moves.
+  This loop existed in LATENT form even before the snap fix (the
+  original lerp-based "stay anchored" version would eventually converge
+  to the same stuck state too, just gradually enough that a normal short
+  press-drag-release rarely if ever reached it) -- the snap fix just made
+  it instant and therefore always visible. Fixed by using
+  `{x: mouseX, y: mouseY}` directly as the per-frame drag target, which
+  is structurally incapable of depending on the sprite's own rendered
+  position (only a real `pointermove` listener ever writes `mouseX`/
+  `mouseY`). Verified live via a temporary debug hook (forced a drag,
+  drove the mouse through 3+ distinct positions, confirmed the dragged
+  point's own position differed and moved in the correct direction each
+  time -- removed before commit). **Any FUTURE per-frame position TARGET
+  (as opposed to a one-shot distance measurement) must never be derived
+  from FLICK MOUSE's own current rendered transform if that same
+  target also feeds back into what the sprite's own position/rotation
+  overrides use as THEIR target** -- that's the exact shape of loop that
+  caused this bug, and the same shape could recur anywhere a future
+  cursor-animation override and a game-state target end up pointing at
+  each other.
