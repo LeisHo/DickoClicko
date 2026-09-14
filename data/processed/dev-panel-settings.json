@@ -98,7 +98,7 @@
       ],
       "arcSeamOverlapPx": 2.8,
       "clickIntensity": 4.1,
-      "holdDistance": 7.5,
+      "holdDistance": 20.5,
       "dragRopeEnabled": true,
       "dragRopeHoldDistance": 9,
       "dragOverridesGrowOnRopeHold": true,

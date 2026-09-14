@@ -1310,6 +1310,45 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   broken. **Any FUTURE child appended to `.dp-group-header` must not
   assume the title span occupies any particular position** -- select it
   by `.dp-group-title` instead, same as this fix now does.
+- **`cfg.holdDistance` (Click And Hold Distance) is dual-purposed —
+  it's BOTH the circle's own hold-to-grow trigger radius
+  (`isNearCircleCenterForGrow()`) AND the charged-punch release-
+  distance gate — and the two can drift out of sync purely through
+  normal tuning of one of them, silently shrinking the OTHER.** Real,
+  reported bug (2026-09-14: "right now Drag seems to prioritize over
+  Click to hold grow in the circle"). The CODE itself was correct and
+  unchanged — `isNearCircleCenterForGrow()`'s dedicated circle branch
+  in `onPointerDown` still unconditionally wins over Drag Rope/
+  charging for any press that qualifies (see the `isNearCircleCenterForGrow`
+  gotcha above; this coupling is deliberate, explicit-request design,
+  not a bug to "fix" by decoupling). The bug was in the LIVE SAVED
+  DATA: `data/processed/dev-panel-settings.json` had `holdDistance:
+  7.5` against `circleSize: 20` -- meaning the actual programmatic
+  grow-trigger zone covered only the innermost ~37% of the VISIBLE
+  circle's radius (7.5 of 20). A press anywhere in the outer ~63% of
+  the visible circle (by radius) fell through to the ordinary rope
+  hit-test instead, where `dragRopeHoldDistance` (9, also from the
+  live save) exceeded `holdDistance` (7.5) -- creating a real ring
+  (roughly 7.5-9%vmin from center) where a press that LOOKED like it
+  was safely inside the circle could arm Drag Rope instead of growing,
+  exactly matching the report. `holdDistance` had almost certainly
+  been independently tuned down at some point for charge-release feel
+  (its other, unrelated purpose) without anyone noticing the side
+  effect on the circle's own grow coverage -- the two code defaults
+  (`circleSize` 21.5, `holdDistance` 22) are close enough that this
+  gap never showed up in the DEFAULTS, only after independent live
+  tuning drifted them apart. Fixed as a pure DATA change (`holdDistance:
+  7.5 -> 20.5`, restoring the same "holdDistance slightly exceeds
+  circleSize" relationship the code defaults already have, scaled to
+  the live `circleSize` of 20) -- no code touched. **Before assuming a
+  reported "X seems to override Y" priority bug is a code/logic
+  problem, check whether the 2 features share a config value (or one's
+  threshold is smaller than the other's) in the LIVE saved settings
+  file first** -- same "check the actual saved value" precedent as the
+  `dragRopeEnabled` gotcha above, now applied to a value that's
+  nonzero and therefore easy to assume is "obviously fine" without
+  actually comparing it against the other value it's implicitly
+  supposed to stay larger than.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as

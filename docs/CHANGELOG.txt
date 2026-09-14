@@ -13206,3 +13206,35 @@ syntax check + direct code review instead, per usage-efficient-
 investigation guidance for a change this scoped once live verification
 became disproportionately costly.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  07:00 AM - 07:11 AM EDT
+
+Fixed a reported "Drag overrides Click-And-Hold-To-Grow in the circle"
+bug -- root cause was a live saved-data mismatch, not a code bug.
+
+Fixed:
+- Investigated live saved dev-panel-settings.json: `holdDistance`
+  (Click And Hold Distance -- also the circle's own hold-to-grow
+  trigger radius, `isNearCircleCenterForGrow()`) was 7.5%vmin against
+  `circleSize` 20%vmin, leaving the outer ~63% of the visible circle's
+  radius outside the actual grow-trigger zone. A press in that outer
+  ring fell through to the ordinary rope hit-test, where
+  `dragRopeHoldDistance` (9) exceeded `holdDistance` (7.5) -- letting
+  Drag Rope arm in a ring that visually looked safely inside the
+  circle. The onPointerDown priority logic itself (circle branch
+  always wins when it qualifies) was confirmed unchanged and correct.
+- Data fix only: `holdDistance` 7.5 -> 20.5 in
+  data/processed/dev-panel-settings.json, restoring the same
+  "holdDistance slightly exceeds circleSize" relationship the code's
+  own defaults already have (21.5/22), scaled to the live circleSize
+  of 20 -- guarantees every press within the visible circle now
+  qualifies for isNearCircleCenterForGrow() (20 <= 20.5 always holds).
+
+Verification: confirmed via direct arithmetic (any point within the
+visible circle has distance <= circleSize (20) <= new holdDistance
+(20.5), so isNearCircleCenterForGrow() is now unconditionally true for
+the whole visible circle) rather than a live browser test -- the local
+dev server's page boot is still stalled by the same unrelated
+mass-deleted FLICK asset files noted in the prior entry (confirmed
+still present, not this session's own change).
+
