@@ -1312,6 +1312,53 @@ drag: the dragged point's angle from the anchor matched the annotated
 point's angle within 1.28 degrees (one frame of lag), vs. 79-80
 degrees off from the raw cursor's own angle -- unambiguous.
 
+**Fixed (2026-09-13): permanent stuck state -- hold-to-grow (circle and
+rope) and full-cut silently stopped working after any rope tap during
+the intro's own regrow.** Root cause: `growing`, a single shared flag,
+is used by BOTH the player's own hold-to-grow AND the intro sequence's
+own scripted regrow (after boot or a full detach) -- `onPointerUp` used
+to reset it UNCONDITIONALLY on every release, "harmless if never
+armed," which is false the instant something else owns the flag
+concurrently. A single ordinary tap/cut/drag/flick release during the
+intro's own regrow permanently froze `mainRope.totalLength` short of
+its target, so introPhase could never reach 'done' and everything
+gated on it silently failed forever -- while ordinary flicks/punches
+kept working, matching the user's own "flicks still work regardless."
+Root-caused from a click-log trace the user provided directly. Fixed
+via `downInfo.armedGrowth`, only set by the 2 real hold-to-grow arm
+sites (both already `introPhase==='done'`-gated) -- release now only
+resets `growing` when THIS press is the one that armed it. Verified
+live via a temporary debug hook: the exact break sequence no longer
+freezes introPhase/totalLength; a genuine hold-to-grow session still
+resets correctly on its own release.
+
+**Added/fixed (2026-09-13): 4 Drag Rope / Cursor Animation follow-ups.**
+(1) Fixed dragging by the endcap/tip -- the arm code was picking the
+grabbed point via the FLICK MOUSE annotated 'drag' point's own hit-test
+(meant only for the distance gate) instead of the real press's own hit;
+now uses the real press, reaching the true tip correctly. (2) Cursor
+Animation now stays anchored to the live drag point (position AND
+rotation-target) for the whole duration of a drag, regardless of cursor
+target mode, reverting to the real cursor on release. (3) Rope growth
+is now paused (not reset) for the duration of an active drag, resuming
+automatically on release. (4) The dev panel's "FLICK MOUSE" group is
+now labeled "CURSOR ANIMATION" (user-facing label only; internal `mf*`/
+`MOUSE_FLICK_*` code names deliberately left as a separate, larger,
+purely cosmetic rename for another time). All verified live via
+dispatched PointerEvents plus a temporary debug hook.
+
+**Added (2026-09-13): device-specific defaults for Rope Length, Default
+Rope Length, and Rope Thickness.** Per explicit request, reversing this
+project's own prior "nothing is device-split" convention for these 3
+keys specifically. New `DEVICE_SPECIFIC_KEYS` mechanism mirrors how
+panel geometry already handles per-device values (`valuesByDevice:
+{desktop, mobile}` alongside the existing shared `values`); switching
+the dev panel's own Desktop/Mobile tab live-previews that device's own
+stored values, resetting to defaults for a never-saved tab. Every other
+setting remains fully shared. Verified live: independently set/saved
+different Rope Thickness values per tab, confirmed neither overwrote
+the other and each resolved correctly.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

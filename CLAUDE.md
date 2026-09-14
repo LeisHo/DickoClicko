@@ -30,13 +30,27 @@ collapsible group fits best (per §12g); create a new group only if none fit.
 
 ## Dev-panel behavior (project-specific judgment calls under §12)
 
-- **Every setting here is shared between the Desktop and Mobile tabs (§12f),
-  none are device-split.** §12f's own rationale for defaulting to
-  device-specific is mainly fixed-`px` values that don't translate across
-  viewports — every control in this project is already %/vmin-based (§12a),
-  so that rationale doesn't apply to any of them. Only the dev panel's own
-  chrome (size/position) is device-specific, because it's genuinely being
-  positioned within two different-shaped viewports.
+- **Most settings here are shared between the Desktop and Mobile tabs
+  (§12f); a small, explicit set is device-split.** §12f's own rationale for
+  defaulting to device-specific is mainly fixed-`px` values that don't
+  translate across viewports — every control in this project is already
+  %/vmin-based (§12a), so that rationale doesn't apply to most of them, and
+  this stayed "none device-split" until 2026-09-13. **Corrected 2026-09-13**
+  per explicit request ("make sure mobile and desktop can have different
+  default rope lengths and rope thickness etc"): `DEVICE_SPECIFIC_KEYS`
+  (currently `ropeLength`, `ropeDefaultLength`, `ropeThickness`) now use a
+  real per-device value mechanism (`valuesByDevice: {desktop, mobile}` in
+  the settings snapshot, alongside the existing shared `values`), the same
+  pattern `panelGeometry` already used for the panel's own chrome — see
+  `splitValuesForSnapshot()`/`applyDeviceSpecificValues()` in `index.html`.
+  Being unit-portable across viewports doesn't mean a designer never wants a
+  genuinely different value per device; §12a's rationale only ever meant
+  these settings COULD stay shared, not that they had to. Add a key to
+  `DEVICE_SPECIFIC_KEYS` (not a one-off mechanism) if more settings need
+  this later. Every other setting remains fully shared, unchanged. The dev
+  panel's own chrome (size/position) stays independently device-specific for
+  its own separate reason (genuinely being positioned within two
+  different-shaped viewports), unrelated to this list.
 - Position/size dev values are expressed in **%/vmin of the viewport**, not
   px, so the layout stays proportionally correct on both desktop and mobile.
   Physics runs in pixel space each frame, re-derived from the %-based config
@@ -1072,3 +1086,93 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   normal scroll-through). Audited ALL 23 `DEV_MODE` occurrences in this
   file the same day and found no OTHER instance of this mistake -- see
   CHANGELOG.txt for the full account of what was checked.
+- **`growing` is a single shared boolean flag used by BOTH the player's
+  own hold-to-grow gesture AND the intro sequence's own scripted regrow
+  (`updateIntro()`'s 'growing' phase, after boot or any full-rope
+  detach) -- never reset it unconditionally on a release/cancel just
+  because "it's harmless if never armed."** That assumption was wrong
+  and caused a real, reported, PERMANENT stuck bug (2026-09-13: "Hold
+  to grow within the circle doesnt work, neither does hold to grow on
+  the rope itself... I am unable to cut the rope fully" -- flicks kept
+  working, matching how this bug actually manifests). `onPointerUp`
+  used to reset `growing = false` on every rope-mode or circle-mode
+  release, including a plain tap/cut/drag that never armed anything --
+  DURING the intro's own regrow, that stomped the flag mid-sequence,
+  permanently freezing `mainRope.totalLength` short of
+  `introTargetLengthPx` (introPhase can then never reach 'done', so
+  everything gated on it -- hold-to-grow arming, the circle's own
+  double-click-to-fully-cut -- silently fails forever). Fixed via
+  `downInfo.armedGrowth`, set ONLY inside the 2 real hold-to-grow timer
+  callbacks (both already gated on `introPhase === 'done'`, so this can
+  never fire during a regrow) -- all 3 release sites (onPointerUp's
+  circle branch, onPointerUp's unconditional rope-mode line,
+  pointercancel) now only reset `growing` when THIS press is the one
+  that armed it. Per explicit, separate follow-up request, an
+  interrupting cut/flick/drag during the intro's own regrow must NOT
+  stop it -- it should keep growing to the default length underneath
+  the interruption -- which is exactly what this fix produces as a side
+  effect (nothing resets the shared flag except a genuine hold-to-grow
+  session's own release). **Any FUTURE code that reads or writes
+  `growing` must account for the intro sequence potentially owning it
+  concurrently** -- don't add a new unconditional reset site.
+- **Drag Rope's arm-time code must use `hit` (the ORIGINAL press's own
+  hit-test, frozen into `downInfo` at pointerdown) to decide WHICH rope
+  point gets grabbed -- never `dragHit` (the FLICK MOUSE annotated
+  'drag' interaction point's OWN separate hit-test), which exists
+  ONLY to gate Drag Rope Hold Distance.** Real, reported bug
+  (2026-09-13: "allow me to drag the rope by the end of the endcap as
+  well. right now it seems to default to the last segment joint as the
+  last draggable point") -- confirmed live that pressing exactly on the
+  tip (`nearestPointOnRope` resolving index 36 of 37 points) still
+  armed `dragIndex` 25, because the code read `dragHit.index` instead
+  of `hit.index`. The annotated point sits at a fixed anatomical spot
+  on the hand sprite's own artwork and rarely lines up with the rope's
+  true tip -- fine for a distance gate, wrong for choosing the grabbed
+  point. The comment directly above this code has said "anchored by
+  the point on the rope that is clicked" since 2026-09-12; the code had
+  silently stopped doing that when the interaction-points substitution
+  landed the same day and this went unnoticed until now.
+- **FLICK MOUSE ("Cursor Animation" going forward -- see below) has 2
+  independent drag-time overrides, both keyed off the SAME live drag
+  anchor (`mouseFlickDragAnchorWorld()`, 2026-09-13), and both must stay
+  in sync if either changes:** the entity's own POSITION-lerp target
+  (`mfEntityX/Y`'s target in `update()`) and `mouseFlickTargetPosition()`'s
+  own ROTATION target (which overrides `cfg.mouseFlickTargetMode`,
+  including 'center', while dragging). Per explicit request: "if i move
+  the cursor too far away while dragging, the cursor animation will
+  stay anchored to the drag point... Only when i release of the drag
+  does the cursor animation return to the cursors real position" plus,
+  separately, "while dragging, the cursor target mode should just point
+  at the drag point on the rope." Deliberately the LIVE dragged-point
+  position, NOT the FROZEN `downInfo.dragAngleRefX/Y` direction-bucket
+  reference (a completely different mechanism, frozen for its own
+  documented mathematical reason -- see that field's own gotcha) --
+  both of these new overrides are about visually FOLLOWING the drag
+  point as it swings, not about a stable angle reference.
+- **Rope growth (the `growing` flag, whatever is driving it) is paused
+  -- not stopped, not reset -- for the duration of an active Drag Rope
+  hold** (2026-09-13, per explicit request: "while im dragging, the
+  rope should not be growing"). Only `growRope()`'s own call is skipped
+  while `downInfo.mode==='rope' && downInfo.dragging`; the `growing`
+  flag itself is untouched, so whatever was growing (a hold-to-grow
+  session, or the intro's own regrow -- see that gotcha above) resumes
+  automatically the instant the drag ends, with no separate resume code
+  needed anywhere.
+- **The dev panel group formerly titled "FLICK MOUSE" is now titled
+  "CURSOR ANIMATION"** (2026-09-13, per explicit request: "from now on
+  dont call the cursor animations FLick mouse, call it 'Cursor
+  Animation'"). Only the user-facing panel label was renamed --
+  internal code identifiers (`mf*` variables, `MOUSE_FLICK_*`
+  constants/functions, and every comment referencing "FLICK MOUSE")
+  were deliberately left alone as a separate, much larger, purely
+  cosmetic rename that wasn't part of this request's own scope. Use
+  "Cursor Animation" in any NEW user-facing text or communication about
+  this feature; existing internal naming is not itself wrong, just an
+  intentionally out-of-scope cleanup for another time.
+- **A small, explicit set of settings now has real per-device
+  (Desktop/Mobile) values -- see `DEVICE_SPECIFIC_KEYS` and the
+  "Dev-panel behavior" section above for the full mechanism.** Before
+  adding a NEW device-specific setting, add its key to that array
+  (never build a one-off parallel mechanism) -- `splitValuesForSnapshot()`,
+  `resetSettings()`, and `initDeviceTabs()`'s tab-switch handler are all
+  already written generically against that list.

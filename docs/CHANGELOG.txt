@@ -12584,3 +12584,135 @@ and after. No other hunks in this diff -- confirmed via `git diff`
 immediately before staging that no concurrent session had unrelated
 uncommitted work in this file at commit time.
 
+================================================================================
+2026-09-13  -  7:53 PM - 8:35 PM EDT
+
+"Hold to grow within the circle doesnt work, neither does hold to grow
+on the rope itself. Neither the effect, nor the animaiton occurs.
+Furthermore, I am unable to cut the rope fully" -- reported against
+https://dicko-clicko.vercel.app/?dev=1, plus a cascade of follow-up
+clarifications and new requests that arrived mid-investigation.
+
+ROOT CAUSE (the critical fix): `growing` is a single shared boolean
+used by BOTH the player's own hold-to-grow gesture AND the intro
+sequence's own scripted regrow (`updateIntro()`'s 'growing' phase,
+after boot or any full-rope detach). `onPointerUp` used to reset
+`growing = false` UNCONDITIONALLY on every rope-mode or circle-mode
+release, on the documented assumption this was "harmless if never
+armed." It is not: a single ordinary tap, cut, drag, or flick release
+DURING the intro's own regrow permanently stomped the flag mid-
+sequence, freezing `mainRope.totalLength` short of its target forever
+-- introPhase can then never reach 'done', so hold-to-grow arming and
+the circle's own double-click-to-fully-cut/detach silently fail
+forever, while ordinary punches/flicks (which don't depend on
+introPhase) keep working, exactly matching the user's own "flicks
+still work regardless." Root-caused from a click-log trace the user
+provided directly (captured via this project's own `logClick()`
+diagnostic) showing a full-detach double-click landing "while the new
+rope is still appearing," then every subsequent circle-area attempt
+resolving as `down:rope ... tap-too-far` (the circle branch is
+deliberately skipped during 'growing', falling through to the ordinary
+rope hit-test) -- confirmed via live reproduction with a temporary
+debug hook: a fixed settle+punch-equivalent (one ordinary tap-release
+during introPhase==='growing') flipped `growing` to false and left
+BOTH introPhase and totalLength frozen across 300+ subsequent simulated
+frames.
+
+Fix: `downInfo.armedGrowth`, set ONLY inside the 2 real hold-to-grow
+timer callbacks (both already gated on `introPhase==='done'`, so this
+can never fire during a regrow) -- all 3 release sites (onPointerUp's
+circle branch, onPointerUp's unconditional rope-mode line,
+pointercancel) now only reset `growing` when THIS press is the one
+that armed it. Verified live: the same tap-release sequence that
+previously broke everything now leaves `growing` true, and introPhase
+correctly reaches 'done' once enough frames pass; a genuine circle
+hold-to-grow session (armed while introPhase was already 'done') still
+correctly resets on its own release, unaffected. Per the user's own
+explicit follow-up ("allow me to interrupt [growth after spawn] with
+any of the cut, flick, or drag sequences[;] it should still continue
+[to] grow to the default length even if i interrupt it"), this is
+exactly the intended behavior, not an accidental side effect.
+
+FOUR follow-up Drag Rope / Cursor Animation fixes, requested in quick
+succession during the above investigation:
+
+1. "allow me to drag the rope by the end of the endcap as well. right
+now it seems to default to the last segment joint as the last
+draggable point." Root cause: the drag-arm code picked which point to
+grab using `dragHit.index` (the FLICK MOUSE annotated 'drag'
+interaction point's OWN hit-test, meant only to gate Drag Rope Hold
+Distance -- per that code's own comment) instead of `hit.index` (the
+actual press's own hit-test, already frozen into `downInfo`).
+Confirmed live: pressing exactly on the tip of a 37-point rope
+(`nearestPointOnRope` correctly resolving index 36) still armed
+`dragIndex` 25 via the substituted point. Fixed by switching to
+`hit.index`; the distance gate itself (`dragHit.dist`) is unchanged.
+
+2. "if i move the cursor too far away while dragging, the cursor
+animation will stay anchored to the drag point. It will continue to
+rotate and change animation types, but it will stay anchored to the
+drag point. Only when i release of the drag does the cursor animation
+return to the cursors real position" + "furthermore, while dragging,
+the cursor target mode should just point at the drag point on the
+rope." New `mouseFlickDragAnchorWorld()` returns the live dragged
+point's world position; both the entity's own position-lerp target and
+`mouseFlickTargetPosition()`'s own rotation target (overriding
+`cfg.mouseFlickTargetMode`, including 'center') switch to it while
+`downInfo.dragging` is true, reverting to the real cursor on release.
+Verified live: the sprite's own tracked position converged exactly
+onto the live drag point while held, and correctly snapped back to
+tracking a real cursor move (700,500) the instant the drag ended.
+
+3. "also, while im dragging, the rope should not be growing." The
+fix above (armedGrowth) deliberately stopped an interrupting drag from
+resetting `growing` at all -- meaning, without this, the intro's own
+regrow (or a hold-to-grow session) would keep silently extending the
+rope underneath an active drag. `growRope()`'s own call is now skipped
+(the `growing` flag itself untouched) for the duration of
+`downInfo.mode==='rope' && downInfo.dragging`, resuming automatically
+on release with no extra code needed. Verified live:
+`mainRope.totalLength` stayed frozen across 120 simulated frames while
+a drag was held (growing was still true underneath).
+
+4. "and from now on dont call the cursor animations FLick mouse, call
+it 'Cursor Animation'." Renamed the dev panel's own "FLICK MOUSE" group
+title to "CURSOR ANIMATION" -- the user-facing label only. Internal
+code identifiers (`mf*`/`MOUSE_FLICK_*`) were deliberately left alone
+as a separate, much larger, purely cosmetic rename outside this
+request's own scope; flagged rather than silently done or silently
+skipped.
+
+FIFTH addition, a genuine architecture change per explicit request:
+"also make sure mobile and desktop can have different default rope
+lengths and rope thickness etc." This project's own convention
+(CLAUDE.md) previously made every setting shared between the dev
+panel's Desktop/Mobile tabs -- a deliberate simplification (every
+control here is already %/vmin-based), not a technical limitation.
+Added a real per-device value mechanism reusing panelGeometry's own
+existing pattern: new `DEVICE_SPECIFIC_KEYS` (`ropeLength`,
+`ropeDefaultLength`, `ropeThickness`) opts specific keys out of the
+shared pool; `splitValuesForSnapshot()` splits live cfg into
+{shared, deviceValues} at Save/Copy time, preserving the OTHER tab's
+own last-saved device values untouched; snapshots gain a new
+`valuesByDevice: {desktop, mobile}` field; `resetSettings()` layers
+this device's own slice on top of the shared values (`activeDeviceTab`
+already equals the REAL device for a non-dev visitor, so this
+resolution is correct with or without a dev panel present); switching
+the panel's own Desktop/Mobile tab now also live-applies that tab's
+own stored values (new `applyDeviceSpecificValues()`), resetting to
+each control's own default for a tab that's never been saved, same
+"meaningful reset, never a silent carryover" rule
+`applyPanelGeometry(null)` already established. Every other setting is
+completely unaffected. Verified live via a temporary debug hook: set
+Rope Thickness to 5.5 on Desktop, switched to Mobile (confirmed reset
+to its own default of 10, not a leftover 5.5), set it to 2.2 there,
+and confirmed the resulting snapshot held both values independently
+and correctly without either overwriting the other; separately
+confirmed the resolution function picks the right value for each
+device's own stored slice.
+
+All 3 commits' debug hooks grep-confirmed removed (0 matches) before
+their respective commits; each pushed separately and immediately
+(`3a46c90`+merge, `734eb6e`, `228624f`) per the user's own explicit
+"fix and push," rather than batched into one delayed push.
+
