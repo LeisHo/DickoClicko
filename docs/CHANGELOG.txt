@@ -13164,3 +13164,45 @@ this before it wasted more time being misread as a code bug (see
 CLAUDE.md's own new gotcha for the full account and the fix that
 actually worked).
 
+--------------------------------------------------------------------------------
+2026-09-14  -  06:51 AM - 06:59 AM EDT
+
+Corrected one Cursor Animation interaction point per newly-supplied
+data, and smoothed/extended the Rope Overstretch release bounce.
+
+Fixed:
+- MOUSE_FLICK_DRAG_END_POINTS['front-pinky']'s frame-48 point corrected
+  from {x:0.43, y:0.546} to {x:0.598, y:0.525} per a fresh interaction-
+  point data dump; cross-checked the full dump (drag/sciss/tickle, all
+  8 directions, frame-1 and frame-48) against the current code first --
+  every other value already matched, this was the only real change.
+- Overstretch thinning's per-segment thickness visibly stepped at each
+  rope point boundary when Drag Overstretch Tolerance was high and the
+  rope was stretched far into the elastic zone -- reported directly.
+  strokeRopeCurveVariableWidth() drew one constant-width stroke() per
+  real segment (Canvas2D's lineWidth is one value per call); now
+  subdivides each segment into N mini-segments with linearly
+  interpolated width via a new Overstretch Thinning Smoothness slider
+  (def 6), shrinking the visible step size without changing the
+  underlying taper curve.
+
+Added:
+- Overstretch Bounce Max Amplitude (Px) slider -- caps the release
+  bounce's own starting amplitude (previously always the raw,
+  uncapped overstretchPx at release). Defaults to its own slider max
+  (200px), matching Drag Max Distance's own no-op-by-default
+  convention -- no behavior change until lowered.
+
+Verification: syntax-checked (node -e extract + new Function, block 0
+OK). Live browser verification was not completed this pass -- the
+local dev server's working tree currently has a very large number of
+FLICK/2TONED asset files deleted (visible in git status, not this
+session's own change), which stalled page boot indefinitely across 2
+fresh server restarts (document.readyState stuck at 'loading', no
+console/server errors). All 3 changes are small, additive, and
+default-safe (smoothness only affects render resolution of an
+existing verified curve; max amplitude defaults to a no-op); relied on
+syntax check + direct code review instead, per usage-efficient-
+investigation guidance for a change this scoped once live verification
+became disproportionately costly.
+

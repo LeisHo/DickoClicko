@@ -608,6 +608,21 @@ const DEV_GROUPS = [
     // ("feel/response curves are sliders, not constants"), not just a
     // spec-completeness formality.
     { key:'overstretchThinningSharpness', label:'Overstretch Thinning Curve Sharpness (x)', type:'slider', unit:'x', min:0.25, max:4, step:0.05, def:1 },
+    // Smoothness: strokeRopeCurveVariableWidth() must draw one stroke()
+    // call per straight sub-segment (Canvas2D's lineWidth is one value
+    // per call -- see that function's own comment), so at 1 sub-segment
+    // per real rope segment the thickness visibly JUMPS at every point
+    // boundary instead of tapering continuously -- reported directly:
+    // "when drag overstretch tolerance is high and i stretch the rope a
+    // lot. i see the steps in the thickness of the segments." This
+    // slider subdivides each real segment into this many mini-segments,
+    // linearly interpolating thicknessAt() across them, so the visible
+    // step size shrinks without changing the underlying taper profile at
+    // all (same overstretchThicknessMultiplier curve, just sampled more
+    // finely). Purely a render-resolution dial, not a feel parameter --
+    // higher costs more stroke() calls per frame, so it's user-tunable
+    // rather than hardcoded high.
+    { key:'overstretchThinningSmoothness', label:'Overstretch Thinning Smoothness (Segments)', type:'slider', unit:'x', min:1, max:16, step:1, def:6 },
     // Release bounce: a SCRIPTED damped harmonic oscillator (radial
     // offset = amplitude * e^(-damping*t) * cos(stiffness*t), amplitude
     // = the actual overstretch distance in px at the moment of release,
@@ -631,6 +646,16 @@ const DEV_GROUPS = [
     { key:'overstretchBounceStiffness', label:'Overstretch Bounce Stiffness (Rad/S)', type:'slider', unit:'rad/s', min:2, max:60, step:1, def:18 },
     { key:'overstretchBounceDamping', label:'Overstretch Bounce Damping (1/S)', type:'slider', unit:'1/s', min:0.2, max:20, step:0.1, def:4 },
     { key:'overstretchBounceMinAmplitude', label:'Overstretch Bounce Min Amplitude (Px)', type:'slider', unit:'px', min:0.1, max:20, step:0.1, def:1 },
+    // Caps the bounce's own STARTING amplitude (normally the raw
+    // mainRope.overstretchPx at release, uncapped) -- per explicit
+    // request ("provide a bounce max amplitude"). Defaults to its own
+    // slider max, matching Drag Max Distance's own established
+    // no-op-by-default convention (2026-09-12) -- out of the box this
+    // changes nothing (200px exceeds any realistic overstretchPx at the
+    // Overstretch Tolerance slider's own usable range), only ever
+    // clamping once a user deliberately lowers it. See the release-bounce
+    // arm site (onPointerUp) for the Math.min() this feeds.
+    { key:'overstretchBounceMaxAmplitude', label:'Overstretch Bounce Max Amplitude (Px)', type:'slider', unit:'px', min:1, max:200, step:1, def:200 },
     // Drag Pickup (2026-09-14, per explicit request: "I want it to look
     // like a smooth and naturally picking up of a dangling rope without
     // any jittering or jumping") -- the grabbed point eases from its own
@@ -4807,7 +4832,7 @@ const MOUSE_FLICK_DRAG_END_POINTS = {
   'side-thumb':   { x: 0.385, y: 0.528 },
   'front-thumb':  { x: 0.425, y: 0.534 },
   'front':        { x: 0.512, y: 0.543 },
-  'front-pinky':  { x: 0.43,  y: 0.546 },
+  'front-pinky':  { x: 0.598, y: 0.525 },
   'side-pinky':   { x: 0.619, y: 0.531 },
   'behind-pinky': { x: 0.596, y: 0.534 },
 };
@@ -8483,7 +8508,7 @@ function onPointerUp(e){
     // actually fires (overstretchPx > 0 only while dragging this exact
     // point), but info.dragIndex is the more directly-scoped value here.
     if (cfg.overstretchEnabled && mainRope.overstretchPx > 0){
-      mainRope.overstretchBounce = { active: true, t: 0, amplitude: mainRope.overstretchPx, subChainLen: info.dragIndex };
+      mainRope.overstretchBounce = { active: true, t: 0, amplitude: Math.min(mainRope.overstretchPx, cfg.overstretchBounceMaxAmplitude), subChainLen: info.dragIndex };
     }
     logClick('up:drag-end', { x: e.clientX, y: e.clientY, index: info.dragIndex, overstretchPx: round(mainRope.overstretchPx, 2) });
     return;
@@ -10200,16 +10225,30 @@ function overstretchThicknessMultiplier(depth, t, sharpness){
 // curve-smoothed strokeRopeCurve() exactly as before -- see this
 // function's own call site in render() for the regression-safety
 // reasoning). `thicknessAt(i)` is called once per point index.
-function strokeRopeCurveVariableWidth(points, thicknessAt, color){
+// `subSegments` (2026-09-14, Overstretch Thinning Smoothness) subdivides
+// each real segment into this many straight mini-segments with linearly
+// interpolated width, instead of one constant lineWidth per real segment
+// -- reduces the visible width JUMP at each point boundary into a much
+// finer staircase that reads as a smooth taper. Still not a true
+// continuous gradient (lineWidth is still one value per stroke() call),
+// but the step size shrinks with subSegments; see that slider's own
+// comment for why this is exposed as a user-tunable dial rather than a
+// hardcoded high constant.
+function strokeRopeCurveVariableWidth(points, thicknessAt, color, subSegments){
+  const steps = Math.max(1, Math.round(subSegments || 1));
   ctx.strokeStyle = color;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (let i = 0; i < points.length - 1; i++){
     const a = points[i], b = points[i + 1];
-    ctx.lineWidth = (thicknessAt(i) + thicknessAt(i + 1)) / 2;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+    const wa = thicknessAt(i), wb = thicknessAt(i + 1);
+    for (let s = 0; s < steps; s++){
+      const t0 = s / steps, t1 = (s + 1) / steps;
+      ctx.lineWidth = wa + (wb - wa) * ((t0 + t1) / 2);
+      ctx.beginPath();
+      ctx.moveTo(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0);
+      ctx.lineTo(a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1);
+      ctx.stroke();
+    }
   }
 }
 
@@ -10898,7 +10937,8 @@ function render(){
       const depth = mainRope.overstretchDepth;
       const sharpness = cfg.overstretchThinningSharpness;
       strokeRopeCurveVariableWidth(mainStrokePoints.slice(0, di + 1),
-        i => liveThickness * overstretchThicknessMultiplier(depth, i / di, sharpness), mainRopeColor);
+        i => liveThickness * overstretchThicknessMultiplier(depth, i / di, sharpness), mainRopeColor,
+        cfg.overstretchThinningSmoothness);
       strokeRopeCurve(mainStrokePoints.slice(di), liveThickness, mainRopeColor);
     } else {
       strokeRopeCurve(mainStrokePoints, liveThickness, mainRopeColor);
