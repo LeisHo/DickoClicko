@@ -2000,8 +2000,18 @@ const isMobileClass = () => window.matchMedia('(max-width: 767px)').matches;
 // which tab (Desktop/Mobile, §12f) is active — the panel's own geometry keys off
 // this explicit selection, not the live viewport, so it can be previewed/tuned
 // without actually resizing the browser. Every functional setting in this
-// project is already %/vmin-based (§12a), so none of them need to be
-// device-split — only the panel's own chrome (§12c) does, per §12f's own text.
+// project is %/vmin-based (§12a), which is WHY none of them needed to be
+// device-split by default -- corrected 2026-09-13, per explicit request
+// ("make sure mobile and desktop can have different default rope lengths
+// and rope thickness etc"): being unit-portable across viewports doesn't
+// mean a DESIGNER never wants a genuinely different value per device (a
+// %vh rope length that reads right on a tall phone can still look wrong
+// on a wide desktop window, independent of the unit conversion itself).
+// DEVICE_SPECIFIC_KEYS below opts specific cfg keys into the exact same
+// per-device storage/resolution pattern panelGeometry (§12c) already
+// uses -- see saveSettings()/resetSettings()/initDeviceTabs()'s own
+// comments for the mechanism. Every other setting stays shared, unchanged.
+const DEVICE_SPECIFIC_KEYS = ['ropeLength', 'ropeDefaultLength', 'ropeThickness'];
 let activeDeviceTab = isMobileClass() ? 'mobile' : 'desktop';
 
 // Captures one group's own direct row keys, plus any subgroups it
@@ -2400,17 +2410,40 @@ async function readGitSettingsLog(){
   }
 }
 
+// Splits the live cfg into {shared, deviceValues} along DEVICE_SPECIFIC_KEYS
+// -- shared goes into a snapshot's own top-level `values` exactly as
+// before; deviceValues is this tab's own slice of the new `valuesByDevice`
+// map (see saveSettings()/copySettings()'s own comment for the full
+// per-device shape, mirroring panelGeometry's pre-existing convention).
+function splitValuesForSnapshot(){
+  const shared = {}, deviceValues = {};
+  Object.keys(cfg).forEach(k => {
+    (DEVICE_SPECIFIC_KEYS.includes(k) ? deviceValues : shared)[k] = cfg[k];
+  });
+  return { shared, deviceValues };
+}
 async function saveSettings(){
   const current = activeDeviceTab;
   const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
   const otherGeom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[other] : null;
+  // otherDeviceValues: the OTHER tab's own last-saved device-specific
+  // values, preserved untouched -- exactly the same "don't clobber the
+  // tab you're not currently on" pattern otherGeom already uses above.
+  // Falls back to {} (not null) so a save from before this feature
+  // existed, or before the other tab was ever saved at all, still
+  // resolves to "no override recorded" rather than throwing when
+  // resetSettings() later tries to spread it.
+  const otherDeviceValues = (lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice && lastLoadedSnapshot.valuesByDevice[other]) || {};
+  const { shared, deviceValues } = splitValuesForSnapshot();
   const snapshot = {
-    values: { ...cfg },
+    values: shared,
+    valuesByDevice: { [current]: deviceValues, [other]: otherDeviceValues },
     order: getPanelOrder(),
     panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
-    // Not device-split (unlike panelGeometry/panelStyle) -- a renamed
-    // label should read the same regardless of which tab is active,
-    // same rationale as cfg's own settings values.
+    // Not device-split (unlike panelGeometry/panelStyle, or now
+    // DEVICE_SPECIFIC_KEYS) -- a renamed label should read the same
+    // regardless of which tab is active, same rationale as cfg's own
+    // SHARED settings values.
     textOverrides: { ...devTextOverrides },
   };
   const btn = document.getElementById('dpSaveBtn');
@@ -2498,7 +2531,20 @@ async function resetSettings(){
   lastLoadedSnapshot = snap;
   if (snap){
     applyOrder(snap.order);
-    applyValues(snap.values);
+    // Shared values first, then this device's own DEVICE_SPECIFIC_KEYS
+    // slice layered on top (mirroring applyPanelGeometry's own per-tab
+    // resolution just below) -- activeDeviceTab already equals the REAL
+    // device for a non-dev visitor (initialized from isMobileClass() at
+    // declaration and never reassigned without a dev panel's own tab
+    // buttons to click), so this same resolution is correct whether or
+    // not a dev panel actually exists. A key missing from
+    // valuesByDevice[activeDeviceTab] (an old save predating this
+    // feature, or a device tab that's simply never been saved yet) is
+    // left out of the merge entirely -- applyValues() only touches keys
+    // actually present in what it's given, so that key just keeps
+    // whatever default buildDevPanel() already populated it with,
+    // exactly like a fresh, never-customized setting should.
+    applyValues({ ...snap.values, ...((snap.valuesByDevice && snap.valuesByDevice[activeDeviceTab]) || {}) });
   }
   applyPanelGeometry(snap && snap.panelGeometry ? snap.panelGeometry[activeDeviceTab] : null);
   // Always resolve (falling back to {}), same "don't silently keep
@@ -2511,8 +2557,13 @@ function copySettings(){
   const current = activeDeviceTab;
   const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
   const otherGeom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[other] : null;
+  // See saveSettings()'s identical comment -- same otherDeviceValues
+  // preservation, same shared/deviceValues split.
+  const otherDeviceValues = (lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice && lastLoadedSnapshot.valuesByDevice[other]) || {};
+  const { shared, deviceValues } = splitValuesForSnapshot();
   const snapshot = {
-    values: { ...cfg },
+    values: shared,
+    valuesByDevice: { [current]: deviceValues, [other]: otherDeviceValues },
     order: getPanelOrder(),
     panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
     textOverrides: { ...devTextOverrides },
@@ -2550,6 +2601,25 @@ function copyClickLog(){
   }
 }
 
+// Applies this tab's own DEVICE_SPECIFIC_KEYS slice, falling back to
+// each control's own default for any key NOT present in `deviceVals`
+// (a tab that's simply never been saved yet) -- same "meaningful reset,
+// not a silent carryover from whichever tab was active before" rule
+// applyPanelGeometry(null) already established (see that fix's own
+// CLAUDE.md gotcha): without this fallback, switching to a never-saved
+// tab would keep showing the PREVIOUS tab's live values instead of
+// that device's own real (default) starting point.
+function applyDeviceSpecificValues(deviceVals){
+  const merged = {};
+  DEVICE_SPECIFIC_KEYS.forEach(k => {
+    if (deviceVals && k in deviceVals) merged[k] = deviceVals[k];
+    else {
+      const ctrl = DEV_GROUPS.flatMap(g => g.controls).find(c => c.key === k);
+      if (ctrl) merged[k] = ctrl.def;
+    }
+  });
+  applyValues(merged);
+}
 function initDeviceTabs(){
   const buttons = document.querySelectorAll('.dp-tab-btn');
   function refreshActive(){
@@ -2560,6 +2630,13 @@ function initDeviceTabs(){
     refreshActive();
     const geom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[activeDeviceTab] : null;
     applyPanelGeometry(geom); // preview that tab's last-loaded panel geometry, even without actually resizing the browser
+    // Same live-preview convention as panel geometry, just above, now
+    // extended to DEVICE_SPECIFIC_KEYS (2026-09-13) -- switching tabs
+    // previews (and actually applies to the running game, matching
+    // ropeLength's own onChange-on-apply behavior) that device's own
+    // stored rope length/thickness/etc, even without resizing the browser.
+    const deviceVals = lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice ? lastLoadedSnapshot.valuesByDevice[activeDeviceTab] : null;
+    applyDeviceSpecificValues(deviceVals);
   }));
   refreshActive();
 }
