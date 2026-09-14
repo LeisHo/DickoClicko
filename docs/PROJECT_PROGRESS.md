@@ -1347,17 +1347,35 @@ now labeled "CURSOR ANIMATION" (user-facing label only; internal `mf*`/
 purely cosmetic rename for another time). All verified live via
 dispatched PointerEvents plus a temporary debug hook.
 
-**Added (2026-09-13): device-specific defaults for Rope Length, Default
-Rope Length, and Rope Thickness.** Per explicit request, reversing this
-project's own prior "nothing is device-split" convention for these 3
-keys specifically. New `DEVICE_SPECIFIC_KEYS` mechanism mirrors how
-panel geometry already handles per-device values (`valuesByDevice:
-{desktop, mobile}` alongside the existing shared `values`); switching
-the dev panel's own Desktop/Mobile tab live-previews that device's own
-stored values, resetting to defaults for a never-saved tab. Every other
-setting remains fully shared. Verified live: independently set/saved
-different Rope Thickness values per tab, confirmed neither overwrote
-the other and each resolved correctly.
+**Added (2026-09-13): a real "Landscape" dev-panel tab, plus a
+per-setting/per-group "Independent from Desktop" checkbox system for
+Mobile and Landscape.** Per explicit follow-up request ("For all
+settings in Mobile and landscape, place a checkbox next to every
+setting and group..."), superseding a narrower same-day
+`DEVICE_SPECIFIC_KEYS` mechanism (a hardcoded 3-key array) built
+earlier that day. This project only ever had Desktop/Mobile tabs
+before this -- Landscape (new `isLandscapeClass()`, gated on touch +
+orientation so a resized desktop window is never misread as
+Landscape) had to be added first. Every setting and every group now
+gets its own checkbox (shown only on Mobile/Landscape); unchecked
+(default) means the setting mirrors Desktop's value, checked means it
+uses its own independently-stored value. The group checkbox is a
+"master checkbox" with no persisted state of its own -- it cascades
+onto whatever currently sits in that group's own DOM (correct for
+custom groups and drag-reordered rows) and its own checked/
+indeterminate display is always computed from its children. A live
+edit's actual save destination (Desktop's pool vs. the active tab's
+own) is decided once, at Save/Copy time, so none of the ~6 existing
+per-control-type live-edit handlers needed to change. 2 real bugs
+caught and fixed during live verification: a group's own checkbox
+wasn't refreshing to "indeterminate" when just one child was
+unchecked (only recomputed on tab-switch, not on an individual
+checkbox change); and loading an old-format settings file (still the
+live deployed shape) could have caused the very first Save afterward
+to silently discard Desktop's own existing values (a local-only
+variable wasn't written back onto the loaded snapshot). Verified live
+via a temporary debug hook covering both bugs' fixes plus the full
+independence/cascade/save-routing mechanism.
 
 ## Recently completed
 

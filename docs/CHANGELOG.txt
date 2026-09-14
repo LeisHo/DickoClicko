@@ -12716,3 +12716,104 @@ their respective commits; each pushed separately and immediately
 (`3a46c90`+merge, `734eb6e`, `228624f`) per the user's own explicit
 "fix and push," rather than batched into one delayed push.
 
+================================================================================
+2026-09-13  -  8:42 PM - 9:35 PM EDT
+
+"Dev panel feature. For all settings in Mobile and landscape, place a
+checkbox next to every setting and group. When checked, it means that
+that setting is independent from desktop settings. If not checked, it
+defaults to desktop settings. If a group is checked, all the settings
+within are applied."
+
+This generalizes the SAME day's own earlier `DEVICE_SPECIFIC_KEYS`
+mechanism (a hardcoded 3-key array covering only Rope Length/Default
+Rope Length/Rope Thickness) into a system covering every setting and
+every group. It also required building an entirely new "Landscape" tab
+first -- this panel only ever had Desktop/Mobile, despite the
+workspace-wide convention calling for all 3 -- discovered while
+investigating scope, not assumed going in.
+
+Landscape tab: new `isLandscapeClass()` detects a TOUCH device
+(`pointer: coarse`) in landscape orientation specifically, checked
+before the portrait-only `isMobileClass()` (a landscape phone's own
+width can exceed that check's 767px threshold) -- deliberately gated
+on touch, not just aspect ratio, so resizing a desktop browser window
+to be short-and-wide is never misread as "Landscape." Every previously
+2-way (desktop/mobile) mechanism -- `activeDeviceTab` detection,
+panel-geometry preservation in saveSettings()/copySettings() -- was
+generalized to loop over all 3 DEVICE_TABS.
+
+Independence system: every setting (`buildRow()`) and every group
+(`createGroupElement()`) now gets its own "Independent from Desktop"
+checkbox, shown only on Mobile/Landscape. `deviceIndependence` tracks
+per-KEY independence per tab only -- deliberately NO separate
+persisted group-level flag, since a real, persisted group override
+couldn't work correctly for a user-created custom group (the "+ Add
+Group" path) or for a row that's been drag-reordered into a different
+group, and the resolution logic (`isKeyIndependent()`/
+`resolveValuesForTab()`) MUST also work correctly for a real, non-dev
+visitor with ZERO dev-panel DOM to look any group membership up
+against. Instead, the group's own checkbox is a pure "master
+checkbox": checking/unchecking it walks its CURRENT `.dp-group-body`
+children (rows and nested subgroups alike) at the moment of the click
+and toggles each one's own individual checkbox to match, dispatching a
+real `change` event so each row's own handler still runs normally --
+correct for custom groups and drag-reordered rows alike, since it
+never depends on any static membership data. The group checkbox's own
+displayed checked/indeterminate state is likewise always COMPUTED from
+its children (`refreshGroupIndependenceStates()`, standard tri-state
+convention), not read back from anywhere -- this still satisfies "if a
+group is checked, all the settings within are applied," since by the
+time the group shows checked, every child's own flag already matches.
+
+A live edit's actual SAVE destination (Desktop's own pool, or the
+active tab's own pool) is decided ONCE, at Save/Copy time
+(`buildValuesByDeviceForSave()`) -- not independently at every one of
+the ~6 scattered control-type write sites (slider/color/checkbox/
+dropdown/gradient), which all still just do `cfg[key] = value`
+completely unchanged. Editing a NON-independent setting while
+previewing Mobile/Landscape is understood as editing the shared value
+the control is currently just mirroring, so it's saved into Desktop's
+own pool; editing an independent one saves into that tab's own pool.
+
+Two real bugs caught during live verification, not just designed
+around in the abstract:
+1) Unchecking ONE child of an otherwise-fully-checked group left the
+parent's own checkbox showing plain `checked` instead of the correct
+`indeterminate` -- `refreshGroupIndependenceStates()` was only being
+called from tab-switch/boot, not from the individual row checkbox's
+own change handler. Fixed by calling it from both places.
+2) `resetSettings()` loading an old-format snapshot (flat `values`, no
+`valuesByDevice` yet -- confirmed this IS the live deployed file's
+actual current shape) synthesized a fallback `valuesByDevice` as a
+local variable only, never writing it back onto `lastLoadedSnapshot`
+itself -- meaning the very first Save after loading an old-format file
+would have silently DISCARDED every real Desktop setting not touched
+during that session (buildValuesByDeviceForSave()'s own "start from
+the previous snapshot" preservation would start from an empty object).
+Confirmed live before the fix (`valuesByDevice.desktop.ropeThickness`
+came back `undefined` after such a save) and after (correctly
+preserved the real prior value).
+
+Verified live via a temporary debug hook (grep-confirmed removed, 0
+matches): editing while unchecked correctly routes into Desktop's own
+pool and reads back; checking then editing routes into that tab's own
+pool without disturbing Desktop's; Landscape's own independence state
+is completely separate from Mobile's (confirmed empty while Mobile had
+real overrides set); checking a group cascades to all 11 children of a
+real group (CUT SPLATTER) with the correct computed all-checked state;
+unchecking one child correctly shows indeterminate, re-checking it
+restores all-checked, unchecking the group cascades back to
+all-unchecked; checkboxes confirmed hidden (`display:none`) on Desktop
+and shown (`display:block`) on Landscape via computed style.
+
+Also updated CLAUDE.md's own "Dev-panel behavior" section and Gotchas
+(correcting, not deleting, the prior DEVICE_SPECIFIC_KEYS entry from
+earlier the same day, since its background reasoning is still
+accurate context for the system that replaced it) to describe the new
+mechanism, all 3 device tabs, and the settings-log's current real
+shape (`{valuesByDevice, independence, order, panelGeometry,
+textOverrides}` -- the old doc text claiming the file held "{values,
+order} only" was already stale before today, panelGeometry/
+textOverrides were already being written).
+

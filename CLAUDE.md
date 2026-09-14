@@ -30,29 +30,31 @@ collapsible group fits best (per §12g); create a new group only if none fit.
 
 ## Dev-panel behavior (project-specific judgment calls under §12)
 
-- **Most settings here are shared between the Desktop and Mobile tabs
-  (§12f); a small, explicit set is device-split.** §12f's own rationale for
-  defaulting to device-specific is mainly fixed-`px` values that don't
-  translate across viewports — every control in this project is already
-  %/vmin-based (§12a), so that rationale doesn't apply to most of them, and
-  this stayed "none device-split" until 2026-09-13. **Corrected 2026-09-13**
-  per explicit request ("make sure mobile and desktop can have different
-  default rope lengths and rope thickness etc"): `DEVICE_SPECIFIC_KEYS`
-  (currently `ropeLength`, `ropeDefaultLength`, `ropeThickness`) now use a
-  real per-device value mechanism (`valuesByDevice: {desktop, mobile}` in
-  the settings snapshot, alongside the existing shared `values`), the same
-  pattern `panelGeometry` already used for the panel's own chrome — see
-  `splitValuesForSnapshot()`/`applyDeviceSpecificValues()` in `index.html`.
-  Being unit-portable across viewports doesn't mean a designer never wants a
-  genuinely different value per device; §12a's rationale only ever meant
-  these settings COULD stay shared, not that they had to. Add a key to
-  `DEVICE_SPECIFIC_KEYS` (not a one-off mechanism) if more settings need
-  this later. Every other setting remains fully shared, unchanged. The dev
-  panel's own chrome (size/position) stays independently device-specific for
-  its own separate reason (genuinely being positioned within two
-  different-shaped viewports), unrelated to this list.
+- **All 3 device tabs (Desktop/Mobile/Landscape, §12f) now exist** —
+  Landscape was added 2026-09-13 (this project previously only had
+  Desktop/Mobile, despite the workspace convention calling for all 3).
+  `isLandscapeClass()` detects it as a TOUCH device (`pointer: coarse`) in
+  landscape orientation specifically, checked before the portrait-only
+  `isMobileClass()` (a landscape phone's own width can exceed
+  `isMobileClass()`'s 767px threshold) — a resized DESKTOP window (mouse
+  pointer) is never misread as Landscape.
+- **Every setting can be made independently adjustable per Mobile/Landscape
+  tab via its own checkbox, defaulting to shared with Desktop.** Corrected
+  2026-09-13, REPLACING that same day's own earlier, narrower
+  `DEVICE_SPECIFIC_KEYS` mechanism (a hardcoded 3-key array) — per a
+  follow-up explicit request ("For all settings in Mobile and landscape,
+  place a checkbox next to every setting and group..."), every single
+  setting AND every group now gets its own "Independent from Desktop"
+  checkbox (shown only on Mobile/Landscape) rather than a fixed short list.
+  §12a's %/vmin-portability rationale only ever meant these settings COULD
+  stay shared, not that they had to — being unit-portable across viewports
+  doesn't mean a designer never wants a genuinely different value on a
+  specific device. See `deviceIndependence`/`isKeyIndependent()`/
+  `resolveValuesForTab()`/`buildValuesByDeviceForSave()` in `index.html`,
+  and this file's own Gotchas entry, for the full mechanism (including why
+  the group-level checkbox deliberately has NO persisted state of its own).
 - Position/size dev values are expressed in **%/vmin of the viewport**, not
-  px, so the layout stays proportionally correct on both desktop and mobile.
+  px, so the layout stays proportionally correct across all 3 device tabs.
   Physics runs in pixel space each frame, re-derived from the %-based config
   (including on resize).
 - Every X/Y position slider pair shares one global origin: `(0,0)` is the
@@ -64,19 +66,27 @@ collapsible group fits best (per §12g); create a new group only if none fit.
 - The built-in "Dev Panel" settings group (§12i) is judged device-specific
   (independent per tab), not shared, for the same reason the panel's own
   size/position already is — it's the panel's own chrome, being rendered
-  within two different-shaped viewports. Persisted alongside panel geometry
-  (`panelStyle` in `getPanelGeometry()`/`applyPanelGeometry()`), not in `cfg`.
+  within differently-shaped viewports. Persisted alongside panel geometry
+  (`panelStyle` in `getPanelGeometry()`/`applyPanelGeometry()`), not in
+  `cfg` — it does NOT participate in the per-setting independence checkbox
+  system above at all (already unconditionally per-device by this older,
+  separate mechanism).
 - **Save Settings writes through to a git-tracked settings log (§12l):**
-  `data/processed/dev-panel-settings.json`, holding `{values, order}` only
-  (not panel geometry/style — those stay per-device chrome, not a
-  cross-session default worth tracking in git). A static page can't
-  silently write an arbitrary disk path, so this uses the File System
-  Access API (`showSaveFilePicker`) — the first Save on a given browser
-  prompts a native dialog (navigate to `data/processed/`, keep the
-  suggested filename); the resulting handle persists in IndexedDB so every
-  later Save reuses it silently. Chromium-only (Firefox/Safari lack the
-  API) and localStorage remains the full baseline regardless — the git-log
-  write is a best-effort addition, never a blocker.
+  `data/processed/dev-panel-settings.json`, holding `{valuesByDevice,
+  independence, order, panelGeometry, textOverrides}` -- `valuesByDevice`
+  (replacing the old flat `values`) and `independence` are both new
+  2026-09-13 (see the per-setting-independence entry above for their own
+  shapes); `panelGeometry`/`textOverrides` were already round-tripped
+  through this same file before today, unaffected by this change. Panel
+  geometry/style stay per-device chrome always, never checkbox-gated,
+  same as before. A static page can't silently write an arbitrary
+  disk path, so this uses the File System Access API
+  (`showSaveFilePicker`) — the first Save on a given browser prompts a
+  native dialog (navigate to `data/processed/`, keep the suggested
+  filename); the resulting handle persists in IndexedDB so every later
+  Save reuses it silently. Chromium-only (Firefox/Safari lack the API) and
+  localStorage remains the full baseline regardless — the git-log write is
+  a best-effort addition, never a blocker.
 - **The "set defaults" workflow (§12m):** when the user pastes a Copy
   Settings dump and asks to "set defaults," merge it against
   `data/processed/dev-panel-settings.json` per-field exactly as §12m
@@ -1169,10 +1179,71 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   "Cursor Animation" in any NEW user-facing text or communication about
   this feature; existing internal naming is not itself wrong, just an
   intentionally out-of-scope cleanup for another time.
-- **A small, explicit set of settings now has real per-device
-  (Desktop/Mobile) values -- see `DEVICE_SPECIFIC_KEYS` and the
-  "Dev-panel behavior" section above for the full mechanism.** Before
-  adding a NEW device-specific setting, add its key to that array
-  (never build a one-off parallel mechanism) -- `splitValuesForSnapshot()`,
-  `resetSettings()`, and `initDeviceTabs()`'s tab-switch handler are all
-  already written generically against that list.
+- **Superseded the same day (2026-09-13) by a fully general mechanism --
+  see the "Dev-panel behavior" section above and this file's own later
+  entry on the per-setting/per-group independence checkboxes.** This
+  entry originally documented a hardcoded `DEVICE_SPECIFIC_KEYS` array
+  (3 keys) and `splitValuesForSnapshot()`/`applyDeviceSpecificValues()`
+  -- none of those identifiers exist in `index.html` anymore, replaced by
+  `deviceIndependence`/`isKeyIndependent()`/`resolveValuesForTab()`/
+  `buildValuesByDeviceForSave()`. Left here, corrected rather than
+  deleted, since the original bug/request context (and the reasoning for
+  why per-device values needed a real storage mechanism at all, mirroring
+  panelGeometry) is still accurate background for the newer system.
+- **Per-setting/per-group "Independent from Desktop" checkboxes
+  (Mobile/Landscape only) -- see the "Dev-panel behavior" section above
+  for the full mechanism; this covers implementation gotchas found while
+  building it.** The group-level checkbox has NO persisted state of its
+  own on purpose -- `isKeyIndependent()`/`resolveValuesForTab()` (which
+  MUST also work correctly for a real, non-dev visitor with zero
+  dev-panel DOM) only ever consult `deviceIndependence[tab].settings`,
+  never a group map. The group checkbox is a live-DOM "master checkbox"
+  instead (`buildGroupIndependenceCheckbox()`): checking/unchecking it
+  walks its CURRENT `.dp-group-body` children (rows AND nested
+  subgroups) and toggles each one's own individual checkbox to match,
+  dispatching a real `change` event so each row's own handler still runs
+  (writing `deviceIndependence[tab].settings[key]` itself) -- this is
+  what makes it correct for a user-created custom group or a
+  drag-reordered row, neither of which a STATIC group-membership lookup
+  (DEV_GROUPS-based) could have handled. Its own checked/indeterminate
+  display is likewise always COMPUTED from children
+  (`refreshGroupIndependenceStates()`, standard tri-state convention:
+  all children checked -> checked, all unchecked -> unchecked, mixed ->
+  indeterminate), deepest groups resynced first so a parent reflects
+  already-current children. **This recompute must run from 2 places, not
+  just tab-switch/boot** -- a real bug caught during verification:
+  unchecking ONE child of an otherwise-fully-checked group left the
+  parent's own checkbox showing plain `checked` (should be
+  `indeterminate`) until `refreshGroupIndependenceStates()` was also
+  called from the individual row checkbox's own `change` handler, not
+  only from `refreshIndependenceUI()` (tab-switch/boot). If a NEW way to
+  toggle a row's own independence is ever added, it needs this same call
+  too, or ancestor groups will show stale checked/indeterminate state
+  until the next tab switch.
+- **A live edit's SAVE destination (Desktop's own pool vs. the active
+  tab's own pool) is decided ONCE, at Save/Copy time
+  (`buildValuesByDeviceForSave()`), never at the point of the edit
+  itself.** Every control type's own live-edit handler (slider
+  input/change, color input, checkbox change, dropdown change, gradient
+  stop drag/color-pick) still just does `cfg[key] = value` completely
+  unchanged -- deliberately NOT rewired to be independence-aware, since
+  there are ~6 scattered write sites across `buildRow()`/`buildRow()`'s
+  gradient branch and touching all of them individually would be both
+  more code and more risk for the identical net result. Don't add
+  independence-awareness to any NEW control's own live-edit handler --
+  route it through the existing single choke point instead.
+- **`resetSettings()` must write a normalized `valuesByDevice` back onto
+  `lastLoadedSnapshot` itself, not just use a local variable, when
+  loading an old-format snapshot (flat `values`, no `valuesByDevice`
+  yet).** Real bug, caught during verification, not just a theoretical
+  edge case: without this, the very first Save/Copy after loading an
+  old-format file would call `buildValuesByDeviceForSave()`, which reads
+  `lastLoadedSnapshot.valuesByDevice` to preserve every tab's own prior
+  values -- finding it `undefined` (the raw old-format snapshot has no
+  such field), it would silently start Desktop's own pool from an EMPTY
+  object, discarding every real Desktop setting that wasn't touched
+  during that particular editing session. Confirmed live: before this
+  fix, `valuesByDevice.desktop.ropeThickness` came back `undefined`
+  after a save built from a freshly-loaded old-format file; after
+  writing the normalized shape onto `lastLoadedSnapshot.valuesByDevice`
+  at load time, it correctly preserved the real prior value.
