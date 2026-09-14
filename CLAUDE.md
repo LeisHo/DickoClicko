@@ -1436,3 +1436,103 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   doesn't error, it just silently floats at the top of the "Dev
   Panel" group exactly like this one did**, invisible until someone
   compares the panel directly against `TEMPLATE_DEV_PANEL.html`.
+- **Rope Overstretch (2026-09-14) is Drag Rope's own elastic "give"
+  zone beyond the pre-existing hard clamp, plus progressive thinning
+  and a release bounce — all 3 pieces are rendering/scripted-motion
+  ADDITIONS layered on top of the existing Drag Rope mechanism, never
+  touching `mainRope.segLen`, rest lengths, or the constraint solver
+  itself.** `cfg.overstretchEnabled` (def `false`) gates the WHOLE
+  feature — with it off, `update()`'s drag-pin clamp resolves to
+  exactly the pre-existing `maxDragDist` hard limit (`overstretchTol`
+  computes to `0`, so `hardLimit === maxDragDist` bit-for-bit), so this
+  feature is fully backward-compatible by construction, not just by
+  convention. `cfg.overstretchThinningEnabled` is a SEPARATE checkbox
+  (def `true`) that only gates the RENDER-time thinning effect, per
+  explicit spec ("lets the whole effect be turned off without zeroing
+  the tolerance itself") — tolerance/bounce still function with
+  thinning off.
+  - **Thinning can't reuse `strokeRopeCurve()`** — Canvas2D's
+    `ctx.lineWidth` is one value per `stroke()` call, so genuine
+    mid-path width variation needs a NEW function
+    (`strokeRopeCurveVariableWidth()`) that strokes each segment of the
+    affected anchor→drag-point sub-chain separately with its own
+    interpolated width, straight lines rather than the curve-through-
+    midpoint technique `strokeRopeCurve()` uses elsewhere (an accepted
+    simplification — this only ever renders while actively
+    overstretched, where some extra faceting reads as "taut/stressed,"
+    not as a bug). `render()`'s main-rope stroke call branches: the
+    unmodified `strokeRopeCurve()` call is still what runs for EVERY
+    other case (feature off, not dragging, dragging but not
+    overstretched) — only `mainRope.overstretchActive` true replaces it
+    with 2 calls (the thinned sub-chain via the new function, then the
+    unmodified rest of the rope via the normal one).
+  - **Thickness profile:** `thickness(t) = base * (1 - depth *
+    sin(pi*t)^sharpness)`, `t` = 0 at the anchor, 1 at the drag point —
+    full thickness at both ends, thinnest at the sub-chain's own
+    midpoint. `depth` itself ramps LINEARLY from `0` (right at the rest
+    limit) to `overstretchMaxThinDepth` (fully at the tolerance limit)
+    as a continuous function of the actual clamped drag distance
+    (`mainRope.overstretchPx`/`overstretchTolerance`), so thinning
+    visibly eases in rather than popping on — verified live (Browser
+    pane, with `mouseFlickEnabled` temporarily forced off so raw
+    `mouseX`/`mouseY` drives the drag target directly — see the next
+    gotcha for why that matters for testing) at an intermediate drag
+    distance: `depth` read a genuine in-between value (`0.173`, neither
+    `0` nor the saturated `0.6`), and `overstretchThicknessMultiplier()`
+    at that depth gave IDENTICAL values at `t=0.25`/`t=0.75`
+    (0.877741 both) with `t=0.5` strictly lower (0.8271) and `t=0`/`t=1`
+    exactly `1` — symmetric, midpoint-thinnest, full at both ends, as
+    specified.
+  - **Testing a live drag via direct `mouseX`/`mouseY` assignment
+    doesn't work while FLICK MOUSE is active/visible** — `update()`'s
+    drag-pin block reads the target via `mouseFlickInteractionPos(mouseX,
+    mouseY, 'drag')`, which returns `mouseFlickInteractionPointWorld('drag')`
+    when FLICK MOUSE can resolve one, falling back to raw `mouseX`/`mouseY`
+    only when it can't. Combined with the 2026-09-14 drag-anchor-snap fix
+    (FLICK MOUSE's own sprite position, `mfEntityX`/`mfEntityY`, now
+    SNAPS to the live drag point with zero lag while dragging — see that
+    gotcha), this creates a closed loop while actively dragging: the
+    drag point's position feeds the sprite's position, which feeds the
+    'drag' interaction point, which feeds the drag point's position
+    again — directly poking `mouseX`/`mouseY` has no effect on this loop
+    at all, since the interaction point never bottoms out at the
+    fallback. A temporary debug hook driving `mouseX`/`mouseY` directly
+    (this feature's own live-test method, per this project's established
+    convention) must set `cfg.mouseFlickEnabled = false` first to break
+    the loop and force the plain fallback — confirmed directly: the
+    SAME test that read back stale/unchanged values with FLICK MOUSE on
+    produced correct, responsive values the instant it was turned off.
+    This isn't specific to Overstretch — it applies to any FUTURE test
+    that needs to drive `mainRope`'s drag target directly rather than
+    reading it back.
+  - **Release bounce is a SCRIPTED damped harmonic oscillator
+    (`amplitude * e^(-damping*t) * cos(stiffness*t)`), applied as a
+    radial position nudge on top of whatever `integrateChain()`'s own
+    normal solve already computed that frame — deliberately NOT
+    touching `oldx`/`oldy`, so it genuinely injects a one-frame Verlet
+    "velocity" contribution rather than reading as a disconnected
+    overlay.** Armed in `onPointerUp`'s Drag Rope release branch, ONLY
+    when `mainRope.overstretchPx > 0` at release (so a release right at
+    the rest limit produces ~zero bounce, per spec) — amplitude IS that
+    exact px overstretch amount directly, no separate "base amplitude"
+    slider needed. Terminates once its own decaying envelope drops
+    below `cfg.overstretchBounceMinAmplitude` (the real, user-facing
+    termination control — `OVERSTRETCH_BOUNCE_MAX_DURATION` is a plain
+    3-second safety backstop, not a slider) rather than a fixed
+    duration. Verified live (30ms-interval sampling over ~1.8s real
+    time, low damping): a clean multi-cycle trace — 211.9 (trough) →
+    224.02 (crest #1) → 221.38 (near-trough) → 224.4 (crest #2) — at
+    least 2 distinct overshoots before the sandbox's own background-tab
+    rAF suspension interrupted the trace (a real environment limitation
+    also documented elsewhere in this file, not a bug in the bounce
+    itself — a `computer` click on the canvas reliably "wakes" a
+    suspended tab's rAF loop back up, used repeatedly during this
+    feature's own live verification). High-damping and near-zero-
+    amplitude termination behavior were verified via an independent
+    Node.js simulation of the exact same envelope/crossing-count math
+    (15 sign-crossings at damping=1, 1 crossing at damping=15, 0 at
+    amplitude below the min-amplitude threshold) rather than live, for
+    speed — the live trace above already confirms the SAME formula
+    genuinely perturbs real rope points end-to-end through the actual
+    render()/update() code path, which is what a pure Node simulation
+    of the formula alone could never confirm on its own.

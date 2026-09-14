@@ -560,6 +560,65 @@ const DEV_GROUPS = [
     // behavior change. See update()'s own `Math.min(...)` call for
     // exactly how the 2 clamps combine.
     { key:'dragMaxDistance', label:'Drag Max Distance', type:'slider', unit:'%vmin', min:5, max:150, step:1, def:150 },
+    // Rope Overstretch (2026-09-14, per explicit spec) -- Drag Max
+    // Distance above stays the REST limit; this adds a genuinely elastic
+    // "give" zone beyond it (the true hard limit becomes maxDragDist +
+    // Overstretch Tolerance), with progressive visual thinning while in
+    // that zone and a damped-spring release bounce scaled to how far
+    // past the rest limit the point was at release. `overstretchEnabled`
+    // defaults OFF so a drag that never exceeds Drag Max Distance is
+    // pixel-identical to today's hard-clamp behavior regardless of every
+    // other slider below -- see update()'s own drag-pin block for
+    // exactly how `overstretchTolerance` folds into the existing
+    // `Math.min(mainRope.segLen * dragPinIndex, vmin(cfg.dragMaxDistance))`
+    // clamp (it becomes the rest limit; the hard limit adds the
+    // tolerance on top, only while this checkbox is on).
+    { key:'overstretchEnabled', label:'Rope Overstretch Enabled', type:'checkbox', def:false },
+    { key:'overstretchTolerance', label:'Drag Overstretch Tolerance (%vmin)', type:'slider', unit:'%vmin', min:0, max:100, step:1, def:15 },
+    // Thinning: thickness(t) = base * (1 - depth * sin(pi*t)^sharpness),
+    // t = 0..1 along the anchor->drag-point sub-chain (0 anchor, 1 drag
+    // point) -- full thickness at both ends, thinnest at the sub-chain's
+    // own midpoint, per explicit spec (a rubber-band "necking" look, not
+    // a linear taper). `depth` itself ramps linearly from 0 (right at
+    // Drag Max Distance) to Overstretch Max Thinning Depth (fully at the
+    // tolerance limit) as a continuous function of the actual clamped
+    // drag distance -- see update()'s own overstretchFrac computation --
+    // so thinning visibly eases in rather than popping on. Rendering-only
+    // (see render()'s own strokeRopeCurveVariableWidth() call) -- never
+    // touches mainRope.segLen, rest lengths, or the constraint solver.
+    { key:'overstretchThinningEnabled', label:'Overstretch Thinning Enabled', type:'checkbox', def:true },
+    { key:'overstretchMaxThinDepth', label:'Overstretch Max Thinning Depth (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:0.6 },
+    // Exponent on sin(pi*t) -- 1 reproduces the exact profile from spec
+    // (the default, so this control adds tunability without changing the
+    // out-of-the-box look); >1 narrows the thin "neck" toward the exact
+    // midpoint, <1 broadens it across more of the sub-chain. A real,
+    // independently-useful feel dial per workspace CLAUDE.md SS12n
+    // ("feel/response curves are sliders, not constants"), not just a
+    // spec-completeness formality.
+    { key:'overstretchThinningSharpness', label:'Overstretch Thinning Curve Sharpness (x)', type:'slider', unit:'x', min:0.25, max:4, step:0.05, def:1 },
+    // Release bounce: a SCRIPTED damped harmonic oscillator (radial
+    // offset = amplitude * e^(-damping*t) * cos(stiffness*t), amplitude
+    // = the actual overstretch distance in px at the moment of release,
+    // so a release right at Drag Max Distance produces ~0 bounce and a
+    // release at the full tolerance limit produces a real, visible
+    // overshoot) applied on TOP of the anchor->former-drag-point
+    // sub-chain's own normal physics for a short window post-release --
+    // per explicit spec, deliberately NOT a one-time velocity spike, and
+    // deliberately NOT left to the passive distance/bend constraints
+    // alone (verified live: those alone converge with no visible
+    // overshoot at all). `stiffness` is the oscillator's own angular
+    // frequency (Rad/S -- higher = faster snap-back cycles); `damping`
+    // is its exponential decay rate (1/S -- low values leave multiple
+    // visible overshoots, high values settle within about one). The
+    // bounce ends (control handed fully back to normal physics) once its
+    // own decaying envelope drops under Overstretch Bounce Min
+    // Amplitude, rather than a fixed duration -- makes "how long it
+    // rings" a real, independently-tunable phase per SS12n instead of a
+    // bundled/implicit guess, and guarantees clean termination with no
+    // leftover jitter regardless of the stiffness/damping combination.
+    { key:'overstretchBounceStiffness', label:'Overstretch Bounce Stiffness (Rad/S)', type:'slider', unit:'rad/s', min:2, max:60, step:1, def:18 },
+    { key:'overstretchBounceDamping', label:'Overstretch Bounce Damping (1/S)', type:'slider', unit:'1/s', min:0.2, max:20, step:0.1, def:4 },
+    { key:'overstretchBounceMinAmplitude', label:'Overstretch Bounce Min Amplitude (Px)', type:'slider', unit:'px', min:0.1, max:20, step:0.1, def:1 },
   ]},
   { title:'ROPE ANIMATION', controls:[
     { key:'bendStiffness',   label:'Bend Stiffness',       type:'slider', unit:'x', min:0,   max:1, step:0.01, def:0 },
@@ -4963,6 +5022,13 @@ function makeChain(n, x, y, segLen){
 let mainRope = null;
 let fallenPieces = [];
 let bgRope = null;
+// Rope Overstretch release bounce (2026-09-14) -- a pure safety backstop,
+// not a user-facing control: Overstretch Bounce Min Amplitude is the REAL
+// tunable termination condition (the bounce almost always ends via that
+// well before this fires); this just guarantees the scripted oscillation
+// can never run forever if stiffness/damping are tuned to decay extremely
+// slowly.
+const OVERSTRETCH_BOUNCE_MAX_DURATION = 3;
 // Cut Splatter (CUT SPLATTER dev group) -- {x,y,vx,vy,size,life}. life
 // counts DOWN from (flightDuration+fadeTime) at spawn; while life is
 // still above fadeTime the particle is "flying" (position/velocity
@@ -8310,7 +8376,24 @@ function onPointerUp(e){
     if (mfMode === 'charge' && mouseFlickFramesByDirection[mfDirectionKey] && mouseFlickFramesByDirection[mfDirectionKey].drag){
       mfMode = 'dragRelease';
     }
-    logClick('up:drag-end', { x: e.clientX, y: e.clientY, index: info.dragIndex });
+    // Rope Overstretch release bounce (2026-09-14) -- armed ONLY when the
+    // point was actually past the rest limit (mainRope.overstretchPx > 0)
+    // at the moment of release, per explicit spec ("a release right at
+    // maxDragDist should produce little to no bounce"); amplitude is that
+    // exact px overstretch amount, so the bounce's own initial energy
+    // scales naturally with how hard the drag was overstretched, with no
+    // separate "base amplitude" slider needed. mainRope.overstretchPx/
+    // overstretchDragIndex reflect the LAST update() tick, which is as
+    // close to "at the moment of release" as a pointerup handler (which
+    // fires between physics ticks) can observe. `subChainLen` uses info.dragIndex
+    // (this release's own drag point), not mainRope.overstretchDragIndex,
+    // as the authoritative index -- they agree whenever the bounce
+    // actually fires (overstretchPx > 0 only while dragging this exact
+    // point), but info.dragIndex is the more directly-scoped value here.
+    if (cfg.overstretchEnabled && mainRope.overstretchPx > 0){
+      mainRope.overstretchBounce = { active: true, t: 0, amplitude: mainRope.overstretchPx, subChainLen: info.dragIndex };
+    }
+    logClick('up:drag-end', { x: e.clientX, y: e.clientY, index: info.dragIndex, overstretchPx: round(mainRope.overstretchPx, 2) });
     return;
   }
 
@@ -9023,6 +9106,14 @@ function update(rawDt){
   // tip hangs from it, exactly like Rope Attraction's own tip case but
   // centered on an interior point instead of the last one.
   let dragPinIndex = -1;
+  // Rope Overstretch's own per-frame state (thinning depth for render(),
+  // and the actual px overstretch amount for a bounce armed on release) --
+  // reset every frame regardless of whether a drag is active, so a stale
+  // value never leaks into a frame where dragging has already ended.
+  mainRope.overstretchActive = false;
+  mainRope.overstretchDepth = 0;
+  mainRope.overstretchDragIndex = 0;
+  mainRope.overstretchPx = 0;
   if (downInfo && downInfo.mode === 'rope' && downInfo.dragging){
     dragPinIndex = downInfo.dragIndex;
     const anchor = mainRope.points[0];
@@ -9034,15 +9125,31 @@ function update(rawDt){
     // what the rope's own real length between anchor and drag point
     // physically allows).
     const maxDragDist = Math.min(mainRope.segLen * dragPinIndex, vmin(cfg.dragMaxDistance));
+    // Rope Overstretch (2026-09-14) -- maxDragDist above is now the REST
+    // limit, not the hard limit; the true hard limit adds a genuinely
+    // elastic tolerance on top, only while explicitly enabled (0 when
+    // off, so `hardLimit === maxDragDist` exactly and behavior is
+    // byte-for-byte identical to before this feature existed).
+    const overstretchTol = cfg.overstretchEnabled ? vmin(cfg.overstretchTolerance) : 0;
+    const hardLimit = maxDragDist + overstretchTol;
     const dragTargetPos = mouseFlickInteractionPos(mouseX, mouseY, 'drag');
     let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
     const ddist = Math.hypot(dx, dy) || 1e-6;
-    if (ddist > maxDragDist){ dx *= maxDragDist / ddist; dy *= maxDragDist / ddist; }
+    if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }
     const dragPoint = mainRope.points[dragPinIndex];
     dragPoint.x = anchor.x + dx;
     dragPoint.y = anchor.y + dy;
     dragPoint.oldx = dragPoint.x;
     dragPoint.oldy = dragPoint.y;
+    // How far past the REST limit (maxDragDist) the point actually sits,
+    // in real px (0 when within limit) -- drives both the thinning depth
+    // below and, at release, the bounce's own initial amplitude.
+    const clampedDist = Math.hypot(dx, dy);
+    mainRope.overstretchPx = Math.max(0, clampedDist - maxDragDist);
+    const overstretchFrac = overstretchTol > 0 ? Math.min(1, mainRope.overstretchPx / overstretchTol) : 0;
+    mainRope.overstretchActive = cfg.overstretchEnabled && cfg.overstretchThinningEnabled && overstretchFrac > 0;
+    mainRope.overstretchDepth = overstretchFrac * cfg.overstretchMaxThinDepth;
+    mainRope.overstretchDragIndex = dragPinIndex;
   }
   // attractionEffSegLen (set just above, only while ropeAttractionActive)
   // temporarily shrinks the rest length THIS solve targets -- see that
@@ -9079,6 +9186,37 @@ function update(rawDt){
     const mdist = Math.hypot(mdx, mdy) || 1e-6;
     prev.x = tip.x - (mdx / mdist) * mainRope.attractionEffSegLen;
     prev.y = tip.y - (mdy / mdist) * mainRope.attractionEffSegLen;
+  }
+  // Rope Overstretch release bounce (2026-09-14) -- see mainRope.overstretchBounce's
+  // own arm site (onPointerUp's Drag Rope release branch) for how/when
+  // this gets armed. Applied AFTER integrateChain() above has already run
+  // its normal convergence step for this frame, as an ADDITIONAL radial
+  // nudge on top -- deliberately NOT touching oldx/oldy, so this actually
+  // injects a real one-frame "velocity" contribution into next frame's
+  // Verlet integration, letting the driven oscillation blend with genuine
+  // gravity/constraint physics instead of reading as a disconnected
+  // scripted overlay. Concentrated at the sub-chain's OWN former-drag-point
+  // end (frac scales 0 at the anchor up to 1 there), mirroring how a real
+  // snapped elastic band visibly moves most at its released end.
+  if (mainRope.overstretchBounce && mainRope.overstretchBounce.active){
+    const b = mainRope.overstretchBounce;
+    b.t += dt;
+    const envelope = b.amplitude * Math.exp(-cfg.overstretchBounceDamping * b.t);
+    if (Math.abs(envelope) < cfg.overstretchBounceMinAmplitude || b.t > OVERSTRETCH_BOUNCE_MAX_DURATION){
+      b.active = false;
+    } else {
+      const offset = envelope * Math.cos(cfg.overstretchBounceStiffness * b.t);
+      const anchor = mainRope.points[0];
+      for (let i = 1; i <= b.subChainLen && i < mainRope.points.length; i++){
+        const p = mainRope.points[i];
+        const bdx = p.x - anchor.x, bdy = p.y - anchor.y;
+        const bdist = Math.hypot(bdx, bdy) || 1e-6;
+        const frac = i / b.subChainLen;
+        const push = offset * frac;
+        p.x += (bdx / bdist) * push;
+        p.y += (bdy / bdist) * push;
+      }
+    }
   }
   // The exact frame introUnsettled flips true->false, the boundary radius
   // shrinks from circleR down to the much tighter anchorBoundaryRadius()
@@ -9858,6 +9996,41 @@ function strokeRopeCurve(points, thicknessPx, color){
   ctx.stroke();
 }
 
+// Rope Overstretch thinning profile (2026-09-14) -- thickness(t) = base *
+// (1 - depth * sin(pi*t)^sharpness): full thickness at t=0 (anchor) and
+// t=1 (drag point), thinnest at t=0.5 (the sub-chain's own midpoint),
+// eased by a sine rather than a linear "V" taper, per explicit spec.
+// sharpness=1 is the exact spec profile (Overstretch Thinning Curve
+// Sharpness's own default) -- >1 narrows the thin "neck," <1 broadens it.
+function overstretchThicknessMultiplier(depth, t, sharpness){
+  const s = Math.pow(Math.sin(Math.PI * Math.max(0, Math.min(1, t))), sharpness);
+  return 1 - depth * s;
+}
+// Draws `points` with a PER-SEGMENT thickness instead of strokeRopeCurve()'s
+// single shared ctx.lineWidth -- Canvas2D's lineWidth is one value per
+// stroke() call, so genuine mid-path width variation needs one stroke()
+// per segment rather than the single continuous quadratic-curve path
+// strokeRopeCurve() draws (straight segments here, not curve-smoothed --
+// an accepted, deliberate simplification: this only ever renders the
+// transient Rope Overstretch thinning effect, where some extra faceting
+// reads as "taut/stressed" rather than as a bug, and every other
+// rope-drawing case in this file still goes through the unmodified,
+// curve-smoothed strokeRopeCurve() exactly as before -- see this
+// function's own call site in render() for the regression-safety
+// reasoning). `thicknessAt(i)` is called once per point index.
+function strokeRopeCurveVariableWidth(points, thicknessAt, color){
+  ctx.strokeStyle = color;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let i = 0; i < points.length - 1; i++){
+    const a = points[i], b = points[i + 1];
+    ctx.lineWidth = (thicknessAt(i) + thicknessAt(i + 1)) / 2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+}
+
 // Split out of strokeRopeCurve() so callers can draw the rope's own BODY
 // first, then the (decorative SVG) endcap on top of it, and only THEN
 // these plain round-cap arcs -- rather than the arcs always painting
@@ -10527,7 +10700,28 @@ function render(){
   const showMainRope = introPhase === 'growing' || introPhase === 'done';
   const mainStrokePoints = mainRope.points;
   const mainRopeColor = ropeStrokeColor(mainRope.points, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
-  if (showMainRope) strokeRopeCurve(mainStrokePoints, liveThickness, mainRopeColor);
+  // Rope Overstretch thinning (2026-09-14) -- only the anchor->drag-point
+  // sub-chain (index 0..overstretchDragIndex) thins; the rest of the rope
+  // (drag point->tip) still draws through the normal, unmodified
+  // strokeRopeCurve() at full thickness, matching "not the whole rope" in
+  // the spec exactly. Regression-safe by construction: mainRope.overstretchActive
+  // is only ever true while actively dragging AND past the rest limit AND
+  // both the master and thinning checkboxes are on (see update()'s own
+  // drag-pin block) -- a normal (non-overstretched) drag, or this feature
+  // left off entirely, always takes the plain strokeRopeCurve() branch
+  // below, byte-for-byte the same call this file always made here.
+  if (showMainRope){
+    if (mainRope.overstretchActive && mainRope.overstretchDragIndex > 0){
+      const di = mainRope.overstretchDragIndex;
+      const depth = mainRope.overstretchDepth;
+      const sharpness = cfg.overstretchThinningSharpness;
+      strokeRopeCurveVariableWidth(mainStrokePoints.slice(0, di + 1),
+        i => liveThickness * overstretchThicknessMultiplier(depth, i / di, sharpness), mainRopeColor);
+      strokeRopeCurve(mainStrokePoints.slice(di), liveThickness, mainRopeColor);
+    } else {
+      strokeRopeCurve(mainStrokePoints, liveThickness, mainRopeColor);
+    }
+  }
   if (hasEndcap){
     // Independent endcap gradient (see endcapGradientEnabled/Colors) --
     // recomputed per piece each frame from its OWN current points span,

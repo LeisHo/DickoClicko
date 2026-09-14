@@ -13015,3 +13015,51 @@ documenting the fix and warning that any future PANEL_STYLE_CONTROLS
 field must be added to applyDefaultDevPanelSubgroupOrder()'s own
 subgroup key lists or it will silently float the same way.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  03:15 AM - 03:40 AM EDT
+
+Added a "Rope Overstretch" feature to Drag Rope, per explicit 3-part
+spec: an elastic tolerance zone beyond the existing hard drag-distance
+clamp, progressive visual thinning of the anchor->drag-point sub-chain
+while overstretched, and a damped-spring release bounce.
+
+Added:
+- `Rope Overstretch Enabled` checkbox (def OFF) gates the whole
+  feature -- with it off, the existing Drag Max Distance clamp behaves
+  byte-for-byte as before (regression-verified live).
+- `Drag Overstretch Tolerance (%vmin)` -- the existing clamp becomes
+  the REST limit; the true hard limit adds this tolerance on top.
+- Progressive thinning: `thickness(t) = base * (1 - depth *
+  sin(pi*t)^sharpness)` across the anchor->drag-point sub-chain only
+  (full at both ends, thinnest at the sub-chain's own midpoint) --
+  `Overstretch Thinning Enabled` (its own separate on/off), `Overstretch
+  Max Thinning Depth`, and `Overstretch Thinning Curve Sharpness` (an
+  extra tunable exponent beyond the literal spec, narrows/broadens the
+  thin "neck"). Rendering-only, via a new `strokeRopeCurveVariableWidth()`
+  function (Canvas2D can't vary lineWidth mid-path) -- every other
+  rope-drawing case still goes through the unmodified strokeRopeCurve().
+- Release bounce: a scripted damped harmonic oscillator
+  (`amplitude*e^(-damping*t)*cos(stiffness*t)`) applied as a radial
+  position nudge on the former anchor->drag-point sub-chain for a short
+  window after release, armed only when the point was actually past the
+  rest limit at release (amplitude = that real px overstretch amount,
+  so a release right at the limit produces ~no bounce). `Overstretch
+  Bounce Stiffness`, `Overstretch Bounce Damping`, and `Overstretch
+  Bounce Min Amplitude` (the real termination control, not a fixed
+  duration). Deliberately blends with real physics (position nudge only,
+  oldx/oldy left untouched, so it injects genuine Verlet "velocity")
+  rather than a disconnected scripted overlay.
+
+Verified: math (thickness symmetry/midpoint-minimum/sharpness effect,
+depth ramp, bounce envelope decay and crossing counts at low/high
+damping) independently in Node.js; then end-to-end live via a temporary
+debug hook (grep-confirmed removed) driving the real update()/render()
+code -- regression case (active:false/depth:0 within the rest limit),
+saturated overstretch (active:true/depth at its configured max), a
+genuine intermediate ramp value, symmetric thinning at that live depth,
+and a real multi-cycle bounce trace (2 visible overshoots before the
+sandbox's own background-tab rAF suspension interrupted the trace --
+see CLAUDE.md's own new gotcha for the "wake the tab with a click"
+workaround this session re-confirmed, and for why direct mouseX/mouseY
+poking doesn't drive the drag target while FLICK MOUSE is active).
+
