@@ -309,7 +309,7 @@
         "subgroups": []
       },
       {
-        "key": "FLICK MOUSE",
+        "key": "CURSOR ANIMATION",
         "collapsed": true,
         "settings": [
           "mouseFlickShowInteractionPoints",
@@ -664,7 +664,6 @@
   },
   "textOverrides": {
     "group:New Group": "FLICK ANIMATIONS",
-    "group:FLICK MOUSE": "CURSOR ANIMATION",
     "group:New Group (2)": "Endcap",
     "group:New Group (3)": "EndArc",
     "group:New Group (4)": "CUT PIECE",
