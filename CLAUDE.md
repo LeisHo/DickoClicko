@@ -1349,6 +1349,84 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   nonzero and therefore easy to assume is "obviously fine" without
   actually comparing it against the other value it's implicitly
   supposed to stay larger than.
+- **Dragging the rope by its own TIP (the last point, `dragIndex ===
+  points.length - 1`) fights `positionGrowingTip()` for control of that
+  same point whenever `mainRope.tipGrowLen < mainRope.segLen` --
+  `positionGrowingTip()` runs unconditionally AFTER `integrateChain()`
+  whenever `hasPartialTip` is true, with zero awareness of dragging, so
+  it silently OVERWRITES whatever the drag code had just set the tip's
+  position to, every single frame.** Real, reported bug (2026-09-14:
+  "some specific cases where i try to drag the rope by the endcap, it
+  fails and snaps me to the last segment end point... I am locked in
+  position like before") -- `tipGrowLen` stays below `segLen` for a
+  few frames after ANY growth session even though `growRope()` itself
+  is correctly paused during a drag (see that gotcha above), so
+  grabbing the tip specifically DURING or shortly after growth hits
+  this every time, while grabbing an interior point, or grabbing the
+  tip once growth has fully settled, never does -- exactly matching
+  "some specific cases," not "every time." "Snaps to the last segment
+  end point" is `positionGrowingTip()` placing the tip near `dir.prev`
+  (the second-to-last point) while `tipGrowLen` is still small; "locked
+  in position" is that override re-running every frame regardless of
+  where the cursor moves, since it never reads the drag target at all.
+  Fixed by extending the SAME exclusion `hasPartialTip` already applies
+  for `ropeAttractionActive` (per that mechanism's own comment: "it
+  re-enters the normal constraint solve... and positionGrowingTip() is
+  skipped entirely... Reverts... the instant attraction ends") to cover
+  dragging the tip too -- `draggingTip = downInfo && downInfo.mode ===
+  'rope' && downInfo.dragging && downInfo.dragIndex === mainRope.points.length
+  - 1`, folded into `hasPartialTip`'s own definition. While the tip is
+  being dragged, the last segment re-enters the normal distance/bend
+  solve (the tip itself stays pinned via the existing generic
+  `pinnedIndex` mechanism, unaffected), and `positionGrowingTip()` is
+  skipped -- reverting the instant the drag ends, so an in-progress
+  hold-to-grow resumes exactly where it left off, same promise as the
+  `ropeAttractionActive` case. Verified via a Node-level simulation of
+  the exact boolean expression (not a live browser test -- this
+  environment's page-boot stall recurred, unpredictably, across
+  multiple fresh navigations the same session, including one that DID
+  fully boot and then failed again on the very next reload) across 6
+  scenarios (no drag, dragging an interior point, dragging the tip
+  mid-growth, dragging the tip post-growth, `ropeAttractionActive`
+  simultaneously true, and drag-just-ended) -- all 6 produced the
+  intended `hasPartialTip`/`draggingTip` values. **If a FUTURE gesture
+  ever kinematically pins the tip point directly (the same way Drag
+  Rope and Rope Attraction both already do), it needs this same
+  exclusion folded into `hasPartialTip` too** -- any code that sets
+  `mainRope.points[points.length-1].x/y` directly on a given frame
+  will silently lose that write to `positionGrowingTip()` if
+  `hasPartialTip` isn't also made aware of it.
+- **Cursor Animation's drag-anchor pinning (2026-09-14) is a dead-zone/
+  "leash" clamp, not a rigid 1:1 pin -- per explicit follow-up request:
+  "instead [of] exactly anchored directly to that point... a circular
+  tolerance threshold around the drag point with the diameter of the
+  rope thickness. So as i drag the rope around, the cursor animation
+  frame can shift away from the drag point by the distance of half the
+  rope thickness."** Built on top of `mouseFlickDragEntityOriginForAnchor()`
+  without modifying that function at all -- it already solves "what
+  origin puts the annotated point at an arbitrary world position," so
+  the tolerance logic just computes a CLAMPED target position and feeds
+  that in instead of the raw anchor. Each frame: read where the
+  annotated point ACTUALLY is right now via `mouseFlickDragPointWorld()`
+  (last frame's transform, read BEFORE this frame's own mfEntityX/Y
+  reassignment); if that's already within `cfg.ropeThickness/2 *
+  cursorAnimationDragToleranceMult` of the live anchor, hold still
+  (don't re-snap); otherwise pull the target back to exactly the
+  tolerance radius's own boundary along the line from anchor to current
+  position (never snap all the way to the anchor -- the same clamp a
+  follow-camera dead zone uses). `cursorAnimationDragToleranceMult` (def
+  1, CURSOR ANIMATION group) scales the literal spec'd radius rather
+  than replacing it with a free-standing constant, per SS12n. Verified
+  via a Node-level simulation of the exact clamp math (4 cases: exactly
+  at anchor, inside tolerance, outside tolerance -- confirmed clamped to
+  precisely the radius along the correct line, and no-prior-data
+  fallback) -- not a live browser test, same recurring page-boot-stall
+  environment issue as the drag-tip fix above (confirmed still present
+  on a fresh attempt the same session). **If this dead-zone target ever
+  needs to feed anything OTHER than `mouseFlickDragEntityOriginForAnchor()`
+  in the future, compute it once and reuse it -- don't re-derive the
+  clamp twice; `mfDragTargetWorld` is already the single source of
+  truth for "where the sprite should actually anchor this frame."**
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as

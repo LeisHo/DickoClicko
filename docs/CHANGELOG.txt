@@ -13238,3 +13238,58 @@ dev server's page boot is still stalled by the same unrelated
 mass-deleted FLICK asset files noted in the prior entry (confirmed
 still present, not this session's own change).
 
+--------------------------------------------------------------------------------
+2026-09-14  -  07:21 AM - (in progress) EDT
+
+Fixed a real drag-by-endcap-tip lockup, updated interaction-point data
+(Drag frame 1 + Tickle, plus 3 Sciss values the dump also changed),
+and added a circular tolerance zone to the drag-anchor cursor pin.
+
+Fixed:
+- Root-caused "some specific cases where i try to drag the rope by the
+  endcap, it fails and snaps me to the last segment end point... I am
+  locked in position": positionGrowingTip() runs unconditionally after
+  integrateChain() whenever mainRope.tipGrowLen < mainRope.segLen (a
+  window that persists for a few frames after any growth session even
+  though growRope() itself is correctly paused during a drag), with no
+  awareness of dragging -- it was silently overwriting the tip's
+  position every frame right after Drag Rope's own code had just set
+  it. Fixed by extending the same exclusion hasPartialTip already
+  applies for ropeAttractionActive to cover "currently dragging the
+  tip" too (draggingTip = dragIndex === points.length-1) -- the last
+  segment re-enters the normal solve while the tip is being dragged,
+  and reverts the instant the drag ends, same as the ropeAttraction
+  case already does.
+
+Data:
+- Cross-checked the full pasted interaction-point dump against code
+  (not just the "Drag and Tickle" the request named) -- found and
+  applied: MOUSE_FLICK_INTERACTION_POINTS.drag (frame 1) changed in 7
+  of 8 directions; .default (Tickle) changed in all 8; .cut (Sciss)
+  changed in 3 of 8 (front-thumb, front, side-pinky) despite not being
+  named in the request. MOUSE_FLICK_DRAG_END_POINTS (frame 48) was
+  unchanged in every direction -- left untouched.
+
+Added:
+- Cursor Animation's drag-anchor pin is now a circular tolerance/dead-
+  zone instead of an exact pin, per explicit follow-up request: the
+  annotated drag point can sit up to (ropeThickness/2 *
+  cursorAnimationDragToleranceMult) away from the live drag anchor
+  before the sprite re-anchors, rather than snapping exactly onto it
+  every frame. New "Cursor Animation Drag Anchor Tolerance (x Rope
+  Thickness)" slider (def 1, reproduces the literal spec'd radius
+  untouched).
+
+Verification: all 3 changes syntax-checked (block 0 OK). The drag-tip
+fix and tolerance feature were both verified via Node-level simulation
+of their exact boolean/clamp logic (6 scenarios for the tip fix, 4 for
+the tolerance clamp -- all produced the intended values) rather than
+live browser testing -- the local dev server's page boot stall
+recurred unpredictably across multiple fresh navigations this session
+(including one navigation that DID fully boot, followed by the very
+next reload failing again), confirmed present on the final attempt
+before writing this entry. A temporary debug hook
+(window.__testDragTip) was added to attempt a live repro of the tip
+fix, then removed (grep-confirmed 0 matches) once the boot stall made
+it unusable.
+

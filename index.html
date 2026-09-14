@@ -1066,6 +1066,19 @@ const DEV_GROUPS = [
     { key:'mouseFlickTickleSpeed',       label:'Tickle Animation Speed',         type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
     { key:'mouseFlickDragSpeed',         label:'Drag Animation Speed',           type:'slider', unit:'x',     min:0.1,  max:5,   step:0.1,  def:3.2 },
     { key:'mouseFlickPositionSmoothing', label:'Mouse Flick Position Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
+    // Drag Anchor Tolerance (2026-09-14, per explicit request): "instead
+    // of [being] exactly anchored directly to that point, [have] a
+    // circular tolerance threshold around the drag point with the
+    // diameter of the rope thickness. So as i drag the rope around, the
+    // cursor animation frame can shift away from the drag point by the
+    // distance of half the rope thickness." Scales the literal spec'd
+    // radius (ropeThickness/2) rather than replacing it -- 1 reproduces
+    // the spec exactly untouched, per SS12n ("feel/response curves are
+    // sliders, not constants," don't hardcode a bare constant when a
+    // tunable multiplier costs nothing extra). See update()'s own
+    // mfDragToleranceRadius computation for the dead-zone/leash mechanic
+    // this actually drives.
+    { key:'cursorAnimationDragToleranceMult', label:'Cursor Animation Drag Anchor Tolerance (x Rope Thickness)', type:'slider', unit:'x', min:0, max:5, step:0.05, def:1 },
     { key:'mouseFlickRotationSmoothing', label:'Mouse Flick Rotation Smoothing', type:'slider', unit:'',      min:0.02, max:1,   step:0.01, def:1 },
     { key:'mouseFlickAngleOffset',       label:'Mouse Flick Angle Offset',       type:'slider', unit:'deg',   min:-180, max:180, step:1,    def:0 },
     { key:'mouseFlickHoldMaxSpeed',      label:'Mouse Flick Hold Max Speed',     type:'slider', unit:'x',     min:1,    max:20,  step:0.5,  def:6 },
@@ -4789,37 +4802,37 @@ const MOUSE_FLICK_INTERACTION_POINTS = {
     'behind':       { x: 0.527, y: 0.298 },
     'behind-thumb': { x: 0.467, y: 0.315 },
     'side-thumb':   { x: 0.457, y: 0.309 },
-    'front-thumb':  { x: 0.485, y: 0.269 },
-    'front':        { x: 0.489, y: 0.272 },
+    'front-thumb':  { x: 0.469, y: 0.304 },
+    'front':        { x: 0.475, y: 0.304 },
     'front-pinky':  { x: 0.504, y: 0.286 },
-    'side-pinky':   { x: 0.531, y: 0.292 },
+    'side-pinky':   { x: 0.544, y: 0.321 },
     'behind-pinky': { x: 0.529, y: 0.298 },
   },
   // 'tickle' category, doubling as the 'click'/'hold' interaction point
   // (and the default fallback) -- per explicit spec, not the actual
   // Tickle animation's own frames.
   default: {
-    'behind':       { x: 0.521, y: 0.24 },
-    'behind-thumb': { x: 0.501, y: 0.237 },
-    'side-thumb':   { x: 0.468, y: 0.231 },
-    'front-thumb':  { x: 0.471, y: 0.249 },
-    'front':        { x: 0.478, y: 0.231 },
-    'front-pinky':  { x: 0.558, y: 0.249 },
-    'side-pinky':   { x: 0.564, y: 0.249 },
-    'behind-pinky': { x: 0.546, y: 0.249 },
+    'behind':       { x: 0.518, y: 0.318 },
+    'behind-thumb': { x: 0.489, y: 0.327 },
+    'side-thumb':   { x: 0.464, y: 0.327 },
+    'front-thumb':  { x: 0.474, y: 0.345 },
+    'front':        { x: 0.478, y: 0.327 },
+    'front-pinky':  { x: 0.525, y: 0.348 },
+    'side-pinky':   { x: 0.554, y: 0.378 },
+    'behind-pinky': { x: 0.541, y: 0.309 },
   },
   // Drag's own frame 1 point (gating/aim) -- frame 48's point lives in
   // MOUSE_FLICK_DRAG_END_POINTS below, used only by the frame-48-to-
   // frame-1 render-alignment feature, not by any distance gate.
   drag: {
     'behind':       { x: 0.522, y: 0.345 },
-    'behind-thumb': { x: 0.462, y: 0.33 },
-    'side-thumb':   { x: 0.457, y: 0.357 },
-    'front-thumb':  { x: 0.455, y: 0.309 },
-    'front':        { x: 0.481, y: 0.351 },
-    'front-pinky':  { x: 0.465, y: 0.324 },
-    'side-pinky':   { x: 0.568, y: 0.345 },
-    'behind-pinky': { x: 0.572, y: 0.309 },
+    'behind-thumb': { x: 0.465, y: 0.432 },
+    'side-thumb':   { x: 0.46,  y: 0.429 },
+    'front-thumb':  { x: 0.467, y: 0.429 },
+    'front':        { x: 0.481, y: 0.405 },
+    'front-pinky':  { x: 0.538, y: 0.42 },
+    'side-pinky':   { x: 0.556, y: 0.414 },
+    'behind-pinky': { x: 0.562, y: 0.402 },
   },
 };
 // Drag's own frame 48 point -- see mouseFlickDragAlignmentOffset()'s own
@@ -9174,7 +9187,34 @@ function update(rawDt){
   // Reverts to the real tipGrowLen-based value the instant attraction
   // ends, so an in-progress hold-to-grow resumes exactly where it left
   // off.
-  const hasPartialTip = !ropeAttractionActive && mainRope.tipGrowLen < mainRope.segLen;
+  // Drag Rope by the endcap tip (2026-09-14 fix) -- when the CURRENTLY
+  // dragged point is the tip itself (dragIndex === points.length-1),
+  // hasPartialTip must be forced false the SAME way ropeAttractionActive
+  // already forces it false above, and for the identical reason. Without
+  // this, a drag that grabs the tip while mainRope.tipGrowLen is still
+  // mid-ramp (tipGrowLen < segLen -- true for a few frames after any
+  // growth session, even though growRope() itself is correctly paused
+  // during a drag per that gotcha) leaves 2 independent kinematic
+  // placements fighting over the SAME point every single frame: this
+  // drag's own code above sets dragPoint.x/y directly, then
+  // positionGrowingTip() (called AFTER integrateChain, unconditionally
+  // whenever hasPartialTip is true, with zero awareness of dragging)
+  // OVERWRITES it back to dir.prev + a small smoothed offset --
+  // positionGrowingTip() always wins since it runs later in the frame.
+  // Real, reported bug (2026-09-14: "some specific cases where i try to
+  // drag the rope by the endcap, it fails and snaps me to the last
+  // segment end point... I am locked in position") -- the "snaps to the
+  // last segment end point" is positionGrowingTip() placing the tip
+  // close to dir.prev while tipGrowLen is still small; "locked in
+  // position" is that override happening every frame regardless of
+  // where the cursor moves, since it never reads the drag target at
+  // all. Reverts to the real tipGrowLen-based value the instant the
+  // drag ends (dragIndex/dragging both come from downInfo, cleared on
+  // release), so an in-progress hold-to-grow resumes exactly where it
+  // left off, matching ropeAttractionActive's own documented promise.
+  const draggingTip = downInfo && downInfo.mode === 'rope' && downInfo.dragging
+    && downInfo.dragIndex === mainRope.points.length - 1;
+  const hasPartialTip = !ropeAttractionActive && !draggingTip && mainRope.tipGrowLen < mainRope.segLen;
   // radius is the circle's own drawn edge (not Infinity) while
   // introUnsettled -- lets a spawn point placed beyond the tight
   // anchorBoundaryRadius() free-fall under Startup Rise Gravity instead
@@ -9749,13 +9789,40 @@ function update(rawDt){
     // needed for a smooth pickup.
     const mfDragAnchor = mouseFlickDragAnchorWorld();
     if (mfDragAnchor){
-      const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mfDragAnchor);
+      // Drag Anchor Tolerance (2026-09-14, per explicit request -- see
+      // cursorAnimationDragToleranceMult's own comment for the full
+      // spec). Dead-zone/"leash" mechanic: mfCurrentAnnotatedWorld is
+      // where the annotated drag point ACTUALLY sits right now (last
+      // frame's transform, read BEFORE this frame's mfEntityX/Y
+      // reassignment below). If that's already within the tolerance
+      // radius of this frame's live anchor, the sprite holds its
+      // current position rather than re-snapping exactly onto the
+      // anchor -- letting it visibly "shift away" by up to the radius
+      // as the rope point moves, instead of rigidly tracking it 1:1.
+      // Once the gap WOULD exceed the radius, the target is pulled back
+      // to exactly the radius's own boundary (never snapped all the way
+      // to the anchor), same clamp a follow-camera dead zone uses.
+      const mfDragPt = MOUSE_FLICK_INTERACTION_POINTS.drag[mfDirectionKey];
+      const mfCurrentAnnotatedWorld = mfDragPt ? mouseFlickDragPointWorld(mfDirectionKey, mfDragPt) : null;
+      let mfDragTargetWorld = mfDragAnchor;
+      if (mfCurrentAnnotatedWorld){
+        const mfDragToleranceRadius = vmin(cfg.ropeThickness) * 0.5 * cfg.cursorAnimationDragToleranceMult;
+        const tdx = mfCurrentAnnotatedWorld.x - mfDragAnchor.x, tdy = mfCurrentAnnotatedWorld.y - mfDragAnchor.y;
+        const tdist = Math.hypot(tdx, tdy);
+        if (tdist <= mfDragToleranceRadius){
+          mfDragTargetWorld = mfCurrentAnnotatedWorld;
+        } else if (tdist > 0){
+          const s = mfDragToleranceRadius / tdist;
+          mfDragTargetWorld = { x: mfDragAnchor.x + tdx * s, y: mfDragAnchor.y + tdy * s };
+        }
+      }
+      const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mfDragTargetWorld);
       if (mfDragOrigin){
         mfEntityX = mfDragOrigin.x;
         mfEntityY = mfDragOrigin.y;
       } else {
-        mfEntityX = mfDragAnchor.x;
-        mfEntityY = mfDragAnchor.y;
+        mfEntityX = mfDragTargetWorld.x;
+        mfEntityY = mfDragTargetWorld.y;
       }
     } else {
       mfEntityX += (mfX - mfEntityX) * mfPosFactor;
