@@ -1398,3 +1398,41 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   request's own wording ("it will continue to rotate and change
   animation types, but it will stay anchored to the drag point") — only
   POSITION needed to become rigid.
+- **`PANEL_STYLE_CONTROLS`' `bodyFontSize` field ("Body Text Font
+  Size") is REMOVED (2026-09-14), not just re-homed into a subgroup.**
+  Real, reported bug: the user asked for the built-in "Dev Panel"
+  group's nesting/naming to match `TEMPLATE_DEV_PANEL.html` exactly
+  ("I see a lot of floating settings in the Dev panel group"). Live
+  inspection (`#dpGroups > .dp-group[data-key="DEV PANEL"]`'s own
+  direct `.dp-row` children, i.e. rows NOT relocated into MECHANICS/
+  PANEL UI/TEXT by `applyDefaultDevPanelSubgroupOrder()`) found exactly
+  ONE floating row: `bodyFontSize`. It was one of this project's own
+  9 pre-existing, independently-tuned fields from BEFORE the
+  2026-09-14 template port (see `PANEL_STYLE_CONTROLS`' own comment)
+  — never part of what got ported FROM the template, so
+  `applyDefaultDevPanelSubgroupOrder()`'s subgroup key lists never
+  mentioned it, and the workspace `CLAUDE.md` §12i's own standing rule
+  ("No separate 'Body Text Font Size' — ... redundant duplicate of
+  Settings Title Font Size ... don't reintroduce it") had never
+  actually been applied to THIS project's copy of the field. Fixed by
+  deleting the `PANEL_STYLE_CONTROLS` entry outright (not moving it
+  into a subgroup) — `#devPanel`'s own base font-size (`--dp-body-
+  size`, used by the `#devPanel` CSS rule's `font-size`) is now a
+  plain hardcoded `12px` in CSS instead of a dedicated control,
+  matching its own default value exactly (confirmed via the live saved
+  `data/processed/dev-panel-settings.json`: `bodyFontSize` was `12` —
+  its own unchanged default — on both Desktop and Mobile, so this is a
+  zero-visual-change removal, not a behavior change). Also gave the
+  top-level "Dev Panel" group's own hand-built title span (in
+  `buildPanelStyleGroup()`, which does NOT call `createGroupElement()`
+  the way every other group does) the `dp-group-title` class it was
+  missing — without it, `applyDevTextOverrides()`'s own `.dp-group-
+  title` selector (see that gotcha above) could never find this ONE
+  group's title, so Text Edit Mode would have silently failed to
+  rename it even though every other group already worked. **If any
+  future field is added to `PANEL_STYLE_CONTROLS`, it must also be
+  added to one of `applyDefaultDevPanelSubgroupOrder()`'s
+  `makeSubgroup()` key lists (or a new subgroup) — a field left out
+  doesn't error, it just silently floats at the top of the "Dev
+  Panel" group exactly like this one did**, invisible until someone
+  compares the panel directly against `TEMPLATE_DEV_PANEL.html`.

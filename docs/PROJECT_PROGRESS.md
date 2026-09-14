@@ -20,14 +20,17 @@ work seamlessly from there.
 
 Nothing in progress — everything through the 2026-09-14 Dev Panel
 template port (19 new chrome fields, nested subgroups, per-setting
-visibility system, Mouse Log, Named Setting States, and a Drag Rope
-cursor-anchor snap fix) is done and pushed. See CHANGELOG.txt's own
-2026-09-14 entry for the full account — this doc's own "Recently
-completed"/historical narrative below has drifted well past what §4c's
-"live document, not a log" convention calls for (it should hold only
-the CURRENT picture, with full history left to CHANGELOG.txt) and is
-worth a dedicated cleanup pass at some point, not attempted here since
-it's unrelated to this session's own task.
+visibility system, Mouse Log, Named Setting States, a Drag Rope
+cursor-anchor snap fix, and a follow-up fix removing a floating
+`bodyFontSize` setting from the built-in "Dev Panel" group so its
+nesting/naming matches `TEMPLATE_DEV_PANEL.html` exactly) is done and
+pushed. See CHANGELOG.txt's own 2026-09-14 entries for the full
+account — this doc's own "Recently completed"/historical narrative
+below has drifted well past what §4c's "live document, not a log"
+convention calls for (it should hold only the CURRENT picture, with
+full history left to CHANGELOG.txt) and is worth a dedicated cleanup
+pass at some point, not attempted here since it's unrelated to this
+session's own task.
 
 **New (2026-09-10): FLICK MOUSE, a 4th mouse-anchored FLICK overlay,
 adopted from the DotFlicko project.** Per explicit request ("adopt the

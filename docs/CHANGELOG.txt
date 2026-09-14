@@ -12973,3 +12973,45 @@ colors present end-to-end, Mouse Log context/Save/Copy, Named Setting
 States Save/Use/Delete round-trip, and the drag-anchor snap fix -- no
 console errors, no regressions to existing dev-panel behavior.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  03:17 AM - 03:28 AM EDT
+
+Fixed a floating setting in the built-in "Dev Panel" group, per direct
+report that its nesting/naming didn't match TEMPLATE_DEV_PANEL.html
+exactly ("I see a lot of floating settings in the Dev panel group").
+
+Fixed (Dev Panel group structure):
+- Live DOM inspection (dev server + ?dev=1) found the group nesting
+  itself already matched the template exactly (MECHANICS / PANEL UI /
+  TEXT, with TEXT nesting Dev Panel Title / Group Title / Setting
+  Title / TABS / BUTTONS) -- the one real mismatch was a single
+  floating row, `bodyFontSize` ("Body Text Font Size"), sitting
+  directly in the top-level group, unassigned to any subgroup.
+- Removed the `bodyFontSize` field from `PANEL_STYLE_CONTROLS`
+  entirely (not relocated into a subgroup) -- it predates this
+  project's 2026-09-14 template port (one of the project's own 9
+  pre-existing fields) and duplicates Settings Title Font Size, which
+  is exactly what the workspace CLAUDE.md's own §12i standard already
+  says this field should never be ("a redundant duplicate ... don't
+  reintroduce it"). #devPanel's own base font-size (`--dp-body-size`)
+  is now a plain hardcoded 12px in CSS -- confirmed against the live
+  saved dev-panel-settings.json that 12 was already bodyFontSize's own
+  unchanged default on both Desktop and Mobile, so this is a
+  zero-visual-change removal.
+- Also added the `dp-group-title` class (present on every other
+  group's title span, via createGroupElement()) to the top-level "Dev
+  Panel" group's own hand-built title span, which was missing it --
+  without it, Text Edit Mode's rename mechanism could never find this
+  one group's title.
+
+Verified live (dev server + ?dev=1, DOM inspection via javascript_tool):
+before the fix, the "DEV PANEL" group's direct .dp-row children were
+exactly `["bodyFontSize"]`; after the fix, zero direct rows remain and
+the 3 subgroup keys (MECHANICS/PANEL UI/TEXT) are unchanged, matching
+the template's structure exactly. Computed font-size on #devPanel
+confirmed still 12px post-fix (no visual regression). No new console
+errors. Updated this project's own CLAUDE.md with a new gotcha entry
+documenting the fix and warning that any future PANEL_STYLE_CONTROLS
+field must be added to applyDefaultDevPanelSubgroupOrder()'s own
+subgroup key lists or it will silently float the same way.
+

@@ -20,7 +20,7 @@
        applies them via style.minWidth/minHeight instead, as the one source
        of truth the resize-drag math also reads from directly. */
     background:var(--dp-bg, rgba(18,18,26,0.94)); color:var(--dp-text-color, #c9c9d8);
-    font-size:var(--dp-body-size, 12px); line-height:1.4;
+    font-size:12px; line-height:1.4;
     font-family:var(--dp-font-family, -apple-system, Segoe UI, Roboto, sans-serif);
     border:1px solid #3a3a4a; border-radius:8px;
     z-index:9999; user-select:none;
@@ -1052,11 +1052,21 @@ DEV_GROUPS.forEach(g => g.controls.forEach(c => cfg[c.key] = Array.isArray(c.def
 // values (blue #5b85c8 accent/slider, Verdana, capitalized button/tab/
 // group text) -- this project's own PRE-EXISTING, independently-tuned
 // fields from before this whole task (titleFontSize/tabFontSize/
-// groupFontSize/labelFontSize/bodyFontSize/opacity/titleColor/bgColor/
+// groupFontSize/labelFontSize/opacity/titleColor/bgColor/
 // textColor) are untouched, since those were never part of "the
 // template's stylizing" to begin with. capsSettingsText and every
 // letter-spacing field already matched the template's own defaults
 // (false / 0) and needed no change.
+// No separate 'bodyFontSize' control (2026-09-14 re-removal) -- this
+// project's own CLAUDE.md already documented it as a redundant
+// duplicate of Settings Title Font Size and said not to reintroduce
+// it, but it had silently come back and was floating in the built-in
+// "Dev Panel" group, unassigned to any of
+// applyDefaultDevPanelSubgroupOrder()'s subgroups (the template this
+// group's structure is ported from has no such field either).
+// #devPanel's own base font-size (--dp-body-size) is now a plain
+// hardcoded 12px in CSS instead of a dedicated control -- see that
+// rule's own comment.
 const PANEL_STYLE_CONTROLS = [
   { key:'titleFontSize', type:'slider', label:'Dev Panel Title Font Size',          min:9,  max:22, step:1,    def:13 },
   { key:'tabFontSize',   type:'slider', label:'Desktop/Mobile Tab Font Size',       min:8,  max:18, step:1,    def:11 },
@@ -1064,7 +1074,6 @@ const PANEL_STYLE_CONTROLS = [
   { key:'labelFontSize', type:'slider', label:'Settings Title Font Size',           min:8,  max:18, step:1,    def:11 },
   { key:'opacity',       type:'slider', label:'Dev Panel Opacity',                  min:0.2,max:1,  step:0.02, def:0.94 },
   { key:'titleColor',    type:'color',  label:'Dev Panel Title Text Color',      def:'#e8e8f0' },
-  { key:'bodyFontSize',  type:'slider', label:'Body Text Font Size',                min:8,  max:18, step:1,    def:12 },
   { key:'bgColor',       type:'color',  label:'Dev Panel Background Color',      def:'#12121e' },
   { key:'textColor',     type:'color',  label:'Dev Panel Non-Title Text Color',  def:'#c9c9d8' },
   { key:'accentColor',   type:'color',  label:'Dev Panel Accent Color',          def:'#5b85c8' },
@@ -1176,7 +1185,6 @@ function applyPanelStyle(){
   panel.style.setProperty('--dp-tab-size', panelStyle.tabFontSize + 'px');
   panel.style.setProperty('--dp-group-size', panelStyle.groupFontSize + 'px');
   panel.style.setProperty('--dp-label-size', panelStyle.labelFontSize + 'px');
-  panel.style.setProperty('--dp-body-size', panelStyle.bodyFontSize + 'px');
   panel.style.setProperty('--dp-bg', hexToRgba(panelStyle.bgColor, panelStyle.opacity));
   panel.style.setProperty('--dp-title-color', panelStyle.titleColor);
   panel.style.setProperty('--dp-text-color', panelStyle.textColor);
@@ -1238,7 +1246,14 @@ function buildPanelStyleGroup(){
   // 'dp-group-handle' here too -- see createGroupElement()'s own
   // matching comment (makeReorderable()'s GROUP registration must not
   // also match a ROW's handle, which shares 'dp-drag-handle' for CSS).
-  h.innerHTML = '<span class="dp-group-handle dp-drag-handle">⠿</span><span class="arrow">▼</span><span>Dev Panel</span>';
+  // The title span carries 'dp-group-title' (2026-09-14 fix) -- without
+  // it, applyDevTextOverrides()'s '.dp-group-title' selector (see its
+  // own comment for why it moved off ':last-child') can never find this
+  // group's own title, so Text Edit Mode would silently fail to rename
+  // this one group even though every other group (built via
+  // createGroupElement(), which already carries this class) renames
+  // correctly.
+  h.innerHTML = '<span class="dp-group-handle dp-drag-handle">⠿</span><span class="arrow">▼</span><span class="dp-group-title">Dev Panel</span>';
   const gb = document.createElement('div');
   gb.className = 'dp-group-body';
   h.addEventListener('click', e => { if (!e.target.closest('.dp-drag-handle')) g.classList.toggle('collapsed'); });
