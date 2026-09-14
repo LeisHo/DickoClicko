@@ -11,7 +11,7 @@
     "endcapHeight": 1.2,
     "ropeThickness": 7.2,
     "segmentLength": 0.9,
-    "ropeLength": 24.568747911013936,
+    "ropeLength": 11.536312472396173,
     "ropeDefaultLength": 30,
     "ropeColor": "#feead7",
     "ropeGradientEnabled": true,
@@ -106,7 +106,7 @@
     "ropeAnimSpeed": 1.8,
     "gravityStrength": 0.5,
     "damping": 0.988,
-    "constraintIterations": 2,
+    "constraintIterations": 14,
     "ropeGrowthRate": 12,
     "ropeGrowthOnRopeHold": true,
     "ropeGrowthHoldDistance": 20,
@@ -367,7 +367,7 @@
           },
           {
             "key": "ROPE ANIMATION",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
