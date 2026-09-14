@@ -136,6 +136,8 @@
   .dp-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 2px; }
   .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); color:var(--dp-text-color, #c9c9d8); letter-spacing:var(--dp-settings-letter-spacing, 0); }
   .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:var(--dp-slider-color, #7d8cff); }
+  .dp-indep-checkbox, .dp-indep-group-checkbox { flex:0 0 auto; accent-color:var(--dp-slider-color, #7d8cff); cursor:pointer; margin-left:auto; }
+  .dp-group-header .dp-indep-group-checkbox { margin-left:auto; margin-right:4px; }
   .dp-num {
     flex:0 0 auto; width:52px; text-align:right; font-size:11px;
     background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
@@ -241,6 +243,7 @@
     <div class="dp-tabs" id="dpTabs">
       <button type="button" class="dp-tab-btn" data-tab="desktop">Desktop</button>
       <button type="button" class="dp-tab-btn" data-tab="mobile">Mobile</button>
+      <button type="button" class="dp-tab-btn" data-tab="landscape">Landscape</button>
     </div>
     <div class="dp-actions">
       <button type="button" id="dpCopyBtn">Copy Settings</button>
@@ -1331,6 +1334,47 @@ function setupDevTextEditMode(){
   }, true);
 }
 
+// Group-level "independent from Desktop" master checkbox (2026-09-13) --
+// see deviceIndependence's own declaration comment for why this has NO
+// persisted state of its own: checking/unchecking it just cascades the
+// same state onto every CURRENT child row's (and nested subgroup's) own
+// individual checkbox, walking the live DOM at the moment of the click
+// -- correct for a custom ("+ Add Group") group and for drag-reordered
+// rows alike, since it never depends on any static group-membership
+// data. Its own checked/indeterminate state is likewise always
+// COMPUTED from children, not read back from here -- see
+// refreshIndependenceUI()'s own comment.
+function buildGroupIndependenceCheckbox(groupEl){
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'dp-indep-group-checkbox';
+  cb.title = 'Independent from Desktop (whole group)';
+  cb.style.display = 'none';
+  // Stops the header's own click handler (collapse/expand, or opening
+  // Text Edit Mode) from also firing for a click that landed on this
+  // checkbox specifically.
+  cb.addEventListener('click', e => e.stopPropagation());
+  cb.addEventListener('change', () => {
+    const checked = cb.checked;
+    const body = groupEl.querySelector(':scope > .dp-group-body');
+    if (!body) return;
+    body.querySelectorAll(':scope > .dp-row').forEach(rowEl => {
+      const entry = numEls[rowEl.dataset.key];
+      if (entry && entry.indepCheckbox && entry.indepCheckbox.checked !== checked){
+        entry.indepCheckbox.checked = checked;
+        entry.indepCheckbox.dispatchEvent(new Event('change'));
+      }
+    });
+    body.querySelectorAll(':scope > .dp-group').forEach(subGroupEl => {
+      const subCb = subGroupEl.querySelector(':scope > .dp-group-header > .dp-indep-group-checkbox');
+      if (subCb && subCb.checked !== checked){
+        subCb.checked = checked;
+        subCb.dispatchEvent(new Event('change'));
+      }
+    });
+  });
+  return cb;
+}
 function createGroupElement(name){
   const g = document.createElement('div');
   g.className = 'dp-group';
@@ -1346,10 +1390,11 @@ function createGroupElement(name){
   const arrow = document.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '▼';
   const title = document.createElement('span'); title.textContent = name;
   h.appendChild(handle); h.appendChild(arrow); h.appendChild(title);
+  h.appendChild(buildGroupIndependenceCheckbox(g));
   const gb = document.createElement('div');
   gb.className = 'dp-group-body';
   h.addEventListener('click', e => {
-    if (e.target.closest('.dp-drag-handle')) return;
+    if (e.target.closest('.dp-drag-handle') || e.target.closest('.dp-indep-group-checkbox')) return;
     // Text Edit Mode takes over the WHOLE header click (not just the
     // title text) while it's on -- matches the template's own
     // toggleSection() behavior -- so collapse/expand is unreachable
@@ -1840,6 +1885,35 @@ function buildRow(ctrl){
     numEls[ctrl.key] = { type:'gradient', renderStops, setStops: newStops => { cfg[ctrl.key] = newStops.map(s => ({ ...s })); renderStops(); } };
     renderStops();
   }
+  // "Independent from Desktop" checkbox (2026-09-13) -- added generically
+  // here, after the type-specific branches above, so every control type
+  // gets one the same way. Hidden by default (desktop tab, or before
+  // refreshIndependenceUI() has run once) -- see that function's own
+  // comment for the full show/hide + checked/disabled sync. Appended
+  // LAST so it doesn't disturb any existing type-specific layout.
+  const indep = document.createElement('input');
+  indep.type = 'checkbox';
+  indep.className = 'dp-indep-checkbox';
+  indep.title = 'Independent from Desktop';
+  indep.style.display = 'none';
+  indep.addEventListener('change', () => {
+    deviceIndependence[activeDeviceTab].settings[ctrl.key] = indep.checked;
+    // Unchecking reverts this ONE control back to mirroring Desktop's
+    // own current value immediately (checking needs no such snap --
+    // cfg[ctrl.key] already holds whatever was showing a moment ago,
+    // which IS Desktop's value while this was still unchecked, so there
+    // is nothing to change and no value jump).
+    if (!indep.checked){
+      const desktopVal = (lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice && lastLoadedSnapshot.valuesByDevice.desktop) || {};
+      if (ctrl.key in desktopVal) applyValues({ [ctrl.key]: desktopVal[ctrl.key] });
+    }
+    // Keeps every ancestor group's own checked/indeterminate state
+    // honest immediately -- see refreshGroupIndependenceStates()'s own
+    // comment for why this can't just be left to the next tab switch.
+    refreshGroupIndependenceStates();
+  });
+  row.appendChild(indep);
+  numEls[ctrl.key].indepCheckbox = indep;
   return row;
 }
 
@@ -1997,22 +2071,125 @@ function initResizeHandles(){
    per device class (§12f).
 --------------------------------------------------------------------- */
 const isMobileClass = () => window.matchMedia('(max-width: 767px)').matches;
-// which tab (Desktop/Mobile, §12f) is active — the panel's own geometry keys off
-// this explicit selection, not the live viewport, so it can be previewed/tuned
-// without actually resizing the browser. Every functional setting in this
-// project is %/vmin-based (§12a), which is WHY none of them needed to be
-// device-split by default -- corrected 2026-09-13, per explicit request
-// ("make sure mobile and desktop can have different default rope lengths
-// and rope thickness etc"): being unit-portable across viewports doesn't
-// mean a DESIGNER never wants a genuinely different value per device (a
-// %vh rope length that reads right on a tall phone can still look wrong
-// on a wide desktop window, independent of the unit conversion itself).
-// DEVICE_SPECIFIC_KEYS below opts specific cfg keys into the exact same
-// per-device storage/resolution pattern panelGeometry (§12c) already
-// uses -- see saveSettings()/resetSettings()/initDeviceTabs()'s own
-// comments for the mechanism. Every other setting stays shared, unchanged.
-const DEVICE_SPECIFIC_KEYS = ['ropeLength', 'ropeDefaultLength', 'ropeThickness'];
-let activeDeviceTab = isMobileClass() ? 'mobile' : 'desktop';
+// A phone/tablet held SIDEWAYS -- distinct from a wide DESKTOP window
+// (mouse pointer), per workspace CLAUDE.md §12f's own definition. Gated
+// on `pointer: coarse` (touch), not just orientation/width, specifically
+// so resizing a desktop browser window to be short-and-wide is never
+// misread as "Landscape" -- that's still Desktop, just a differently
+// shaped one. This is a judgment-call heuristic (no exact breakpoint was
+// specified) -- if a real device is ever misclassified, tighten this
+// query rather than the width-only isMobileClass() above, which stays
+// portrait-oriented and untouched.
+const isLandscapeClass = () => window.matchMedia('(pointer: coarse) and (orientation: landscape)').matches;
+const DEVICE_TABS = ['desktop', 'mobile', 'landscape'];
+// which tab (Desktop/Mobile/Landscape, §12f) is active — the panel's own
+// geometry keys off this explicit selection, not the live viewport, so
+// it can be previewed/tuned without actually resizing the browser.
+// Checked in landscape-first order since a landscape phone's own WIDTH
+// can exceed isMobileClass()'s 767px portrait threshold.
+let activeDeviceTab = isLandscapeClass() ? 'landscape' : (isMobileClass() ? 'mobile' : 'desktop');
+// Per-setting "independent from Desktop" state for the Mobile and
+// Landscape tabs (2026-09-13, per explicit request: "For all settings
+// in Mobile and landscape, place a checkbox next to every setting and
+// group. When checked, it means that that setting is independent from
+// desktop settings. If not checked, it defaults to desktop settings.
+// If a group is checked, all the settings within are applied.") --
+// REPLACES the prior session's narrower DEVICE_SPECIFIC_KEYS (a
+// hardcoded 3-key array); that mechanism and this one would otherwise
+// compete over the exact same keys, so it's removed rather than
+// layered underneath this. Desktop has no entry here -- the concept
+// doesn't apply to it, it's always the shared base every other tab
+// falls back to. Keyed by each setting's own `ctrl.key`.
+//
+// Deliberately NO separate `groups` map, even though the request
+// itself is phrased in terms of a group-level checkbox too -- a real,
+// PERSISTED group-level override can't work correctly for a
+// user-created custom group (createGroupElement()'s "+ Add Group"
+// path) or a row that's been drag-reordered into a different group,
+// since resolveValuesForTab()/isKeyIndependent() below MUST also work
+// for a real, non-dev visitor with NO dev-panel DOM at all (no rows,
+// no groups, nothing to look membership up against). Instead, the
+// group checkbox (buildGroupIndependenceCheckbox()) is a pure "master
+// checkbox" UI convenience -- checking/unchecking it immediately
+// checks/unchecks (and writes through to `settings` here) every
+// CURRENT child row's own individual checkbox, walking the LIVE DOM at
+// the moment of the click (so it stays correct across drag-reordering
+// and works identically for a custom group); its own displayed
+// checked/indeterminate state is like-wise computed FROM the children
+// each time (see refreshIndependenceUI()), never stored independently.
+// This still satisfies "if a group is checked, all the settings within
+// are applied" -- by the time the group shows checked, every setting
+// inside it already has its own individual flag set to match.
+let deviceIndependence = {
+  mobile: { settings: {} },
+  landscape: { settings: {} },
+};
+function isKeyIndependent(tab, key){
+  if (tab === 'desktop') return false;
+  const ind = deviceIndependence[tab];
+  return !!(ind && ind.settings[key]);
+}
+// Merges Desktop's own stored values with `tab`'s own independent
+// overrides (only for keys actually marked independent, per
+// isKeyIndependent() above) into one flat object suitable for
+// applyValues() -- used both at boot (resetSettings()) and on every
+// dev-panel tab switch (initDeviceTabs()), so both paths resolve
+// identically. `valuesByDevice` is the snapshot-level {desktop, mobile,
+// landscape} map (see buildValuesByDeviceForSave()'s own comment for
+// how it's built/persisted) -- for `tab==='desktop'` this is just a
+// copy of the desktop pool, no independence concept applies.
+function resolveValuesForTab(tab, valuesByDevice){
+  const desktop = (valuesByDevice && valuesByDevice.desktop) || {};
+  const merged = { ...desktop };
+  if (tab !== 'desktop'){
+    const own = (valuesByDevice && valuesByDevice[tab]) || {};
+    Object.keys(own).forEach(k => { if (isKeyIndependent(tab, k)) merged[k] = own[k]; });
+  }
+  // Any key with no stored value anywhere (a brand new setting added
+  // since this snapshot was last saved) falls back to its own compiled
+  // default -- applyValues() only touches keys present in what it's
+  // given, so without this, a never-saved key would silently keep
+  // whatever cfg ALREADY held on a tab switch (a STALE value carried
+  // over from whichever tab was active a moment ago) instead of a real,
+  // deterministic default -- same "meaningful reset" rule
+  // applyPanelGeometry(null) already established for panel geometry.
+  DEV_GROUPS.forEach(g => g.controls.forEach(c => { if (!(c.key in merged)) merged[c.key] = c.def; }));
+  return merged;
+}
+// Builds the full {desktop, mobile, landscape} pool to persist at
+// Save/Copy time, starting from whatever was PREVIOUSLY saved for every
+// tab (lastLoadedSnapshot) so a save made while viewing one tab never
+// clobbers another tab's own independent values, then overlaying the
+// CURRENT live cfg into whichever pool actually owns each key right
+// now: Desktop's own pool if that key is NOT independent for the
+// active tab (an edit made while previewing a non-independent setting
+// on Mobile/Landscape is understood as editing the shared Desktop
+// value the control is currently just mirroring -- there is no
+// separate "this tab's own value" for a setting that isn't
+// independent), or the active tab's own pool when it genuinely is
+// independent. This is the ONLY place a live edit's destination pool
+// is decided -- every control's own onChange/oninput handler still just
+// writes `cfg[key] = v` exactly as before, unchanged.
+function buildValuesByDeviceForSave(){
+  const prev = (lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice) || {};
+  const result = {};
+  DEVICE_TABS.forEach(t => { result[t] = { ...(prev[t] || {}) }; });
+  Object.keys(cfg).forEach(k => {
+    const targetTab = (activeDeviceTab === 'desktop' || !isKeyIndependent(activeDeviceTab, k)) ? 'desktop' : activeDeviceTab;
+    result[targetTab][k] = cfg[k];
+  });
+  return result;
+}
+// Same "preserve every tab's own last-saved geometry, overwrite only
+// the active one" pattern as buildValuesByDeviceForSave() above,
+// generalized from the old 2-way (desktop/mobile) current+other pair to
+// all 3 DEVICE_TABS now that Landscape exists too.
+function buildPanelGeometryForSave(){
+  const prev = (lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry) || {};
+  const result = {};
+  DEVICE_TABS.forEach(t => { result[t] = t === activeDeviceTab ? getPanelGeometry() : (prev[t] || null); });
+  return result;
+}
 
 // Captures one group's own direct row keys, plus any subgroups it
 // directly contains -- genuinely recursive, UNLIMITED depth (matching
@@ -2410,40 +2587,17 @@ async function readGitSettingsLog(){
   }
 }
 
-// Splits the live cfg into {shared, deviceValues} along DEVICE_SPECIFIC_KEYS
-// -- shared goes into a snapshot's own top-level `values` exactly as
-// before; deviceValues is this tab's own slice of the new `valuesByDevice`
-// map (see saveSettings()/copySettings()'s own comment for the full
-// per-device shape, mirroring panelGeometry's pre-existing convention).
-function splitValuesForSnapshot(){
-  const shared = {}, deviceValues = {};
-  Object.keys(cfg).forEach(k => {
-    (DEVICE_SPECIFIC_KEYS.includes(k) ? deviceValues : shared)[k] = cfg[k];
-  });
-  return { shared, deviceValues };
-}
 async function saveSettings(){
-  const current = activeDeviceTab;
-  const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
-  const otherGeom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[other] : null;
-  // otherDeviceValues: the OTHER tab's own last-saved device-specific
-  // values, preserved untouched -- exactly the same "don't clobber the
-  // tab you're not currently on" pattern otherGeom already uses above.
-  // Falls back to {} (not null) so a save from before this feature
-  // existed, or before the other tab was ever saved at all, still
-  // resolves to "no override recorded" rather than throwing when
-  // resetSettings() later tries to spread it.
-  const otherDeviceValues = (lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice && lastLoadedSnapshot.valuesByDevice[other]) || {};
-  const { shared, deviceValues } = splitValuesForSnapshot();
   const snapshot = {
-    values: shared,
-    valuesByDevice: { [current]: deviceValues, [other]: otherDeviceValues },
+    valuesByDevice: buildValuesByDeviceForSave(),
+    // Persisted alongside values -- see deviceIndependence's own
+    // declaration comment for the full shape/semantics.
+    independence: deviceIndependence,
     order: getPanelOrder(),
-    panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
-    // Not device-split (unlike panelGeometry/panelStyle, or now
-    // DEVICE_SPECIFIC_KEYS) -- a renamed label should read the same
-    // regardless of which tab is active, same rationale as cfg's own
-    // SHARED settings values.
+    panelGeometry: buildPanelGeometryForSave(),
+    // Not device-split (unlike panelGeometry/panelStyle, or the
+    // independence-gated settings) -- a renamed label should read the
+    // same regardless of which tab is active.
     textOverrides: { ...devTextOverrides },
   };
   const btn = document.getElementById('dpSaveBtn');
@@ -2531,21 +2685,44 @@ async function resetSettings(){
   lastLoadedSnapshot = snap;
   if (snap){
     applyOrder(snap.order);
-    // Shared values first, then this device's own DEVICE_SPECIFIC_KEYS
-    // slice layered on top (mirroring applyPanelGeometry's own per-tab
-    // resolution just below) -- activeDeviceTab already equals the REAL
-    // device for a non-dev visitor (initialized from isMobileClass() at
+    // Backward compat: a save from before this feature existed has a
+    // flat top-level `values` (the old shared pool) and no
+    // `valuesByDevice` at all -- treated as "everything is Desktop's",
+    // with nothing independent anywhere (deviceIndependence's own
+    // defaults are already all-empty/false), so an old save resolves
+    // identically for every tab, exactly as it did before this feature
+    // existed. `independence` is similarly optional/absent on an old
+    // save. Normalized straight onto `lastLoadedSnapshot` itself (not
+    // just a local variable) -- every downstream consumer
+    // (buildValuesByDeviceForSave() at the next Save/Copy,
+    // initDeviceTabs()'s own tab-switch resolve) reads
+    // lastLoadedSnapshot.valuesByDevice directly and must see the
+    // real, already-migrated shape; leaving the raw old-format object
+    // in place here would make the very first Save after loading an
+    // old-format file silently DISCARD Desktop's own existing values
+    // (buildValuesByDeviceForSave()'s own "start from the previous
+    // snapshot" preservation would start from nothing).
+    if (!snap.valuesByDevice) lastLoadedSnapshot.valuesByDevice = { desktop: snap.values || {} };
+    const valuesByDevice = lastLoadedSnapshot.valuesByDevice;
+    deviceIndependence = snap.independence || { mobile: { settings:{} }, landscape: { settings:{} } };
+    // activeDeviceTab already equals the REAL device for a non-dev
+    // visitor (initialized from isLandscapeClass()/isMobileClass() at
     // declaration and never reassigned without a dev panel's own tab
     // buttons to click), so this same resolution is correct whether or
-    // not a dev panel actually exists. A key missing from
-    // valuesByDevice[activeDeviceTab] (an old save predating this
-    // feature, or a device tab that's simply never been saved yet) is
-    // left out of the merge entirely -- applyValues() only touches keys
-    // actually present in what it's given, so that key just keeps
-    // whatever default buildDevPanel() already populated it with,
-    // exactly like a fresh, never-customized setting should.
-    applyValues({ ...snap.values, ...((snap.valuesByDevice && snap.valuesByDevice[activeDeviceTab]) || {}) });
+    // not a dev panel actually exists.
+    applyValues(resolveValuesForTab(activeDeviceTab, valuesByDevice));
   }
+  // DEV_MODE-guarded -- the individual setting/group rows this walks
+  // only exist once buildDevPanel() has actually run, same reasoning as
+  // every other dev-panel-only DOM sync in this file. A real, non-dev
+  // visitor still gets the correct resolved cfg values from
+  // applyValues() above regardless -- this call only refreshes the dev
+  // panel's OWN checkbox UI, which doesn't exist for them at all.
+  // Outside the `if (snap)` block (unlike the applyValues() call above)
+  // so a fresh install with nothing saved anywhere yet still gets its
+  // checkboxes correctly shown/hidden for whatever the real device
+  // actually is, not left at buildRow()'s own hidden-by-default state.
+  if (DEV_MODE) refreshIndependenceUI();
   applyPanelGeometry(snap && snap.panelGeometry ? snap.panelGeometry[activeDeviceTab] : null);
   // Always resolve (falling back to {}), same "don't silently keep
   // whatever was already showing" convention as applyPanelStyleValues().
@@ -2554,18 +2731,12 @@ async function resetSettings(){
 }
 
 function copySettings(){
-  const current = activeDeviceTab;
-  const other = activeDeviceTab === 'mobile' ? 'desktop' : 'mobile';
-  const otherGeom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[other] : null;
-  // See saveSettings()'s identical comment -- same otherDeviceValues
-  // preservation, same shared/deviceValues split.
-  const otherDeviceValues = (lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice && lastLoadedSnapshot.valuesByDevice[other]) || {};
-  const { shared, deviceValues } = splitValuesForSnapshot();
+  // See saveSettings()'s identical comment for both helpers.
   const snapshot = {
-    values: shared,
-    valuesByDevice: { [current]: deviceValues, [other]: otherDeviceValues },
+    valuesByDevice: buildValuesByDeviceForSave(),
+    independence: deviceIndependence,
     order: getPanelOrder(),
-    panelGeometry: { [current]: getPanelGeometry(), [other]: otherGeom },
+    panelGeometry: buildPanelGeometryForSave(),
     textOverrides: { ...devTextOverrides },
   };
   const text = JSON.stringify(snapshot, null, 2);
@@ -2601,24 +2772,70 @@ function copyClickLog(){
   }
 }
 
-// Applies this tab's own DEVICE_SPECIFIC_KEYS slice, falling back to
-// each control's own default for any key NOT present in `deviceVals`
-// (a tab that's simply never been saved yet) -- same "meaningful reset,
-// not a silent carryover from whichever tab was active before" rule
-// applyPanelGeometry(null) already established (see that fix's own
-// CLAUDE.md gotcha): without this fallback, switching to a never-saved
-// tab would keep showing the PREVIOUS tab's live values instead of
-// that device's own real (default) starting point.
-function applyDeviceSpecificValues(deviceVals){
-  const merged = {};
-  DEVICE_SPECIFIC_KEYS.forEach(k => {
-    if (deviceVals && k in deviceVals) merged[k] = deviceVals[k];
-    else {
-      const ctrl = DEV_GROUPS.flatMap(g => g.controls).find(c => c.key === k);
-      if (ctrl) merged[k] = ctrl.def;
-    }
+// Syncs every row's and group's own independence checkbox to the
+// CURRENTLY active tab (2026-09-13) -- called on boot (resetSettings())
+// and on every dev-panel tab switch (initDeviceTabs()). Checkboxes are
+// hidden entirely on Desktop (the concept doesn't apply there) and
+// shown on Mobile/Landscape, each one's checked state pulled straight
+// from deviceIndependence[activeDeviceTab].settings. Groups are
+// resynced DEEPEST-first so a parent's own computed checked/
+// indeterminate state (all-checked / all-unchecked / mixed, standard
+// tri-state checkbox convention) reflects its children's ALREADY-
+// current state, not stale leftovers from a previous tab.
+function groupElDepth(g){
+  let d = 0, p = g.parentElement;
+  while (p){ if (p.classList && p.classList.contains('dp-group')) d++; p = p.parentElement; }
+  return d;
+}
+// Recomputes every group's own checked/indeterminate state from its
+// CURRENT children (deepest first, so a parent reflects its children's
+// already-current state) -- factored out of refreshIndependenceUI() so
+// it can ALSO run after a single row's own checkbox changes (see
+// buildRow()'s own change handler), not just on tab switch/boot. Without
+// that second call site, unchecking one child of an otherwise-fully-
+// checked group left the group's own checkbox showing plain "checked"
+// instead of the correct indeterminate/mixed state -- caught live
+// (setCheckbox('cutSplatterEnabled', false) inside an all-checked CUT
+// SPLATTER left its group checkbox reading checked:true, indeterminate:
+// false, until this was added). Does nothing when checkboxes aren't
+// currently shown (Desktop tab) -- no visible checkbox state to sync.
+function refreshGroupIndependenceStates(){
+  if (activeDeviceTab === 'desktop') return;
+  Array.from(document.querySelectorAll('#devPanel .dp-group'))
+    .sort((a, b) => groupElDepth(b) - groupElDepth(a))
+    .forEach(groupEl => {
+      const cb = groupEl.querySelector(':scope > .dp-group-header > .dp-indep-group-checkbox');
+      if (!cb) return; // the built-in "Dev Panel" chrome group has none -- see its own comment
+      const body = groupEl.querySelector(':scope > .dp-group-body');
+      const states = [];
+      body.querySelectorAll(':scope > .dp-row').forEach(r => {
+        const e = numEls[r.dataset.key];
+        if (e && e.indepCheckbox) states.push(e.indepCheckbox.checked);
+      });
+      body.querySelectorAll(':scope > .dp-group').forEach(sg => {
+        const subCb = sg.querySelector(':scope > .dp-group-header > .dp-indep-group-checkbox');
+        if (subCb) states.push(subCb.indeterminate ? 'mixed' : subCb.checked);
+      });
+      if (states.length === 0){ cb.checked = false; cb.indeterminate = false; return; }
+      const allChecked = states.every(s => s === true);
+      const allUnchecked = states.every(s => s === false);
+      cb.checked = allChecked;
+      cb.indeterminate = !allChecked && !allUnchecked;
+    });
+}
+function refreshIndependenceUI(){
+  const showCheckboxes = activeDeviceTab !== 'desktop';
+  const ind = deviceIndependence[activeDeviceTab] || { settings: {} };
+  document.querySelectorAll('#devPanel .dp-row').forEach(rowEl => {
+    const entry = numEls[rowEl.dataset.key];
+    if (!entry || !entry.indepCheckbox) return;
+    entry.indepCheckbox.style.display = showCheckboxes ? '' : 'none';
+    entry.indepCheckbox.checked = showCheckboxes && !!ind.settings[rowEl.dataset.key];
   });
-  applyValues(merged);
+  document.querySelectorAll('#devPanel .dp-indep-group-checkbox').forEach(cb => {
+    cb.style.display = showCheckboxes ? '' : 'none';
+  });
+  refreshGroupIndependenceStates();
 }
 function initDeviceTabs(){
   const buttons = document.querySelectorAll('.dp-tab-btn');
@@ -2630,13 +2847,19 @@ function initDeviceTabs(){
     refreshActive();
     const geom = lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry ? lastLoadedSnapshot.panelGeometry[activeDeviceTab] : null;
     applyPanelGeometry(geom); // preview that tab's last-loaded panel geometry, even without actually resizing the browser
-    // Same live-preview convention as panel geometry, just above, now
-    // extended to DEVICE_SPECIFIC_KEYS (2026-09-13) -- switching tabs
-    // previews (and actually applies to the running game, matching
-    // ropeLength's own onChange-on-apply behavior) that device's own
-    // stored rope length/thickness/etc, even without resizing the browser.
-    const deviceVals = lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice ? lastLoadedSnapshot.valuesByDevice[activeDeviceTab] : null;
-    applyDeviceSpecificValues(deviceVals);
+    // Live-preview every setting's own resolved value for the newly
+    // active tab (2026-09-13, generalized from the prior session's
+    // DEVICE_SPECIFIC_KEYS-only version) -- switching tabs actually
+    // applies to the running game, matching ropeLength's own
+    // onChange-on-apply behavior, even without resizing the browser.
+    const valuesByDevice = (lastLoadedSnapshot && lastLoadedSnapshot.valuesByDevice) || {};
+    applyValues(resolveValuesForTab(activeDeviceTab, valuesByDevice));
+    // Independence checkboxes are only shown/meaningful on Mobile and
+    // Landscape (Desktop has no concept of "independent from Desktop")
+    // -- refreshIndependenceUI() shows/hides every row's and group's own
+    // checkbox and syncs each one's checked/disabled state to this tab's
+    // own deviceIndependence.
+    refreshIndependenceUI();
   }));
   refreshActive();
 }
