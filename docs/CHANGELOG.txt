@@ -12817,3 +12817,61 @@ textOverrides}` -- the old doc text claiming the file held "{values,
 order} only" was already stale before today, panelGeometry/
 textOverrides were already being written).
 
+================================================================================
+2026-09-13  -  9:21 PM - 9:41 PM EDT
+
+"Bro my settings groups in desktop got mressed up in terms of nesting
+and naming etc. Fix that. chec the lastgit save." Root-caused by
+reading the actual last git-tracked settings save
+(data/processed/dev-panel-settings.json) directly, per the user's own
+explicit instruction, rather than guessing -- and found 2 real,
+distinct, shippable regressions, both introduced earlier this same
+session.
+
+1) Group-title text overrides silently broke entirely.
+applyDevTextOverrides() found each group's own title span via
+`span:last-child` inside `.dp-group-header` -- this stopped working
+the instant this session's own earlier "Independent from Desktop"
+group checkbox (buildGroupIndependenceCheckbox()) got appended to the
+SAME header, AFTER the title, making the checkbox the new last child.
+Every previously-renamed custom group (via Text Edit Mode) -- "Endcap"
+(was "New Group (2)"), "EndArc" ("New Group (3)"), "CUT PIECE" ("New
+Group (4)"), "BACKGROUND ROPE" ("New Group (5)"), "CLICK FUNCTIONS"
+("New Group (6)"), "FLICK ANIMATIONS" ("New Group"), plus 5 renamed
+EXISTING groups (RIGHT CLICK-ATTRACT, CLICK HOLD-CHARGE, DOUBLE
+CLICK-CUT, CLICK-FLICK, CLICK-HOLD-GROW) -- silently reverted to
+showing their own raw internal keys instead, with no error, nothing to
+notice until actually comparing against what had been renamed. The
+underlying saved `order`/`textOverrides` data was completely fine the
+whole time; only the DISPLAY of it broke. Fixed by giving the title
+span its own dedicated class (`dp-group-title`, set in
+createGroupElement()) and switching the selector to match it directly
+instead of relying on child position, which can't be assumed stable
+once other elements get appended to the same header.
+
+2) A genuine structural duplicate group. Renaming the static "FLICK
+MOUSE" group to "CURSOR ANIMATION" (734eb6e, earlier this session)
+never accounted for an ALREADY-SAVED custom order still keyed under
+the OLD "FLICK MOUSE" name (itself carrying its own text override
+making it ALSO display as "CURSOR ANIMATION") -- loading this file
+therefore split the real 16 Cursor-Animation settings into a
+differently-keyed custom group while the actual static "CURSOR
+ANIMATION" group sat empty, both showing the identical label. Fixed
+directly in the settings data (not code): confirmed the old group's
+16 saved settings keys matched the static group's own controls
+exactly, 1:1, then renamed the saved group's key from "FLICK MOUSE" to
+"CURSOR ANIMATION" (merging it back into the real static group) and
+removed the now-redundant "group:FLICK MOUSE" text-override entry.
+
+Verified live end-to-end against the repaired real settings file: all
+11 renamed group labels now render correctly again; "CURSOR ANIMATION"
+appears exactly once with its full, real 16-setting contents;
+collapse/expand and the independence-checkbox group-cascade (both
+pre-existing/earlier-session features) re-confirmed still working
+correctly after the selector change.
+
+Committed as 2 separate commits matching this project's own
+established convention of keeping settings-data updates separate from
+code changes (4cc3575 for the selector fix, 97434d4 for the data
+repair) -- pushed immediately.
+

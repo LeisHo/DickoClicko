@@ -1377,6 +1377,30 @@ variable wasn't written back onto the loaded snapshot). Verified live
 via a temporary debug hook covering both bugs' fixes plus the full
 independence/cascade/save-routing mechanism.
 
+**Fixed (2026-09-13): custom dev-panel group renames on Desktop had
+silently stopped displaying, plus a real duplicate "CURSOR ANIMATION"
+group.** Reported directly ("my settings groups in desktop got messed
+up in terms of nesting and naming"), root-caused by reading the actual
+last git-tracked settings save per the user's own instruction. Two
+distinct regressions, both introduced earlier the same session: (1)
+the independence checkbox added to each group's header broke
+`applyDevTextOverrides()`'s `span:last-child` selector for finding the
+title -- every previously-renamed custom group (Endcap, EndArc, CUT
+PIECE, BACKGROUND ROPE, CLICK FUNCTIONS, FLICK ANIMATIONS, and 5
+renamed existing groups) silently reverted to its own raw internal
+key, with no error. Fixed by giving the title span its own class
+(`dp-group-title`) instead of relying on DOM position. (2) Renaming
+the static "FLICK MOUSE" group to "CURSOR ANIMATION" left an
+already-saved custom order still keyed under the old name (with its
+own text override ALSO reading "CURSOR ANIMATION"), producing a real
+structural duplicate -- an empty static group and a populated custom
+one, both labeled the same. Fixed directly in the saved settings data
+(confirmed a clean 1:1 key match first) by renaming the stale key and
+dropping the redundant override. Verified live against the repaired
+file: all renamed labels render correctly, "CURSOR ANIMATION" appears
+exactly once with its full contents, collapse/expand and the
+independence-checkbox cascade both still work.
+
 ## Recently completed
 
 The initial build (verlet rope physics + circle interaction) is long since

@@ -1247,3 +1247,38 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   after a save built from a freshly-loaded old-format file; after
   writing the normalized shape onto `lastLoadedSnapshot.valuesByDevice`
   at load time, it correctly preserved the real prior value.
+- **A group's own title span (`createGroupElement()`) has its own
+  dedicated class, `dp-group-title` -- never re-select it by DOM
+  position (`:last-child`, `:first-child` etc.).** Real, reported,
+  shipped regression (2026-09-13: "my settings groups in desktop got
+  mressed up in terms of nesting and naming etc"): `applyDevTextOverrides()`
+  used to find the title via `span:last-child`, which broke the INSTANT
+  the independence checkbox (`buildGroupIndependenceCheckbox()`, this
+  same session's own earlier feature) got appended to the header AFTER
+  it -- every previously-renamed custom group (Text Edit Mode) silently
+  reverted to displaying its own raw internal key instead, with no
+  error and nothing to notice until actually comparing against what had
+  been renamed. Root-caused by checking the actual last git-tracked
+  settings save directly (per the user's own explicit instruction, "chec
+  the lastgit save") rather than assuming -- the saved `order`/
+  `textOverrides` data itself was fine; only the DISPLAY of it was
+  broken. **Any FUTURE child appended to `.dp-group-header` must not
+  assume the title span occupies any particular position** -- select it
+  by `.dp-group-title` instead, same as this fix now does.
+- **Renaming a STATIC `DEV_GROUPS` title does not migrate any
+  ALREADY-SAVED custom-group data that referenced the OLD title as its
+  own key.** Real, shipped bug (2026-09-13, same investigation as
+  above): renaming the "FLICK MOUSE" static group to "CURSOR ANIMATION"
+  (734eb6e) left an earlier save's own `order` still keyed "FLICK
+  MOUSE" (with a `textOverrides` entry independently making IT also
+  display as "CURSOR ANIMATION") -- `placeGroup()` then created a
+  genuine duplicate: the real static group ended up empty (all its
+  settings relocated by key into the differently-keyed custom group)
+  while a second, identically-labeled group held the real values.
+  Fixed by hand-editing the saved `data/processed/dev-panel-settings.json`
+  directly (a data repair, not a code change) to rename the stale key
+  and drop its now-redundant text override. **If a static group's title
+  is ever renamed again, check whether the OLD title survives anywhere
+  in the live settings log's own `order` as a group key** (`grep` for
+  the old title) and repair it the same way -- there is no automatic
+  migration for this.
