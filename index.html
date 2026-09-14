@@ -31,14 +31,29 @@
   #devPanel.dp-collapsed .dp-body,
   #devPanel.dp-collapsed .dp-resize { display:none; }
   .dp-header {
-    padding:8px 10px; font-weight:600;
+    padding:8px 10px;
     background:#25253a; border-radius:8px 8px 0 0;
     cursor:grab; touch-action:none;
     display:flex; justify-content:space-between; align-items:center; gap:8px;
     flex:0 0 auto;
   }
   .dp-header:active { cursor:grabbing; }
-  .dp-title { letter-spacing:.06em; font-size:var(--dp-title-size, 13px); color:var(--dp-title-color, #e8e8f0); }
+  /* letter-spacing/line-height default (0.78px/1.2) reproduces the
+     project's original hardcoded `.06em` look at the default 13px title
+     size -- kept as a real, tunable dial (2026-09-14 port) rather than a
+     fixed em value. font-weight moved OFF .dp-header (was 600,
+     inherited by everything inside it including the hide/collapse icon
+     buttons) onto .dp-title specifically via the dp-bold-title toggle
+     below, so Title/Button boldness are independently controllable --
+     see PANEL_STYLE_CONTROLS' own titleBold/buttonBold comment for the
+     one small resulting cosmetic change (icon buttons no longer inherit
+     bold by default). */
+  .dp-title {
+    letter-spacing:var(--dp-title-letter-spacing, 0.78px); line-height:var(--dp-title-line-height, 1.2);
+    font-size:var(--dp-title-size, 13px); color:var(--dp-title-color, #e8e8f0);
+  }
+  #devPanel.dp-bold-title .dp-title { font-weight:700; }
+  #devPanel.dp-caps-title-text .dp-title { text-transform:uppercase; }
   #dpFps { flex:1 1 auto; opacity:.6; font-weight:400; font-size:10px; }
   .dp-icon-btn {
     flex:0 0 auto; width:18px; min-height:var(--dp-button-height, 18px); line-height:16px; text-align:center;
@@ -50,18 +65,20 @@
   .dp-body { padding:4px 8px 10px; overflow-y:auto; flex:1 1 auto; min-height:0; }
   .dp-actions { display:flex; gap:6px; padding:2px 2px 8px; }
   .dp-actions button {
-    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:var(--dp-accent, #3a3a4a); color:#e8e8f0; border:none; border-radius:4px;
-    padding:var(--dp-button-text-border, 5px) 4px; font-size:11px; cursor:pointer;
-    letter-spacing:var(--dp-button-letter-spacing, 0);
+    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:var(--dp-accent, #3a3a4a); color:var(--dp-button-text-color, #e8e8f0); border:none; border-radius:4px;
+    padding:var(--dp-button-text-border, 5px) 4px; font-size:var(--dp-button-font-size, 11px); cursor:pointer;
+    letter-spacing:var(--dp-button-letter-spacing, 0); line-height:var(--dp-button-line-height, 1.2);
   }
   .dp-actions button:active { filter:brightness(1.2); }
+  #devPanel.dp-bold-button .dp-actions button, #devPanel.dp-bold-button .dp-icon-btn { font-weight:700; }
   .dp-tabs { display:flex; gap:4px; padding:6px 2px 0; }
   .dp-tab-btn {
-    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:#25253a; color:#9a9ab0; border:none; border-radius:4px;
+    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:#25253a; color:var(--dp-tab-text-color, #9a9ab0); border:none; border-radius:4px;
     padding:var(--dp-button-text-border, 5px) 4px; font-size:var(--dp-tab-size, 11px); cursor:pointer;
-    letter-spacing:var(--dp-tab-letter-spacing, 0);
+    letter-spacing:var(--dp-tab-letter-spacing, 0); line-height:var(--dp-tab-line-height, 1.2);
   }
   .dp-tab-btn.active { background:var(--dp-accent, #3a3a4a); color:#e8e8f0; font-weight:600; }
+  #devPanel.dp-bold-tab .dp-tab-btn { font-weight:700; }
   .dp-add-group-btn {
     display:block; width:100%; margin:2px 0 8px; background:none; color:var(--dp-text-color, #c9c9d8);
     border:1px dashed #3a3a4a; border-radius:4px; padding:5px 4px; font-size:11px; cursor:pointer;
@@ -112,9 +129,11 @@
     min-height:20px; border:1px dashed #3a3a4a; border-radius:3px; opacity:.5;
   }
   .dp-group-header {
-    padding:7px 2px; font-weight:600; font-size:var(--dp-group-size, 11px); letter-spacing:var(--dp-group-letter-spacing, 0);
-    color:var(--dp-text-color, #c9c9d8); cursor:pointer; display:flex; align-items:center; gap:6px;
+    padding:7px 2px; background:var(--dp-group-label-bg, transparent); border-radius:3px;
+    font-size:var(--dp-group-size, 11px); letter-spacing:var(--dp-group-letter-spacing, 0); line-height:var(--dp-group-line-height, 1.2);
+    color:var(--dp-group-text-color, #c9c9d8); cursor:pointer; display:flex; align-items:center; gap:6px;
   }
+  #devPanel.dp-bold-group .dp-group-header { font-weight:700; }
   /* Capitalize toggles (§12i-adjacent, ported from TEMPLATE_DEV_PANEL.html's
      own dev-caps-* classes) -- 4 independent categories, off by default so
      nothing capitalizes until explicitly turned on. */
@@ -122,6 +141,7 @@
   #devPanel.dp-caps-tab-text .dp-tab-btn { text-transform:uppercase; }
   #devPanel.dp-caps-group-names .dp-group-header { text-transform:uppercase; }
   #devPanel.dp-caps-settings-text .dp-row label { text-transform:uppercase; }
+  #devPanel.dp-bold-settings .dp-row label { font-weight:700; }
   .dp-group-header .arrow { transition:transform .15s; font-size:9px; }
   .dp-group.collapsed .arrow { transform:rotate(-90deg); }
   .dp-group.collapsed .dp-group-body { display:none; }
@@ -134,13 +154,14 @@
      to its label, it drops to its own line beneath the label instead of
      overflowing/getting cut off -- reported directly. */
   .dp-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 2px; }
-  .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); color:var(--dp-text-color, #c9c9d8); letter-spacing:var(--dp-settings-letter-spacing, 0); }
+  .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); line-height:var(--dp-settings-line-height, 1.2); color:var(--dp-text-color, #c9c9d8); letter-spacing:var(--dp-settings-letter-spacing, 0); }
   .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:var(--dp-slider-color, #7d8cff); }
-  .dp-indep-checkbox, .dp-indep-group-checkbox { flex:0 0 auto; accent-color:var(--dp-slider-color, #7d8cff); cursor:pointer; margin-left:auto; }
-  .dp-group-header .dp-indep-group-checkbox { margin-left:auto; margin-right:4px; }
+  .dp-indep-checkbox, .dp-indep-group-checkbox,
+  .dp-visible-checkbox, .dp-visible-group-checkbox { flex:0 0 auto; accent-color:var(--dp-slider-color, #7d8cff); cursor:pointer; margin-left:auto; }
+  .dp-group-header .dp-indep-group-checkbox, .dp-group-header .dp-visible-group-checkbox { margin-left:auto; margin-right:4px; }
   .dp-num {
-    flex:0 0 auto; width:52px; text-align:right; font-size:11px;
-    background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
+    flex:0 0 auto; width:52px; text-align:right; font-size:var(--dp-value-font-size, 11px);
+    background:#0f0f18; color:var(--dp-value-text-color, #e8e8f0); border:1px solid #3a3a4a; border-radius:4px;
     padding:2px 4px;
   }
   .dp-row input[type=color] {
@@ -250,6 +271,26 @@
       <button type="button" id="dpSaveBtn">Save Settings</button>
       <button type="button" id="dpResetBtn">Reset</button>
     </div>
+    <!-- Named Setting States (2026-09-14, ported from TEMPLATE_DEV_PANEL.html's
+         own [JS-13b] "Saved Dev Settings") -- multiple named, full-panel
+         snapshots to try different UI/game configurations without losing
+         the real Save/Reset baseline. Stored in localStorage (this is
+         personal, local scratch space, not the shared source of truth
+         Save Settings writes to -- see saveNamedDevPanelState()'s own
+         comment for why that's the right call here specifically, unlike
+         the rest of this project's git-tracked-only persistence). -->
+    <div class="dp-click-log-wrap">
+      <div class="dp-click-log-header"><span>SAVED DEV SETTINGS</span></div>
+      <div class="dp-row">
+        <select id="dpSavedStatesSelect" class="dp-dropdown" style="flex:1 1 auto;"></select>
+      </div>
+      <div class="dp-actions">
+        <button type="button" id="dpSavedStatesSaveBtn">Save</button>
+        <button type="button" id="dpSavedStatesUseBtn">Use</button>
+        <button type="button" id="dpSavedStatesSetDefaultBtn">Set Default</button>
+        <button type="button" id="dpSavedStatesDeleteBtn">Delete</button>
+      </div>
+    </div>
     <button type="button" id="dpAddGroupBtn" class="dp-add-group-btn">+ Add Group</button>
     <div id="dpUngrouped" class="dp-ungrouped"></div>
     <div id="dpGroups"></div>
@@ -260,6 +301,33 @@
         <button type="button" id="dpClickLogClear">Clear</button>
       </div>
       <div id="dpClickLog" class="dp-click-log"><span class="dp-click-log-empty">(no clicks yet)</span></div>
+    </div>
+    <!-- Mouse Log (2026-09-14, ported from TEMPLATE_DEV_PANEL.html's own
+         [JS-13c]) -- a RAW pointer/gesture diagnostic (tap/click/hold/
+         drag/swipe/pinch/scroll/rightclick, at the browser input layer),
+         deliberately separate from CLICK LOG above: CLICK LOG records
+         semantic APPLICATION events (what the rope's physics actually
+         did -- flick/charge/cut/grow/drag/attract), Mouse Log records
+         what the user's actual finger/mouse did, independent of whether
+         the app reacted to it at all. Same dp-click-log-* CSS classes
+         reused rather than a near-duplicate class set. -->
+    <div class="dp-click-log-wrap">
+      <div class="dp-click-log-header">
+        <span>MOUSE LOG</span>
+        <button type="button" id="dpMouseLogCopy">Copy</button>
+        <button type="button" id="dpMouseLogSave">Save</button>
+        <button type="button" id="dpMouseLogClear">Clear</button>
+      </div>
+      <div class="dp-row">
+        <label style="width:auto;flex:1 1 auto;">Log Mouse Position (Continuous)</label>
+        <input type="checkbox" id="dpMouseLogPositionEnabled">
+      </div>
+      <div class="dp-row">
+        <label>Position Log Interval (Ms)</label>
+        <input type="range" id="dpMouseLogInterval" min="100" max="5000" step="50" value="1000">
+        <input type="text" id="dpMouseLogIntervalNum" class="dp-num" value="1000">
+      </div>
+      <div id="dpMouseLog" class="dp-click-log"><span class="dp-click-log-empty">(no mouse activity logged yet)</span></div>
     </div>
   </div>
   <div class="dp-resize dp-resize-n" data-dir="n"></div>
@@ -1020,6 +1088,42 @@ const PANEL_STYLE_CONTROLS = [
   { key:'tabLetterSpacing',    type:'slider', label:'Dev Panel Tab Letter Spacing',       min:-1, max:4,  step:0.1, def:0 },
   { key:'groupLetterSpacing',  type:'slider', label:'Dev Panel Group Letter Spacing',     min:-1, max:4,  step:0.1, def:0 },
   { key:'settingsLetterSpacing', type:'slider', label:'Dev Panel Settings Letter Spacing', min:-1, max:4, step:0.1, def:0 },
+  // 19 fields below (2026-09-14) ported from TEMPLATE_DEV_PANEL.html's own
+  // [JS-12] section, which itself just adopted this exact battery
+  // (naming, defaults, and the shared-vs-per-tab split) as its new
+  // standard -- porting it back in keeps this project's own Dev Panel
+  // group in sync with the shared template again. Per-tab (device-
+  // independent, like every field above) vs shared-across-tabs
+  // (PANEL_STYLE_SHARED_KEYS below) exactly matches the template's own
+  // DEV_PANEL_STYLE_SHARED_KEYS split. Every default below was chosen to
+  // reproduce this project's CURRENT hardcoded look exactly (so nothing
+  // visually changes the moment these fields exist) rather than blindly
+  // reusing the template's own defaults -- see each field's own note for
+  // the one genuine exception (titleBold/groupBold true, buttonBold/
+  // tabBold/settingsBold false, chosen to match which elements are
+  // ALREADY bold today; buttonBold=false is the one small, deliberate
+  // cosmetic change -- the hide/collapse icon buttons lose an incidental
+  // inherited bold they got only as a side effect of font-weight living
+  // on their container, not because it was ever a deliberate style).
+  { key:'valueFontSize',    type:'slider', label:'Dev Panel Setting Number Font Size', min:6,  max:20, step:1,   def:10 },
+  { key:'buttonFontSize',   type:'slider', label:'Dev Panel Button Text Font Size',    min:6,  max:20, step:1,   def:11 },
+  { key:'titleLetterSpacing', type:'slider', label:'Dev Panel Title Letter Spacing',   min:-1, max:4,  step:0.1, def:0.78 },
+  { key:'titleLineHeight',    type:'slider', label:'Dev Panel Title Line Spacing (x)', min:0.8,max:3,  step:0.05,def:1.2 },
+  { key:'tabLineHeight',      type:'slider', label:'Dev Panel Tab Line Spacing (x)',   min:0.8,max:3,  step:0.05,def:1.2 },
+  { key:'groupLineHeight',    type:'slider', label:'Dev Panel Group Line Spacing (x)', min:0.8,max:3,  step:0.05,def:1.2 },
+  { key:'settingsLineHeight', type:'slider', label:'Dev Panel Settings Line Spacing (x)', min:0.8,max:3, step:0.05, def:1.2 },
+  { key:'buttonLineHeight',   type:'slider', label:'Dev Panel Button Line Spacing (x)', min:0.8,max:3,  step:0.05,def:1.2 },
+  { key:'groupLabelBgColor', type:'color', label:'Dev Panel Group Label Background Color', def:'#12121e' },
+  { key:'groupTextColor',    type:'color', label:'Dev Panel Group Text Color',       def:'#c9c9d8' },
+  { key:'buttonTextColor',   type:'color', label:'Dev Panel Button Text Color',      def:'#e8e8f0' },
+  { key:'settingNumberColor',type:'color', label:'Dev Panel Setting Number Text Color', def:'#e8e8f0' },
+  { key:'tabTextColor',      type:'color', label:'Dev Panel Tab Text Color',         def:'#9a9ab0' },
+  { key:'titleBold',    type:'checkbox', label:'Bold Dev Panel Title',    def:true },
+  { key:'groupBold',    type:'checkbox', label:'Bold Group Text',         def:true },
+  { key:'tabBold',      type:'checkbox', label:'Bold Tab Text',           def:false },
+  { key:'buttonBold',   type:'checkbox', label:'Bold Button Text',        def:false },
+  { key:'settingsBold', type:'checkbox', label:'Bold Settings Text',      def:false },
+  { key:'titleCapitalize', type:'checkbox', label:'Capitalize Dev Panel Title', def:false },
   // Text Edit Mode (§12-adjacent, ported from the template's own
   // checkboxDevTextEditMode) -- per explicit request. When on, clicking
   // a group title or setting label opens an inline rename editor instead
@@ -1029,6 +1133,26 @@ const PANEL_STYLE_CONTROLS = [
 ];
 const panelStyle = {};
 PANEL_STYLE_CONTROLS.forEach(c => panelStyle[c.key] = c.def);
+// Which of the 19 newly-ported fields (above) are shared/desktop-
+// authoritative across all 3 tabs, matching TEMPLATE_DEV_PANEL.html's own
+// DEV_PANEL_STYLE_SHARED_KEYS exactly (colors + bold/capitalize toggles =
+// shared "desktop-only cosmetic", same bucket every pre-existing cap
+// toggle/color in this group already falls into; font sizes/letter-
+// spacing/line-heights stay per-tab like every pre-existing size field).
+// Every field NOT listed here (the 8 remaining new ones, plus all 23
+// pre-existing PANEL_STYLE_CONTROLS entries) keeps this group's
+// original, unmodified per-tab behavior -- this array is additive, it
+// changes nothing about how the pre-existing 23 fields persist. See
+// applyPanelStyleValues()/buildPanelGeometryForSave()'s own comments for
+// how "shared" is actually implemented (panelStyle[key] read directly,
+// bypassing the normal per-tab snapshot restore, rather than a parallel
+// duplicate-storage object like the template's own mobileDevPanelStyle/
+// landscapeDevPanelStyle -- unnecessary here since this project only
+// ever keeps ONE live panelStyle object, swapped wholesale per tab).
+const PANEL_STYLE_SHARED_KEYS = [
+  'groupLabelBgColor', 'groupTextColor', 'buttonTextColor', 'settingNumberColor', 'tabTextColor',
+  'titleBold', 'groupBold', 'tabBold', 'buttonBold', 'settingsBold', 'titleCapitalize',
+];
 
 function hexToRgba(hex, alpha){
   const h = hex.replace('#', '');
@@ -1039,6 +1163,12 @@ function hexToRgba(hex, alpha){
 const PANEL_CAPS_CLASS_MAP = {
   capsButtonText: 'dp-caps-button-text', capsTabText: 'dp-caps-tab-text',
   capsGroupNames: 'dp-caps-group-names', capsSettingsText: 'dp-caps-settings-text',
+  // 2026-09-14 additions -- see PANEL_STYLE_CONTROLS' own comment for
+  // why titleBold/groupBold default true and tabBold/buttonBold/
+  // settingsBold default false.
+  titleCapitalize: 'dp-caps-title-text', titleBold: 'dp-bold-title',
+  tabBold: 'dp-bold-tab', buttonBold: 'dp-bold-button',
+  settingsBold: 'dp-bold-settings', groupBold: 'dp-bold-group',
 };
 function applyPanelStyle(){
   const panel = document.getElementById('devPanel');
@@ -1059,6 +1189,23 @@ function applyPanelStyle(){
   panel.style.setProperty('--dp-tab-letter-spacing', panelStyle.tabLetterSpacing + 'px');
   panel.style.setProperty('--dp-group-letter-spacing', panelStyle.groupLetterSpacing + 'px');
   panel.style.setProperty('--dp-settings-letter-spacing', panelStyle.settingsLetterSpacing + 'px');
+  // 2026-09-14 additions -- read the same way regardless of shared vs.
+  // per-tab (see PANEL_STYLE_SHARED_KEYS' own comment: that distinction
+  // is only about how panelStyle[key] gets SET/persisted, never about
+  // how it's read here).
+  panel.style.setProperty('--dp-value-font-size', panelStyle.valueFontSize + 'px');
+  panel.style.setProperty('--dp-button-font-size', panelStyle.buttonFontSize + 'px');
+  panel.style.setProperty('--dp-title-letter-spacing', panelStyle.titleLetterSpacing + 'px');
+  panel.style.setProperty('--dp-title-line-height', panelStyle.titleLineHeight);
+  panel.style.setProperty('--dp-tab-line-height', panelStyle.tabLineHeight);
+  panel.style.setProperty('--dp-group-line-height', panelStyle.groupLineHeight);
+  panel.style.setProperty('--dp-settings-line-height', panelStyle.settingsLineHeight);
+  panel.style.setProperty('--dp-button-line-height', panelStyle.buttonLineHeight);
+  panel.style.setProperty('--dp-group-label-bg', panelStyle.groupLabelBgColor);
+  panel.style.setProperty('--dp-group-text-color', panelStyle.groupTextColor);
+  panel.style.setProperty('--dp-button-text-color', panelStyle.buttonTextColor);
+  panel.style.setProperty('--dp-value-text-color', panelStyle.settingNumberColor);
+  panel.style.setProperty('--dp-tab-text-color', panelStyle.tabTextColor);
   for (const [key, className] of Object.entries(PANEL_CAPS_CLASS_MAP)){
     panel.classList.toggle(className, !!panelStyle[key]);
   }
@@ -1186,12 +1333,69 @@ function buildPanelStyleGroup(){
   // this group's body via event delegation.
 }
 
+// Default nested-subgroup arrangement for the built-in "Dev Panel" group
+// (2026-09-14), ported from TEMPLATE_DEV_PANEL.html's own
+// applyDefaultDevPanelSubgroupOrder() -- which itself ported THIS
+// project's own live organization as the template's new standard (per
+// that section's own comment), so this is porting the structure back to
+// its origin. Builds 3 top-level subgroups -- MECHANICS (Scroll
+// Strength), PANEL UI (background/accent/slider color, opacity), and
+// TEXT (font family) -- with TEXT itself nesting 5 further subgroups,
+// one per text category (Dev Panel Title, Group Title, Setting Title,
+// TABS, BUTTONS), each holding that category's own Bold/Capitalize/
+// Font-Size/Letter-Spacing/Line-Spacing/Color battery. Every control
+// stays registered flat in PANEL_STYLE_CONTROLS/panelStyle -- this only
+// RELOCATES already-built rows (found via findRowByKey(), which
+// searches the whole panel) into new subgroup DOM, exactly how
+// buildPanelStyleGroup() built them moments before this runs. Idempotent
+// (bails if a "MECHANICS" subgroup already exists) so a later real
+// reorganization -- the user dragging things around, or applyOrder()
+// restoring a saved arrangement -- is never clobbered by a repeat call.
+// `{noDeviceCheckboxes:true}` keeps these subgroups (and their own
+// nested rows, which never call buildRow() to begin with) out of the
+// independence/visibility systems, matching the top-level "DEV PANEL"
+// group's own existing exemption from both.
+function applyDefaultDevPanelSubgroupOrder(){
+  const devPanelGroupEl = Array.from(document.querySelectorAll('#dpGroups > .dp-group')).find(g => g.dataset.key === 'DEV PANEL');
+  if (!devPanelGroupEl) return;
+  const gb = devPanelGroupEl.querySelector(':scope > .dp-group-body');
+  if (!gb || gb.querySelector(':scope > .dp-group[data-key="MECHANICS"]')) return;
+  function makeSubgroup(name, keys, parentBody){
+    const sub = createGroupElement(name, { noDeviceCheckboxes: true });
+    parentBody.appendChild(sub);
+    const body = sub.querySelector(':scope > .dp-group-body');
+    keys.forEach(key => { const row = findRowByKey(key); if (row) body.appendChild(row); });
+    return sub;
+  }
+  makeSubgroup('MECHANICS', ['scrollStrength'], gb);
+  makeSubgroup('PANEL UI', ['bgColor', 'accentColor', 'sliderColor', 'opacity'], gb);
+  const text = makeSubgroup('TEXT', ['fontFamily'], gb);
+  const textBody = text.querySelector(':scope > .dp-group-body');
+  makeSubgroup('Dev Panel Title', ['titleBold', 'titleCapitalize', 'titleFontSize', 'titleLetterSpacing', 'titleLineHeight', 'buttonTextBorder', 'titleColor'], textBody);
+  makeSubgroup('Group Title', ['groupBold', 'capsGroupNames', 'groupFontSize', 'groupLetterSpacing', 'groupLineHeight', 'groupTextColor', 'groupLabelBgColor'], textBody);
+  makeSubgroup('Setting Title', ['capsSettingsText', 'settingsBold', 'labelFontSize', 'valueFontSize', 'settingsLineHeight', 'settingsLetterSpacing', 'textColor', 'settingNumberColor'], textBody);
+  makeSubgroup('TABS', ['tabBold', 'capsTabText', 'tabFontSize', 'tabLetterSpacing', 'tabLineHeight', 'tabTextColor'], textBody);
+  makeSubgroup('BUTTONS', ['buttonBold', 'capsButtonText', 'buttonFontSize', 'buttonLetterSpacing', 'buttonLineHeight', 'buttonTextColor', 'buttonHeight'], textBody);
+}
+
 function applyPanelStyleValues(saved){
   // always resolve every field (falling back to its default), so switching to
   // a tab with nothing saved yet resets away from whatever the previously
   // active tab happened to be showing, rather than silently keeping it.
   PANEL_STYLE_CONTROLS.forEach(ctrl => {
-    const v = (saved && ctrl.key in saved) ? saved[ctrl.key] : ctrl.def;
+    // Shared keys (PANEL_STYLE_SHARED_KEYS) deliberately IGNORE `saved`
+    // here and just keep whatever panelStyle[ctrl.key] already holds --
+    // that's either the value resetSettings() seeded once from Desktop's
+    // own saved style at boot, or a live edit made on ANY tab since (a
+    // shared field's own control writes straight into panelStyle[key]
+    // exactly like every other field, so it's already correct going into
+    // this call). Resolving it from `saved` instead would incorrectly
+    // reset a shared field back to THIS TAB's own possibly-stale saved
+    // snapshot every time the tab is switched, discarding a live edit
+    // made moments ago on a different tab before Save was ever clicked.
+    const v = PANEL_STYLE_SHARED_KEYS.includes(ctrl.key)
+      ? (ctrl.key in panelStyle ? panelStyle[ctrl.key] : ctrl.def)
+      : (saved && ctrl.key in saved) ? saved[ctrl.key] : ctrl.def;
     // panelStyle write happens regardless of whether el exists -- a real
     // visitor (no dev panel built, panelStyleNumEls always empty here)
     // still needs applyPanelStyle() below to see the real value, even
@@ -1382,7 +1586,58 @@ function buildGroupIndependenceCheckbox(groupEl){
   });
   return cb;
 }
-function createGroupElement(name){
+// Desktop-only "Show On Mobile & Landscape" master checkbox (2026-09-14,
+// [JS-4b0]-adjacent, adapted from TEMPLATE_DEV_PANEL.html's own dynamic
+// visibility system) -- same NO-persisted-state, pure-cascade design as
+// buildGroupIndependenceCheckbox() above, just for the opposite tab (shown
+// on Desktop only, since "which tab this hides on" is a Desktop-side
+// decision, the mirror image of "independent from Desktop" being a
+// Mobile/Landscape-side decision). Unlike independence, there is no
+// separate per-group persisted flag at all -- see deviceVisibility's own
+// comment: a group's own shown/hidden state on Mobile/Landscape is always
+// COMPUTED from whether it has any visible descendant left (refreshVisibilityUI()),
+// exactly the same "never trust static group membership, walk the live
+// DOM" reasoning as independence's cascade.
+function buildGroupVisibilityCheckbox(groupEl){
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'dp-visible-group-checkbox';
+  cb.title = 'Show On Mobile & Landscape (whole group)';
+  cb.checked = true;
+  cb.style.display = 'none';
+  cb.addEventListener('click', e => e.stopPropagation());
+  cb.addEventListener('change', () => {
+    const checked = cb.checked;
+    const body = groupEl.querySelector(':scope > .dp-group-body');
+    if (!body) return;
+    body.querySelectorAll(':scope > .dp-row').forEach(rowEl => {
+      const entry = numEls[rowEl.dataset.key];
+      if (entry && entry.visibleCheckbox && entry.visibleCheckbox.checked !== checked){
+        entry.visibleCheckbox.checked = checked;
+        entry.visibleCheckbox.dispatchEvent(new Event('change'));
+      }
+    });
+    body.querySelectorAll(':scope > .dp-group').forEach(subGroupEl => {
+      const subCb = subGroupEl.querySelector(':scope > .dp-group-header > .dp-visible-group-checkbox');
+      if (subCb && subCb.checked !== checked){
+        subCb.checked = checked;
+        subCb.dispatchEvent(new Event('change'));
+      }
+    });
+  });
+  return cb;
+}
+// `opts.noDeviceCheckboxes` (2026-09-14) -- set true for a group that
+// shouldn't participate in the independence/visibility system at all
+// (the Dev Panel chrome group's own nested subgroups, built by
+// applyDefaultDevPanelSubgroupOrder() -- that whole group is ALREADY
+// excluded from this system, same as its top-level "DEV PANEL" container
+// which is hand-built by buildPanelStyleGroup(), not this function).
+// Every other caller (buildDevPanel(), addDevGroup(), placeGroup()'s own
+// "recreate a group that only exists in saved order" fallback) omits
+// `opts` entirely and gets both checkboxes exactly as before.
+function createGroupElement(name, opts){
+  opts = opts || {};
   const g = document.createElement('div');
   g.className = 'dp-group';
   g.dataset.key = name;
@@ -1410,11 +1665,14 @@ function createGroupElement(name){
   // selection.
   const title = document.createElement('span'); title.className = 'dp-group-title'; title.textContent = name;
   h.appendChild(handle); h.appendChild(arrow); h.appendChild(title);
-  h.appendChild(buildGroupIndependenceCheckbox(g));
+  if (!opts.noDeviceCheckboxes){
+    h.appendChild(buildGroupIndependenceCheckbox(g));
+    h.appendChild(buildGroupVisibilityCheckbox(g));
+  }
   const gb = document.createElement('div');
   gb.className = 'dp-group-body';
   h.addEventListener('click', e => {
-    if (e.target.closest('.dp-drag-handle') || e.target.closest('.dp-indep-group-checkbox')) return;
+    if (e.target.closest('.dp-drag-handle') || e.target.closest('.dp-indep-group-checkbox') || e.target.closest('.dp-visible-group-checkbox')) return;
     // Text Edit Mode takes over the WHOLE header click (not just the
     // title text) while it's on -- matches the template's own
     // toggleSection() behavior -- so collapse/expand is unreachable
@@ -1905,6 +2163,27 @@ function buildRow(ctrl){
     numEls[ctrl.key] = { type:'gradient', renderStops, setStops: newStops => { cfg[ctrl.key] = newStops.map(s => ({ ...s })); renderStops(); } };
     renderStops();
   }
+  // "Show On Mobile & Landscape" checkbox (2026-09-14, [JS-4b0]-adjacent) --
+  // the Desktop-side mirror of the "Independent from Desktop" checkbox
+  // below: shown only on the Desktop tab (opposite gating), default
+  // checked (visible everywhere, matching every setting's behavior before
+  // this feature existed). Unchecking it hides this row's DOM entirely on
+  // Mobile/Landscape (refreshVisibilityUI()) -- purely a dev-panel DISPLAY
+  // decision, never touches cfg/resolveValuesForTab()'s own value
+  // resolution, so a hidden setting's independent (or mirrored) value
+  // keeps behaving exactly as configured in the actual running game.
+  const visible = document.createElement('input');
+  visible.type = 'checkbox';
+  visible.className = 'dp-visible-checkbox';
+  visible.title = 'Show On Mobile & Landscape';
+  visible.checked = true;
+  visible.style.display = 'none';
+  visible.addEventListener('change', () => {
+    deviceVisibility.settings[ctrl.key] = visible.checked;
+    refreshVisibilityUI();
+  });
+  row.appendChild(visible);
+  numEls[ctrl.key].visibleCheckbox = visible;
   // "Independent from Desktop" checkbox (2026-09-13) -- added generically
   // here, after the type-specific branches above, so every control type
   // gets one the same way. Hidden by default (desktop tab, or before
@@ -2144,6 +2423,22 @@ let deviceIndependence = {
   mobile: { settings: {} },
   landscape: { settings: {} },
 };
+// Desktop-side "Show On Mobile & Landscape" flags (2026-09-14,
+// [JS-4b0]-adjacent) -- { [key]: boolean }, default true (visible) when
+// absent, same "default absent = current/prior behavior" convention as
+// deviceIndependence above. ONE combined flag per setting (not split
+// mobile-vs-landscape) -- matches the checkbox's own single "Mobile &
+// Landscape" label; there is no per-tab granularity here, same as the
+// template's own devVisibility this was adapted from. No `groups` map --
+// a group's own shown/hidden state on Mobile/Landscape is always computed
+// live from its current children (see refreshVisibilityUI()), never a
+// separate persisted flag, mirroring deviceIndependence's own group
+// checkbox (buildGroupIndependenceCheckbox()'s comment explains why).
+// Scoped to DEV_GROUPS settings only, same as deviceIndependence -- the
+// built-in "Dev Panel" chrome group is excluded from both systems (its
+// own rows are built by buildPanelStyleGroup(), which never calls
+// buildRow(), so they never get a visibleCheckbox to begin with).
+let deviceVisibility = { settings: {} };
 function isKeyIndependent(tab, key){
   if (tab === 'desktop') return false;
   const ind = deviceIndependence[tab];
@@ -2208,6 +2503,23 @@ function buildPanelGeometryForSave(){
   const prev = (lastLoadedSnapshot && lastLoadedSnapshot.panelGeometry) || {};
   const result = {};
   DEVICE_TABS.forEach(t => { result[t] = t === activeDeviceTab ? getPanelGeometry() : (prev[t] || null); });
+  // Shared Dev-Panel-chrome fields (PANEL_STYLE_SHARED_KEYS, 2026-09-14)
+  // always follow the CURRENT live panelStyle value into every OTHER
+  // tab's own saved style too -- otherwise a shared field edited while
+  // previewing Mobile/Landscape would only update the ACTIVE tab's own
+  // saved snapshot (via getPanelGeometry() above), leaving Desktop's own
+  // saved copy stale until Desktop is separately revisited and re-saved.
+  // Skipped for a tab with nothing saved at all yet (result[t] === null)
+  // -- there's no left/top/width/height to attach a style override to,
+  // and applyPanelGeometry(null) already means "use CSS defaults," which
+  // this project's own §12l convention wants to leave alone.
+  PANEL_STYLE_SHARED_KEYS.forEach(key => {
+    const v = panelStyle[key];
+    DEVICE_TABS.forEach(t => {
+      if (t === activeDeviceTab || !result[t]) return;
+      result[t] = { ...result[t], style: { ...result[t].style, [key]: v } };
+    });
+  });
   return result;
 }
 
@@ -2607,12 +2919,19 @@ async function readGitSettingsLog(){
   }
 }
 
-async function saveSettings(){
-  const snapshot = {
+// The one full-panel-state snapshot shape used by Save Settings, Copy
+// Settings, AND Named Setting States (2026-09-14) -- factored out so all
+// 3 build it identically rather than 3 independently-drifting copies of
+// the same 6-field object literal.
+function captureFullDevPanelState(){
+  return {
     valuesByDevice: buildValuesByDeviceForSave(),
     // Persisted alongside values -- see deviceIndependence's own
     // declaration comment for the full shape/semantics.
     independence: deviceIndependence,
+    // Persisted alongside independence -- see deviceVisibility's own
+    // declaration comment for the full shape/semantics.
+    visibility: deviceVisibility,
     order: getPanelOrder(),
     panelGeometry: buildPanelGeometryForSave(),
     // Not device-split (unlike panelGeometry/panelStyle, or the
@@ -2620,6 +2939,9 @@ async function saveSettings(){
     // same regardless of which tab is active.
     textOverrides: { ...devTextOverrides },
   };
+}
+async function saveSettings(){
+  const snapshot = captureFullDevPanelState();
   const btn = document.getElementById('dpSaveBtn');
   const flash = (text, holdMs) => {
     if (!btn) return;
@@ -2702,7 +3024,23 @@ async function resetSettings(){
     try { snap = JSON.parse(sessionStorage.getItem(SESSION_FALLBACK_KEY)); } catch (err) { snap = null; }
   }
 
-  lastLoadedSnapshot = snap;
+  applySnapshotToPanel(snap, true);
+}
+
+// Applies an already-resolved snapshot object to the live panel/game --
+// factored out of resetSettings() (2026-09-14) so Named Setting States'
+// own Use/Set-as-Default (below) can apply an arbitrary snapshot the
+// exact same way, without duplicating this logic. `updateLastLoaded`
+// controls whether `lastLoadedSnapshot` (what a REAL Save/Reset reads/
+// writes against) gets reassigned -- resetSettings() always passes
+// `true`; Named Setting States' own "Use" deliberately passes `false`
+// (per its own §12d spec: "applies... WITHOUT touching whatever
+// Sync/Reset would restore" -- a reversible preview, not a commit) while
+// "Set as Default" applies with `false` too and then calls the real
+// saveSettings() separately, which is what actually updates
+// lastLoadedSnapshot for real.
+function applySnapshotToPanel(snap, updateLastLoaded){
+  if (updateLastLoaded) lastLoadedSnapshot = snap;
   if (snap){
     applyOrder(snap.order);
     // Backward compat: a save from before this feature existed has a
@@ -2712,25 +3050,44 @@ async function resetSettings(){
     // defaults are already all-empty/false), so an old save resolves
     // identically for every tab, exactly as it did before this feature
     // existed. `independence` is similarly optional/absent on an old
-    // save. Normalized straight onto `lastLoadedSnapshot` itself (not
-    // just a local variable) -- every downstream consumer
-    // (buildValuesByDeviceForSave() at the next Save/Copy,
-    // initDeviceTabs()'s own tab-switch resolve) reads
-    // lastLoadedSnapshot.valuesByDevice directly and must see the
-    // real, already-migrated shape; leaving the raw old-format object
-    // in place here would make the very first Save after loading an
-    // old-format file silently DISCARD Desktop's own existing values
-    // (buildValuesByDeviceForSave()'s own "start from the previous
-    // snapshot" preservation would start from nothing).
-    if (!snap.valuesByDevice) lastLoadedSnapshot.valuesByDevice = { desktop: snap.values || {} };
-    const valuesByDevice = lastLoadedSnapshot.valuesByDevice;
+    // save. Normalized straight onto `snap` itself (not just a local
+    // variable) -- every downstream consumer (buildValuesByDeviceForSave()
+    // at the next Save/Copy, initDeviceTabs()'s own tab-switch resolve)
+    // reads lastLoadedSnapshot.valuesByDevice directly and must see the
+    // real, already-migrated shape when `updateLastLoaded` is true;
+    // leaving the raw old-format object in place here would make the
+    // very first real Save after loading an old-format file silently
+    // DISCARD Desktop's own existing values (buildValuesByDeviceForSave()'s
+    // own "start from the previous snapshot" preservation would start
+    // from nothing).
+    if (!snap.valuesByDevice) snap.valuesByDevice = { desktop: snap.values || {} };
+    const valuesByDevice = snap.valuesByDevice;
     deviceIndependence = snap.independence || { mobile: { settings:{} }, landscape: { settings:{} } };
+    // Same absent-means-prior-behavior backward compat as independence
+    // above -- an old save has no `visibility` key at all, which
+    // correctly resolves to "everything visible everywhere" (deviceVisibility's
+    // own declared default), matching every setting's behavior before
+    // this feature existed.
+    deviceVisibility = snap.visibility || { settings: {} };
     // activeDeviceTab already equals the REAL device for a non-dev
     // visitor (initialized from isLandscapeClass()/isMobileClass() at
     // declaration and never reassigned without a dev panel's own tab
     // buttons to click), so this same resolution is correct whether or
     // not a dev panel actually exists.
     applyValues(resolveValuesForTab(activeDeviceTab, valuesByDevice));
+    // Shared Dev-Panel-chrome fields (PANEL_STYLE_SHARED_KEYS, 2026-09-14)
+    // are seeded ONCE here from Desktop's own saved style, regardless of
+    // activeDeviceTab -- Desktop is always their source of truth. Done
+    // BEFORE applyPanelGeometry()/applyPanelStyleValues() below, which for
+    // these specific keys deliberately reads panelStyle[key] directly
+    // (not `saved`) so a later live edit on ANY tab persists across a
+    // tab switch within the same session -- see applyPanelStyleValues()'s
+    // own comment for why re-resolving them from `saved` on every switch
+    // would be wrong.
+    const desktopStyle = snap.panelGeometry && snap.panelGeometry.desktop && snap.panelGeometry.desktop.style;
+    if (desktopStyle){
+      PANEL_STYLE_SHARED_KEYS.forEach(k => { if (k in desktopStyle) panelStyle[k] = desktopStyle[k]; });
+    }
   }
   // DEV_MODE-guarded -- the individual setting/group rows this walks
   // only exist once buildDevPanel() has actually run, same reasoning as
@@ -2742,7 +3099,7 @@ async function resetSettings(){
   // so a fresh install with nothing saved anywhere yet still gets its
   // checkboxes correctly shown/hidden for whatever the real device
   // actually is, not left at buildRow()'s own hidden-by-default state.
-  if (DEV_MODE) refreshIndependenceUI();
+  if (DEV_MODE){ refreshIndependenceUI(); refreshVisibilityUI(); }
   applyPanelGeometry(snap && snap.panelGeometry ? snap.panelGeometry[activeDeviceTab] : null);
   // Always resolve (falling back to {}), same "don't silently keep
   // whatever was already showing" convention as applyPanelStyleValues().
@@ -2750,15 +3107,92 @@ async function resetSettings(){
   applyDevTextOverrides();
 }
 
+/* ---------------------------------------------------------------------
+   Named Setting States (2026-09-14, ported from TEMPLATE_DEV_PANEL.html's
+   own [JS-13b] "Saved Dev Settings") -- multiple named, full-panel-state
+   snapshots to switch between without losing the real Save/Reset
+   baseline (§12d). Stored in localStorage, DELIBERATELY not the
+   git-tracked settings log -- these are personal, local, disposable
+   experiments ("try different UI settings"), not the shared
+   cross-device source of truth every real visitor's cfg loads from
+   (that's exactly what Save Settings is for, and what this feature is
+   explicitly NOT supposed to silently become). Use applies a saved
+   state live WITHOUT touching what Reset would restore (reversible --
+   see applySnapshotToPanel()'s own `updateLastLoaded` param); Set as
+   Default applies it AND runs it through the real saveSettings(), so it
+   becomes what Reset/a fresh load restores going forward.
+--------------------------------------------------------------------- */
+const DEV_PANEL_SAVED_STATES_KEY = 'dickoClickoSavedDevStates';
+function getSavedDevPanelStates(){
+  try {
+    const raw = localStorage.getItem(DEV_PANEL_SAVED_STATES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) { return {}; }
+}
+function setSavedDevPanelStates(states){
+  try { localStorage.setItem(DEV_PANEL_SAVED_STATES_KEY, JSON.stringify(states)); } catch (err) { /* full/unavailable -- ignore, same tolerance as saveSettings()'s own tiers */ }
+}
+function renderSavedDevPanelStatesList(){
+  const select = document.getElementById('dpSavedStatesSelect');
+  if (!select) return;
+  const states = getSavedDevPanelStates();
+  const prevValue = select.value;
+  select.innerHTML = '';
+  Object.keys(states).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    select.appendChild(opt);
+  });
+  if (states[prevValue]) select.value = prevValue;
+}
+function saveNamedDevPanelState(){
+  const name = prompt('Save current settings as:');
+  if (!name) return;
+  const states = getSavedDevPanelStates();
+  if (states[name] && !confirm('"' + name + '" already exists. Overwrite it?')) return;
+  states[name] = captureFullDevPanelState();
+  setSavedDevPanelStates(states);
+  renderSavedDevPanelStatesList();
+  const select = document.getElementById('dpSavedStatesSelect');
+  if (select) select.value = name;
+}
+function useNamedDevPanelState(){
+  const select = document.getElementById('dpSavedStatesSelect');
+  const name = select && select.value;
+  if (!name) return;
+  const states = getSavedDevPanelStates();
+  if (states[name]) applySnapshotToPanel(states[name], false);
+}
+function deleteNamedDevPanelState(){
+  const select = document.getElementById('dpSavedStatesSelect');
+  const name = select && select.value;
+  if (!name) return;
+  if (!confirm('Delete "' + name + '"?')) return;
+  const states = getSavedDevPanelStates();
+  delete states[name];
+  setSavedDevPanelStates(states);
+  renderSavedDevPanelStatesList();
+}
+function setNamedDevPanelStateAsDefault(){
+  const select = document.getElementById('dpSavedStatesSelect');
+  const name = select && select.value;
+  if (!name) return;
+  const states = getSavedDevPanelStates();
+  const state = states[name];
+  if (!state) return;
+  applySnapshotToPanel(state, false);
+  saveSettings();
+}
+function initSavedDevPanelStates(){
+  document.getElementById('dpSavedStatesSaveBtn').addEventListener('click', saveNamedDevPanelState);
+  document.getElementById('dpSavedStatesUseBtn').addEventListener('click', useNamedDevPanelState);
+  document.getElementById('dpSavedStatesSetDefaultBtn').addEventListener('click', setNamedDevPanelStateAsDefault);
+  document.getElementById('dpSavedStatesDeleteBtn').addEventListener('click', deleteNamedDevPanelState);
+  renderSavedDevPanelStatesList();
+}
+
 function copySettings(){
-  // See saveSettings()'s identical comment for both helpers.
-  const snapshot = {
-    valuesByDevice: buildValuesByDeviceForSave(),
-    independence: deviceIndependence,
-    order: getPanelOrder(),
-    panelGeometry: buildPanelGeometryForSave(),
-    textOverrides: { ...devTextOverrides },
-  };
+  const snapshot = captureFullDevPanelState();
   const text = JSON.stringify(snapshot, null, 2);
   const btn = document.getElementById('dpCopyBtn');
   const flash = msg => { const orig = btn.textContent; btn.textContent = msg; setTimeout(() => btn.textContent = orig, 900); };
@@ -2857,6 +3291,70 @@ function refreshIndependenceUI(){
   });
   refreshGroupIndependenceStates();
 }
+// Visibility's own group-checkbox sync (2026-09-14) -- same
+// deepest-first/tri-state pattern as refreshGroupIndependenceStates()
+// above, gated on the OPPOSITE tab (only meaningful/shown on Desktop,
+// where these checkboxes actually live) and defaulting a childless group
+// to fully-checked (visible) rather than independence's own
+// fully-unchecked default, matching deviceVisibility's own "absent means
+// visible" convention.
+function refreshGroupVisibilityStates(){
+  if (activeDeviceTab !== 'desktop') return;
+  Array.from(document.querySelectorAll('#devPanel .dp-group'))
+    .sort((a, b) => groupElDepth(b) - groupElDepth(a))
+    .forEach(groupEl => {
+      const cb = groupEl.querySelector(':scope > .dp-group-header > .dp-visible-group-checkbox');
+      if (!cb) return; // the built-in "Dev Panel" chrome group (and its own nested subgroups) has none
+      const body = groupEl.querySelector(':scope > .dp-group-body');
+      const states = [];
+      body.querySelectorAll(':scope > .dp-row').forEach(r => {
+        const e = numEls[r.dataset.key];
+        if (e && e.visibleCheckbox) states.push(e.visibleCheckbox.checked);
+      });
+      body.querySelectorAll(':scope > .dp-group').forEach(sg => {
+        const subCb = sg.querySelector(':scope > .dp-group-header > .dp-visible-group-checkbox');
+        if (subCb) states.push(subCb.indeterminate ? 'mixed' : subCb.checked);
+      });
+      if (states.length === 0){ cb.checked = true; cb.indeterminate = false; return; }
+      const allChecked = states.every(s => s === true);
+      const allUnchecked = states.every(s => s === false);
+      cb.checked = allChecked;
+      cb.indeterminate = !allChecked && !allUnchecked;
+    });
+}
+// Shows/hides every row's own "Show On Mobile & Landscape" checkbox
+// (Desktop only, opposite gating of refreshIndependenceUI()'s own
+// checkboxes) and, on Mobile/Landscape, actually hides a row's whole DOM
+// (`display:none`) when its flag is off. A group is then hidden in the
+// SAME pass once every one of its current children (rows AND nested
+// subgroups, recursively) is hidden -- computed fresh from the live DOM
+// every refresh rather than a separate persisted per-group flag, so it
+// stays correct regardless of drag-reordering. The built-in "Dev Panel"
+// chrome group is naturally exempt: none of its rows ever get a
+// visibleCheckbox (see deviceVisibility's own comment), so `anyVisible`
+// below is always true for it.
+function refreshVisibilityUI(){
+  const showCheckboxes = activeDeviceTab === 'desktop';
+  document.querySelectorAll('#devPanel .dp-row').forEach(rowEl => {
+    const entry = numEls[rowEl.dataset.key];
+    if (!entry || !entry.visibleCheckbox) return;
+    entry.visibleCheckbox.style.display = showCheckboxes ? '' : 'none';
+    const isVisible = deviceVisibility.settings[rowEl.dataset.key] !== false;
+    entry.visibleCheckbox.checked = isVisible;
+    rowEl.style.display = (showCheckboxes || isVisible) ? '' : 'none';
+  });
+  document.querySelectorAll('#devPanel .dp-visible-group-checkbox').forEach(cb => {
+    cb.style.display = showCheckboxes ? '' : 'none';
+  });
+  Array.from(document.querySelectorAll('#devPanel .dp-group'))
+    .sort((a, b) => groupElDepth(b) - groupElDepth(a))
+    .forEach(groupEl => {
+      const body = groupEl.querySelector(':scope > .dp-group-body');
+      const anyVisible = showCheckboxes || !body || Array.from(body.children).some(child => child.style.display !== 'none');
+      groupEl.style.display = anyVisible ? '' : 'none';
+    });
+  refreshGroupVisibilityStates();
+}
 function initDeviceTabs(){
   const buttons = document.querySelectorAll('.dp-tab-btn');
   function refreshActive(){
@@ -2880,6 +3378,11 @@ function initDeviceTabs(){
     // checkbox and syncs each one's checked/disabled state to this tab's
     // own deviceIndependence.
     refreshIndependenceUI();
+    // refreshVisibilityUI() is the mirror-image pass -- shows/hides every
+    // row's/group's "Show On Mobile & Landscape" checkbox on Desktop, and
+    // actually hides a row/group's DOM on Mobile/Landscape per
+    // deviceVisibility.
+    refreshVisibilityUI();
   }));
   refreshActive();
 }
@@ -6975,6 +7478,267 @@ function logClick(event, data){
   el.scrollTop = el.scrollHeight;
 }
 
+/* ---------------------------------------------------------------------
+   Mouse Log (2026-09-14, ported from TEMPLATE_DEV_PANEL.html's own
+   [JS-13c]) -- a RAW pointer/gesture diagnostic, deliberately separate
+   from CLICK LOG above (see this widget's own HTML comment for why: raw
+   input vs. rope-physics semantics). Attached directly to `window`
+   pointer/wheel/contextmenu events so it observes activity anywhere on
+   the page, not just the rope/circle -- entirely independent of the
+   game's own onPointerDown/onPointerUp handlers, on purpose (this is a
+   record of what the user's hardware actually did, not what the app
+   decided to do with it).
+--------------------------------------------------------------------- */
+const MOUSE_LOG_MAX_ENTRIES = 500;
+const MOUSE_LOG_HOLD_MS = 500;
+const MOUSE_LOG_MULTICLICK_MS = 350;
+const MOUSE_LOG_MOVE_THRESHOLD_PX = 10;
+let mouseLog = [];
+let mouseLogPositionEnabled = false;
+let mouseLogPositionIntervalMs = 1000;
+let mouseLogPositionTimer = null;
+let mouseLogLastPointerPos = null;
+let mouseLogLastViewport = null;
+const mouseLogActivePointers = new Map();
+let mouseLogClickCount = 0;
+let mouseLogClickTimer = null;
+let mouseLogHoldTimer = null;
+let mouseLogPinchStartDist = null;
+let mouseLogPinchActive = false;
+
+// 3-way, matching this project's own Desktop/Mobile/Landscape device
+// model (isMobileClass()/isLandscapeClass() already exist for the real
+// dev-panel tabs) -- richer than the template's own 2-way desktop/mobile.
+function mouseLogDeviceContext(){
+  return isLandscapeClass() ? 'landscape' : (isMobileClass() ? 'mobile' : 'desktop');
+}
+// Resolves WHAT a mouse/touch action hit -- a dev-panel control (by its
+// own row label/button text/group title) vs. something in the game's own
+// canvas area (the anchor circle, by isOnCircle() at that screen point,
+// else just "canvas") vs. background. Best-effort "triggered" guess: true
+// for any genuinely interactive element (button/input/select/label) or a
+// canvas hit that isOnCircle() would treat as a valid grow-arm zone --
+// not real app-logic awareness, just a structural hint for reading the
+// log back later.
+function describeMouseLogTarget(el, clientX, clientY){
+  if (!el || el === document.documentElement || el === document.body) return { target:'(background)', triggered:false };
+  const inPanel = el.closest && el.closest('#devPanel');
+  if (inPanel){
+    const row = el.closest('.dp-row');
+    const label = row && row.querySelector('label');
+    const btn = el.closest('button');
+    const groupTitle = el.closest('.dp-group-title');
+    const name = label ? label.textContent.trim() : btn ? btn.textContent.trim() : groupTitle ? '(group) ' + groupTitle.textContent.trim() : (el.id || el.tagName.toLowerCase());
+    const interactive = !!(btn || groupTitle || el.matches('input, select, textarea'));
+    return { target:'Dev Panel: ' + name, triggered:interactive };
+  }
+  if (el.id === 'scene' || (el.closest && el.closest('#scene'))){
+    const onCircle = typeof isOnCircle === 'function' && typeof clientX === 'number' ? isOnCircle(clientX, clientY) : false;
+    return { target: onCircle ? 'Canvas: circle' : 'Canvas', triggered: onCircle };
+  }
+  const interactiveEl = el.closest && el.closest('button, a[href], input, select, textarea, label');
+  if (interactiveEl){
+    const id = interactiveEl.id ? '#' + interactiveEl.id : '';
+    const text = (interactiveEl.textContent || '').trim().slice(0, 30);
+    return { target:'App: ' + interactiveEl.tagName.toLowerCase() + id + (text ? ' "' + text + '"' : ''), triggered:true };
+  }
+  const id = el.id ? '#' + el.id : '';
+  const cls = el.className && typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/)[0] : '';
+  return { target:'App: ' + el.tagName.toLowerCase() + id + cls, triggered:false };
+}
+function renderMouseLogEntry(entry){
+  const el = document.getElementById('dpMouseLog');
+  if (!el) return;
+  const empty = el.querySelector('.dp-click-log-empty');
+  if (empty) empty.remove();
+  const line = document.createElement('div');
+  line.textContent = mouseLogEntryToLine(entry);
+  el.appendChild(line);
+  while (el.children.length > MOUSE_LOG_MAX_ENTRIES) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+function pushMouseLogEntry(entry){
+  entry.time = formatClickLogTime(new Date());
+  mouseLog.push(entry);
+  if (mouseLog.length > MOUSE_LOG_MAX_ENTRIES) mouseLog.shift();
+  renderMouseLogEntry(entry);
+}
+// Context entries (device + viewport dims + pixel ratio) -- logged once
+// at start, and again whenever the viewport actually changes size while
+// the log has content, without repeating full viewport info on every
+// single move/click entry (each entry still carries its own compact
+// device tag -- see mouseLogEntryToLine()).
+function logMouseLogContext(reason){
+  const w = window.innerWidth, h = window.innerHeight;
+  if (reason === 'resize' && mouseLogLastViewport && mouseLogLastViewport.w === w && mouseLogLastViewport.h === h) return;
+  mouseLogLastViewport = { w, h };
+  pushMouseLogEntry({
+    type:'context', x:'-', y:'-', device:mouseLogDeviceContext(), pointerType:'-',
+    target:null, triggered:null,
+    detail: reason + ': ' + w + 'x' + h + ' dpr:' + (window.devicePixelRatio || 1).toFixed(2),
+  });
+}
+function clearMouseLog(){
+  mouseLog = [];
+  const el = document.getElementById('dpMouseLog');
+  if (el) el.innerHTML = '<span class="dp-click-log-empty">(no mouse activity logged yet)</span>';
+  mouseLogLastViewport = null;
+}
+function mouseLogEntryToLine(e){
+  let text = e.time + '  [' + e.device + '/' + e.pointerType + ']  ' + e.type + '  (' + e.x + ', ' + e.y + ')';
+  if (e.target) text += '  -> ' + e.target;
+  if (e.triggered === true) text += '  [OK]';
+  else if (e.triggered === false) text += '  [no-op]';
+  if (e.detail) text += '  ' + e.detail;
+  return text;
+}
+function copyMouseLog(){
+  const text = mouseLog.map(mouseLogEntryToLine).join('\n');
+  const btn = document.getElementById('dpMouseLogCopy');
+  const flash = msg => { if (!btn) return; const orig = btn.textContent; btn.textContent = msg; setTimeout(() => btn.textContent = orig, 900); };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => flash('Copied!')).catch(() => flash('Copy failed'));
+  } else {
+    flash('Copy failed');
+  }
+}
+function saveMouseLog(){
+  const header = '# Mouse Log\n\n' + mouseLog.filter(e => e.type === 'context').map(mouseLogEntryToLine).join('\n') + '\n\n';
+  const body = mouseLog.map(e => '- ' + mouseLogEntryToLine(e)).join('\n');
+  const blob = new Blob([header + body + '\n'], { type:'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mouse-log-' + new Date().toISOString().replace(/[:.]/g, '-') + '.md';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function restartMouseLogPositionTimer(){
+  clearInterval(mouseLogPositionTimer);
+  mouseLogPositionTimer = null;
+  if (!mouseLogPositionEnabled) return;
+  mouseLogPositionTimer = setInterval(() => {
+    if (!mouseLogLastPointerPos) return;
+    pushMouseLogEntry({
+      type:'position', x:mouseLogLastPointerPos.x, y:mouseLogLastPointerPos.y,
+      device:mouseLogDeviceContext(), pointerType:mouseLogLastPointerPos.pointerType || '-',
+      target:null, triggered:null,
+    });
+  }, mouseLogPositionIntervalMs);
+}
+function initMouseLog(){
+  document.getElementById('dpMouseLogCopy').addEventListener('click', copyMouseLog);
+  document.getElementById('dpMouseLogSave').addEventListener('click', saveMouseLog);
+  document.getElementById('dpMouseLogClear').addEventListener('click', clearMouseLog);
+  const posCheckbox = document.getElementById('dpMouseLogPositionEnabled');
+  posCheckbox.addEventListener('change', () => { mouseLogPositionEnabled = posCheckbox.checked; restartMouseLogPositionTimer(); });
+  const interval = document.getElementById('dpMouseLogInterval');
+  const intervalNum = document.getElementById('dpMouseLogIntervalNum');
+  function applyInterval(v){
+    v = parseFloat(v);
+    if (isNaN(v)) return;
+    mouseLogPositionIntervalMs = v;
+    interval.value = v; intervalNum.value = v;
+    restartMouseLogPositionTimer();
+  }
+  interval.addEventListener('input', () => applyInterval(interval.value));
+  intervalNum.addEventListener('change', () => applyInterval(intervalNum.value));
+  intervalNum.addEventListener('keydown', e => { if (e.key === 'Enter') intervalNum.blur(); });
+
+  window.addEventListener('pointermove', e => {
+    mouseLogLastPointerPos = { x:Math.round(e.clientX), y:Math.round(e.clientY), pointerType:e.pointerType };
+    const info = mouseLogActivePointers.get(e.pointerId);
+    if (!info) return;
+    info.curX = e.clientX; info.curY = e.clientY;
+    if (!info.moved && Math.hypot(e.clientX - info.startX, e.clientY - info.startY) > MOUSE_LOG_MOVE_THRESHOLD_PX) info.moved = true;
+  });
+  window.addEventListener('pointerdown', e => {
+    mouseLogActivePointers.set(e.pointerId, { startX:e.clientX, startY:e.clientY, curX:e.clientX, curY:e.clientY, startTime:performance.now(), moved:false, target:e.target });
+    if (e.pointerType === 'touch' && mouseLogActivePointers.size === 2){
+      const pts = Array.from(mouseLogActivePointers.values());
+      mouseLogPinchStartDist = Math.hypot(pts[0].curX - pts[1].curX, pts[0].curY - pts[1].curY);
+      mouseLogPinchActive = true;
+      clearTimeout(mouseLogHoldTimer);
+      return;
+    }
+    if (e.button === 2 || mouseLogActivePointers.size > 1) return;
+    clearTimeout(mouseLogHoldTimer);
+    mouseLogHoldTimer = setTimeout(() => {
+      const info2 = mouseLogActivePointers.get(e.pointerId);
+      if (info2 && !info2.moved){
+        const { target, triggered } = describeMouseLogTarget(e.target, e.clientX, e.clientY);
+        pushMouseLogEntry({ type:'hold', x:Math.round(e.clientX), y:Math.round(e.clientY), device:mouseLogDeviceContext(), pointerType:e.pointerType, target, triggered });
+      }
+    }, MOUSE_LOG_HOLD_MS);
+  });
+  window.addEventListener('pointerup', e => {
+    clearTimeout(mouseLogHoldTimer);
+    const info = mouseLogActivePointers.get(e.pointerId);
+    const wasPinching = mouseLogPinchActive && mouseLogActivePointers.size === 2;
+    mouseLogActivePointers.delete(e.pointerId);
+    if (!info) return;
+    const x = Math.round(e.clientX), y = Math.round(e.clientY);
+    const device = mouseLogDeviceContext();
+    if (wasPinching){
+      mouseLogPinchActive = false;
+      const remaining = Array.from(mouseLogActivePointers.values())[0];
+      if (remaining && mouseLogPinchStartDist){
+        const endDist = Math.hypot(x - remaining.curX, y - remaining.curY);
+        const scale = mouseLogPinchStartDist > 0 ? endDist / mouseLogPinchStartDist : 1;
+        pushMouseLogEntry({ type:'pinch', x, y, device, pointerType:'touch', target:null, triggered:null, detail:(scale > 1 ? 'out' : 'in') + ' scale:' + scale.toFixed(2) });
+      }
+      return;
+    }
+    const heldMs = performance.now() - info.startTime;
+    const { target, triggered } = describeMouseLogTarget(info.target, x, y);
+    if (e.pointerType === 'touch'){
+      if (info.moved){
+        const dx = e.clientX - info.startX, dy = e.clientY - info.startY;
+        const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+        pushMouseLogEntry({ type:'swipe', x, y, device, pointerType:'touch', target, triggered, detail:'dir:' + dir + ' dist:' + Math.round(Math.hypot(dx, dy)) });
+        return;
+      }
+      if (heldMs > MOUSE_LOG_HOLD_MS) return;
+      mouseLogClickCount++;
+      clearTimeout(mouseLogClickTimer);
+      mouseLogClickTimer = setTimeout(() => {
+        pushMouseLogEntry({ type: mouseLogClickCount >= 2 ? 'doubletap' : 'tap', x, y, device, pointerType:'touch', target, triggered });
+        mouseLogClickCount = 0;
+      }, MOUSE_LOG_MULTICLICK_MS);
+      return;
+    }
+    if (e.button === 2){
+      pushMouseLogEntry({ type:'rightclick', x, y, device, pointerType:e.pointerType, target, triggered });
+      return;
+    }
+    if (info.moved){
+      pushMouseLogEntry({ type:'drag-release', x, y, device, pointerType:e.pointerType, target, triggered, detail:'heldMs:' + Math.round(heldMs) });
+      return;
+    }
+    if (heldMs > MOUSE_LOG_HOLD_MS){
+      pushMouseLogEntry({ type:'release', x, y, device, pointerType:e.pointerType, target, triggered, detail:'heldMs:' + Math.round(heldMs) });
+      return;
+    }
+    mouseLogClickCount++;
+    clearTimeout(mouseLogClickTimer);
+    mouseLogClickTimer = setTimeout(() => {
+      const kind = mouseLogClickCount >= 3 ? 'tripleclick' : mouseLogClickCount === 2 ? 'dblclick' : 'click';
+      pushMouseLogEntry({ type:kind, x, y, device, pointerType:e.pointerType, target, triggered });
+      mouseLogClickCount = 0;
+    }, MOUSE_LOG_MULTICLICK_MS);
+  });
+  window.addEventListener('wheel', e => {
+    const { target, triggered } = describeMouseLogTarget(e.target, e.clientX, e.clientY);
+    pushMouseLogEntry({ type:'scroll', x:Math.round(e.clientX), y:Math.round(e.clientY), device:mouseLogDeviceContext(), pointerType:'wheel', target, triggered, detail:'deltaY:' + Math.round(e.deltaY) });
+  }, { passive:true });
+  window.addEventListener('resize', () => logMouseLogContext('resize'));
+
+  clearMouseLog();
+  logMouseLogContext('start');
+}
+
 // a generous margin beyond the circle's own visual radius — a small
 // circleSize is an easy miss otherwise, and the rope renders on top of
 // (visually through) the circle right where it emerges, so a press that's
@@ -8623,14 +9387,32 @@ function update(rawDt){
     // dragged rope point is itself clamped to a max distance from the
     // anchor (see update()'s own drag-pin block), a cursor moved far
     // beyond that clamp visibly detached the sprite from the rope it's
-    // supposedly holding. Position (this lerp target) and rotation
+    // supposedly holding. Position (this branch) and rotation
     // (mouseFlickTargetPosition()'s own drag override, above) both
     // switch to the same live drag-point anchor together.
+    //
+    // Corrected 2026-09-14, per explicit clarification: "I meant
+    // visually... the cursor animation should not visually separate
+    // away from the drag point, even if the real cursor is moved beyond
+    // how far i can drag the rope." The rope's own drag mechanic
+    // (dragging the actual rope point) is unaffected either way -- this
+    // is purely about the SPRITE's own rendered position. The original
+    // version still ran mfEntityX/Y through the same smoothing lerp
+    // (mfPosFactor) toward the drag anchor as it does toward a normal
+    // cursor position, which could visibly lag a frame or more behind a
+    // fast-moving or newly-clamped drag point -- exactly the
+    // "separation" being reported. While actively dragging, the sprite
+    // now SNAPS directly to the live drag anchor every frame (zero lag,
+    // no smoothing) instead of easing toward it; smoothing still applies
+    // normally to every other (non-drag) cursor-following case.
     const mfDragAnchor = mouseFlickDragAnchorWorld();
-    const mfPosTargetX = mfDragAnchor ? mfDragAnchor.x : mfX;
-    const mfPosTargetY = mfDragAnchor ? mfDragAnchor.y : mfY;
-    mfEntityX += (mfPosTargetX - mfEntityX) * mfPosFactor;
-    mfEntityY += (mfPosTargetY - mfEntityY) * mfPosFactor;
+    if (mfDragAnchor){
+      mfEntityX = mfDragAnchor.x;
+      mfEntityY = mfDragAnchor.y;
+    } else {
+      mfEntityX += (mfX - mfEntityX) * mfPosFactor;
+      mfEntityY += (mfY - mfEntityY) * mfPosFactor;
+    }
     // mfTargetAngle (the mouse's own angle from viewport center) feeds
     // the rotation LERP TARGET for 'center' mode only now (see
     // mfRotationTargetAngle's own comment a few lines down) -- it no
@@ -10161,6 +10943,7 @@ if (DEV_MODE){
   document.getElementById('devPanel').classList.remove('hidden');
   buildDevPanel();
   buildPanelStyleGroup();
+  applyDefaultDevPanelSubgroupOrder();
   // Row (setting) dragging, registered ONCE here -- delegation-based
   // (see makeReorderable()'s own comment), so this single call reaches
   // every row in every group AND #dpUngrouped, including ones created/
@@ -10176,6 +10959,8 @@ if (DEV_MODE){
   document.getElementById('dpAddGroupBtn').addEventListener('click', addDevGroup);
   setupDevTextEditMode();
   applyDevTextOverrides();
+  initMouseLog();
+  initSavedDevPanelStates();
 }
 // Runs regardless of DEV_MODE -- previously nested inside the block
 // above, so a real visitor (no ?dev=1, not localhost) never loaded the

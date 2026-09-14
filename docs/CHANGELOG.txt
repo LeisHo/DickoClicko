@@ -12875,3 +12875,101 @@ established convention of keeping settings-data updates separate from
 code changes (4cc3575 for the selector fix, 97434d4 for the data
 repair) -- pushed immediately.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  02:27 AM - 03:13 AM EDT
+
+Ported TEMPLATE_DEV_PANEL.html's newest changes into this project's own
+"Dev Panel" settings group, plus a follow-up correction to the Drag Rope
+cursor-animation anchor and a new Named Setting States feature.
+
+Added (Dev Panel chrome, 19 new fields):
+- Setting Number Font Size, Button Text Font Size, Dev Panel Title Letter
+  Spacing, and 5 Line Spacing sliders (Title/Tab/Group/Settings/Button).
+- Group Label Background Color, Group Text Color, Button Text Color,
+  Setting Number Text Color, Tab Text Color (color pickers).
+- Bold toggles for Title/Group/Tab/Button/Settings text, and a Capitalize
+  Dev Panel Title toggle.
+- 11 of these (colors + bold/capitalize toggles) are SHARED across all 3
+  device tabs (desktop-authoritative) rather than independent per tab,
+  matching the template's own newly-updated convention and the parent
+  CLAUDE.md's general §12f principle -- the other 8 (font sizes, letter
+  spacing, line heights) stay per-tab like every pre-existing field in
+  this group. New `PANEL_STYLE_SHARED_KEYS` array; `applyPanelStyleValues()`/
+  `buildPanelGeometryForSave()` both extended to implement the split
+  without touching how the pre-existing 23 fields persist.
+- All 19 defaults chosen to reproduce this project's exact CURRENT
+  hardcoded look -- verified live, zero visual change until a new slider
+  is actually touched (one small, deliberate exception: the hide/collapse
+  icon buttons lose an incidental inherited bold weight they only ever
+  had as a side effect of font-weight living on their container).
+
+Added (Dev Panel nested subgroups):
+- The "Dev Panel" group is now organized into MECHANICS / PANEL UI / TEXT,
+  with TEXT nesting 5 further subgroups (Dev Panel Title / Group Title /
+  Setting Title / TABS / BUTTONS) -- built once at boot
+  (`applyDefaultDevPanelSubgroupOrder()`), fully drag-reorderable
+  afterward like any other group.
+- Fixed a real bug this surfaced: the git-tracked settings file
+  (data/processed/dev-panel-settings.json) still had a STALE flat "DEV
+  PANEL" order entry from before subgroups existed, which
+  `applyOrder()`'s own (correct, by-design) "restore the user's saved
+  arrangement" behavior used to yank all 23 pre-existing fields straight
+  back out of the fresh subgroups on every load, leaving MECHANICS/PANEL
+  UI/TEXT looking empty except for the 19 brand-new fields. Fixed with a
+  one-time data repair (removed the stale entry), not a code change --
+  same "check the actual saved file" precedent as the CURSOR ANIMATION
+  fix earlier this session.
+
+Added (per-setting visibility, [JS-4b0]-adjacent):
+- A "Show On Mobile & Landscape" checkbox alongside the existing
+  "Independent from Desktop" one -- shown only on the Desktop tab
+  (opposite gating), default checked. Unchecking hides that row's DOM
+  entirely on Mobile/Landscape (a group auto-hides once every descendant
+  is hidden, computed live, no separate persisted group flag). Purely a
+  dev-panel DISPLAY decision -- never touches cfg/resolveValuesForTab(),
+  so a hidden setting's value still behaves exactly as configured.
+  Scoped to DEV_GROUPS settings/groups only, same as independence -- the
+  Dev Panel chrome group is excluded from both systems.
+
+Added (Mouse Log, [JS-13c]):
+- A new "MOUSE LOG" widget alongside the existing CLICK LOG, at the
+  bottom of the dev panel -- a RAW pointer/gesture diagnostic (tap/
+  click/dblclick/tripleclick/hold/drag-release/rightclick/swipe/pinch/
+  scroll), deliberately separate from CLICK LOG's rope-physics-semantic
+  events. Own Copy/Save(.md file)/Clear buttons, an optional continuous
+  position-logging interval slider, and per-entry device-context tags
+  (desktop/mobile/landscape).
+
+Added (Named Setting States, [JS-13b], "Saved Dev Settings"):
+- Multiple named, full-panel-state snapshots (Save/Use/Delete/Set as
+  Default), stored in localStorage -- deliberately NOT the git-tracked
+  settings log, since these are personal/disposable experiments, not the
+  shared source of truth. Use previews a saved state live without
+  touching what Reset restores; Set as Default applies it AND runs it
+  through the real Save Settings. Factored `captureFullDevPanelState()`/
+  `applySnapshotToPanel()` out of the existing Save/Copy/Reset code so
+  all 3 features (old and new) build/apply the exact same snapshot shape
+  instead of 3 independently-drifting copies.
+
+Fixed (Drag Rope cursor-animation anchor, follow-up correction):
+- The 2026-09-13 "cursor animation stays anchored to the drag point"
+  feature still ran the sprite's position through the normal smoothing
+  lerp toward that anchor, which could visibly lag a frame or more
+  behind a fast-moving or newly-clamped drag point. Per explicit
+  clarification that the sprite must never visually separate from the
+  drag point at all (rotation should still smoothly animate, only
+  position needed to become rigid) -- `update()`'s FLICK MOUSE block now
+  SNAPS mfEntityX/Y directly to the live drag anchor with zero lag while
+  dragging, falling back to the normal smoothed lerp for every other
+  (non-drag) cursor-following case. Verified live via a temporary debug
+  hook (forced a fake dragging state, moved the pinned point twice,
+  confirmed mfEntityX/Y matched the anchor exactly both times) --
+  removed before commit.
+
+Verified live throughout: dev-panel group/row drag-to-nest (confirmed
+still working, including into a newly-nested subgroup), Scroll Strength
+(wheel delta correctly scaled by the slider value), all 10 Dev Panel
+colors present end-to-end, Mouse Log context/Save/Copy, Named Setting
+States Save/Use/Delete round-trip, and the drag-anchor snap fix -- no
+console errors, no regressions to existing dev-panel behavior.
+

@@ -271,36 +271,6 @@
         "subgroups": []
       },
       {
-        "key": "DEV PANEL",
-        "collapsed": true,
-        "settings": [
-          "accentColor",
-          "sliderColor",
-          "fontFamily",
-          "buttonHeight",
-          "buttonTextBorder",
-          "scrollStrength",
-          "capsButtonText",
-          "capsTabText",
-          "capsGroupNames",
-          "capsSettingsText",
-          "buttonLetterSpacing",
-          "tabLetterSpacing",
-          "groupLetterSpacing",
-          "settingsLetterSpacing",
-          "titleFontSize",
-          "tabFontSize",
-          "groupFontSize",
-          "labelFontSize",
-          "opacity",
-          "titleColor",
-          "bodyFontSize",
-          "bgColor",
-          "textColor"
-        ],
-        "subgroups": []
-      },
-      {
         "key": "UI",
         "collapsed": true,
         "settings": [

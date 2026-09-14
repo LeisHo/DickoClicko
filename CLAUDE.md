@@ -64,13 +64,58 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   value copied from one X slider and pasted into another X slider (same for
   Y) always lands on the identical screen point.
 - The built-in "Dev Panel" settings group (§12i) is judged device-specific
-  (independent per tab), not shared, for the same reason the panel's own
+  (independent per tab) by DEFAULT, for the same reason the panel's own
   size/position already is — it's the panel's own chrome, being rendered
   within differently-shaped viewports. Persisted alongside panel geometry
   (`panelStyle` in `getPanelGeometry()`/`applyPanelGeometry()`), not in
-  `cfg` — it does NOT participate in the per-setting independence checkbox
-  system above at all (already unconditionally per-device by this older,
-  separate mechanism).
+  `cfg` — it does NOT participate in the per-setting independence/
+  visibility checkbox systems above at all (this whole group has its own,
+  older, separate mechanism).
+  **Corrected 2026-09-14 — one real exception to "always per-device":**
+  `PANEL_STYLE_SHARED_KEYS` (`index.html`) lists the subset of fields
+  (currently the 11 newest-ported ones — colors + bold/capitalize
+  toggles) that are DESKTOP-authoritative and shared across all 3 tabs
+  instead, matching `TEMPLATE_DEV_PANEL.html`'s own current convention
+  (`DEV_PANEL_STYLE_SHARED_KEYS`) and the parent CLAUDE.md's general §12f
+  principle (non-spatial/cosmetic settings default to shared; only
+  size/position stays per-tab by default). The pre-existing 23 fields and
+  the 8 newest per-tab fields (font sizes, letter-spacing, line-heights)
+  are UNCHANGED — still fully per-tab, same mechanism as before. See
+  `applyPanelStyleValues()`/`buildPanelGeometryForSave()`'s own comments
+  for exactly how a shared key bypasses the normal per-tab snapshot
+  restore (reads `panelStyle[key]` directly instead of the active tab's
+  own saved `style`, and propagates a live edit into every OTHER tab's
+  saved style at Save time) — this is intentionally a narrow, additive
+  carve-out, not a rewrite of the whole group's persistence model.
+- **The Dev Panel group now has real nested subgroups** (2026-09-14,
+  ported from `TEMPLATE_DEV_PANEL.html`'s own `applyDefaultDevPanelSubgroupOrder()`,
+  which itself ported THIS project's live organization back as the
+  template's new standard): MECHANICS / PANEL UI / TEXT, with TEXT
+  nesting 5 further subgroups (Dev Panel Title / Group Title / Setting
+  Title / TABS / BUTTONS). Built once at boot
+  (`applyDefaultDevPanelSubgroupOrder()` in `index.html`, called right
+  after `buildPanelStyleGroup()`), idempotent, and — like every other
+  group in this panel — fully drag-reorderable afterward via the
+  existing generic group/row drag system (§12e; no special-casing
+  needed, `createGroupElement(name, {noDeviceCheckboxes:true})` is the
+  only difference from a normal group, and only skips the independence/
+  visibility checkboxes, not drag capability).
+- **A "Show On Mobile & Landscape" visibility system now exists alongside
+  the per-setting independence checkboxes** (2026-09-14, `[JS-4b0]`-adjacent,
+  adapted from `TEMPLATE_DEV_PANEL.html`'s own dynamic visibility feature)
+  — scoped to `DEV_GROUPS` settings/groups only, same as independence
+  (the Dev Panel chrome group is excluded from both). Shown ONLY on the
+  Desktop tab (opposite gating from the independence checkbox, which
+  shows only on Mobile/Landscape); default checked (visible everywhere).
+  Unchecking hides that row's DOM entirely on Mobile/Landscape (a group
+  hides itself once every current descendant is hidden — computed live,
+  not a separate persisted per-group flag, same "no persisted group
+  state, pure cascade" design as the independence group checkbox). This
+  is purely a dev-panel DISPLAY decision — it never touches
+  `cfg`/`resolveValuesForTab()`, so a hidden setting's independent (or
+  mirrored) value keeps behaving exactly as configured in the actual
+  running game. See `deviceVisibility`/`refreshVisibilityUI()`/
+  `buildGroupVisibilityCheckbox()` in `index.html`.
 - **Save Settings writes through to a git-tracked settings log (§12l):**
   `data/processed/dev-panel-settings.json`, holding `{valuesByDevice,
   independence, order, panelGeometry, textOverrides}` -- `valuesByDevice`
@@ -1282,3 +1327,74 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   in the live settings log's own `order` as a group key** (`grep` for
   the old title) and repair it the same way -- there is no automatic
   migration for this.
+- **A stale flat saved `order` entry for a group can silently defeat a
+  brand-new default NESTED structure for that same group.** Real,
+  reproduced bug (2026-09-14): the moment `applyDefaultDevPanelSubgroupOrder()`
+  (new this same day) reorganized the "DEV PANEL" group's flat rows into
+  MECHANICS/PANEL UI/TEXT subgroups at boot, `resetSettings()`'s own
+  `applyOrder(snap.order)` ran immediately afterward and used the OLD
+  (pre-reorganization) saved `data/processed/dev-panel-settings.json`,
+  whose "DEV PANEL" entry was still a flat `settings: [...23 keys...],
+  subgroups: []` from before subgroups existed — `placeGroup()` then
+  correctly did exactly what it's designed to do (restore the user's own
+  saved arrangement) and yanked every one of those 23 pre-existing keys
+  back out of the freshly-built subgroups into the flat top-level body,
+  leaving MECHANICS/PANEL UI/TEXT's OWN direct-child rows empty (only
+  the 19 BRAND-NEW fields, absent from the old save entirely, stayed
+  correctly nested). This is not a code bug — `applyOrder()` restoring a
+  user's own saved arrangement over a built-in default is the intended
+  behavior (same "a later real reorganization is never clobbered"
+  design the idempotency guard itself describes) — but a genuinely STALE
+  save from before a structural change like this needs a one-time data
+  fix, not a code change: removed the stale "DEV PANEL" entry from
+  `order.groups` in `data/processed/dev-panel-settings.json` directly so
+  the fresh default nesting is left alone until a real Save re-captures
+  it (same "check the actual saved file, fix data not code" precedent as
+  the CURSOR ANIMATION gotcha above). **If `applyDefaultDevPanelSubgroupOrder()`
+  (or any future default-reorganization-at-boot function) is ever added
+  for another group, check the live settings log for a stale flat entry
+  under that exact group key before assuming the new nesting will
+  actually show up** — it silently won't, for anyone with a save that
+  predates the change, until either the stale entry is removed/repaired
+  or the user's own Save/Reset naturally recaptures the new shape.
+- **Mouse Log (2026-09-14, ported from `TEMPLATE_DEV_PANEL.html`'s own
+  `[JS-13c]`) is a RAW pointer/gesture diagnostic, deliberately separate
+  from CLICK LOG** (the pre-existing `logClick()`/`#dpClickLog` widget):
+  CLICK LOG records semantic APPLICATION events tied to the rope's own
+  physics (flick/charge/cut/grow/drag/attract, via explicit `logClick()`
+  call sites inside `onPointerDown`/`onPointerUp`); Mouse Log records
+  what the user's actual finger/mouse did (tap/click/dblclick/
+  tripleclick/hold/drag-release/rightclick/swipe/pinch/scroll), via its
+  own independent `window`-level pointer/wheel listeners
+  (`initMouseLog()`), completely unaware of what the game does with any
+  of it. Don't merge the two or assume one supersedes the other — they
+  answer different questions when reading a log back ("what did the
+  rope do" vs. "what did the input hardware actually register"). Reuses
+  `formatClickLogTime()` and the `.dp-click-log*` CSS classes rather than
+  duplicating either.
+- **FLICK MOUSE's cursor-animation SPRITE position must SNAP directly to
+  the live Drag Rope anchor while dragging, never ease/lerp toward it.**
+  Corrected 2026-09-14, refining the 2026-09-13 "stay anchored to the
+  drag point" feature: the original version ran `mfEntityX`/`mfEntityY`
+  through the SAME `mouseFlickPositionSmoothing` lerp toward the drag
+  anchor as it uses for normal cursor-following, which could still show
+  a frame or more of visible lag/separation behind a fast-moving or
+  newly-clamped drag point. Per explicit clarification ("I meant
+  visually... the cursor animation should not visually separate away
+  from the drag point, even if the real cursor is moved beyond how far i
+  can drag the rope") — the ROPE's own drag mechanic (dragging the real
+  rope point) is completely unaffected either way; this is purely about
+  the sprite's own rendered position. `update()`'s own FLICK MOUSE block
+  now branches: whenever `mouseFlickDragAnchorWorld()` returns non-null
+  (actively dragging), `mfEntityX`/`mfEntityY` are set DIRECTLY to the
+  anchor's current position (zero lag, bypassing `mfPosFactor` entirely);
+  otherwise the normal smoothed lerp toward the raw cursor still applies
+  unchanged. Verified live via a temporary debug hook (forced a fake
+  dragging `downInfo`, moved the pinned rope point twice, confirmed
+  `mfEntityX/Y` matched the anchor's position EXACTLY on both samples,
+  not just closer to it) — removed before commit, per this project's own
+  debug-hook convention. Rotation is NOT touched by this fix and
+  continues to smoothly lerp/animate while dragging, per the original
+  request's own wording ("it will continue to rotate and change
+  animation types, but it will stay anchored to the drag point") — only
+  POSITION needed to become rigid.
