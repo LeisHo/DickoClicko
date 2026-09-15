@@ -4874,15 +4874,17 @@ function mouseFlickVariantKeyForMode(mode){
 // MOUSE_FLICK_POINTING_TOP instead, an unrelated purpose), that
 // stand-in is retired in favor of the real Flick-category annotation.
 const MOUSE_FLICK_INTERACTION_POINTS = {
+  // Sciss category's own frame 1 -- updated 2026-09-15, per a fresh
+  // annotated data drop (values genuinely differ from the prior sync).
   cut: {
-    'behind':       { x: 0.522, y: 0.315 },
-    'behind-thumb': { x: 0.499, y: 0.315 },
-    'side-thumb':   { x: 0.457, y: 0.309 },
-    'front-thumb':  { x: 0.469, y: 0.304 },
-    'front':        { x: 0.475, y: 0.304 },
-    'front-pinky':  { x: 0.504, y: 0.286 },
-    'side-pinky':   { x: 0.544, y: 0.321 },
-    'behind-pinky': { x: 0.529, y: 0.298 },
+    'behind':       { x: 0.517, y: 0.389 },
+    'behind-thumb': { x: 0.489, y: 0.403 },
+    'side-thumb':   { x: 0.477, y: 0.394 },
+    'front-thumb':  { x: 0.481, y: 0.389 },
+    'front':        { x: 0.491, y: 0.386 },
+    'front-pinky':  { x: 0.486, y: 0.368 },
+    'side-pinky':   { x: 0.5,   y: 0.38  },
+    'behind-pinky': { x: 0.506, y: 0.368 },
   },
   // 'flick' (Click) category's own frame 1 -- used for 'click'/'hold'
   // (and 'attract', added the same day) per explicit spec; see this
@@ -4901,15 +4903,17 @@ const MOUSE_FLICK_INTERACTION_POINTS = {
   // measurement only (Click Hold (Drag)/Click Hold (Grow) per explicit
   // spec). The LIVE dragging anchor point is frame 48's own point
   // instead -- see MOUSE_FLICK_DRAG_END_POINTS's own comment.
+  // Drag category's own frame 1 -- updated 2026-09-15, per the same
+  // fresh data drop (values genuinely differ from the prior sync).
   drag: {
-    'behind':       { x: 0.522, y: 0.297 },
-    'behind-thumb': { x: 0.454, y: 0.345 },
-    'side-thumb':   { x: 0.451, y: 0.333 },
-    'front-thumb':  { x: 0.471, y: 0.309 },
-    'front':        { x: 0.477, y: 0.309 },
-    'front-pinky':  { x: 0.531, y: 0.318 },
-    'side-pinky':   { x: 0.551, y: 0.327 },
-    'behind-pinky': { x: 0.559, y: 0.318 },
+    'behind':       { x: 0.521, y: 0.334 },
+    'behind-thumb': { x: 0.462, y: 0.433 },
+    'side-thumb':   { x: 0.462, y: 0.409 },
+    'front-thumb':  { x: 0.456, y: 0.403 },
+    'front':        { x: 0.48,  y: 0.433 },
+    'front-pinky':  { x: 0.543, y: 0.397 },
+    'side-pinky':   { x: 0.561, y: 0.418 },
+    'behind-pinky': { x: 0.544, y: 0.352 },
   },
 };
 // Drag's own frame 48 point -- corrected 2026-09-14: this is now the
@@ -8321,7 +8325,41 @@ function onPointerDown(e){
       // stopped actually doing) is the correct source for WHICH point
       // gets grabbed; dragHit stays exactly as before for the distance
       // gate only.
-      downInfo.dragIndex = Math.max(1, hit.index);
+      // Endcap-tip qualifier (2026-09-15, per direct request: "its
+      // still making me drag from the end of the last non endcap
+      // segment... add a qualifier that when the click drag is
+      // triggered a certain distance from the endcap base or end, you
+      // compare that with the closest rope point, then whichever is
+      // closer you make that the drag point"). The endcap's own
+      // rendered TIP is purely decorative -- a point `endcapExtensionPx()`
+      // world-px PAST `points[length-1]` along the last segment's own
+      // tangent (tipDirection()) -- nearestPointOnRope() has no
+      // knowledge of it at all, since it only ever walks real physics
+      // segments. A press that's visually closer to the drawn endcap
+      // tip than to any real rope point can still resolve hit.index to
+      // an EARLIER point (e.g. length-2) whenever that real segment
+      // happens to be the closer one in straight-line distance -- there
+      // is no separate physics point actually located at the endcap
+      // tip for hit-testing to find. Fixed by computing this same
+      // virtual tip point here and comparing its distance to the press
+      // against hit.dist: whichever is closer decides. "Grabbing the
+      // endcap tip" always means grabbing the LAST real point
+      // (points.length-1) -- there's nothing else it could mean, the
+      // tip position only exists as a render-time offset (see the
+      // drag-pin block's own endcap pull-back correction further down)
+      // -- this qualifier only decides WHETHER that's the right point
+      // to grab for a given press, layered on top of (not replacing)
+      // the existing hit.index-based selection above.
+      let dragGrabIndex = hit.index;
+      if (cfg.endcapDesign !== 'none'){
+        const tipPt = mainRope.points[mainRope.points.length - 1];
+        const tipDir = tipDirection(mainRope.points);
+        const ext = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
+        const tipX = tipPt.x + tipDir.x * ext, tipY = tipPt.y + tipDir.y * ext;
+        const distToEndcapTip = Math.hypot(x - tipX, y - tipY);
+        if (distToEndcapTip < hit.dist) dragGrabIndex = mainRope.points.length - 1;
+      }
+      downInfo.dragIndex = Math.max(1, dragGrabIndex);
       // Direction-angle reference point for this drag (2026-09-12, per
       // explicit request) -- captured ONCE here, at the grabbed point's
       // own position BEFORE any kinematic override moves it, not read
@@ -9527,30 +9565,59 @@ function update(rawDt){
       let dragTargetPos = (ldist <= dragLeashRadius || ldist <= 1e-6)
         ? { x: dragPoint.x, y: dragPoint.y }
         : { x: mouseX - (ldx / ldist) * dragLeashRadius, y: mouseY - (ldy / ldist) * dragLeashRadius };
-      // Drag by the endcap's own visual TIP -- smooth pull-back, corrected
-      // 2026-09-14 (2nd pass). The original version (`Math.min(extension,
-      // rdist - 1)`) pulled the target almost exactly onto the upstream
-      // neighbor (prevPt) for ANY cursor position within roughly
-      // `extension` px of it -- extension is easily tens of px, so this
-      // degenerated into "stuck near the neck" for a wide, easily-
-      // triggered range of realistic drag distances. Reported directly:
-      // "still snaps to the next segment's head, instead of the endcap."
-      // Replaced with a smooth blend, `pull = extension * rdist /
-      // (rdist + extension)` -- provably always < rdist (so it can never
-      // invert past prevPt, no separate clamp needed), vanishes smoothly
-      // as rdist -> 0 instead of collapsing onto prevPt, and approaches
-      // the full extension once the cursor is comfortably far away (e.g.
-      // ~92% of the full offset at rdist = 10x extension) -- the endcap's
-      // own rendered tip lands close to the cursor for any realistic drag
-      // and degrades gracefully, rather than snapping, for a very short
-      // one.
+      // Drag by the endcap's own visual TIP -- EXACT pull-back, corrected
+      // 2026-09-15 (3rd pass). Per direct report: "when i initiate the
+      // drag sequence... I line [the interaction point] to the tip of
+      // the end cap... but... it makes me drag it by the base of the end
+      // cap... same thing as before." The 2nd-pass smooth blend
+      // (`pull = extension * rdist / (rdist + extension)`) was flagged in
+      // its OWN comment as a known approximation -- and it's a
+      // significantly LOSSY one for exactly the drag distances a user
+      // actually performs: at rdist === extension (a drag roughly as long
+      // as the endcap itself, easily 100+px at default settings) it only
+      // ever compensates 50% of the true extension; even at rdist = 3x
+      // extension it's still only 75%. The endcap's own rendered tip
+      // therefore consistently lands well short of the cursor for any
+      // normal-length drag -- reads exactly as "grabbing near the base,"
+      // which is what got reported.
+      //
+      // The exact solution is simpler than the blend it replaces: prevPt,
+      // the eventual physics point, and dragTargetPos are meant to be
+      // COLLINEAR, with the physics point sitting exactly `extension` px
+      // back from dragTargetPos along that same line -- so `pull =
+      // extension` outright (not a fraction of it) makes
+      // physicsPoint + direction*extension land EXACTLY on dragTargetPos,
+      // by construction, algebraically (physicsPoint = dragTargetPos -
+      // direction*extension, so physicsPoint + direction*extension =
+      // dragTargetPos identically). `Math.min(extension, rdist)` is the
+      // one guard needed on top: whenever the cursor sits CLOSER to
+      // prevPt than the endcap's own fixed length allows, there is no
+      // position that makes a rigid `extension`-long tip reach it exactly
+      // (the near end would have to sit BEHIND prevPt) -- clamping pull
+      // to rdist instead collapses the physics point onto prevPt exactly
+      // as rdist -> extension from above (continuous, not a snap) and
+      // keeps it there for anything closer, which is the correct "as
+      // close as achievable" answer for that genuinely-unreachable case,
+      // not a bug to smooth away.
+      //
+      // `stretchMult` (Deformable Endcap's own drag-tip elongation, see
+      // its own DEV_GROUPS comment) is folded in here too -- the
+      // deformable renderer's ACTUAL rendered length is `extension *
+      // mainRope.endcapStretchMult`, not the static rigid `extension`
+      // alone, so leaving it out would let the visual tip creep away from
+      // the cursor again as stretch grows during a hard pull. Read from
+      // LAST frame's value (this frame's own stretchMult is computed
+      // further down, from the ddist this pull-back is about to produce
+      // -- a genuine circular dependency), same one-frame-lag convention
+      // already used elsewhere in this file for equivalent cases; at 60fps
+      // this is not visually distinguishable from same-frame.
       if (dragPinIndex === mainRope.points.length - 1){
         const prevPt = mainRope.points[dragPinIndex - 1];
         const rdx = dragTargetPos.x - prevPt.x, rdy = dragTargetPos.y - prevPt.y;
         const rdist = Math.hypot(rdx, rdy);
         if (rdist > 1e-6){
-          const extension = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
-          const pull = extension * rdist / (rdist + extension);
+          const extension = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight) * (mainRope.endcapStretchMult || 1);
+          const pull = Math.min(extension, rdist);
           dragTargetPos = { x: dragTargetPos.x - (rdx / rdist) * pull, y: dragTargetPos.y - (rdy / rdist) * pull };
         }
       }

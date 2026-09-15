@@ -13984,3 +13984,107 @@ leash radius at every sampled distance on both sides of hardLimit.
 Live browser verification blocked by the same recurring dev-server
 page-boot stall as several prior entries this session.
 
+--------------------------------------------------------------------------------
+2026-09-15  -  05:44 AM - 06:02 AM EDT
+
+Added an endcap-tip proximity qualifier to Drag Rope's arm-time point
+selection, and synced a fresh interaction-point data drop.
+
+Added:
+- Reported: "its still making me drag from the end of the last non
+  endcap segment... add a qualifier that when the click drag is
+  triggered a certain distance from the endcap base or end, you
+  compare that with the closest rope point, then whichever is closer
+  you make that the drag point." `nearestPointOnRope()` has no
+  knowledge of the endcap's own rendered TIP (a decorative point past
+  the last real physics point) -- it only walks real segments, so a
+  press near the visual tip could still resolve to an earlier point.
+  Fixed by computing the same virtual tip point at arm-time (reusing
+  the existing `tipDirection()`/`endcapExtensionPx()` helpers) and
+  comparing its distance to the press against the plain hit-test
+  result -- whichever is closer decides. Scoped to Drag Rope's own
+  index selection only, doesn't touch the shared hit-test used for
+  punch/charge/cut.
+- Synced a fresh annotated interaction-point data drop (drag/sciss/
+  flick/tickle x 8 directions). Diffed every category against the live
+  table values before editing: Drag→48 (live anchor), Flick→01 (click/
+  hold/attract point), and Tickle→01 (Base/Top axis pair) were all
+  byte-identical to what was already in the code for all 8 directions
+  -- left untouched. Only Drag→01 (arm-time distance-gate point) and
+  Sciss→01 (cut-measuring point) genuinely changed -- updated.
+
+Diagnosed, not yet fixed:
+- The endcap-tip qualifier above makes grabbing the tip succeed much
+  more reliably, which newly exposes a real, pre-existing, ~100%-
+  reproducible jump right after the Drag Pickup animation completes,
+  specifically for tip drags. Root cause: the 7th-pass cursor
+  realignment aligns the tracked cursor to the raw physics joint's own
+  position, but the endcap pull-back a few lines later unconditionally
+  subtracts up to min(extension, segLen) from that same target,
+  assuming it represents where the cursor/rendered-tip wants to be --
+  so the joint jumps backward by that amount the instant pickup ends,
+  even with zero cursor movement. Confirmed via a Node simulation (a
+  representative case produced a 20px jump with no cursor movement at
+  all). Not yet fixed -- see CLAUDE.md's own dedicated gotcha entry for
+  the full mechanism and what the eventual fix needs to account for.
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse) after each edit. The qualifier's own selection logic
+verified via a Node-level simulation across 5 click-position cases (at
+the tip, halfway to the tip, off-axis near the tip, on the 2nd-to-last
+segment, near an unrelated interior point) -- correctly overrides only
+when the endcap tip is genuinely closer. The pickup-jump diagnosis
+verified via a Node simulation of the exact realignment+leash+pull-back
+sequence. Live browser verification blocked by the same recurring
+dev-server page-boot stall as several prior entries this session.
+Not yet committed or pushed.
+
+--------------------------------------------------------------------------------
+2026-09-15  -  04:42 AM - 04:46 AM EDT
+
+Fixed: dragging by the endcap's own visual tip still grabbed a point
+noticeably closer to the base/neck than the cursor, per direct report:
+"I line [the interaction point] to the tip of the end cap... but...
+it makes me drag it by the base of the end cap... same thing as
+before... I am dragging this line the point in between the end cap
+and the rope fix that."
+
+Root cause: the existing pull-back formula (2nd pass, 2026-09-14) used
+a smooth blend, `pull = extension * rdist / (rdist + extension)`,
+explicitly flagged in its own comment as an approximation. It's a
+significantly lossy one at exactly the drag distances a user performs
+in practice -- only 50% compensated at rdist===extension (a drag
+roughly as long as the endcap itself, 100+px at default settings),
+still only 75% at 3x that distance -- so the endcap's own rendered tip
+consistently landed well short of the cursor, reading exactly as
+"grabbing near the base."
+
+Fixed (index.html, update()'s drag-pin block, 3rd pass):
+- Replaced the blend with the EXACT solution: pull = Math.min(extension,
+  rdist). prevPt, the physics point, and the cursor target are meant to
+  be collinear with the physics point sitting exactly `extension` px
+  back from the cursor along that line -- pull=extension outright (not
+  a fraction) makes the rendered tip land exactly on the cursor,
+  algebraically, whenever rdist >= extension. Below that (the cursor
+  sitting closer than the endcap's own fixed length allows -- a
+  genuinely unreachable target), pull=rdist collapses the physics point
+  onto prevPt exactly, continuously, rather than the blend's persistent
+  partial undershoot.
+- extension is now also multiplied by mainRope.endcapStretchMult (last
+  frame's value, due to a genuine circular dependency) so the pull-back
+  accounts for Deformable Endcap's own drag-tip elongation when that
+  feature is active, instead of assuming the static rigid length.
+
+Verification: syntax-checked (Node `new Function()` parse). Node-level
+numeric simulation of the exact formula across rdist = 50/100/150/300/
+1000 against extension=100: the rendered tip (target + direction*
+extension) matched the cursor position to within floating-point
+precision at every rdist >= extension, and correctly collapsed to
+prevPt (with the tip geometrically overshooting the unreachable
+cursor, as expected) at rdist=50 < extension. Live: confirmed clean
+boot with the new code path present, no console errors; a full
+real-time drag-and-hold gesture was not reproduced live (this session's
+recurring dev-server timing made a reliable held-drag synthetic
+sequence impractical), so this relies on the exact algebraic proof plus
+the numeric simulation rather than a live pixel-position confirmation.
+

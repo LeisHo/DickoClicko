@@ -2542,3 +2542,105 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   a quick visual check near `hardLimit` and only shows up clearly once
   the cursor is dragged much further out, which is exactly the
   "5-10 second drag session" scenario the user's own report described.
+- **Drag by the endcap's own visual TIP uses an EXACT pull-back now
+  (2026-09-15, 3rd pass on this mechanism) -- `pull = Math.min(extension,
+  rdist)`, not the previous smooth blend `pull = extension * rdist /
+  (rdist + extension)`.** Real, reported bug: "I line [the interaction
+  point] to the tip of the end cap... but... it makes me drag it by the
+  base of the end cap... same thing as before." The 2nd-pass blend was
+  documented in its OWN comment as a known approximation, and it's a
+  significantly lossy one at exactly the drag distances a user actually
+  performs -- at `rdist === extension` (a drag roughly as long as the
+  endcap itself, easily 100+px at default settings) it only ever
+  compensates 50% of the true extension; even at `rdist = 3x extension`
+  it's still only 75%. **The exact fix is simpler than the blend it
+  replaces**: `prevPt`, the eventual physics point, and `dragTargetPos`
+  are meant to be COLLINEAR, with the physics point sitting exactly
+  `extension` px back from `dragTargetPos` along that line -- so
+  `pull = extension` outright (not a fraction) makes `physicsPoint +
+  direction*extension` land EXACTLY on `dragTargetPos`, algebraically,
+  by construction. `Math.min(extension, rdist)` is the one guard needed
+  on top, for when the cursor sits closer to `prevPt` than the endcap's
+  own fixed length allows -- there is no position that makes a rigid
+  `extension`-long tip reach it exactly in that case (the near end
+  would have to sit BEHIND `prevPt`), so clamping `pull` to `rdist`
+  collapses the physics point onto `prevPt` exactly as `rdist ->
+  extension` from above (continuous, not a snap) and keeps it there for
+  anything closer -- the correct "as close as achievable" answer for a
+  genuinely-unreachable target, not a bug to smooth away. **Verified via
+  a Node-level simulation** sweeping `rdist` from below `extension` to
+  10x `extension`: the rendered tip (`target + direction*extension`)
+  landed EXACTLY on the cursor at every sampled distance `>= extension`,
+  and correctly collapsed to `prevPt` (with the tip geometrically
+  overshooting the unreachable cursor, as expected) below it.
+  `extension` is also now multiplied by `mainRope.endcapStretchMult`
+  (def 1, only ever `!=1` while Deformable Endcap's own stretch is
+  active -- see that feature's own gotcha) -- the deformable renderer's
+  ACTUAL rendered length is `extension * stretchMult`, not the static
+  rigid `extension` alone, so leaving this out would let the visual tip
+  creep away from the cursor again as stretch grows during a hard pull.
+  Read from LAST frame's value (this frame's own `stretchMult` is
+  computed later in the same block, from the `ddist` this pull-back is
+  about to produce -- a genuine circular dependency) -- same one-frame-
+  lag convention already used elsewhere in this file for equivalent
+  cases, not visually distinguishable from same-frame at 60fps.
+- **Drag Rope's arm-time point selection now has an endcap-tip proximity
+  qualifier (2026-09-15), per direct request/spec: "add a qualifier
+  that when the click drag is triggered a certain distance from the
+  endcap base or end, you compare that with the closest rope point,
+  then whichever is closer you make that the drag point."**
+  `nearestPointOnRope()` has no knowledge of the endcap's own rendered
+  TIP (a purely decorative point `endcapExtensionPx()` world-px PAST
+  `points[length-1]`, along the last segment's tangent) -- it only ever
+  walks real physics segments, so a press that's visually closer to the
+  drawn endcap tip than to any real rope point could still resolve
+  `hit.index` to an EARLIER point, reported as "still making me drag
+  from the end of the last non endcap segment." Fixed in `onPointerDown`'s
+  drag-arm callback (right before `downInfo.dragIndex` is set): computes
+  the same virtual tip point (reusing `tipDirection()`/`endcapExtensionPx()`,
+  the exact helpers the per-frame pull-back below already uses) and
+  compares its distance to the press against `hit.dist` -- whichever is
+  closer decides. Only ever forces `dragGrabIndex = points.length-1`
+  when the tip is genuinely closer; never overrides a press that's
+  actually closest to some other real point. Verified via a Node
+  simulation of the exact hit-test+qualifier math across 5 click-
+  position cases (at the tip, halfway to the tip, off-axis near the
+  tip, on the 2nd-to-last segment itself, near an unrelated interior
+  point) -- not live-browser-verified (this environment's recurring
+  dev-server page-boot stall, documented above).
+  **This qualifier makes grabbing the tip succeed far more reliably
+  than before, which in turn newly exposes a real, pre-existing, 100%-
+  reproducible discontinuity in the pickup-to-active handoff specifically
+  for tip drags -- DIAGNOSED but NOT YET FIXED as of this entry.** Root
+  cause: the 7th-pass cursor realignment (`mouseX = dragPoint.x`, see
+  that gotcha above) aligns the tracked cursor to the RAW physics
+  joint's own position, but the endcap pull-back a few lines later
+  assumes the (pre-pull-back) target represents where the cursor/
+  rendered-tip wants to be, and unconditionally subtracts up to
+  `min(extension, segLen)` from it -- so the instant pickup ends, the
+  joint jumps backward by that amount even with ZERO cursor movement
+  (confirmed via simulation: a representative segLen=20/extension=30
+  case produced a 20px jump with no cursor movement at all). Since
+  adjacent joints sit at ~segLen apart by construction, this fires on
+  effectively every tip-drag, not intermittently. **If/when this is
+  fixed, the realignment step needs to account for the endcap offset
+  when `dragPinIndex === points.length-1`** (align to joint+extension,
+  not just the joint) -- don't just retune the pull-back's own math,
+  the mismatch is between these 2 separate blocks agreeing on what
+  "the drag point" means.
+- **Interaction-point data sync (2026-09-15)** -- a fresh annotated
+  data drop covering drag/sciss/flick/tickle again. Diffed against the
+  live table values before editing anything: Drag→48
+  (`MOUSE_FLICK_DRAG_END_POINTS`), Flick→01
+  (`MOUSE_FLICK_INTERACTION_POINTS.default`), and Tickle→01 (sorted by
+  Y into Base/Top per the established convention -- feeds
+  `MOUSE_FLICK_VISIBLE_BOUNDS.base`/`MOUSE_FLICK_POINTING_TOP`) were
+  ALL byte-identical to what was already in the code for all 8
+  directions -- left untouched. Only Drag→01
+  (`MOUSE_FLICK_INTERACTION_POINTS.drag`, the arm-time distance-gate
+  point) and Sciss→01 (`MOUSE_FLICK_INTERACTION_POINTS.cut`) genuinely
+  changed -- updated to the new values. **Before syncing a future data
+  drop, diff every category against the live table first** (as done
+  here) rather than assuming a full re-paste means every category
+  changed -- this one didn't, and rewriting identical data would just
+  be unnecessary diff noise.
