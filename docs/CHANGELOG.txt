@@ -14132,3 +14132,45 @@ settings file before staging to confirm only these 4 fields changed.
 Not live-browser-verified (this environment's recurring dev-server
 page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-15  -  08:35 AM - 08:41 AM EDT
+
+Fixed the full-cut trigger still failing outside the circle after the
+minRopeLength fix -- the circle-exclusion gate was checking the wrong
+point.
+
+Reported: "cuting the full rope outsie of the circle doest work,"
+followed by the decisive clue: "what i noticed though is that rope
+full cut works when i do double click with my true cursor."
+
+Root cause: hitTestRope()'s isOnCircle() exclusion check and its own
+distance-to-rope measurement were both reading the SAME x/y -- for
+double-click-cut and the single-tap punch arm check, that's the FLICK
+MOUSE-substituted interaction point (2026-09-12's "measure distance to
+the annotated point, not the true cursor" feature), correct for the
+distance measurement but never intended for the circle-exclusion gate.
+The substituted point sits at a real, pose-dependent offset from the
+true cursor -- close enough to the anchor under common poses to trip
+isOnCircle() even when the actual click was genuinely outside the
+circle, silently rejecting the hit-test before cutRopeAt()'s own
+remainingLen<minRopeLength check was ever reached.
+
+Fixed (index.html):
+- Added optional circleCheckX/Y params to hitTestRope()/hitTestAny()
+  (default to x/y, so no other caller's behavior changes).
+- Both real call sites now pass the REAL press/release position for
+  the circle check specifically (e.clientX/Y for the double-click cut
+  path, info.x/y for the single-tap punch arm check), while the
+  substituted point still drives the actual distance-to-rope
+  measurement, unchanged.
+- The punch-arm case had the identical latent bug -- fixed alongside
+  the reported cut case since it's the same shared function.
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse). Verified via a Node simulation of the exact hit-test
+math: a true click at distance 15.03 from the anchor (outside a
+13.25-radius circle) with a substituted point at distance 2.19
+(inside it) -- OLD code returned null (rejected), NEW code correctly
+resolved the target. Not live-browser-verified (this environment's
+recurring dev-server page-boot stall). Not yet committed or pushed.
+

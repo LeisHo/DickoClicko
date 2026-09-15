@@ -2692,3 +2692,43 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   have a code-level floor/ceiling beyond the dev panel's own slider
   bounds, and the click-to-type mechanism can push a value arbitrarily
   far outside even those.
+- **`hitTestRope()`'s `isOnCircle()` exclusion gate must always check
+  the REAL press/release position, never a FLICK MOUSE-substituted
+  interaction point -- fixed 2026-09-15, following directly from the
+  `minRopeLength` fix above.** After that fix made the full-detach
+  condition mathematically reachable again, the user reported it still
+  didn't trigger from a rope double-click outside the circle -- then
+  gave the decisive diagnostic clue: "rope full cut works when i do
+  double click with my true cursor" (i.e. only fails when FLICK MOUSE
+  is active and its own substitution is in play). Root cause:
+  `hitTestAny()`'s 2 real callers (double-click cut, single-tap punch
+  arm) both pass the FLICK MOUSE-substituted interaction point (the
+  2026-09-12 "measure distance to the annotated point, not the true
+  cursor" feature) as the same `x, y` used for BOTH the distance-to-
+  rope measurement AND the `isOnCircle()` circle-exclusion check --
+  correct for the former, never intended for the latter. The
+  substituted point sits at a real, pose/direction-dependent offset
+  from the true cursor; close enough to the anchor under common poses
+  to trip `isOnCircle()` even when the actual click was genuinely
+  outside the circle, silently rejecting the hit-test before
+  `cutRopeAt()`'s own `remainingLen < minRopeLength` check was ever
+  reached. Fixed by adding optional `circleCheckX/Y` params to
+  `hitTestRope()`/`hitTestAny()` (defaulting to `x, y` so nothing else
+  changes), with both call sites now passing the REAL press/release
+  position (`e.clientX/Y` for cut, `info.x/y` for the click arm) for
+  the circle check specifically, while the substituted point still
+  drives the actual distance measurement, unchanged. Verified via a
+  Node simulation: a true click at distance 15.03 from the anchor
+  (outside a 13.25-radius circle) with a substituted point at distance
+  2.19 (inside it) -- OLD code returned `null` (rejected), NEW code
+  correctly resolves the target. **The single-tap punch arm check
+  (`onPointerUp`'s `nearAny` gate) had the exact same latent bug** --
+  fixed alongside the reported cut case since it's the same underlying
+  mechanism in the same shared function, not a separate investigation.
+  Note in passing: `circleExclusionRadius()`'s own comment (and
+  `isNearCircleCenterForGrow()`'s) still references "cutRopeAt()'s own
+  Circle Cut Distance floor" -- that mechanism (`cfg.circleCutDistance`)
+  no longer exists anywhere in this file (confirmed via grep) and this
+  fix doesn't revive it; the comment is stale and should be corrected
+  whenever that area is next touched, not urgent enough on its own to
+  justify a separate pass right now.

@@ -8072,9 +8072,35 @@ function isNearCircleCenterForGrow(x, y){
   return Math.hypot(x - anchor.x, y - anchor.y) <= vmin(cfg.holdDistance);
 }
 
-function hitTestRope(x, y, maxDist){
+// circleCheckX/Y (2026-09-15, per direct report: "rope full cut works
+// when i do double click with my true cursor" -- confirmed the bug
+// only when the substituted FLICK MOUSE interaction point was used).
+// Optional, defaults to x/y so every pre-existing caller that only
+// ever passed the real press position is completely unaffected.
+// Root cause: `hitTestAny()`'s 2 real callers (the double-click cut
+// path and the single-tap punch arm check) both pass in the FLICK
+// MOUSE-substituted interaction point (2026-09-12's own "measure
+// distance to the annotated point, not the true cursor" feature) as
+// x/y -- correct for the DISTANCE-to-rope measurement below, but this
+// same x/y was ALSO being used for the isOnCircle() exclusion gate,
+// which was never meant to measure against anything but the user's
+// own real press/release position. The substituted point sits at a
+// real, direction/rotation-dependent OFFSET from the true cursor (the
+// annotated point's own position on the hand artwork, transformed
+// through the sprite's current pose) -- close enough to the anchor
+// under common poses/directions to trip isOnCircle() even when the
+// real click was genuinely outside the circle, silently rejecting the
+// hit-test before cutRopeAt()'s own remainingLen<minRopeLength
+// full-detach check (see that gotcha) was ever reached. Now the
+// circle-exclusion gate always checks the REAL press/release
+// position, passed explicitly from each call site, while the
+// DISTANCE-to-rope measurement below is untouched -- still exactly
+// the annotated point, per the original 2026-09-12 spec.
+function hitTestRope(x, y, maxDist, circleCheckX, circleCheckY){
   if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
-  if (isOnCircle(x, y)) return null; // clicking the circle itself never counts as a rope hit
+  const ccx = circleCheckX !== undefined ? circleCheckX : x;
+  const ccy = circleCheckY !== undefined ? circleCheckY : y;
+  if (isOnCircle(ccx, ccy)) return null; // clicking the circle itself never counts as a rope hit
   const hit = nearestPointOnRope(x, y, mainRope.points);
   return hit.dist <= maxDist ? hit : null;
 }
@@ -8105,9 +8131,14 @@ function hitTestPieces(x, y, maxDist){
 // click distance sliders"). Punching/hold-charging stay rope-only
 // (unchanged scope) and keep using hitTestRope/nearestPointOnRope
 // directly, always at Click Distance.
-function hitTestAny(x, y, maxDist){
+// circleCheckX/Y -- see hitTestRope's own 2026-09-15 comment; threaded
+// through unchanged so this function's own callers can pass the real
+// press/release position for the circle-exclusion gate while x/y stays
+// whatever distance-measurement point they're using (raw or
+// FLICK MOUSE-substituted).
+function hitTestAny(x, y, maxDist, circleCheckX, circleCheckY){
   if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
-  const ropeHit = hitTestRope(x, y, maxDist);
+  const ropeHit = hitTestRope(x, y, maxDist, circleCheckX, circleCheckY);
   const pieceHit = hitTestPieces(x, y, maxDist);
   if (ropeHit && (!pieceHit || ropeHit.dist <= pieceHit.dist)) return { ...ropeHit, target: 'rope' };
   if (pieceHit) return { ...pieceHit, target: 'piece' };
@@ -8632,8 +8663,11 @@ function onPointerUp(e){
     // release position, not this substitute -- only the targeting
     // DISTANCE was asked to change, not which side the visual sweep
     // reads as "clicked from."
+    // circleCheck args (2026-09-15) -- the real release position
+    // (e.clientX/Y), NOT cutPos, per hitTestRope's own comment: "rope
+    // full cut works when i do double click with my true cursor."
     const cutPos = mouseFlickInteractionPos(e.clientX, e.clientY, 'cut');
-    const target = hitTestAny(cutPos.x, cutPos.y, vmin(cfg.doubleClickDistance));
+    const target = hitTestAny(cutPos.x, cutPos.y, vmin(cfg.doubleClickDistance), e.clientX, e.clientY);
     logClick('up:double-click', { x: e.clientX, y: e.clientY, willCut: !!target, target: target && target.target });
     if (target){
       if (target.target === 'rope') cutRopeAt(target, e.clientX, e.clientY);
@@ -8737,8 +8771,12 @@ function onPointerUp(e){
   // check), rather than reusing one frozen value, matching how Click
   // And Hold Distance already samples at decision time rather than
   // press time.
+  // circleCheck args (2026-09-15) -- the real press position
+  // (info.x/y), NOT clickArmPos -- see hitTestRope's own comment for
+  // why the circle-exclusion gate must never use a FLICK MOUSE-
+  // substituted point.
   const clickArmPos = mouseFlickInteractionPos(info.x, info.y, 'click');
-  const nearAny = hitTestAny(clickArmPos.x, clickArmPos.y);
+  const nearAny = hitTestAny(clickArmPos.x, clickArmPos.y, undefined, info.x, info.y);
   if (!nearAny){
     logClick('up:tap-too-far', { x: info.x, y: info.y, hitDist: info.hit.dist });
     return;
