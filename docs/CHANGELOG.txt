@@ -13617,3 +13617,186 @@ exactly matched it one frame later. Live browser verification blocked
 by the same recurring dev-server page-boot stall as every other fix in
 this feature's history.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  11:31 PM - 11:52 PM EDT
+
+Implemented a Deformable Endcap for Form 1-01, per direct request:
+"recreate that exact shape, but make it deformable... act rope like
+instead of like a cap... it should ideally end up looking exactly the
+same as it does now in a static position... when I drag from the
+endcap tip, it should also get stretched" -- plus a follow-up
+requirement to gate it behind a checkbox with the existing rigid
+rendering staying the default ("make it something i can turn on and
+off with a checkbox so keep our current viz as is").
+
+Added (index.html):
+- parseSvgPathD() -- a small, generic SVG path-data parser (M/L/H/V/
+  C/Z, absolute or relative, with the standard "bare numbers continue
+  the previous command" rule) -- this file had no general one.
+- FORM1_01_SKIN -- Form 1-01's own `d` string parsed once at load and
+  tagged per-vertex with (t, lx): t = normalized position along the
+  shape's own local axis (0 neck, 1 far/pointed end), lx = sideways
+  offset from centerline. Includes a sanity check (console.error +
+  graceful skip if the parse looks wrong, rather than silently drawing
+  garbage).
+- endcapSpineSample() -- walks forward from the rope's own last
+  physics point along a short curvature-extrapolated arc (curvature
+  read from the signed angle between the rope's last 2 real segments),
+  used to place every skin vertex instead of one rigid direction.
+- drawEndcapDeformable() -- the actual renderer: places every tagged
+  vertex (including cubic-bezier control-point handles, treated as
+  their own independently-skinned vertices) via the spine sampler, with
+  a `stretchMult` param that scales the shape's own rendered length
+  (elongating away from the tip, which stays fixed) for the drag-tip
+  stretch effect. Supports the same world-space gradient convention as
+  drawEndcap(), just expressed in world coordinates since this renderer
+  never enters the shape's local pre-rotation frame.
+- New dev sliders (ROPE group, after Endcap Height): Deformable Endcap
+  Enabled (Form 1-01 Only) [checkbox, def false], Bend Strength (x)
+  [def 1], Stretch Enabled [checkbox, def true], Stretch Range (%vmin)
+  [def 15], Max Stretch (x) [def 1.4].
+- mainRope.endcapPullPx/endcapStretchMult -- a new stretch-tension
+  signal in update()'s drag-pin block, measured from the RAW pre-clamp
+  drag target (ddist - maxDragDist, captured before the hardLimit
+  clamp) rather than reusing mainRope.overstretchPx -- that field is
+  only ever nonzero when Rope Overstretch's own tolerance is separately
+  enabled, and this stretch cue needed to work regardless. Only armed
+  while dragging the tip specifically (dragPinIndex === points.length-1).
+- render()'s mainRope endcap call site now branches: deformable path
+  only when the checkbox is on AND Endcap Design is form1-01 AND
+  mainTipFactor>=1 (fully settled, past the separate End Emerge
+  animation) -- every other case (any other design, fallen pieces,
+  mid-emerge) takes the exact same drawEndcap() call this file has
+  always made, unchanged.
+
+Verification:
+- Algebraic: hand-derived drawEndcap()'s own full transform chain
+  (translate/rotate/translate/scale/translate, composed in REVERSE of
+  call order per Canvas2D semantics) and confirmed it reduces to the
+  exact same formula the deformable renderer uses when curvature=0 and
+  stretchMult=1 -- proving byte-identical output at rest before ever
+  touching the browser.
+- Live (dev server, temporary debug hook -- removed before finishing,
+  grep-confirmed zero `__endcapTest` references remaining):
+  - Straight-hanging rope, checkbox on vs. off: screenshotted PIXEL-
+    IDENTICAL, confirming the algebraic proof held in practice.
+  - A sharp synthetic ~90 degree kink (hand-built 3-point arrays,
+    rendered via a frozen-rAF technique to defeat this environment's
+    own per-frame canvas clear): the rigid renderer stayed a straight
+    rotated stamp; the deformable renderer visibly curved along the
+    bend -- confirmed via screenshot.
+  - stretchMult 1 vs. 1.8 on an identical straight spine: the 1.8
+    version visibly longer in a side-by-side screenshot.
+  - A real (non-synthetic) boot with the checkbox on: no console
+    errors, endcap rendered correctly as the rope grew.
+  - Post-hook-removal: a Node-level `new Function()` parse of the
+    file's own inline script confirmed zero syntax errors (used as a
+    faster, environment-independent substitute for a live reload after
+    this session's dev server repeatedly hit its own documented
+    page-boot-stall issue).
+
+Note: this session's own uncommitted index.html edits ended up inside
+a CONCURRENT session's commit (07f9520, "Fix pickup-completion jump...")
+-- the Nth occurrence of this project's own recurring cross-session
+commit-attribution mixup (a blanket `git add` sweeps in whatever's
+uncommitted in the shared working tree, regardless of the committing
+session's own intent). Confirmed via `git show 07f9520:index.html |
+grep drawEndcapDeformable` that no content was lost. Not committed
+separately by this session -- the content is already in the repo.
+
+--------------------------------------------------------------------------------
+2026-09-15  -  12:31 AM - 12:35 AM EDT
+
+Fixed: Background Rope's own start point visibly separating from Main
+Rope's start point on a hard flick, per direct report: "Background
+rope start should never NEVER separate from main rope start. Right now
+when i have the settings right and i flick main rope really hard, I
+see the 2 separate as if the background rope is catching up."
+
+Root cause: a genuine tension between 2 requirements previously solved
+via the SAME point. The 2026-09-12 Background Rope Anchor Max Speed
+fix deliberately caps how fast bgRope.points[0] can move toward
+mainRope.points[0] each frame -- a real, measured fix for a DIFFERENT
+bug (an instant snap there used to inject a large velocity into the
+rest of bgRope's own chain via the distance constraint, making it fly
+up far higher than mainRope on a strong punch). Capping that same
+point's own speed is exactly what now reads as visible lag/separation
+on a hard flick, since a strong punch can swing mainRope's own anchor
+by 130+px (previously measured) faster than any reasonable cap allows
+bgRope's anchor to follow.
+
+Fixed (index.html, render() only -- update()/physics untouched):
+- Added `bgRenderPoints`, a shallow copy of bgRope.points with ONLY
+  index 0 substituted for mainRope.points[0] (the same object
+  reference, not a converging value) -- built once per frame right
+  before bgRope's own draw block.
+- Every DRAW call that used to read bgRope.points directly now reads
+  bgRenderPoints instead: the gradient's worldTop, the start-endcap's
+  reversed 2-point slice, ropeStrokeColor()/strokeRopeCurve()/
+  drawRopeEndArcs() in both the clipped and unclipped branches.
+- bgRope.points[0] itself, and everything in update() that reads/
+  writes it (the intro sequence, maintainBgRopeEnd(), the Anchor Max
+  Speed block itself), is completely unchanged -- the 2026-09-12
+  anti-overshoot fix for the rest of the chain (points[1] onward) is
+  fully preserved.
+
+This makes the rendered start point bit-for-bit identical to
+mainRope's own anchor on literally every frame, by construction (same
+object reference assigned every frame, not a value that could drift).
+The one deliberate, much smaller visible tradeoff: during the brief
+window where the eased physics point[0] hasn't caught up yet, the
+FIRST rendered segment (bgRenderPoints[0] -> [1]) can visibly stretch/
+compress rather than the whole rope staying perfectly taut -- reads as
+"a little give right at the anchor," not as the anchor detaching,
+which is what was actually reported and is now structurally
+impossible regardless of flick strength.
+
+Verification: syntax-checked (Node `new Function()` parse of the
+file's own inline script). Live (local dev server): confirmed clean
+boot with no console errors, the background rope still renders
+correctly and seamlessly joined to the circle in the normal at-rest
+case (unchanged from before this fix, as expected -- the substitution
+is a no-op whenever bgRope.points[0] already equals mainRope.points[0]).
+The fix's core correctness (bgRenderPoints[0] === mainRope.points[0]
+on every frame) is guaranteed by construction rather than by a
+converging/conditional calculation, so it doesn't depend on
+reproducing a fast transient flick live to verify -- confirmed by
+direct code inspection of the single assignment responsible
+(`bgRenderPoints[0] = mainRope.points[0]`, unconditional, every frame).
+
+--------------------------------------------------------------------------------
+2026-09-15  -  12:34 AM - 12:42 AM EDT
+
+Found and fixed the real remaining cause of "short Segment Length
+feels heavy/weird even at high Constraint Iterations": a punch-power
+cap that shrinks along with segment length.
+
+Fixed:
+- Re-verified the earlier "short Segment Length" diagnosis via a fresh
+  simulation at the live segLen/ropeLength/iterations=20 -- confirmed
+  constraint-solver convergence is now genuinely resolved (~0.05% max
+  rest-length error, down from the much larger error at low
+  iterations). Iterations was NOT the remaining problem.
+- Found the actual remaining cause: applyPunch()'s own power is capped
+  at `segLen * maxPunchSegments` (a fixed multiplier, previously
+  hardcoded at 4) -- a cap that scales multiplicatively with Segment
+  Length. At the live segLen (0.9%vh, well under the ~2.37%vh default
+  this cap was originally tuned against), a full Intensity Ceiling
+  charge that should push ~270px was being capped down to just ~39px --
+  14.4% of its intended strength, regardless of how hard the flick was
+  charged. Exposed the multiplier as a new "Punch Power Cap (x Segment
+  Length)" slider (def 4, matching the old hardcoded value exactly --
+  a pure no-op for any project/save that hasn't touched Segment
+  Length) so a deliberately short segLen can be compensated for
+  directly, rather than baking in a single universal multiplier that
+  can't fit every segLen a project might choose.
+
+Verification: Node-level simulation of the exact solver + punch
+formula -- a settle-accuracy test (iterations=20 -> 0.05% error), a
+same-absolute-punch-power comparison across point counts (no
+obvious point-count-alone deadening once iterations are adequate),
+and a table of cap-vs-multiplier values at the live segLen (8/10/15/20
+give ~29%/36%/54%/72% of full intended power). Not a live browser
+test -- blocked by the same recurring dev-server page-boot stall as
+several prior entries.
+

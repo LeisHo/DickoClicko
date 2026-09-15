@@ -705,6 +705,28 @@ const DEV_GROUPS = [
     { key:'ropeGrowthHoldDistance', label:'Rope Growth Hold Distance', type:'slider', unit:'%vmin', min:1, max:60, step:0.5, def:20 },
     { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
     { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:10 },
+    // Corrected 2026-09-15 -- was a hardcoded constant (MAX_PUNCH_
+    // SEGMENTS, still 4 here as its def, so this is a pure no-op for
+    // any project/save that hasn't touched it). Real, reported bug:
+    // "even with a strong click hold charge flick, the rope still acts
+    // weird" at a short Segment Length (0.9%vh, well under the default
+    // ~2.37%vh) -- applyPunch()'s own power is capped at
+    // `mainRope.segLen * maxPunchSegments`, a cap that was tuned
+    // against whatever segLen was in use when it was built (see that
+    // function's own comment on why the cap exists at all: preventing
+    // a punch from flinging a point past its own neighbor into an
+    // inverted, chaotically-recovering configuration). Since the cap
+    // scales MULTIPLICATIVELY with segLen, shrinking Segment Length
+    // shrinks the cap right along with it -- confirmed via direct
+    // simulation at the live segLen/ropeLength: a full Intensity
+    // Ceiling charge that should push ~270px was being capped down to
+    // ~39px, just 14% of its intended strength, regardless of how
+    // "charged" the flick was. Exposed as its own slider (not just
+    // raised in code) so a project/save that deliberately runs a short
+    // segLen can compensate directly -- raise gradually and watch for
+    // the ORIGINAL "dark flash near the rope start" symptom this cap
+    // was built to prevent if pushed too high for the current segLen.
+    { key:'maxPunchSegments', label:'Punch Power Cap (x Segment Length)', type:'slider', unit:'x', min:1, max:20, step:0.5, def:4 },
   ]},
   { title:'ROPE CUT', controls:[
     { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.5 },
@@ -7215,12 +7237,19 @@ function growRope(dtSeconds, ratePerSecVh){
 // worth of kick) while never letting a single application send a point
 // past where its own neighbor structurally allows it to go without an
 // inverted, chaotically-recovering configuration.
-const MAX_PUNCH_SEGMENTS = 4;
+//
+// Corrected 2026-09-15 -- MAX_PUNCH_SEGMENTS is now cfg.maxPunchSegments
+// (see that control's own comment for the full account: this cap scales
+// WITH segLen, so a deliberately short Segment Length silently shrinks
+// it right along with the rope's own resolution, capping even a full
+// Intensity Ceiling charge down to a small fraction of its intended
+// push). def:4 matches the old hardcoded value exactly, so this is a
+// pure no-op for any project/save that's never touched it.
 function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex, segLen){
   const dirX = hit.x - clickX, dirY = hit.y - clickY;
   const len = Math.hypot(dirX, dirY) || 1;
   const nx = dirX / len, ny = dirY / len;
-  const power = Math.min(vh(1.0) * intensity, segLen * MAX_PUNCH_SEGMENTS);
+  const power = Math.min(vh(1.0) * intensity, segLen * cfg.maxPunchSegments);
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex) continue;
     const falloff = Math.exp(-Math.pow((i - hit.index) / 3, 2));
@@ -11302,12 +11331,44 @@ function render(){
   // obeys Background Rope Clip Enabled identically -- the climbing tip
   // shouldn't show its cap outside the circle any more than it shows
   // rope there.
+  // Background Rope start, RENDER-ONLY hard pin (2026-09-15) -- per
+  // direct report: "Background rope start should never NEVER separate
+  // from main rope start... when i flick main rope really hard, I see
+  // the 2 separate as if the background rope is catching up." The
+  // PHYSICS-side anchor (update()'s Background Rope Anchor Max Speed
+  // block, see that block's own comment) deliberately eases/caps
+  // bgRope.points[0]'s own movement toward mainRope.points[0] -- a real,
+  // measured, explicit fix for a DIFFERENT earlier bug (an instant snap
+  // there injected a huge velocity into the rest of bgRope's own chain
+  // via the distance constraint, making it fly up far higher than
+  // mainRope on a strong punch). That easing is exactly what now reads
+  // as "catching up" on a hard flick -- capping the anchor's own speed
+  // and never letting it visibly lag are directly in tension when
+  // solved with the SAME point, so this splits them: bgRenderPoints is
+  // a shallow copy of bgRope.points with ONLY index 0 substituted for
+  // mainRope's own CURRENT anchor position, used for every DRAW call
+  // below (never for physics) -- the rendered start point is therefore
+  // bit-for-bit identical to mainRope's own anchor on every single
+  // frame, with zero exception. bgRope.points[0] itself (the eased,
+  // physics-driving value) is completely untouched, so the distance/
+  // bend constraint solve in update() still only ever gets pulled by
+  // the SAME capped-speed reference it always has -- the anti-overshoot
+  // fix for the rest of the chain (points[1] onward) is fully preserved.
+  // The one visible tradeoff, and a deliberate, much smaller one: during
+  // the brief window where the eased point[0] hasn't caught up yet, the
+  // FIRST rendered segment (bgRenderPoints[0] -> [1]) can visibly
+  // stretch/compress rather than the whole rope staying perfectly
+  // taut -- reads as "the rope has a little give right at the anchor,"
+  // not as the anchor itself detaching, which is what was actually
+  // reported.
+  const bgRenderPoints = bgRope.points.slice();
+  bgRenderPoints[0] = mainRope.points[0];
   // Independent gradient/height from mainRope's own Endcap Gradient/Height
   // (see this control's own DEV_GROUPS comment) -- worldTop: bgRope's own
   // start, same convention mainGradientInfo below uses for mainRope's tip.
-  const bgRopeEndcapGradientInfo = cfg.bgRopeEndcapGradientEnabled ? { stops: cfg.bgRopeEndcapGradientColors, worldTop: bgRope.points[0] } : null;
+  const bgRopeEndcapGradientInfo = cfg.bgRopeEndcapGradientEnabled ? { stops: cfg.bgRopeEndcapGradientColors, worldTop: bgRenderPoints[0] } : null;
   const drawBgRopeStartEndcap = () => {
-    if (!cfg.bgRopeStartEndcapEnabled || bgRope.points.length < 2) return;
+    if (!cfg.bgRopeStartEndcapEnabled || bgRenderPoints.length < 2) return;
     let h;
     if (introPhase === 'rising'){
       h = cfg.bgRopeEndcapHeight;
@@ -11318,7 +11379,7 @@ function render(){
     } else {
       return;
     }
-    drawEndcap([bgRope.points[1], bgRope.points[0]], liveThickness, cfg.endcapDesign, cfg.ropeColor, h, 1, bgRopeEndcapGradientInfo);
+    drawEndcap([bgRenderPoints[1], bgRenderPoints[0]], liveThickness, cfg.endcapDesign, cfg.ropeColor, h, 1, bgRopeEndcapGradientInfo);
   };
   if (introPhase !== 'waiting'){
     if (cfg.bgRopeClipEnabled){
@@ -11327,16 +11388,16 @@ function render(){
       ctx.arc(anchor.x, anchor.y, vmin(cfg.circleSize) / 2, 0, Math.PI * 2);
       ctx.clip();
       {
-        const bgColor = ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor);
-        strokeRopeCurve(bgRope.points, liveThickness, bgColor);
-        drawRopeEndArcs(bgRope.points, liveThickness, bgColor, cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+        const bgColor = ropeStrokeColor(bgRenderPoints, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor);
+        strokeRopeCurve(bgRenderPoints, liveThickness, bgColor);
+        drawRopeEndArcs(bgRenderPoints, liveThickness, bgColor, cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
       }
       drawBgRopeStartEndcap();
       ctx.restore();
     } else {
-      const bgColor = ropeStrokeColor(bgRope.points, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor);
-      strokeRopeCurve(bgRope.points, liveThickness, bgColor);
-      drawRopeEndArcs(bgRope.points, liveThickness, bgColor, cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
+      const bgColor = ropeStrokeColor(bgRenderPoints, cfg.bgRopeGradientEnabled, cfg.bgRopeGradientColors, cfg.ropeColor);
+      strokeRopeCurve(bgRenderPoints, liveThickness, bgColor);
+      drawRopeEndArcs(bgRenderPoints, liveThickness, bgColor, cfg.ropeEndCurveArc, cfg.ropeTopCurveArc);
       drawBgRopeStartEndcap();
     }
   }

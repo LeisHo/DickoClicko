@@ -1770,6 +1770,54 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   DIFFERENT staleness bug if the rope's frozen position were ever made
   to drift for any other reason in the future (it doesn't currently,
   but nothing enforces that invariant structurally).
+- **`applyPunch()`'s own power cap scales MULTIPLICATIVELY with
+  `segLen`, so a deliberately short Segment Length silently caps every
+  punch/charged-flick down to a small fraction of its intended
+  strength, regardless of Click Intensity or Intensity Ceiling.** Real,
+  reported bug (2026-09-15, direct follow-up to the earlier "short
+  Segment Length feels dampened/heavy" investigation): "with Segment
+  length set at .9, even with Constraint Iteration at 20, the rope
+  physics feels very dampened and heavy. even with a strong click hold
+  charge flick, the rope still acts weird." That earlier investigation
+  correctly diagnosed constraint-solver convergence as ONE real factor
+  (confirmed AGAIN here via direct simulation at the live segLen/
+  ropeLength: iterations=20 brings max rest-length error down to
+  ~0.05%, i.e. genuinely fully resolved) -- but raising iterations to
+  20 alone didn't fix the reported feel, because a SEPARATE, larger
+  factor was still fully in effect: `applyPunch()`'s power is capped at
+  `segLen * maxPunchSegments` (see that function's own comment for why
+  the cap exists at all -- preventing a punch from flinging a point
+  past its own neighbor into an inverted, chaotically-recovering
+  configuration, "the dark flash near the rope start" bug this was
+  originally built to fix). That cap was tuned against whatever segLen
+  was in use at the time (the default, ~2.37%vh) -- at the live
+  segLen of 0.9%vh (well under half that), the SAME multiplier (4)
+  produces a MUCH tighter absolute cap. Confirmed via direct
+  simulation: a full Intensity Ceiling (25x) charge that should push
+  ~270px was being capped down to just ~39px -- 14.4% of its intended
+  strength -- completely independent of how hard the flick was charged,
+  which is exactly what "acts weird" describes (charge level stops
+  mattering once it's already saturating a cap far below its own
+  ceiling). Fixed by exposing the multiplier as `cfg.maxPunchSegments`
+  (def 4, matching the old hardcoded value exactly -- a pure no-op for
+  any project/save that's never touched Segment Length) instead of a
+  fixed constant, so a project running a deliberately short segLen can
+  compensate directly. **Raising this slider trades power-cap headroom
+  against the ORIGINAL inversion risk it exists to prevent** -- at the
+  live segLen, 8/10/15/20 give roughly 29%/36%/54%/72% of full intended
+  power respectively (verified via the same simulation formula); raise
+  gradually and watch for the "dark flash"/inverted-recovery symptom
+  returning before pushing it further. Verified via Node-level
+  simulation of the exact solver + punch formula (a settle-accuracy
+  test, a same-absolute-punch-power comparison across point counts, and
+  the cap-vs-multiplier table above) -- not a live browser test,
+  blocked by the same recurring dev-server page-boot stall as several
+  prior entries. **If a future report says a charged flick "feels weak"
+  or "doesn't respond to intensity," check `cfg.maxPunchSegments *
+  mainRope.segLen` against the theoretical uncapped power
+  (`vh(1.0) * intensity`) before assuming the intensity/charge system
+  itself is broken** -- this cap can silently dominate regardless of
+  how correctly the charge-intensity math itself is implemented.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as
@@ -2175,3 +2223,128 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   of rendering as one rigid `Path2D`), not selectable designs. Don't
   add a `-curves` key to `ENDCAP_DESIGNS` without a fresh, explicit
   request to do so.
+- **Deformable Endcap (2026-09-14, implemented) -- an opt-in
+  ALTERNATIVE to `drawEndcap()`'s rigid single-transform stamp, gated
+  behind `cfg.endcapDeformableEnabled` (default `false`, so the
+  existing rigid rendering stays the untouched default per explicit
+  instruction: "keep our current viz as is").** Scoped narrowly on
+  purpose: mainRope only (never fallen pieces), and `form1-01` only
+  (the one shape actually parsed) -- any other design silently falls
+  back to the normal `drawEndcap()` call, see that branch's own comment
+  at its render() call site.
+  - **Technique**: `parseSvgPathD()` (a small, generic M/L/H/V/C/Z SVG
+    path parser -- this file had no general one) turns Form 1-01's own
+    `d` string into an ordered segment list; `FORM1_01_SKIN` (computed
+    once at load) tags every anchor point AND every cubic-bezier
+    control-point handle with `(t, lx)` -- `t` = normalized position
+    along the shape's own local axis (0 at the neck, 1 at its far/
+    pointed end), `lx` = sideways offset from centerline. At render
+    time, `drawEndcapDeformable()` places each tagged point by walking
+    `t * worldLength` world px PAST the rope's own last physics point,
+    along a short curvature-extrapolated "spine" (`endcapSpineSample()`)
+    instead of one rigid rotate/scale -- the spine's own curvature is
+    read directly from the signed angle between the rope's last 2 real
+    segments (`points[length-3..length-1]`), so the shape genuinely
+    bends when those segments are currently angled (e.g. resting on the
+    floor) without touching physics at all -- purely a rendering-layer
+    addition, same "additive on top of the existing mechanism" pattern
+    as Rope Overstretch.
+  - **Verified algebraically that this reduces to BYTE-IDENTICAL output
+    vs. the rigid `drawEndcap()`** whenever the spine is straight (zero
+    curvature) and `stretchMult=1` -- both express the exact same world
+    point as `origin + s*dir + lx*xScale*normal` (worked through
+    `drawEndcap()`'s own full transform chain by hand: translate(tip) ->
+    rotate(angle) -> translate(0,-SEAM) -> scale -> translate(-topCenterX,
+    -anchorY), applied to a raw path coordinate in REVERSE of call order
+    per Canvas2D's own compose semantics). **Confirmed live, not just on
+    paper**: a straight-hanging rope with the checkbox on screenshotted
+    PIXEL-IDENTICAL to the checkbox off, satisfying "should look exactly
+    the same in a static position" per the original request.
+  - **Bend and stretch confirmed live via synthetic test draws** (a
+    temporary debug hook calling `drawEndcapDeformable()`/`drawEndcap()`
+    directly against hand-built point arrays, bypassing the live
+    physics/rAF timing entirely -- this environment's own recurring
+    "can go long stretches with zero rAF ticks" issue, documented
+    elsewhere in this file, made testing against REAL dragged/settled
+    physics state impractical this session): a sharp synthetic ~90°
+    kink showed the rigid version staying a straight rotated stamp
+    while the deformable version visibly curved along the bend;
+    `stretchMult` 1 vs. 1.8 on an identical straight spine showed the
+    1.8 version visibly longer. Hook removed before finishing
+    (grep-confirmed zero `__endcapTest` references remaining).
+  - **Stretch-on-drag signal (`mainRope.endcapPullPx`/
+    `endcapStretchMult`, set in `update()`'s drag-pin block) is
+    deliberately NOT the same as `mainRope.overstretchPx`** (Rope
+    Overstretch's own field) -- that field only ever becomes nonzero
+    when Rope Overstretch's own tolerance is enabled (the drag point is
+    hard-clamped to `maxDragDist` otherwise, so `actualDist-maxDragDist`
+    is always ~0). This feature needed a stretch cue regardless of
+    whether that separate subsystem is on, so `endcapPullPx` is measured
+    from the RAW pre-clamp target distance (`ddist - maxDragDist`,
+    captured right before the `hardLimit` clamp applies) instead --
+    genuine pull intent even while the point itself is hard-capped. Only
+    armed while `dragPinIndex === mainRope.points.length-1` (dragging
+    the tip specifically). Gated by its own checkbox
+    (`endcapStretchEnabled`, default `true`) separate from the master
+    toggle, so bend and stretch can be tested/tuned independently --
+    same "each piece of a feature gets its own on/off" convention as
+    Rope Overstretch's own Thinning/master split.
+  - **New dev sliders** (ROPE group, right after Endcap Height):
+    Deformable Endcap Enabled, Bend Strength (x), Stretch Enabled,
+    Stretch Range (%vmin), Max Stretch (x) -- all per §12n's own
+    decomposition philosophy (bend/stretch tunable independently, no
+    bundled "deform amount" dial).
+  - **A concurrent session's own commit (`07f9520`, "Fix pickup-
+    completion jump...") ended up containing this entire feature** --
+    the Nth occurrence of this project's own recurring cross-session
+    commit-attribution mixup (see the 2026-09-11/09-12 entries above
+    for the earlier occurrences and the root cause: a blanket `git add`
+    against the shared working tree sweeps in whatever's uncommitted at
+    that moment, regardless of the committing session's own intent).
+    Confirmed via `git show 07f9520:index.html | grep drawEndcapDeformable`
+    that no content was lost -- not corrected further, per this
+    project's own established precedent for this exact situation.
+- **`bgRope.points[0]`'s own PHYSICS position (the eased/capped value
+  driven by Background Rope Anchor Max Speed, see that slider's own
+  comment) and its RENDERED position are now deliberately 2 different
+  things (2026-09-15).** Real, reported bug: "Background rope start
+  should never NEVER separate from main rope start... when i flick
+  main rope really hard, I see the 2 separate as if the background rope
+  is catching up." Root cause was a genuine, previously-undetected
+  TENSION between 2 requirements solved via the SAME point: the
+  2026-09-12 Anchor Max Speed fix deliberately caps how fast
+  `bgRope.points[0]` can move toward `mainRope.points[0]` (a real,
+  measured fix for a DIFFERENT bug -- an instant snap there used to
+  inject a huge velocity into the REST of bgRope's own chain via the
+  distance constraint, making it fly up far higher than mainRope on a
+  strong punch) -- but capping that same point's speed is EXACTLY what
+  now reads as visible lag/separation on a hard flick, since a strong
+  punch can swing mainRope's own anchor by 130+px (measured, see that
+  slider's own comment) faster than any reasonable cap allows it to
+  follow. Fixed by splitting the 2 uses apart rather than picking one
+  side: `render()` now builds `bgRenderPoints` (a shallow copy of
+  `bgRope.points` with ONLY index 0 substituted for mainRope's own
+  CURRENT anchor -- same object reference, not a value copy) and uses
+  THAT for every draw call (`strokeRopeCurve`/`drawRopeEndArcs`/
+  `drawEndcap`'s start-cap/the gradient's `worldTop`) instead of
+  `bgRope.points` directly. The RENDERED start point is therefore
+  bit-for-bit identical to mainRope's own anchor on literally every
+  frame (guaranteed by construction -- same object, not a converging
+  value), while `bgRope.points[0]` itself (and therefore the distance/
+  bend constraint solve in `update()`) is completely untouched, so the
+  2026-09-12 anti-overshoot fix for the REST of the chain
+  (points[1] onward) is fully preserved. **One deliberate, much
+  smaller visible tradeoff**: during the brief window where the eased
+  physics point[0] hasn't caught up yet, the FIRST rendered segment
+  (`bgRenderPoints[0]` -> `[1]`) can visibly stretch/compress rather
+  than the whole rope staying perfectly taut -- reads as "a little give
+  right at the anchor," not as the anchor itself detaching, which is
+  what was actually reported and is now structurally impossible.
+  **Any FUTURE code that reads `bgRope.points` for DRAWING must use
+  `bgRenderPoints` instead** (built once per frame, right before the
+  `if (introPhase !== 'waiting')` render block) -- reading the raw
+  array again would silently reopen this exact bug for whatever new
+  draw call did it. Physics/update()-side code (intro sequence,
+  `maintainBgRopeEnd()`, the anchor-sync block itself) correctly keeps
+  reading/writing `bgRope.points` directly, unchanged -- this split is
+  render-only.
