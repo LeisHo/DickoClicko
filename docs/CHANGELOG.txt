@@ -14088,3 +14088,47 @@ recurring dev-server timing made a reliable held-drag synthetic
 sequence impractical), so this relies on the exact algebraic proof plus
 the numeric simulation rather than a live pixel-position confirmation.
 
+--------------------------------------------------------------------------------
+2026-09-15  -  07:28 AM - 07:44 AM EDT
+
+Fixed physics jitter and an unreachable full-cut trigger -- both live
+tuning-data drift, not code bugs.
+
+Reported: "the new endcap mode is causing some physis issues. I see
+jttering / flashing / sudden physics when growing, as well as when cut
+rope segments collide, as well as when the rope is falling. furthermore,
+rght now when i try to cut the rope beyond the min length, it doesnt
+trigger a full cut."
+
+Root-caused by diffing the live data/processed/dev-panel-settings.json
+directly (not the code) -- the endcap-related sessions had reorganized
+the ROPE group's settings around the same time these values drifted,
+which is likely why it read as endcap-caused:
+- bendStiffness had drifted to 0.05, well below this project's own
+  measured-safe 0.15 (see that constant's own CLAUDE.md gotcha --
+  below threshold, a strong dynamic event left a 2-point span
+  permanently kinked at ~42% of rest length). Growing/colliding/falling
+  are exactly the scenarios that compress the chain locally.
+- maxPunchSegments had drifted to 100 (slider-declared max is 20, code
+  default 4) -- someone had typed a value directly into the numeric
+  readout. This is the exact safety cap applyPunch() was built around
+  to prevent flinging a point into an inverted, chaotically-recovering
+  configuration -- effectively disabled at 100x.
+- damping had crept to 0.988, back toward the pre-fix 0.99 zone this
+  project already found left punches visibly swinging for ~3.65s.
+- minRopeLength had drifted to 0.8, BELOW segmentLength (0.9) --
+  cutRopeAt()'s full-detach check (remainingLen < minRopeLength) was
+  mathematically unreachable from any click position, since the
+  closest-to-anchor cuttable index is always clamped to at least 1 full
+  segment (remainingLen can never go below segLen itself).
+
+Fixed (pure data change, data/processed/dev-panel-settings.json, no
+code touched): bendStiffness 0.05->0.15, damping 0.988->0.85,
+maxPunchSegments 100->4, minRopeLength 0.8->1.
+
+Verification: JSON validated after edit; confirmed minRopeLength (1) >
+segmentLength (0.9) algebraically, restoring reachability. Diffed the
+settings file before staging to confirm only these 4 fields changed.
+Not live-browser-verified (this environment's recurring dev-server
+page-boot stall).
+

@@ -2644,3 +2644,51 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   here) rather than assuming a full re-paste means every category
   changed -- this one didn't, and rewriting identical data would just
   be unnecessary diff noise.
+- **`cfg.minRopeLength` must always stay ABOVE `cfg.segmentLength`, or
+  the full-rope-detach trigger becomes mathematically unreachable from
+  any click position -- this is a real relationship between 2
+  independently-tunable sliders, not just "pick reasonable individual
+  values."** Real, reported bug (2026-09-15): "right now when i try to
+  cut the rope beyond the min length, it doesnt trigger a full cut."
+  `cutRopeAt()`'s full-detach check is `remainingLen < vh(cfg.
+  minRopeLength)`, where `remainingLen = idx * mainRope.segLen` and
+  `idx` is always clamped to `Math.max(1, ...)` -- so the SMALLEST
+  possible `remainingLen` from any partial cut is exactly
+  `1 * segLen = cfg.segmentLength` (in %vh terms). If `minRopeLength <=
+  segmentLength`, that check can never be satisfied, REGARDLESS of
+  where the click lands -- not intermittent, structurally impossible.
+  Found via diffing the live `data/processed/dev-panel-settings.json`
+  directly (`minRopeLength: 0.8` vs `segmentLength: 0.9`) -- same "check
+  the actual saved value" precedent as every prior data-drift bug in
+  this file. Fixed as a pure DATA change (`minRopeLength: 0.8 -> 1`) --
+  no code touched, the check itself was always correct. **If
+  `segmentLength` is ever retuned upward again, re-verify
+  `minRopeLength` still exceeds it** -- there's no code-level guard
+  enforcing this relationship, only this gotcha.
+- **`bendStiffness`, `damping`, and `maxPunchSegments` had ALL
+  independently drifted well outside their own previously-measured-safe
+  ranges in the live settings file (2026-09-15), reported as "the new
+  endcap mode is causing some physis issues... jittering / flashing /
+  sudden physics when growing... cut rope segments collide... the rope
+  is falling."** Not an endcap bug at all -- pure live tuning-data
+  drift, most likely from experimentation happening in the same
+  session as an endcap-settings reorganization (hence the mistaken
+  attribution). `bendStiffness` was down to `0.05` (vs. the
+  extensively-measured-safe `0.15` from this file's own earlier
+  bend-stiffness gotcha -- below that threshold, a strong dynamic event
+  left a chain permanently kinked); `maxPunchSegments` was at `100`
+  (vs. slider-declared max `20`, code default `4` -- someone had typed
+  directly into the numeric readout, which the dev panel's own
+  click-to-type convention allows even outside the slider's own
+  bounds) -- this is the exact safety cap `applyPunch()` exists to
+  enforce, effectively disabled at 100x; `damping` had crept to
+  `0.988`, back toward the pre-fix `0.99` zone this project already
+  measured as leaving a punch visibly swinging for ~3.65s. Restored all
+  3 to their previously-tested-safe values (`0.15`/`0.85`/`4`) as a
+  pure data change. **When a physics-feel complaint arrives after ANY
+  unrelated feature work, check these 3 values (plus `minRopeLength`
+  above) in the live settings file before assuming the new feature
+  itself is the cause** -- none of this project's own physics constants
+  have a code-level floor/ceiling beyond the dev panel's own slider
+  bounds, and the click-to-type mechanism can push a value arbitrarily
+  far outside even those.
