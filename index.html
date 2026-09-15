@@ -10085,24 +10085,67 @@ function update(rawDt){
       // Corrected 2026-09-14 (5th pass) -- this used to lerp toward the
       // FROZEN `mfDragAnchor` during pickup, then SWITCH to the LIVE
       // `dragCursorClamped` the instant pickup completed -- a real
-      // discontinuity whenever those 2 values differed (i.e. whenever
-      // the cursor moved during the pickup window at all), matching the
-      // reported "once the [pickup] animation finishes... shift
-      // backwards by the length of the image." Replaced with a lerp
-      // toward the SAME live `dragCursorClamped` throughout -- since it
-      // updates every frame with the actual cursor, and the cursor is
-      // normally very close to the drag point right as a hold arms, this
-      // still visually reads as "moving toward the drag point" for a
-      // normal drag start, while making the pickup-to-active handoff
-      // mathematically seamless (the formula literally doesn't change at
-      // mfPickupT===1, it just naturally reaches dragCursorClamped there).
+      // discontinuity whenever those 2 values differed. "Fixed" by
+      // lerping toward the LIVE cursor throughout pickup instead -- which
+      // silently undid the 4th-pass fix it was built on top of: the
+      // sprite was no longer visibly moving toward the DRAG POINT during
+      // pickup at all, it was moving toward the cursor the whole time.
+      // Reported directly, 2026-09-15: "the cursor animation frame
+      // displaces smoothly back to the true curser, then the dragpoint
+      // with rope displaces smoothly to the interaction point anchor.
+      // Tht is incorrect... 2. Cursor animation is smoothly displaced to
+      // the dragpoint... 3. When the frame interaction anchor point
+      // aligns with the drag points, then the dragging physic starts."
+      //
+      // Corrected AGAIN, 2026-09-15 (6th pass) -- restores the 4th-pass
+      // target (ease toward the FROZEN `mfDragAnchor` during pickup) but
+      // fixes the 5th pass's own real handoff-discontinuity concern
+      // properly instead of routing around it: the sprite now gets its
+      // OWN catch-up-ease phase, mirroring the rope's own (see update()'s
+      // "Catch-up ease -- 5th correction" comment) using the IDENTICAL
+      // catchupEasedT timing so sprite and rope move in lockstep during
+      // the handoff, not just agree at its 2 endpoints. Three phases,
+      // continuous at both boundaries by construction:
+      // 1. pickupEasedT<1: sprite eases from its own real pre-drag
+      //    position toward the frozen drag point (mfDragAnchor) -- this
+      //    is what visibly "initiates" the drag, matching the report.
+      // 2. catchupEasedT<1 (pickup just completed): sprite eases from
+      //    that SAME frozen point (downInfo.dragCatchupOriginX/Y --
+      //    already captured by update()'s own rope-freeze code, in the
+      //    exact same world-position space, since the rope's point AND
+      //    the sprite's annotated point coincide there by construction
+      //    once phase 1 reaches t=1) toward the live cursor -- reusing
+      //    the rope's own captured origin rather than a separate
+      //    capture, since they're provably the same point at that instant.
+      // 3. catchupEasedT>=1: freely tracks the live cursor, unchanged.
+      // Phase 1's own t=1 endpoint (mfDragAnchor) and phase 2's own t=0
+      // origin (dragCatchupOriginX/Y) are the SAME value by construction
+      // (the rope was frozen the whole time phase 1 ran), so the 1->2
+      // handoff is continuous without needing to fudge either target.
       const mfPickupT = mainRope.dragPickupEasedT;
-      const mfDragTargetWorld = mfPickupT < 1
-        ? {
-            x: downInfo.dragSpritePickupStartX + (mainRope.dragCursorClamped.x - downInfo.dragSpritePickupStartX) * mfPickupT,
-            y: downInfo.dragSpritePickupStartY + (mainRope.dragCursorClamped.y - downInfo.dragSpritePickupStartY) * mfPickupT,
-          }
-        : mainRope.dragCursorClamped;
+      let mfDragTargetWorld;
+      if (mfPickupT < 1){
+        mfDragTargetWorld = {
+          x: downInfo.dragSpritePickupStartX + (mfDragAnchor.x - downInfo.dragSpritePickupStartX) * mfPickupT,
+          y: downInfo.dragSpritePickupStartY + (mfDragAnchor.y - downInfo.dragSpritePickupStartY) * mfPickupT,
+        };
+      } else {
+        // Same catchupEasedT formula as update()'s own rope catch-up
+        // ease, recomputed here identically (both read the same
+        // downInfo.dragPickupStartTime/cfg.dragPickupDuration) so the 2
+        // stay in lockstep without needing a 2nd mainRope-stashed value.
+        const catchupMs = cfg.dragPickupDuration;
+        const elapsedMs = performance.now() - downInfo.dragPickupStartTime;
+        const catchupElapsedMs = elapsedMs - catchupMs;
+        const catchupT = catchupMs > 0 ? Math.max(0, Math.min(1, catchupElapsedMs / catchupMs)) : 1;
+        const catchupEasedT = catchupT * catchupT * (3 - 2 * catchupT);
+        const originX = downInfo.dragCatchupOriginX !== undefined ? downInfo.dragCatchupOriginX : mainRope.dragCursorClamped.x;
+        const originY = downInfo.dragCatchupOriginY !== undefined ? downInfo.dragCatchupOriginY : mainRope.dragCursorClamped.y;
+        mfDragTargetWorld = {
+          x: originX + (mainRope.dragCursorClamped.x - originX) * catchupEasedT,
+          y: originY + (mainRope.dragCursorClamped.y - originY) * catchupEasedT,
+        };
+      }
       const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mfDragTargetWorld);
       if (mfDragOrigin){
         mfEntityX = mfDragOrigin.x;

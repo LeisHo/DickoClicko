@@ -1818,6 +1818,58 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   (`vh(1.0) * intensity`) before assuming the intensity/charge system
   itself is broken** -- this cap can silently dominate regardless of
   how correctly the charge-intensity math itself is implemented.
+- **Drag Pickup's 5th-pass fix (see the entry above) silently undid the
+  4th-pass fix it was built on top of -- 2 corrections that each solved
+  a real, different problem can still conflict if the 2nd one's fix
+  routes around the 1st one's target instead of preserving it.** Real,
+  reported bug (2026-09-15): "when i trigger a drag function, the
+  cursor animation frame displaces smoothly back to the true curser,
+  then the dragpoint with rope displaces smoothly to the interaction
+  point anchor. Tht is incorrect. The correct sequeunce is - 1. Click
+  Hold to Drag is triggered 2. Cursor animation is smoothly displaced
+  to the dragpoint... 3. When the frame interaction anchor point
+  aligns with the drag points, then the dragging physic starts." This
+  is EXACTLY the 4th-pass spec, still correct -- the 5th pass (fixing a
+  real discontinuity at the pickup-to-active HANDOFF, by making the
+  sprite's own pickup-phase target lerp toward the LIVE cursor instead
+  of the frozen drag point throughout) accidentally reverted the
+  sprite's actual PICKUP-PHASE TARGET back to the cursor, the precise
+  behavior the 4th pass existed to fix. **6th pass, same day:** restores
+  the 4th-pass target (sprite eases toward the frozen `mfDragAnchor`
+  during pickup) and fixes the 5th pass's own handoff concern PROPERLY
+  instead of routing around it -- the sprite now gets its own catch-up-
+  ease phase, mirroring the rope's own (`update()`'s "Catch-up ease --
+  5th correction" block), using the IDENTICAL `catchupEasedT` timing
+  formula so sprite and rope move in lockstep during the handoff, not
+  merely agree at its 2 endpoints. 3 phases, continuous at both
+  boundaries BY CONSTRUCTION (not by coincidence or approximation):
+  1. `pickupEasedT<1`: sprite eases from its own real pre-drag position
+     toward the frozen drag point (`mfDragAnchor`) -- this is what
+     visibly "initiates" the drag.
+  2. `catchupEasedT<1` (pickup just completed): sprite eases from that
+     SAME frozen point toward the live cursor. Reuses
+     `downInfo.dragCatchupOriginX/Y` -- the ROPE's OWN already-captured
+     freeze-origin -- as the sprite's catch-up origin too, rather than a
+     separate capture, since the rope's point and the sprite's
+     annotated point are PROVABLY the same world position at that exact
+     instant (the rope was frozen the entire time phase 1 ran, and
+     phase 1's own t=1 endpoint is defined as that exact frozen value).
+  3. `catchupEasedT>=1`: freely tracks the live cursor, unchanged from
+     the 5th pass's own post-handoff behavior.
+  Verified via a Node-level simulation of the FULL sequence (not just
+  the formula in isolation): the sprite reaches the frozen drag point
+  EXACTLY the same frame the rope's own catch-up-ease begins moving
+  (126.6 at the first post-pickup sample, up from a flat 100.0 for
+  every prior frame) -- confirming "when the frame interaction anchor
+  point aligns with the drag points, then the dragging physic starts"
+  holds by construction, not by tuning. Not a live browser test --
+  blocked by the same recurring dev-server page-boot stall as several
+  prior entries. **If this feature needs a 7th pass, re-read this
+  entry AND the 4th/5th-pass entries above in full first** -- this is
+  now the 3rd time a fix to one symptom (jump, handoff discontinuity)
+  has needed to be re-checked against an EARLIER, already-validated
+  requirement (which point the sprite targets during which phase)
+  rather than assumed independent of it.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as

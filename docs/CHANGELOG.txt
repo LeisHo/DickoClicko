@@ -13800,3 +13800,40 @@ give ~29%/36%/54%/72% of full intended power). Not a live browser
 test -- blocked by the same recurring dev-server page-boot stall as
 several prior entries.
 
+--------------------------------------------------------------------------------
+2026-09-15  -  02:20 AM - 02:23 AM EDT
+
+6th pass on Drag Pickup: the 5th pass's own fix for the handoff
+discontinuity had silently undone the 4th pass's own sprite-targeting
+fix.
+
+Fixed:
+- Reported: "the cursor animation frame displaces smoothly back to the
+  true curser, then the dragpoint with rope displaces smoothly to the
+  interaction point anchor. Tht is incorrect." Root cause: the 5th
+  pass fixed a real discontinuity at the pickup-to-active handoff by
+  making the sprite's pickup-phase target lerp toward the LIVE cursor
+  throughout pickup -- which reverted the sprite's actual target back
+  to the cursor, exactly the behavior the 4th pass existed to fix (the
+  sprite is supposed to visibly move toward the DRAG POINT during
+  pickup, not the cursor).
+- Restored the 4th-pass target (ease toward the frozen drag point
+  during pickup) and fixed the 5th pass's own handoff concern properly
+  this time: the sprite now gets its own catch-up-ease phase after
+  pickup completes, mirroring the rope's own, using the identical
+  catchupEasedT timing so sprite and rope move in lockstep during the
+  handoff rather than merely matching at the 2 endpoints. Reuses the
+  rope's own already-captured freeze-origin for the sprite's catch-up
+  start, since the two are provably the same world position at that
+  instant (the rope was frozen the whole time the sprite was easing
+  toward it).
+
+Verification: syntax-checked, and verified via a Node-level simulation
+of the FULL 3-phase sequence (not just the formula in isolation) --
+confirmed the sprite reaches the frozen drag point exactly the same
+frame the rope's own catch-up-ease begins moving, matching "when the
+frame interaction anchor point aligns with the drag points, then the
+dragging physic starts" by construction. Live browser verification
+blocked by the same recurring dev-server page-boot stall as several
+prior entries.
+
