@@ -13472,3 +13472,110 @@ live saved settings file's endcapDesign (form1-01) still resolves.
 Live dev-panel verification (dropdown options, each new/changed design
 rendering without a console error) via the local dev server.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  11:20 PM - 11:36 PM EDT
+
+Restructured Cursor Animation's interaction-point/wrist-anchor data
+per a fresh annotated data drop with explicit per-purpose mapping
+instructions (Drag, Sciss, Flick, and a relabeled "Tickle" dump).
+
+Changed:
+- Drag now uses 2 distinct points for 2 distinct jobs: frame 1's point
+  stays the arm-time DISTANCE gate for Click Hold (Drag)/Click Hold
+  (Grow) triggering (data refreshed only); frame 48's point is now the
+  LIVE dragging anchor itself, replacing frame 1 in that role. Per
+  explicit spec: "Use Drag Frame 01 for:...distance measuring...Use
+  Drag Frame 48 for:...the actual dragging anchor point."
+- Removed mouseFlickDragAlignmentOffset() entirely (plus its
+  render()-time call site and the now-dead mfDragSequenceActive flag)
+  -- a direct, necessary consequence of the anchor swap above. That
+  function's whole purpose was correcting for frame 48 drifting away
+  from frame 1 while frame 1 was the anchor; with frame 48 now the
+  anchor for the whole sequence, reapplying it would shove the sprite
+  away from where it was just solved to be.
+- The 'default' interaction point (click/hold, plus a new 'attract'
+  purpose for Rope Attraction) no longer sources from "tickle" data --
+  per "Ignore Tickle" -- now sources from a "Flick" category instead
+  (Click's own frame 1). REF_IMAGE/VARIANT/POINT_KEY tables updated to
+  match, including renaming REF_IMAGE's click/hold entries from
+  'tickle' to 'click' (the actually-displayed, always-loaded category).
+  'attract' is registered as available infrastructure per explicit
+  instruction, though Rope Attraction's own arm code doesn't yet read
+  it -- no existing distance gate to plug it into.
+- Cut (Sciss) and Drag frame-1/frame-48 point data refreshed from the
+  new dump (cross-checked in full against current code, not just the
+  directions the request named).
+- The "tickle" section of the dump was itself relabeled mid-
+  conversation to an unrelated purpose: 2 points per direction (frame
+  1 only) defining "the main axis of the image" -- the lower
+  (larger-Y) point is the Base Point, the higher (smaller-Y) point is
+  the Top Point. Per "Anchor the cursor frame animations to the cursor
+  by the base point": replaced the 'base' variant's own
+  centerX/bottomY in MOUSE_FLICK_VISIBLE_BOUNDS (previously alpha-
+  scan-derived) with the real annotated Base Point, for all 8
+  directions -- 'charge'/'sciss'/'snap' variants unchanged. The Top
+  Point half is stored in a new MOUSE_FLICK_POINTING_TOP table but NOT
+  wired into the rotation/direction-bucket system yet -- that's a
+  separate, materially riskier recalibration left for an explicit
+  future request, not attempted here.
+
+Verification: syntax-checked (node -e extract + new Function, block 0
+OK). This is a data/mapping-table change built on already-proven-
+correct surrounding math (mouseFlickDragEntityOriginForAnchor()'s own
+formula is unchanged, just fed a different point table) -- live
+browser verification was attempted and blocked by the same recurring
+dev-server page-boot stall as several prior entries this session.
+
+--------------------------------------------------------------------------------
+2026-09-14  -  11:20 PM - 11:34 PM EDT
+
+Interaction-point data refresh with 2 real structural changes: Drag's
+live anchor moved from frame 1 to frame 48, and the wrist-anchor point
+for click/drag/attract is now a real annotation instead of an
+alpha-scan.
+
+Fixed/Changed:
+- MOUSE_FLICK_INTERACTION_POINTS.cut/drag (frame 1) and
+  MOUSE_FLICK_DRAG_END_POINTS (frame 48) refreshed from a new data
+  drop, per explicit per-purpose mapping instructions.
+- Drag now uses 2 distinct points for 2 distinct jobs: frame 1 for the
+  arm-time distance gate only (Click Hold (Drag)/Click Hold (Grow)),
+  frame 48 as the actual LIVE dragging anchor (previously frame 1 was
+  the anchor and frame 48 was purely a cosmetic end-of-sequence
+  convergence target).
+- Removed mouseFlickDragAlignmentOffset() entirely (plus its render()
+  call site and the now-dead mfDragSequenceActive flag) -- its whole
+  purpose was compensating for frame 48 drifting away from frame 1
+  while frame 1 was the anchor; with frame 48 now the anchor for the
+  entire sequence, reapplying that correction would displace the
+  sprite away from its own just-solved position.
+- 'default' (click/hold, plus a new 'attract' purpose for Rope
+  Attraction) no longer sources from "tickle" data -- now sources from
+  a "Flick" (Click's own frame 1) category instead, per explicit
+  correction ("Ignore Tickle"). REF_IMAGE for these purposes changed
+  from 'tickle' to 'click' (the actually-displayed, always-loaded
+  category) to match.
+- 'attract' registered in all 3 purpose-mapping tables per explicit
+  instruction, though Rope Attraction's own arm code doesn't yet read
+  it anywhere -- registered as available infrastructure, not because
+  an existing gate needed it.
+- The "tickle" data was itself relabeled mid-task to an unrelated
+  purpose: 2 points per direction (frame 1) defining "the main axis of
+  the image" -- the lower (max-Y) point is the Base Point, the higher
+  (min-Y) is the Top Point. MOUSE_FLICK_VISIBLE_BOUNDS's own 'base'
+  variant centerX/bottomY (previously alpha-scan-derived) now uses the
+  real annotated Base Point for anchoring the sprite to the cursor.
+  The Top Point is stored in a new MOUSE_FLICK_POINTING_TOP table but
+  deliberately NOT yet wired into the rotation/direction-bucket system
+  -- that would be a materially riskier recalibration of an
+  already-3-times-corrected system, left for an explicit future
+  request.
+
+Verification: syntax-checked only (this is a data/mapping-table change
+with well-understood, already-proven-correct surrounding math). Live
+browser verification blocked by the same recurring dev-server
+page-boot stall as several prior entries. Confirmed via git diff that
+these edits carry zero overlap with a concurrent session's own endcap
+SVG reorganization commits, which landed in this same working tree
+between this task's start and its own commit.
+

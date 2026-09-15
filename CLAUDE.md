@@ -1623,6 +1623,88 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   -- only `dragPickupStartTime` (the shared timer) and the NEW
   `dragSpritePickupStartX/Y` (the sprite's own start) are captured
   there now.
+- **Cursor Animation's interaction-point/wrist-anchor data was
+  substantially restructured 2026-09-14, per a fresh annotated data
+  drop with explicit per-purpose mapping instructions.** Full account,
+  since several pieces moved at once:
+  - **Drag now has 2 distinct points doing 2 distinct jobs.** Frame 1's
+    own point (`MOUSE_FLICK_INTERACTION_POINTS.drag`) is used ONLY for
+    the arm-time DISTANCE gate (Click Hold (Drag)/Click Hold (Grow)
+    triggering) -- unchanged in ROLE, just refreshed data. Frame 48's
+    own point (`MOUSE_FLICK_DRAG_END_POINTS`) is now the LIVE dragging
+    ANCHOR itself (`mouseFlickDragEntityOriginForAnchor()`/
+    `mouseFlickDragPointWorld()`'s target, and `dragSpritePickupStartX/Y`'s
+    own reference point in onPointerDown) -- previously frame 1 was the
+    anchor and frame 48 was purely cosmetic. Per explicit spec: "Use
+    Drag Frame 01 for:... distance measuring... Use Drag Frame 48
+    for:... the actual dragging anchor point."
+  - **`mouseFlickDragAlignmentOffset()` -- the OLD "frame 48 converges
+    onto frame 1 by the end of the sequence" cosmetic correction --
+    was REMOVED entirely**, along with its render()-time call site and
+    the now-dead `mfDragSequenceActive` flag. Direct, necessary
+    consequence of the anchor swap above: that correction's entire
+    purpose was to compensate for frame 48 drifting away from frame 1
+    while frame 1 was the anchor; with frame 48 now the anchor for the
+    WHOLE drag sequence (not just its final frame), reapplying it would
+    actively shove the sprite away from the point it was just solved to
+    be at. If a FUTURE report says the drag sprite doesn't look quite
+    right at some frame OTHER than 48 specifically, this removal (not a
+    reintroduction of the old offset) is the first place to look --
+    don't resurrect the old function without re-deriving whether it's
+    still even meaningful under this anchor scheme.
+  - **The 'default' interaction point (click/hold, plus a NEW 'attract'
+    purpose) no longer sources from "tickle" data at all.** Per
+    explicit correction ("Ignore Tickle" -- that data was relabeled for
+    a completely different purpose, see the Base/Top Point entry
+    below): now sourced from a "Flick" category (Click's own frame 1)
+    instead. `MOUSE_FLICK_INTERACTION_REF_IMAGE`/`_VARIANT`/`_POINT_KEY`
+    all updated to match, including a real key/data rename (REF_IMAGE
+    'tickle' -> 'click', the actually-displayed, always-loaded category
+    -- tickle is conditionally loaded per direction and no longer holds
+    anything semantically relevant to this purpose anyway).
+  - **'attract' (Rope Attraction) is now a registered purpose** in all
+    3 mapping tables, per explicit instruction ("Use Flick Frame 01
+    for:... Right-Click/Clickhold (Attract)'s interaction measuring
+    point") -- but Rope Attraction's own arm code (onPointerDown's
+    right-click branch) does NOT currently read this purpose anywhere;
+    unlike click/hold/cut/drag, attraction has no proximity/distance
+    gate at all to plug it into yet. Registered as available
+    infrastructure per the explicit ask, not because an existing
+    mechanism needed it -- don't assume a distance gate for Attraction
+    exists just because this purpose is registered.
+  - **The "tickle" data was itself relabeled mid-conversation to a
+    completely different, unrelated purpose** -- direct correction:
+    "I added points to Tickle. It is not for Tickle... there are 2
+    points [per direction, frame 1]. They will define the main axis of
+    the image. So the lower point is the Base Point and the higher
+    point will be the Top Point... Anchor the cursor frame animations
+    to the cursor by the base point." This replaces the 'base' variant's
+    own `centerX`/`bottomY` in `MOUSE_FLICK_VISIBLE_BOUNDS` (previously
+    alpha-scan-derived, per that table's own long-standing convention)
+    with the real annotated Base Point, for all 8 directions --
+    'charge'/'sciss'/'snap' variants are UNCHANGED (no new data was
+    given for those). The Top Point half of each pair is stored in a
+    NEW `MOUSE_FLICK_POINTING_TOP` table but is NOT YET wired into
+    anything -- the axis concept ("when i say the hand 'points' at
+    something, it will be along this axis") implies a possible future
+    recalibration of the direction-bucket/rotation system to use this
+    REAL annotated axis instead of assuming the artwork's own local
+    "up" already is the neutral pointing direction, but that's a
+    separate, materially riskier change to a system already 3 times
+    corrected this project (see the direction-bucket history below) --
+    deliberately NOT attempted without an explicit, separate request.
+    **The "lower point is Base" rule sorts by Y VALUE, not by array
+    position** -- the 2 points in each direction's own dump entry
+    appear in inconsistent order (sometimes base first, sometimes top
+    first); always take max-Y as base, min-Y as top per direction
+    independently, never assume a fixed array index.
+  All of the above verified via syntax check only (Node's `new
+  Function()` extraction) -- this is a pure data/mapping-table change
+  with well-understood, already-proven-correct surrounding math (the
+  anchor-solve formula itself, `mouseFlickDragEntityOriginForAnchor()`,
+  is unchanged from its last correction, just fed a different point
+  table); live browser verification was attempted and blocked by the
+  same recurring dev-server page-boot stall as several prior entries.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as

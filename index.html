@@ -4750,15 +4750,49 @@ const SNAP_REPEAT_C_END_INDEX   = mouseFlickNearestIndex(SNAP_A_FRAME_NUMBERS, 3
 // using DotFlicko's own documented one-liner as the template (see that
 // project's VISIBLE_BOUNDS_BY_DIRECTION comment) -- same alpha
 // threshold, same centerX/bottomY formula.
+//
+// Corrected 2026-09-14 -- the 'base' variant's own centerX/bottomY (used
+// for click/drag/attract/the 'default' interaction point, i.e. every
+// variant='base' consumer) is no longer alpha-scan-derived. Per explicit
+// data drop (mislabeled "tickle" in the dump, corrected immediately after:
+// "It is not for Tickle... the lower point is the Base Point... Anchor
+// the cursor frame animations to the cursor by the base point"), replaced
+// with the real ANNOTATED base point (the larger-y/lower-on-screen of a
+// 2-point pair also defining a Top Point -- see MOUSE_FLICK_POINTING_TOP
+// below for that other point, stored but not yet consumed by anything).
+// 'charge'/'sciss'/'snap' are UNCHANGED, still the original alpha-scan
+// values -- no new data was given for those variants.
 const MOUSE_FLICK_VISIBLE_BOUNDS = {
-  'behind':       { base:{centerX:0.5265,bottomY:0.8916}, charge:{centerX:0.5266,bottomY:0.891},  sciss:{centerX:0.5299,bottomY:0.891},  snap:{centerX:0.5299,bottomY:0.891} },
-  'behind-thumb': { base:{centerX:0.5029,bottomY:0.9009}, charge:{centerX:0.4987,bottomY:0.8931}, sciss:{centerX:0.4992,bottomY:0.8931}, snap:{centerX:0.4992,bottomY:0.8931} },
-  'side-thumb':   { base:{centerX:0.4788,bottomY:0.8815}, charge:{centerX:0.4786,bottomY:0.8815}, sciss:{centerX:0.4786,bottomY:0.8815}, snap:{centerX:0.4786,bottomY:0.8815} },
-  'front-thumb':  { base:{centerX:0.4738,bottomY:0.9009}, charge:{centerX:0.4737,bottomY:0.9005}, sciss:{centerX:0.4706,bottomY:0.9005}, snap:{centerX:0.4706,bottomY:0.9005} },
-  'front':        { base:{centerX:0.4763,bottomY:0.9145}, charge:{centerX:0.4763,bottomY:0.9143}, sciss:{centerX:0.4719,bottomY:0.9143}, snap:{centerX:0.4719,bottomY:0.9143} },
-  'front-pinky':  { base:{centerX:0.4942,bottomY:0.9221}, charge:{centerX:0.4943,bottomY:0.9228}, sciss:{centerX:0.4922,bottomY:0.9228}, snap:{centerX:0.4922,bottomY:0.9228} },
-  'side-pinky':   { base:{centerX:0.5194,bottomY:0.9272}, charge:{centerX:0.5195,bottomY:0.927},  sciss:{centerX:0.5195,bottomY:0.927},  snap:{centerX:0.5195,bottomY:0.927} },
-  'behind-pinky': { base:{centerX:0.521, bottomY:0.917},  charge:{centerX:0.5208,bottomY:0.9175}, sciss:{centerX:0.5208,bottomY:0.9175}, snap:{centerX:0.5208,bottomY:0.9175} },
+  'behind':       { base:{centerX:0.528, bottomY:0.879}, charge:{centerX:0.5266,bottomY:0.891},  sciss:{centerX:0.5299,bottomY:0.891},  snap:{centerX:0.5299,bottomY:0.891} },
+  'behind-thumb': { base:{centerX:0.511, bottomY:0.885}, charge:{centerX:0.4987,bottomY:0.8931}, sciss:{centerX:0.4992,bottomY:0.8931}, snap:{centerX:0.4992,bottomY:0.8931} },
+  'side-thumb':   { base:{centerX:0.493, bottomY:0.879}, charge:{centerX:0.4786,bottomY:0.8815}, sciss:{centerX:0.4786,bottomY:0.8815}, snap:{centerX:0.4786,bottomY:0.8815} },
+  'front-thumb':  { base:{centerX:0.469, bottomY:0.903}, charge:{centerX:0.4737,bottomY:0.9005}, sciss:{centerX:0.4706,bottomY:0.9005}, snap:{centerX:0.4706,bottomY:0.9005} },
+  'front':        { base:{centerX:0.473, bottomY:0.894}, charge:{centerX:0.4763,bottomY:0.9143}, sciss:{centerX:0.4719,bottomY:0.9143}, snap:{centerX:0.4719,bottomY:0.9143} },
+  'front-pinky':  { base:{centerX:0.49,  bottomY:0.909}, charge:{centerX:0.4943,bottomY:0.9228}, sciss:{centerX:0.4922,bottomY:0.9228}, snap:{centerX:0.4922,bottomY:0.9228} },
+  'side-pinky':   { base:{centerX:0.517, bottomY:0.921}, charge:{centerX:0.5195,bottomY:0.927},  sciss:{centerX:0.5195,bottomY:0.927},  snap:{centerX:0.5195,bottomY:0.927} },
+  'behind-pinky': { base:{centerX:0.53,  bottomY:0.897}, charge:{centerX:0.5208,bottomY:0.9175}, sciss:{centerX:0.5208,bottomY:0.9175}, snap:{centerX:0.5208,bottomY:0.9175} },
+};
+// The Top Point half of the same 2-point annotation (see the correction
+// above) -- together with each direction's own 'base' entry just above,
+// this defines "the main axis of the image" per explicit spec: "When i
+// say the hand 'points' at something, it will be along this axis."
+// Captured here so the data isn't lost, but NOT YET wired into the
+// rotation/direction-bucket system -- that system currently assumes the
+// artwork's own local "up" (pre-rotation) already IS the neutral
+// pointing direction, and recalibrating it against this real axis
+// instead is a separate, not-yet-requested change with real regression
+// risk to an already-3-times-corrected system (see CLAUDE.md's own
+// direction-bucket history). Revisit this table when/if that
+// recalibration is explicitly asked for.
+const MOUSE_FLICK_POINTING_TOP = {
+  'behind':       { x: 0.518, y: 0.318 },
+  'behind-thumb': { x: 0.489, y: 0.327 },
+  'side-thumb':   { x: 0.463, y: 0.304 },
+  'front-thumb':  { x: 0.472, y: 0.301 },
+  'front':        { x: 0.481, y: 0.292 },
+  'front-pinky':  { x: 0.516, y: 0.316 },
+  'side-pinky':   { x: 0.55,  y: 0.316 },
+  'behind-pinky': { x: 0.544, y: 0.289 },
 };
 // The 0.5/1 fallback (old center-anchor behavior) only matters for a
 // direction/variant combo missing from the table above (e.g. a newly
@@ -4788,17 +4822,23 @@ function mouseFlickVariantKeyForMode(mode){
 // frame 1 of each category -- normalized (0-1) fractions of that
 // category's own frame-1 image, same convention MOUSE_FLICK_VISIBLE_
 // BOUNDS already uses. Per explicit mapping: the annotator's own
-// "sciss"/"drag" categories map 1:1 to the 'cut' (double-click) and
-// 'drag' (Drag Rope) purposes; "tickle" is NOT the Tickle animation
-// here -- its points are reused as the 'click' and 'click-and-hold'
-// purpose's own points, AND as the fallback for any future purpose
-// this table doesn't otherwise address (see MOUSE_FLICK_INTERACTION_
-// REF_IMAGE/VARIANT below, which route 'click'/'hold' at the 'tickle'
-// category).
+// "sciss" category maps 1:1 to the 'cut' (double-click) purpose;
+// "drag" frame 1 feeds the 'drag' purpose's own DISTANCE-gating point
+// (arm-time trigger measurement only -- the LIVE anchor uses frame 48
+// instead, see MOUSE_FLICK_DRAG_END_POINTS's own comment for the
+// 2026-09-14 correction). Corrected 2026-09-14 -- 'default' (the
+// 'click'/'hold' purposes' own point, also used as 'attract's, per
+// that same correction) now sources from the "flick" category
+// specifically ("Click (Flick)"'s own frame 1), NOT "tickle" -- an
+// earlier version of this table (and this comment) used tickle's own
+// frame-1 point here as a stand-in; per direct correction ("Ignore
+// Tickle" -- ITS data now feeds MOUSE_FLICK_VISIBLE_BOUNDS/
+// MOUSE_FLICK_POINTING_TOP instead, an unrelated purpose), that
+// stand-in is retired in favor of the real Flick-category annotation.
 const MOUSE_FLICK_INTERACTION_POINTS = {
   cut: {
-    'behind':       { x: 0.527, y: 0.298 },
-    'behind-thumb': { x: 0.467, y: 0.315 },
+    'behind':       { x: 0.522, y: 0.315 },
+    'behind-thumb': { x: 0.499, y: 0.315 },
     'side-thumb':   { x: 0.457, y: 0.309 },
     'front-thumb':  { x: 0.469, y: 0.304 },
     'front':        { x: 0.475, y: 0.304 },
@@ -4806,46 +4846,56 @@ const MOUSE_FLICK_INTERACTION_POINTS = {
     'side-pinky':   { x: 0.544, y: 0.321 },
     'behind-pinky': { x: 0.529, y: 0.298 },
   },
-  // 'tickle' category, doubling as the 'click'/'hold' interaction point
-  // (and the default fallback) -- per explicit spec, not the actual
-  // Tickle animation's own frames.
+  // 'flick' (Click) category's own frame 1 -- used for 'click'/'hold'
+  // (and 'attract', added the same day) per explicit spec; see this
+  // block's own comment above for why this is no longer tickle's data.
   default: {
-    'behind':       { x: 0.518, y: 0.318 },
-    'behind-thumb': { x: 0.489, y: 0.327 },
-    'side-thumb':   { x: 0.464, y: 0.327 },
-    'front-thumb':  { x: 0.474, y: 0.345 },
-    'front':        { x: 0.478, y: 0.327 },
-    'front-pinky':  { x: 0.525, y: 0.348 },
-    'side-pinky':   { x: 0.554, y: 0.378 },
-    'behind-pinky': { x: 0.541, y: 0.309 },
+    'behind':       { x: 0.522, y: 0.283 },
+    'behind-thumb': { x: 0.487, y: 0.278 },
+    'side-thumb':   { x: 0.452, y: 0.301 },
+    'front-thumb':  { x: 0.458, y: 0.292 },
+    'front':        { x: 0.479, y: 0.292 },
+    'front-pinky':  { x: 0.522, y: 0.286 },
+    'side-pinky':   { x: 0.549, y: 0.292 },
+    'behind-pinky': { x: 0.564, y: 0.283 },
   },
-  // Drag's own frame 1 point (gating/aim) -- frame 48's point lives in
-  // MOUSE_FLICK_DRAG_END_POINTS below, used only by the frame-48-to-
-  // frame-1 render-alignment feature, not by any distance gate.
+  // Drag's own frame 1 point -- DISTANCE-GATING/arm-time trigger
+  // measurement only (Click Hold (Drag)/Click Hold (Grow) per explicit
+  // spec). The LIVE dragging anchor point is frame 48's own point
+  // instead -- see MOUSE_FLICK_DRAG_END_POINTS's own comment.
   drag: {
-    'behind':       { x: 0.522, y: 0.345 },
-    'behind-thumb': { x: 0.465, y: 0.432 },
-    'side-thumb':   { x: 0.46,  y: 0.429 },
-    'front-thumb':  { x: 0.467, y: 0.429 },
-    'front':        { x: 0.481, y: 0.405 },
-    'front-pinky':  { x: 0.538, y: 0.42 },
-    'side-pinky':   { x: 0.556, y: 0.414 },
-    'behind-pinky': { x: 0.562, y: 0.402 },
+    'behind':       { x: 0.522, y: 0.297 },
+    'behind-thumb': { x: 0.454, y: 0.345 },
+    'side-thumb':   { x: 0.451, y: 0.333 },
+    'front-thumb':  { x: 0.471, y: 0.309 },
+    'front':        { x: 0.477, y: 0.309 },
+    'front-pinky':  { x: 0.531, y: 0.318 },
+    'side-pinky':   { x: 0.551, y: 0.327 },
+    'behind-pinky': { x: 0.559, y: 0.318 },
   },
 };
-// Drag's own frame 48 point -- see mouseFlickDragAlignmentOffset()'s own
-// comment for how this is used to keep the annotated contact point
-// visually pinned across the whole Drag sequence, converging back onto
-// MOUSE_FLICK_INTERACTION_POINTS.drag's own frame-1 point by frame 48.
+// Drag's own frame 48 point -- corrected 2026-09-14: this is now the
+// LIVE dragging anchor point itself ("Click Hold (Drag)'s actual
+// dragging anchor point," per explicit spec), not merely a cosmetic
+// alignment reference -- mouseFlickDragEntityOriginForAnchor() and
+// mouseFlickDragPointWorld() (the drag-time position-solve pair) both
+// target THIS table now, not MOUSE_FLICK_INTERACTION_POINTS.drag's
+// frame-1 point. The old "frame 48 converges onto frame 1 by the end
+// of the sequence" cosmetic correction (mouseFlickDragAlignmentOffset(),
+// 2026-09-12) is REMOVED as a direct consequence -- it existed only to
+// compensate for anchoring against frame 1 while frame 48 drifted; with
+// frame 48 itself now the anchor for the WHOLE sequence, there's no
+// drift left for it to correct (see that function's own former
+// call site in render() for the removal).
 const MOUSE_FLICK_DRAG_END_POINTS = {
-  'behind':       { x: 0.492, y: 0.474 },
+  'behind':       { x: 0.492, y: 0.45 },
   'behind-thumb': { x: 0.411, y: 0.525 },
   'side-thumb':   { x: 0.385, y: 0.528 },
   'front-thumb':  { x: 0.425, y: 0.534 },
   'front':        { x: 0.512, y: 0.543 },
   'front-pinky':  { x: 0.598, y: 0.525 },
   'side-pinky':   { x: 0.619, y: 0.531 },
-  'behind-pinky': { x: 0.596, y: 0.534 },
+  'behind-pinky': { x: 0.599, y: 0.537 },
 };
 // Which already-loaded frame array (mouseFlickFramesByDirection[dir][?])
 // supplies frame 1's own naturalWidth/naturalHeight for each purpose's
@@ -4854,15 +4904,31 @@ const MOUSE_FLICK_DRAG_END_POINTS = {
 // MOUSE_FLICK_VISIBLE_BOUNDS variant supplies the wrist-anchor origin
 // that point is offset from -- 'cut' uses its own dedicated 'sciss'
 // bounds entry (a genuine 1:1 match with what was actually annotated);
-// 'drag' and 'default'/click share 'base' (Drag/Tickle/plain-click all
-// already render pinned to the 'base' wrist anchor, same as render()'s
-// own mouseFlickVariantKeyForMode mapping); 'default'/hold uses 'charge'
-// specifically, since a held click-and-hold (and Tickle, which overrides
-// charge's OWN display without changing mfMode) both actually render
-// via the 'charge' wrist anchor.
-const MOUSE_FLICK_INTERACTION_REF_IMAGE = { click: 'tickle', hold: 'tickle', cut: 'sciss', drag: 'drag' };
-const MOUSE_FLICK_INTERACTION_VARIANT   = { click: 'base',   hold: 'charge', cut: 'sciss', drag: 'base' };
-const MOUSE_FLICK_INTERACTION_POINT_KEY = { click: 'default', hold: 'default', cut: 'cut', drag: 'drag' };
+// 'drag' and 'default'/click/'attract' share 'base' (Drag/Click/Attract
+// all already render (or, for Attract, would render) pinned to the
+// 'base' wrist anchor, same as render()'s own mouseFlickVariantKeyForMode
+// mapping); 'default'/hold uses 'charge' specifically, since a held
+// click-and-hold (and Tickle, which overrides charge's OWN display
+// without changing mfMode) both actually render via the 'charge' wrist
+// anchor. Corrected 2026-09-14 -- click/hold/attract's own REF_IMAGE
+// changed from 'tickle' to 'click' (the category actually displayed for
+// a plain click, and always loaded, unlike tickle which is conditional
+// per direction): the 'tickle' data this used to borrow purely for
+// dimension-sourcing has since been repurposed entirely (see
+// MOUSE_FLICK_VISIBLE_BOUNDS/MOUSE_FLICK_POINTING_TOP's own corrections)
+// and no longer represents anything about the click/hold point.
+// 'attract' (Rope Attraction, right-click-and-hold) added the SAME day,
+// per explicit spec ("Use Flick Frame 01 for: ...Right-Click/Clickhold
+// (Attract)'s interaction measuring point") -- registered here so
+// `mouseFlickInteractionPos(x, y, 'attract')` resolves correctly, but
+// note Rope Attraction's own arm code (onPointerDown, right-click
+// branch) does not yet READ this purpose anywhere -- unlike
+// click/hold/cut/drag, attraction currently has no proximity/distance
+// gate at all to plug it into. Added as available infrastructure per
+// the explicit instruction, not because an existing gate needed it.
+const MOUSE_FLICK_INTERACTION_REF_IMAGE = { click: 'click', hold: 'click', cut: 'sciss', drag: 'drag', attract: 'click' };
+const MOUSE_FLICK_INTERACTION_VARIANT   = { click: 'base',  hold: 'charge', cut: 'sciss', drag: 'base', attract: 'base' };
+const MOUSE_FLICK_INTERACTION_POINT_KEY = { click: 'default', hold: 'default', cut: 'cut', drag: 'drag', attract: 'default' };
 // World-space (canvas coordinate) position of purpose's own annotated
 // interaction point, transformed through FLICK MOUSE's CURRENT live
 // entity transform (mfEntityX/Y, mfEntityAngleDeg, mfDirectionKey) --
@@ -4907,9 +4973,11 @@ function mouseFlickInteractionPos(realX, realY, purpose){
 // (px,py) would render at RIGHT NOW -- same transform as
 // mouseFlickInteractionPointWorld() above, generalized to any point
 // (not just the frame-1 gating point) and always keyed off drag's own
-// reference image + 'base' wrist-anchor bounds, since that's the only
-// category mouseFlickDragAlignmentOffset() below ever needs. Returns
-// null if drag's own frame 1 isn't loaded yet.
+// reference image + 'base' wrist-anchor bounds. Returns null if drag's
+// own frame 1 isn't loaded yet (used only for its naturalWidth/Height,
+// same for every frame in the sequence -- this function works for a
+// point from ANY frame's own annotation, frame 1 or 48, the caller
+// decides which).
 function mouseFlickDragPointWorld(dirKey, pt){
   const framesForDir = mouseFlickFramesByDirection[dirKey];
   const img = framesForDir && framesForDir.drag && framesForDir.drag[0];
@@ -4927,32 +4995,27 @@ function mouseFlickDragPointWorld(dirKey, pt){
   };
 }
 // INVERSE of mouseFlickDragPointWorld() above -- given a desired world
-// position for the annotated 'drag' point (frame 1's own green
-// interaction point), solves for what mfEntityX/Y (the sprite's own
-// wrist-anchor origin) would need to be so that point actually lands
-// there once rendered. Corrected 2026-09-14, per explicit clarification:
-// "When i said anchor the cursor animation to the drag point. I meant
-// the cursor image's Interaction Points that I had provided previously.
-// For Drag, it would be the green interaction point" -- the sprite's own
-// WRIST (what mfEntityX/Y directly represents) is a DIFFERENT point on
-// the artwork than the annotated drag/green point, so pinning the wrist
-// itself to the drag anchor (the previous version) anchored the WRONG
-// spot. Solving `origin = anchorWorld - R*localOffset` (world = origin +
-// R*localOffset, rearranged) is what actually pins the RIGHT point.
-// Deliberately reuses ONLY frame 1's own annotated point (MOUSE_FLICK_
-// INTERACTION_POINTS.drag), never frame 48's -- render()'s own PRE-
-// EXISTING mouseFlickDragAlignmentOffset() already keeps frame 48's
-// point visually converged onto frame 1's throughout the whole
-// sequence (that's its literal, already-shipped purpose), so anchoring
-// against frame 1 here is sufficient to keep EVERY frame's own point
-// pinned at the anchor, not just frame 1's -- no new offset-tracking
-// logic needed on top of what already exists. Returns null (caller
-// falls back to the old wrist-pin behavior) whenever the annotated
-// point or its reference frame isn't available yet, same defensive
-// convention every other FLICK MOUSE point-transform function here uses.
+// position for the annotated drag-anchor point, solves for what
+// mfEntityX/Y (the sprite's own wrist-anchor origin) would need to be
+// so that point actually lands there once rendered. Originally anchored
+// against frame 1's own point (2026-09-14, 1st pass -- "the cursor
+// image's Interaction Points... For Drag, it would be the green
+// interaction point"); corrected the SAME day (2nd pass) to frame 48's
+// point instead, per explicit spec: "Use Drag Frame 48 for: Click Hold
+// (Drag)'s actual dragging anchor point" (frame 1 is now used ONLY for
+// the arm-time distance gate, not live anchoring -- see
+// MOUSE_FLICK_INTERACTION_POINTS.drag's own comment). Solving
+// `origin = anchorWorld - R*localOffset` (world = origin +
+// R*localOffset, rearranged) is what actually pins the RIGHT point --
+// the sprite's own WRIST (what mfEntityX/Y directly represents) is a
+// DIFFERENT point on the artwork than the annotated point. Returns null
+// (caller falls back to the old wrist-pin behavior) whenever the
+// annotated point or its reference frame isn't available yet, same
+// defensive convention every other FLICK MOUSE point-transform function
+// here uses.
 function mouseFlickDragEntityOriginForAnchor(anchorWorld){
   const dirKey = mfDirectionKey;
-  const pt = MOUSE_FLICK_INTERACTION_POINTS.drag[dirKey];
+  const pt = MOUSE_FLICK_DRAG_END_POINTS[dirKey];
   if (!pt) return null;
   const framesForDir = mouseFlickFramesByDirection[dirKey];
   const img = framesForDir && framesForDir.drag && framesForDir.drag[0];
@@ -4968,37 +5031,19 @@ function mouseFlickDragEntityOriginForAnchor(anchorWorld){
   const rotatedLocalY = localX * sin + localY * cos;
   return { x: anchorWorld.x - rotatedLocalX, y: anchorWorld.y - rotatedLocalY };
 }
-// Drag Rope hand animation alignment offset (2026-09-12, per explicit
-// spec): "as the Drag animation sequence runs, the position of the
-// actual frames itself will also be displaced. At the end of the
-// sequence, the point of frame 48 will align with the point of frame
-// 01." Without correction, frame 48's own annotated point naturally
-// renders at a DIFFERENT world position than frame 1's own (the art
-// itself moves across the sequence) -- this computes the WORLD-SPACE
-// difference between the two, evaluated via the CURRENT live entity
-// transform (so it stays correct regardless of the entity's current
-// position/rotation), and returns a per-frame corrective offset that
-// grows from {0,0} at t=0 (frame 1, no correction -- matches ordinary
-// rendering exactly) to exactly CANCEL that difference at t=1 (frame
-// 48), linearly interpolated in between. Applied as an ADDITIONAL
-// world-space translate on top of mfEntityX/Y specifically while
-// rendering a drag/dragRelease frame -- see render()'s own draw call
-// and mfDragSequenceActive. Returns {dx:0,dy:0} (no correction) if
-// either endpoint's own world position can't be computed yet (a frame
-// not loaded), so a missing frame degrades gracefully instead of
-// throwing or drawing at a wildly wrong offset.
-function mouseFlickDragAlignmentOffset(t){
-  const dirKey = mfDirectionKey;
-  const p1 = MOUSE_FLICK_INTERACTION_POINTS.drag[dirKey];
-  const p48 = MOUSE_FLICK_DRAG_END_POINTS[dirKey];
-  if (!p1 || !p48) return { dx: 0, dy: 0 };
-  const w1 = mouseFlickDragPointWorld(dirKey, p1);
-  const w48 = mouseFlickDragPointWorld(dirKey, p48);
-  if (!w1 || !w48) return { dx: 0, dy: 0 };
-  const driftX = w48.x - w1.x, driftY = w48.y - w1.y;
-  const tc = Math.max(0, Math.min(1, t));
-  return { dx: -driftX * tc, dy: -driftY * tc };
-}
+// Drag Rope hand animation alignment offset (2026-09-12) -- REMOVED
+// 2026-09-14 as a direct consequence of switching the live drag anchor
+// to frame 48's own point (see mouseFlickDragEntityOriginForAnchor()'s
+// own comment). This function's ENTIRE purpose was to compensate for
+// anchoring against frame 1 while frame 48's point drifted away from it
+// over the sequence ("the point of frame 48 will align with the point
+// of frame 01" by the end) -- with frame 48 now the anchor for the
+// WHOLE sequence (not just its final frame), there's no drift left for
+// this to correct; re-applying it now would actively displace the
+// sprite AWAY from the point mfEntityX/Y was just solved to hit. Its
+// former call site in render() (gated on mfDragSequenceActive, also
+// removed) is gone too -- a drag/dragRelease frame now draws with zero
+// extra offset, same as every other mode always has.
 
 // Starts a fresh click/sciss/snap play (forward, or forward+reverse for
 // click) -- an in-progress sequence still can't be INTERRUPTED, but per
@@ -8284,7 +8329,11 @@ function onPointerDown(e){
       // active/loaded, same defensive convention every other point in
       // this feature already follows.
       {
-        const mfDragPtNow = mouseFlickActive() ? MOUSE_FLICK_INTERACTION_POINTS.drag[mfDirectionKey] : null;
+        // Reads MOUSE_FLICK_DRAG_END_POINTS (frame 48), matching the
+        // LIVE anchor point everywhere else in this feature now targets
+        // -- see mouseFlickDragEntityOriginForAnchor()'s own 2026-09-14
+        // (2nd pass) correction.
+        const mfDragPtNow = mouseFlickActive() ? MOUSE_FLICK_DRAG_END_POINTS[mfDirectionKey] : null;
         const mfStartWorld = mfDragPtNow ? mouseFlickDragPointWorld(mfDirectionKey, mfDragPtNow) : null;
         downInfo.dragSpritePickupStartX = mfStartWorld ? mfStartWorld.x : mfX;
         downInfo.dragSpritePickupStartY = mfStartWorld ? mfStartWorld.y : mfY;
@@ -9296,6 +9345,18 @@ function update(rawDt){
   mainRope.overstretchDepth = 0;
   mainRope.overstretchDragIndex = 0;
   mainRope.overstretchPx = 0;
+  // Deformable Endcap's own stretch-on-drag signal (2026-09-14) -- reset
+  // every frame for the same reason as the Overstretch fields just above
+  // (a stale value must never leak into a frame where dragging has
+  // already ended). Kept deliberately separate from mainRope.overstretchPx:
+  // that field only ever becomes nonzero when Rope Overstretch's own
+  // tolerance is enabled (dragPoint is hard-clamped to maxDragDist
+  // otherwise, so actualDist-maxDragDist is always ~0) -- this feature
+  // needs a stretch cue regardless of whether that separate subsystem is
+  // on, so it's measured from the RAW pre-clamp pull instead (see
+  // endcapPullPx's own capture below).
+  mainRope.endcapPullPx = 0;
+  mainRope.endcapStretchMult = 1;
   if (downInfo && downInfo.mode === 'rope' && downInfo.dragging){
     dragPinIndex = downInfo.dragIndex;
     const anchor = mainRope.points[0];
@@ -9350,6 +9411,13 @@ function update(rawDt){
       // movement, not just a small step, for the whole pickup window.
       dragPoint.oldx = dragPoint.x;
       dragPoint.oldy = dragPoint.y;
+      // Catch-up origin (2026-09-14, 5th pass -- see the catch-up ease
+      // in the else branch below) -- recaptured every frame while still
+      // frozen, so whichever frame is LAST before pickup completes
+      // leaves this holding the correct "where the rope actually was"
+      // reference for that ease to start from.
+      downInfo.dragCatchupOriginX = dragPoint.x;
+      downInfo.dragCatchupOriginY = dragPoint.y;
     } else {
       // Corrected 2026-09-14 -- REGRESSION FIX (superseded in shape, not
       // in spirit, by the Drag Leash below). This used to read
@@ -9418,8 +9486,39 @@ function update(rawDt){
       let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
       const ddist = Math.hypot(dx, dy) || 1e-6;
       if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }
-      dragPoint.x = anchor.x + dx;
-      dragPoint.y = anchor.y + dy;
+      const leashTargetX = anchor.x + dx, leashTargetY = anchor.y + dy;
+      // Catch-up ease -- 5th correction on this feature (2026-09-14), per
+      // direct report: "once the [pickup] animation finishes, both the
+      // animation frame and the dragpoint suddenly shift backwards by
+      // the length of the image." Root cause: the instant pickupEasedT
+      // reached 1, this used to jump `dragPoint` STRAIGHT to the Leash's
+      // own output in one frame -- fine if the cursor barely moved during
+      // the pickup freeze, but the Leash's own reference was the FROZEN
+      // dragPoint the whole time, so any real cursor movement during that
+      // ~200ms window (very normal for an actively-dragging user) stayed
+      // completely "banked" until pickup ended, then got released all at
+      // once (still bounded by the Leash radius from the CURRENT cursor,
+      // but that itself can be a large single-frame correction relative
+      // to where the point had been sitting). Eased instead, the SAME
+      // smoothstep shape as the pickup ease itself, from
+      // `downInfo.dragCatchupOriginX/Y` (captured every frame while
+      // frozen, so it holds the exact pre-catch-up position) toward this
+      // frame's own freshly-recomputed Leash target -- continuous at the
+      // handoff (catchupT=0 reproduces the origin exactly) and converges
+      // to the Leash's own unmodified value once catchupT reaches 1,
+      // after which this block behaves byte-for-byte like before this
+      // correction (a stale/never-set origin -- dragging armed with
+      // dragPickupDuration at 0 -- degrades to catchupMs<=0, i.e.
+      // catchupT=1 immediately, the same as the old instant-jump behavior
+      // by design in that edge case).
+      const catchupMs = cfg.dragPickupDuration;
+      const catchupElapsedMs = pickupElapsedMs - pickupMs;
+      const catchupT = catchupMs > 0 ? Math.max(0, Math.min(1, catchupElapsedMs / catchupMs)) : 1;
+      const catchupEasedT = catchupT * catchupT * (3 - 2 * catchupT);
+      const catchupOriginX = downInfo.dragCatchupOriginX !== undefined ? downInfo.dragCatchupOriginX : leashTargetX;
+      const catchupOriginY = downInfo.dragCatchupOriginY !== undefined ? downInfo.dragCatchupOriginY : leashTargetY;
+      dragPoint.x = catchupOriginX + (leashTargetX - catchupOriginX) * catchupEasedT;
+      dragPoint.y = catchupOriginY + (leashTargetY - catchupOriginY) * catchupEasedT;
       dragPoint.oldx = dragPoint.x;
       dragPoint.oldy = dragPoint.y;
     }
@@ -9919,11 +10018,25 @@ function update(rawDt){
       // (hardLimit-clamped) cursor via `dragCursorClamped`, same as
       // before this correction -- no easing there either, same
       // "must SNAP, never lerp" rule the rest of this feature follows.
+      // Corrected 2026-09-14 (5th pass) -- this used to lerp toward the
+      // FROZEN `mfDragAnchor` during pickup, then SWITCH to the LIVE
+      // `dragCursorClamped` the instant pickup completed -- a real
+      // discontinuity whenever those 2 values differed (i.e. whenever
+      // the cursor moved during the pickup window at all), matching the
+      // reported "once the [pickup] animation finishes... shift
+      // backwards by the length of the image." Replaced with a lerp
+      // toward the SAME live `dragCursorClamped` throughout -- since it
+      // updates every frame with the actual cursor, and the cursor is
+      // normally very close to the drag point right as a hold arms, this
+      // still visually reads as "moving toward the drag point" for a
+      // normal drag start, while making the pickup-to-active handoff
+      // mathematically seamless (the formula literally doesn't change at
+      // mfPickupT===1, it just naturally reaches dragCursorClamped there).
       const mfPickupT = mainRope.dragPickupEasedT;
-      const mfDragTargetWorld = (mfPickupT < 1)
+      const mfDragTargetWorld = mfPickupT < 1
         ? {
-            x: downInfo.dragSpritePickupStartX + (mfDragAnchor.x - downInfo.dragSpritePickupStartX) * mfPickupT,
-            y: downInfo.dragSpritePickupStartY + (mfDragAnchor.y - downInfo.dragSpritePickupStartY) * mfPickupT,
+            x: downInfo.dragSpritePickupStartX + (mainRope.dragCursorClamped.x - downInfo.dragSpritePickupStartX) * mfPickupT,
+            y: downInfo.dragSpritePickupStartY + (mainRope.dragCursorClamped.y - downInfo.dragSpritePickupStartY) * mfPickupT,
           }
         : mainRope.dragCursorClamped;
       const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mfDragTargetWorld);
@@ -10590,6 +10703,177 @@ const { bottoms: ENDCAP_BOTTOM_Y, tipWidths: ENDCAP_TIP_WIDTH } = (function(){
   document.body.removeChild(svg);
   return { bottoms, tipWidths };
 })();
+
+/* ---------------------------------------------------------------------
+   Deformable Endcap (2026-09-14) -- an opt-in ALTERNATIVE to
+   drawEndcap()'s rigid single-transform stamp, per explicit request:
+   "recreate that exact shape, but make it deformable... act rope like
+   instead of like a cap... it should ideally end up looking exactly the
+   same as it does now in a static position." Scoped deliberately narrow
+   -- form1-01 only (the one shape actually authored/discussed for this),
+   mainRope only (never fallen pieces), gated behind its own checkbox
+   (`cfg.endcapDeformableEnabled`, default false) so drawEndcap()'s
+   existing rigid rendering stays the untouched default for everything
+   else, per direct instruction ("keep our current viz as is").
+
+   Technique: instead of one rigid rotate/scale of the whole Path2D,
+   every anchor point AND every cubic-bezier control-point handle in the
+   shape's own path data is treated as its own "skinned" vertex, tagged
+   once at load time with (t, lx) -- t = normalized position along the
+   shape's local long axis (0 at the neck/rope-attachment edge, 1 at the
+   shape's own far/pointed end), lx = sideways offset from the shape's
+   own centerline. At render time each vertex is placed by walking `t *
+   worldLength` world px PAST the rope's own last physics point, along a
+   short curvature-extrapolated "spine" (see endcapSpineSample() below)
+   instead of a single straight direction -- so the shape genuinely
+   bends when the rope's own last 1-2 segments are currently angled
+   (e.g. pressed against the floor), and genuinely stretches (worldLength
+   scaled up) when the tip is being actively dragged taut.
+
+   Verified algebraically (not just live) that this reduces to BYTE-
+   IDENTICAL output vs. drawEndcap()'s own rigid transform whenever the
+   spine is straight (zero curvature) and stretchMult=1 -- both express
+   the exact same point as `origin + s*dir + lx*xScale*normal`, where
+   `origin = tip - dir*ENDCAP_SEAM_OVERLAP_PX` (drawEndcap()'s own
+   constant, replicated here) -- so a hanging-straight rope looks
+   pixel-identical whichever renderer draws it, per the "look exactly
+   the same in a static position" requirement.
+--------------------------------------------------------------------- */
+// Minimal SVG path-data parser -- this file has no general one. Handles
+// exactly the commands Illustrator's own path export actually uses here
+// (M/L/H/V/C/Z, absolute or relative), including the standard SVG-spec
+// rule that a bare run of numbers with no new command letter continues
+// the PREVIOUS command (this is what lets Form 1-01's own `d` chain 5
+// cubic-bezier segments after a single leading 'c'). Returns an ordered
+// list of {type:'move'|'line'|'cubic'|'close', ...points}.
+function parseSvgPathD(d){
+  const tokens = d.match(/[MLHVCZmlhvcz]|-?\d*\.?\d+(?:e-?\d+)?/gi) || [];
+  const argCounts = { M:2, L:2, H:1, V:1, C:6, Z:0 };
+  let i = 0, cur = { x:0, y:0 }, start = { x:0, y:0 }, cmd = null;
+  const segments = [];
+  function nextNum(){ return parseFloat(tokens[i++]); }
+  while (i < tokens.length){
+    if (/^[MLHVCZ]$/i.test(tokens[i])){ cmd = tokens[i]; i++; }
+    const upper = cmd.toUpperCase();
+    const rel = cmd !== upper;
+    if (upper === 'Z'){ cur = { x: start.x, y: start.y }; segments.push({ type:'close' }); continue; }
+    const n = argCounts[upper];
+    const args = [];
+    for (let k = 0; k < n; k++) args.push(nextNum());
+    if (upper === 'H'){
+      cur = { x: rel ? cur.x + args[0] : args[0], y: cur.y };
+      segments.push({ type:'line', to:{ x: cur.x, y: cur.y } });
+    } else if (upper === 'V'){
+      cur = { x: cur.x, y: rel ? cur.y + args[0] : args[0] };
+      segments.push({ type:'line', to:{ x: cur.x, y: cur.y } });
+    } else if (upper === 'L' || upper === 'M'){
+      cur = { x: rel ? cur.x + args[0] : args[0], y: rel ? cur.y + args[1] : args[1] };
+      if (upper === 'M'){ start = { x: cur.x, y: cur.y }; segments.push({ type:'move', to:{ x: cur.x, y: cur.y } }); cmd = rel ? 'l' : 'L'; }
+      else segments.push({ type:'line', to:{ x: cur.x, y: cur.y } });
+    } else if (upper === 'C'){
+      const c1 = { x: rel ? cur.x + args[0] : args[0], y: rel ? cur.y + args[1] : args[1] };
+      const c2 = { x: rel ? cur.x + args[2] : args[2], y: rel ? cur.y + args[3] : args[3] };
+      const to = { x: rel ? cur.x + args[4] : args[4], y: rel ? cur.y + args[5] : args[5] };
+      segments.push({ type:'cubic', c1, c2, to });
+      cur = to;
+    }
+  }
+  return segments;
+}
+// Parsed once at load, tagged with each point's (t, lx) per the comment
+// above. Sanity-checked (not just trusted) -- a malformed parse would
+// otherwise silently draw an empty or garbled shape with no error.
+const FORM1_01_SKIN = (function(){
+  const segments = parseSvgPathD(ENDCAP_DESIGNS['form1-01'].d);
+  const hideRange = ENDCAP_BOTTOM_Y['form1-01'] - ENDCAP_ALIGNMENT.topY;
+  function tag(pt){ return { t: (pt.y - ENDCAP_ALIGNMENT.topY) / hideRange, lx: pt.x - ENDCAP_ALIGNMENT.topCenterX }; }
+  const tagged = segments.map(seg => {
+    if (seg.type === 'move') return { type:'move', to: tag(seg.to) };
+    if (seg.type === 'line') return { type:'line', to: tag(seg.to) };
+    if (seg.type === 'cubic') return { type:'cubic', c1: tag(seg.c1), c2: tag(seg.c2), to: tag(seg.to) };
+    return { type:'close' };
+  });
+  if (tagged.length < 5 || hideRange <= 0){
+    console.error('[endcap] FORM1_01_SKIN parse looks wrong -- deformable endcap will be skipped', tagged);
+    return null;
+  }
+  return { segments: tagged, hideRange };
+})();
+// Walks forward `s` world px from `origin` (already ENDCAP_SEAM_OVERLAP_PX
+// -shifted, see drawEndcapDeformable()) along a constant-curvature arc
+// extrapolated from the rope's own last 2 real segments -- the curvature
+// itself (`angleRate`, radians of turn per world px) is read directly
+// from the signed angle between those 2 segments, scaled by
+// `bendStrength`. Zero curvature (a straight rope) degenerates to a
+// perfectly straight walk in `originDir` -- see this block's own header
+// comment for why that reproduces drawEndcap()'s rigid placement exactly.
+// Small forward-Euler steps (not one big linear step) so the arc actually
+// curves smoothly across the endcap's own short span, rather than
+// kinking at a single pivot.
+function endcapSpineSample(points, origin, originDir, s, bendStrength){
+  let angleRate = 0;
+  if (points.length >= 3){
+    const a = points[points.length - 3], b = points[points.length - 2], c = points[points.length - 1];
+    const d1x = b.x - a.x, d1y = b.y - a.y, len1 = Math.hypot(d1x, d1y) || 1e-6;
+    const d2x = c.x - b.x, d2y = c.y - b.y, len2 = Math.hypot(d2x, d2y) || 1e-6;
+    const cross = (d1x / len1) * (d2y / len2) - (d1y / len1) * (d2x / len2);
+    const dot = (d1x / len1) * (d2x / len2) + (d1y / len1) * (d2y / len2);
+    angleRate = (Math.atan2(cross, dot) / len2) * bendStrength;
+  }
+  const STEPS = 10;
+  const step = s / STEPS;
+  let x = origin.x, y = origin.y, ang = Math.atan2(originDir.y, originDir.x);
+  for (let k = 0; k < STEPS; k++){
+    x += Math.cos(ang) * step;
+    y += Math.sin(ang) * step;
+    ang += angleRate * step;
+  }
+  return { x, y, tx: Math.cos(ang), ty: Math.sin(ang) };
+}
+// The deformable renderer itself. Signature deliberately mirrors
+// drawEndcap()'s own relevant params (points/thicknessPx/color/heightMult/
+// gradientInfo/heightThicknessPx) plus the 2 new tuning inputs
+// (bendStrength, stretchMult) -- see its own call site in render() for
+// exactly when this replaces the plain drawEndcap() call.
+function drawEndcapDeformable(points, thicknessPx, color, heightMult, gradientInfo, heightThicknessPx, bendStrength, stretchMult){
+  const skin = FORM1_01_SKIN;
+  if (!skin) return; // parse sanity-check failed at load -- see its own comment
+  const tip = points[points.length - 1];
+  const dir = tipDirection(points);
+  const ENDCAP_SEAM_OVERLAP_PX = 1.5; // matches drawEndcap()'s own constant exactly
+  const origin = { x: tip.x - dir.x * ENDCAP_SEAM_OVERLAP_PX, y: tip.y - dir.y * ENDCAP_SEAM_OVERLAP_PX };
+  if (heightThicknessPx === undefined) heightThicknessPx = thicknessPx;
+  const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
+  const worldLength = skin.hideRange * (heightThicknessPx / ENDCAP_ALIGNMENT.width) * heightMult;
+  function place(v){
+    const sample = endcapSpineSample(points, origin, dir, v.t * worldLength * stretchMult, bendStrength);
+    return { x: sample.x + v.lx * normalScale * sample.ty, y: sample.y - v.lx * normalScale * sample.tx };
+  }
+  ctx.save();
+  ctx.beginPath();
+  skin.segments.forEach(seg => {
+    if (seg.type === 'move'){ const p = place(seg.to); ctx.moveTo(p.x, p.y); }
+    else if (seg.type === 'line'){ const p = place(seg.to); ctx.lineTo(p.x, p.y); }
+    else if (seg.type === 'cubic'){ const c1 = place(seg.c1), c2 = place(seg.c2), p = place(seg.to); ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, p.x, p.y); }
+    else ctx.closePath();
+  });
+  if (gradientInfo && gradientInfo.stops && gradientInfo.stops.length >= 2){
+    // World-space gradient along the spine's own neck->far-end span --
+    // same reversed-stops convention as drawEndcap()'s own local-space
+    // gradient (see that function's comment), just expressed in world
+    // coordinates since this renderer never enters the shape's local
+    // (pre-rotation) coordinate frame the way drawEndcap() does.
+    const neckPt = place({ t: 0, lx: 0 }), farPt = place({ t: 1, lx: 0 });
+    const grad = ctx.createLinearGradient(neckPt.x, neckPt.y, farPt.x, farPt.y);
+    gradientInfo.stops.map(s => ({ pos: 1 - s.pos, color: s.color })).sort((a, b) => a.pos - b.pos)
+      .forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    ctx.fillStyle = grad;
+  } else {
+    ctx.fillStyle = color;
+  }
+  ctx.fill();
+  ctx.restore();
+}
 
 /* ---------------------------------------------------------------------
    End Emerge -- when enabled (End Emerge Enabled), a freshly-cut edge's
@@ -11357,13 +11641,6 @@ function render(){
   if (mouseFlickActive()){
       const mfFramesForDir = mouseFlickFramesByDirection[mfDirectionKey];
       let mfImg;
-      // Set true for either half of the Drag Rope hand animation (forward
-      // play below, or its dragRelease reverse) -- drives
-      // mouseFlickDragAlignmentOffset() at the actual draw call, per the
-      // frame-48-aligns-with-frame-1 spec (see that function's own
-      // comment). Left false for every other mode, which draws with zero
-      // extra offset, identical to before this feature existed.
-      let mfDragSequenceActive = false;
       if (mfMode === 'charge'){
         // Drag Rope hand animation (2026-09-11) overrides charge's own
         // display while actively dragging a rope point -- see update()'s
@@ -11384,7 +11661,6 @@ function render(){
         if (mfDragFrameNumber !== null){
           const mfDragArrIdx = mouseFlickDragFrameIndex(mfDirectionKey, mfDragFrameNumber);
           mfImg = mfFramesForDir.drag[mfDragArrIdx];
-          mfDragSequenceActive = true;
         } else {
           // Tickle overrides charge's own display while actively hold-to-
           // growing the rope, for whichever directions have tickle art
@@ -11419,7 +11695,6 @@ function render(){
         const mfDragReleaseFrameNumber = MOUSE_FLICK_TICKLE_FORWARD[Math.max(0, Math.min(47, Math.floor(mfDragCyclePos)))];
         const mfDragReleaseArrIdx = mouseFlickDragFrameIndex(mfDirectionKey, mfDragReleaseFrameNumber);
         mfImg = mfFramesForDir.drag ? mfFramesForDir.drag[mfDragReleaseArrIdx] : mfFramesForDir.click[0];
-        if (mfFramesForDir.drag) mfDragSequenceActive = true;
       } else if (mfMode !== 'idle' && mfFrozenFrames){
         const mfIdx = Math.min(Math.floor(mfFrameAccum), mfFrozenFrames.length - 1);
         mfImg = mfFrozenFrames[mfIdx];
@@ -11438,17 +11713,8 @@ function render(){
         // that exact wrist point at mfEntityX/mfEntityY (the entity's own
         // translated+rotated origin).
         const mfVb = mouseFlickVisibleBounds(mfDirectionKey, mouseFlickVariantKeyForMode(mfMode));
-        // Drag Rope hand animation alignment offset (2026-09-12) -- see
-        // mouseFlickDragAlignmentOffset()'s own comment. {0,0} for every
-        // mode except the Drag sequence itself, so this is a no-op
-        // everywhere else.
-        let mfAlignDx = 0, mfAlignDy = 0;
-        if (mfDragSequenceActive){
-          const mfAlign = mouseFlickDragAlignmentOffset(mfDragCyclePos / 47);
-          mfAlignDx = mfAlign.dx; mfAlignDy = mfAlign.dy;
-        }
         ctx.save();
-        ctx.translate(mfEntityX + mfAlignDx, mfEntityY + mfAlignDy);
+        ctx.translate(mfEntityX, mfEntityY);
         ctx.rotate(mfRotationRad);
         ctx.drawImage(mfImg, -mfDrawW * mfVb.centerX, -mfDrawH * mfVb.bottomY, mfDrawW, mfDrawH);
         ctx.restore();
