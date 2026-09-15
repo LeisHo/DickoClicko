@@ -2,12 +2,12 @@
   "valuesByDevice": {
     "desktop": {
       "backgroundColor": "#252546",
-      "circleSize": 20,
+      "circleSize": 30,
       "circleX": 50,
       "circleY": 18,
       "circleColor": "#111023",
       "circleBoundaryOffset": 1.5,
-      "anchorWeight": 1.7,
+      "anchorWeight": 0,
       "endcapDesign": "form1-01",
       "endcapHeight": 1.35,
       "ropeThickness": 6.4,
@@ -441,7 +441,7 @@
         "subgroups": [
           {
             "key": "ANCHOR PHYSICS",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "circleBoundaryOffset",
               "anchorWeight"
