@@ -1705,6 +1705,71 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   is unchanged from its last correction, just fed a different point
   table); live browser verification was attempted and blocked by the
   same recurring dev-server page-boot stall as several prior entries.
+- **Corrected 2026-09-14 (5th pass on this feature) -- switching the
+  live drag anchor to frame 48 (the entry directly above) fixed the
+  ARM-TIME jump but introduced a NEW one at the opposite end: "once the
+  [pickup] animation finishes, both the animation frame and the
+  dragpoint suddenly shift backwards by the length of the image."**
+  Root cause: `pickupEasedT` reaching 1 flipped 2 separate formulas
+  from one TARGET VALUE to a completely different one, in a single
+  frame, with no blending between them:
+  - The ROPE's own target switched from "frozen at rest" to "the Drag
+    Leash's own output, computed against the CURRENT raw cursor" --
+    but the Leash's own reference point (`dragPoint.x/y`) had been
+    FROZEN the whole ~200ms pickup window, so any real cursor movement
+    during that window (very normal mid-drag) stayed fully "banked"
+    and got released in ONE frame the instant pickup ended -- still
+    bounded by the Leash radius from the cursor's OWN current
+    position, but that alone can be a large single-frame correction
+    relative to wherever the point had been sitting the whole time.
+  - The SPRITE's own target switched from lerping toward the FROZEN
+    `mfDragAnchor` to the LIVE `mainRope.dragCursorClamped` -- these 2
+    values diverge by exactly however far the cursor moved during
+    pickup, so the switch itself was the jump.
+  Fixed with 2 coordinated changes, both reusing the SAME smoothstep
+  shape the original pickup ease already established:
+  1. **Rope catch-up ease** -- once `pickupEasedT` reaches 1, the rope
+     no longer snaps straight to the Leash's own output. It eases there
+     instead, over a 2nd phase (reusing `cfg.dragPickupDuration` again,
+     a deliberate choice, not a new slider), from
+     `downInfo.dragCatchupOriginX/Y` (recaptured every frame while
+     still frozen, so it always holds the exact pre-catch-up position)
+     toward the Leash's own per-frame-recomputed target -- continuous
+     at the handoff by construction (catchupT=0 reproduces the origin
+     exactly) and converges to the Leash's unmodified value once
+     catchupT reaches 1, after which this behaves byte-for-byte like
+     the pre-fix code.
+  2. **Sprite target unified** -- no longer 2 separate formulas
+     (lerp-toward-frozen-anchor, then a hard switch to live-cursor).
+     Now a SINGLE lerp toward the LIVE `mainRope.dragCursorClamped`
+     throughout the whole pickup window -- since that value updates
+     every frame with the real cursor, and the cursor is normally very
+     close to the drag point right as a hold arms, this still visually
+     reads as "moving toward the drag point" for a normal drag start
+     (satisfying the 4th-pass request unchanged), while making the
+     pickup-to-active handoff mathematically seamless: the formula
+     doesn't change at all at `pickupEasedT===1`, it just naturally
+     evaluates to `dragCursorClamped` there, identical to what the
+     post-pickup branch already used.
+  Verified via a Node-level simulation of the full sequence (a 200ms
+  freeze with the cursor moving 0.8px/ms the whole time, banking
+  ~153px of unrealized movement): the rope stayed EXACTLY at its
+  frozen position for the entire freeze, then moved smoothly and
+  continuously from the very first catch-up frame (100.00 -> 100.75,
+  not a snap) through to fully tracking the cursor ~200ms later, and
+  the sprite's own target evaluated to WITHIN under 1px of
+  `dragCursorClamped` right at the pickup boundary and EXACTLY equal to
+  it one frame later -- confirming zero discontinuity in either case,
+  even with substantial banked cursor movement. Not a live browser
+  test -- blocked again by the same recurring dev-server page-boot
+  stall as every other fix in this feature's long history. **If this
+  feature is ever revisited again, the catch-up ease's own origin
+  capture (`downInfo.dragCatchupOriginX/Y`, written every frame while
+  `pickupEasedT < 1`) must keep being refreshed every such frame, not
+  captured once at arm time** -- capturing it once would reintroduce a
+  DIFFERENT staleness bug if the rope's frozen position were ever made
+  to drift for any other reason in the future (it doesn't currently,
+  but nothing enforces that invariant structurally).
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as

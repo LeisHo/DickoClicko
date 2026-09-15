@@ -409,6 +409,22 @@ const DEV_GROUPS = [
         { value:'form10', label:'Form 10' },
       ] },
     { key:'endcapHeight',   label:'Endcap Height',     type:'slider', unit:'x', min:0.2, max:3, step:0.05, def:1.45 },
+    // Deformable Endcap (2026-09-14) -- an opt-in alternative renderer
+    // for Form 1-01 specifically (see drawEndcapDeformable()'s own
+    // header comment for the full mechanism): skins the shape per-vertex
+    // along a curvature-extrapolated spine instead of one rigid stamp,
+    // so it visibly bends when the rope's own last segments are angled
+    // (e.g. resting on the floor) and stretches when the tip is dragged
+    // taut. Default OFF -- per explicit instruction, the existing rigid
+    // drawEndcap() rendering stays the untouched default; this is purely
+    // additive. Only takes effect when Endcap Design is Form 1 - 01 (the
+    // one shape this renderer actually has skin data for) -- any other
+    // design silently falls back to the normal rigid rendering.
+    { key:'endcapDeformableEnabled', label:'Deformable Endcap Enabled (Form 1-01 Only)', type:'checkbox', def:false },
+    { key:'endcapBendStrength', label:'Deformable Endcap Bend Strength (x)', type:'slider', unit:'x', min:0, max:3, step:0.05, def:1 },
+    { key:'endcapStretchEnabled', label:'Deformable Endcap Stretch Enabled', type:'checkbox', def:true },
+    { key:'endcapStretchRange', label:'Deformable Endcap Stretch Range (%vmin)', type:'slider', unit:'%vmin', min:1, max:50, step:1, def:15 },
+    { key:'endcapStretchMaxMult', label:'Deformable Endcap Max Stretch (x)', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1.4 },
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:10 },
     // Segment Length (2026-09-12, per explicit request: "do i have a
     // slider that sets the amount of segments? If not, add that
@@ -9485,6 +9501,13 @@ function update(rawDt){
       }
       let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
       const ddist = Math.hypot(dx, dy) || 1e-6;
+      // Deformable Endcap stretch signal -- how far PAST maxDragDist the
+      // user is actively trying to pull the TIP specifically, measured
+      // from the RAW pre-clamp target (before the hardLimit clamp just
+      // below), so it reflects genuine pull intent even while the point
+      // itself is hard-capped. Only meaningful when dragging the tip
+      // (index length-1) -- see this block's own header comment.
+      if (dragPinIndex === mainRope.points.length - 1) mainRope.endcapPullPx = Math.max(0, ddist - maxDragDist);
       if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }
       const leashTargetX = anchor.x + dx, leashTargetY = anchor.y + dy;
       // Catch-up ease -- 5th correction on this feature (2026-09-14), per
@@ -9551,6 +9574,18 @@ function update(rawDt){
     mainRope.overstretchActive = cfg.overstretchEnabled && cfg.overstretchThinningEnabled && overstretchFrac > 0;
     mainRope.overstretchDepth = overstretchFrac * cfg.overstretchMaxThinDepth;
     mainRope.overstretchDragIndex = dragPinIndex;
+    // Deformable Endcap stretch multiplier -- converts endcapPullPx
+    // (captured above) into the actual elongation applied by
+    // drawEndcapDeformable() (see that function's own worldLength/
+    // stretchMult use). Gated on its own checkbox (endcapStretchEnabled)
+    // so bend and stretch can be tested/tuned independently, per this
+    // project's own established "each piece of a feature gets its own
+    // on/off" convention.
+    if (cfg.endcapStretchEnabled && dragPinIndex === mainRope.points.length - 1){
+      const range = vmin(cfg.endcapStretchRange);
+      const frac = range > 0 ? Math.min(1, mainRope.endcapPullPx / range) : 0;
+      mainRope.endcapStretchMult = 1 + frac * (cfg.endcapStretchMaxMult - 1);
+    }
   }
   // attractionEffSegLen (set just above, only while ropeAttractionActive)
   // temporarily shrinks the rest length THIS solve targets -- see that
@@ -11419,7 +11454,23 @@ function render(){
     // convention).
     const mainEndcapHeight = mainRope.bootEndcapScale !== null ? mainRope.bootEndcapScale : cfg.endcapHeight * detachScale;
     const mainGradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: mainRope.points[0] } : null;
-    if (showMainRope) drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo);
+    // Deformable Endcap (2026-09-14) -- opt-in alternative to the plain
+    // rigid drawEndcap() call, scoped to mainRope only (never fallen
+    // pieces, see this file's own drawEndcapDeformable() header comment)
+    // and to form1-01 only (the one shape actually parsed for it) and to
+    // fully-settled (mainTipFactor>=1, matching mainArcMult's own "fully
+    // emerged" gate just above) so it never has to reason about the
+    // separate End Emerge slide/scale animation. Every other case falls
+    // through to the exact same drawEndcap() call this file has always
+    // made here -- per direct instruction, the current rigid rendering
+    // stays the untouched default.
+    if (showMainRope){
+      if (cfg.endcapDeformableEnabled && cfg.endcapDesign === 'form1-01' && mainTipFactor >= 1){
+        drawEndcapDeformable(mainRope.points, liveThickness, cfg.ropeColor, mainEndcapHeight, mainGradientInfo, undefined, cfg.endcapBendStrength, mainRope.endcapStretchMult);
+      } else {
+        drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo);
+      }
+    }
     // piece.points[0] is the cut edge (where it severed from the rest of the
     // rope, per renderCutSweep's own convention) -- reversing the piece's
     // points array before reusing drawEndcap() puts that cut point at

@@ -13579,3 +13579,41 @@ these edits carry zero overlap with a concurrent session's own endcap
 SVG reorganization commits, which landed in this same working tree
 between this task's start and its own commit.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  11:29 PM - 11:38 PM EDT
+
+5th correction on the Drag Pickup feature: switching the live anchor
+to frame 48 fixed the arm-time jump but introduced a new one at
+pickup-completion.
+
+Fixed:
+- Reported: "once the [pickup] animation finishes, both the animation
+  frame and the dragpoint suddenly shift backwards by the length of
+  the image." Root cause: pickupEasedT reaching 1 flipped both the
+  rope's and the sprite's own target formulas to a different value in
+  a single frame, with no blending -- the rope's own Leash reference
+  point had been frozen the whole ~200ms pickup window, so any real
+  cursor movement during that window got released all at once the
+  instant pickup ended; the sprite's own target switched from the
+  frozen drag point to the live cursor position outright.
+- Fixed with 2 coordinated changes: the rope now eases (reusing the
+  same Drag Pickup Duration, a 2nd phase) from its frozen position
+  toward the Leash's own per-frame target instead of snapping to it;
+  the sprite's own pickup target is now a single, continuous lerp
+  toward the live cursor position throughout (instead of lerping
+  toward a frozen point and then hard-switching), so the handoff at
+  pickupEasedT===1 is mathematically seamless -- the formula doesn't
+  change there, it just naturally reaches the same value the
+  post-pickup code already used.
+
+Verification: syntax-checked, and verified via a Node-level simulation
+of the full sequence (a 200ms freeze with the cursor moving steadily
+the whole time, banking ~153px of unrealized movement) -- the rope
+stayed exactly frozen through the whole freeze, then moved smoothly
+from the very first catch-up frame with no snap, converging to full
+cursor-tracking ~200ms later; the sprite's own target landed within
+under 1px of the live cursor position right at the pickup boundary and
+exactly matched it one frame later. Live browser verification blocked
+by the same recurring dev-server page-boot stall as every other fix in
+this feature's history.
+
