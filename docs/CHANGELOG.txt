@@ -13432,3 +13432,43 @@ cursor ended up during pickup. Live browser verification blocked by
 the same recurring dev-server page-boot stall as the several prior
 entries in this feature's history.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  11:07 PM - 11:14 PM EDT
+
+Synced the Endcap Design dropdown to a reorganized set of endcap SVGs
+in data/Rope/, per direct request ("I updated the endcap svgs...
+update my dropdown list for the normal endcaps. Do not include the
+svgs with the word 'curves' in the title").
+
+Changed (data/Rope asset reorganization):
+- Archived the old End_Form1-01 through End_Form3-02.svg family (plus
+  End Alignment.svg and RopeEG.svg) into data/Rope/ARCHIVED/ -- per
+  this project's "nothing gets deleted by default" convention. Git
+  auto-detected these as renames (100% content match), not delete+add.
+- New live files: Form 1--01/02/03/04/15/20.svg (double-dash naming,
+  an Illustrator export quirk) and a new standalone End_Form10.svg.
+  Form 1--01.svg and Form 1--15.svg are byte-identical re-exports of
+  the old form1-01/form1-15 path data (confirmed by direct comparison
+  before syncing); Form 1--02/03/04.svg are genuinely redesigned
+  shapes; Form 1--20.svg and End_Form10.svg are brand new.
+- Also added, but deliberately NOT wired into the dropdown: the
+  "-Curves" outline versions (Form 1-Curves-01/02/03/04/15.svg,
+  End_Form10-Curves.svg) -- per explicit instruction, these are
+  reference material for a separate, discussed-but-not-yet-authorized
+  deformable-endcap effort, not selectable designs.
+
+Changed (index.html, ENDCAP_DESIGNS + dropdown):
+- Synced ENDCAP_DESIGNS' `d`/Path2D data for form1-01/02/03/04/15 to
+  the new files' content, added form1-20 and form10, and removed
+  form1-05/06/c plus the entire form2-*/form3-* family (2-07 through
+  2-c, 3-01/02) -- their source SVGs have no current on-disk
+  replacement. No other code references any of the removed keys
+  (grep-confirmed), and the live saved dev-panel-settings.json's own
+  endcapDesign value (form1-01) is unaffected by any of the removals.
+
+Verification: grepped the whole file for every removed key (form1-05/
+06/c, form2-*, form3-*) -- zero remaining references. Confirmed the
+live saved settings file's endcapDesign (form1-01) still resolves.
+Live dev-panel verification (dropdown options, each new/changed design
+rendering without a console error) via the local dev server.
+

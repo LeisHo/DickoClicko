@@ -2000,3 +2000,31 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   this cost real time chasing what looked like a position/rotation bug
   before the tick counter revealed the loop simply wasn't running at
   all during those specific test windows.
+- **Endcap SVGs were reorganized (2026-09-14): the OLD `End_Form1-01`
+  through `End_Form3-02.svg` family (plus `End Alignment.svg`/
+  `RopeEG.svg`) are archived to `data/Rope/ARCHIVED/`, and the live
+  "Form 1" variant set now ships as `Form 1--01/02/03/04/15/20.svg`
+  (double-dash naming, an Illustrator export quirk, not a typo) plus a
+  new standalone `End_Form10.svg`.** `ENDCAP_DESIGNS`/the Endcap
+  Design dropdown were synced to match exactly what's on disk per this
+  gotcha's own established convention (sync to the filename-derived
+  key, don't infer renumbering intent): `form1-01`/`form1-15` are
+  BYTE-IDENTICAL to their old `d` values (confirmed before syncing --
+  re-exported unchanged), `form1-02`/`03`/`04` are genuinely redesigned
+  shapes, `form1-20` is new (and happens to reuse `form6`'s exact path
+  data -- confirmed intentional-as-provided, not a bug, per this
+  project's own "match what's on disk, don't second-guess intent"
+  rule), and `form10` is a new standalone design. The entire old
+  Form 2/Form 3 variant family (`form2-07` through `form2-c`,
+  `form3-01`/`02`) has NO current replacement on disk and was removed
+  from the dropdown -- if it's ever re-added under new files, treat it
+  as a fresh addition, not a restoration (their old archived content
+  may not match whatever eventually replaces them). **`*-Curves.svg`
+  files** (`Form 1-Curves-01/02/03/04/15.svg`, `End_Form10-Curves.svg`)
+  are the OUTLINE/reference versions of these same shapes, tracked as
+  assets but deliberately EXCLUDED from `ENDCAP_DESIGNS`/the dropdown
+  -- they're reference material for a separate, not-yet-started
+  deformable-endcap effort (skinning Form 1-01 to bend/stretch instead
+  of rendering as one rigid `Path2D`), not selectable designs. Don't
+  add a `-curves` key to `ENDCAP_DESIGNS` without a fresh, explicit
+  request to do so.
