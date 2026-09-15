@@ -13344,3 +13344,49 @@ being only 2 points long on that fresh boot (the pre-existing
 maxDragDist clamp dominated at that length) combined with the tick
 freeze recurring before a longer rope could be grown.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  09:54 PM - 10:01 PM EDT
+
+3rd correction on the Drag Anchor Tolerance feature (inverted which
+side is "elastic") and a 2nd correction on the endcap-tip pull-back
+(the smooth version this time).
+
+Fixed:
+- Drag Anchor Tolerance had the tolerance on the wrong side for 2
+  rounds running: rounds 1 and 2 both let the rope's own drag point
+  move completely freely with the cursor while trying to make the
+  CURSOR ANIMATION sprite show "give" relative to it -- which could
+  never actually show real separation, since any rope movement
+  immediately pulled the sprite back toward it. Per direct correction
+  ("the cursor frame to be able to freely move within the radius
+  boundary. When it hits the boundary and further is when the rope
+  gets triggered to get dragged"), inverted which side is elastic: the
+  ROPE's own per-frame drag target now stays frozen wherever it
+  already sits as long as the raw cursor is within the tolerance
+  radius of it, and only starts moving (leashed, staying exactly at
+  the radius) once the cursor exceeds that -- while the sprite now
+  freely tracks the raw cursor directly (clamped only to the same
+  large-scale anchor-relative limit the rope already respects, so it
+  still can't fly arbitrarily far from the rope on a huge drag).
+  Rotation is untouched. Removed the now-dead "Cursor Animation Drag
+  Catch-Up Smoothing" slider from round 2, which no longer does
+  anything under this design.
+- The endcap-tip pull-back's own formula degenerated for realistic
+  drag distances: it pulled the target to within 1px of the segment's
+  upstream neighbor for ANY cursor position under roughly the endcap's
+  own extension length (measured live at ~68px in one configuration)
+  from it -- reported directly: "still snaps to the next segment's
+  head, instead of the endcap." Replaced the hard clamp with a smooth
+  blend (pull = extension * rdist / (rdist + extension)) that scales
+  continuously instead of collapsing, and is provably always less than
+  the raw distance (no separate invert-guard needed).
+
+Verification: both fixes syntax-checked and verified via Node-level
+simulation of their exact math (the leash: 3 small-wiggle cases
+confirmed zero movement, a 2-frame large-jump trace confirmed the rope
+settles at exactly the radius behind a continuously-moving cursor; the
+endcap blend: 5 distances from 10px to 680px showing smooth, non-
+degenerate scaling). Live browser verification was attempted again and
+blocked by the same recurring dev-server page-boot stall as the
+previous 2 entries.
+

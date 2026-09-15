@@ -1493,6 +1493,84 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   pre-existing clamp dominated at that length) combined with this
   session's now-repeated rAF-tick-freeze environment issue (tick
   counter confirmed 0 new ticks even immediately after a wake-click).
+- **Corrected 2026-09-14 (3rd pass on this feature) -- the "give" in
+  Drag Anchor Tolerance belongs to the ROPE POINT, not the Cursor
+  Animation sprite; rounds 1 and 2 both had this backwards.** Per
+  direct clarification: "I actually dont want it to continuously chase
+  the drag point... the frame interaction point cant ever reach the
+  radius boundary since it always moves to aligning the 2 points. What
+  i want is for the cursor frame to be able to freely move within the
+  radius boundary. When it hits the boundary and further is when the
+  rope gets triggered to get dragged." Both earlier designs (dead-zone-
+  then-teleport, then an eased chase -- see the 2 entries directly
+  below, both now superseded) put the tolerance logic on the SPRITE
+  while letting the ROPE's own drag point move completely freely with
+  the raw cursor every frame -- which is why the sprite could never
+  actually separate by the full radius: any real anchor movement
+  immediately pulled the sprite back toward it, so the gap never grew,
+  it only ever shrank. The 3rd design inverts which side is "elastic":
+  - **The ROPE's own per-frame drag target (Drag Anchor Leash,
+    `update()`'s drag-pin block)** now stays FROZEN at wherever it
+    already sits for as long as the raw cursor (`mouseX`/`mouseY`) is
+    within `dragLeashRadius` (`vmin(cfg.ropeThickness) * 0.5 *
+    cfg.cursorAnimationDragToleranceMult` -- same formula as before,
+    just now gating the rope instead of the sprite) of it, and only
+    starts moving once the cursor would exceed that radius -- pulled
+    along just enough to hold the gap at EXACTLY the radius (a taut
+    leash), never all the way to the cursor. This runs BEFORE the
+    endcap pull-back and the pre-existing anchor-relative `hardLimit`
+    clamp, both otherwise unchanged.
+  - **The Cursor Animation sprite** no longer mirrors the rope point at
+    all while dragging -- it now freely tracks the raw cursor directly
+    (no easing, same "must SNAP, never lerp" rule as always), clamped
+    to the SAME `hardLimit` the rope's own target uses (so it still
+    can't fly arbitrarily far from the rope on a huge drag, preserving
+    the original 2026-09-13 "don't visually separate" intent for THAT,
+    much larger scale). This clamped-but-otherwise-raw cursor position
+    is computed once in the drag-pin block and stashed on
+    `mainRope.dragCursorClamped` for the FLICK MOUSE block (which runs
+    later in the same `update()` call) to read.
+  - Rotation is UNCHANGED by any of this -- still points from the raw
+    cursor toward the rope's own actual drag point
+    (`mouseFlickDragAnchorWorld()`), which is why that function call
+    (renamed in intent but not in code -- `mfDragAnchor`) is still
+    resolved in the FLICK MOUSE block even though position no longer
+    reads its VALUE, only uses it as a "currently dragging" gate.
+  The now-unused `cursorAnimationDragCatchUpSmoothing` slider (round
+  2's own dedicated easing control) was removed outright rather than
+  left dead -- an inert slider that visibly does nothing is worse than
+  no slider. Verified via a Node-level simulation of the leash itself
+  (3 same-frame small-wiggle cases confirmed zero movement; a 2-frame
+  large-jump trace confirmed the rope lands and then stays at EXACTLY
+  the radius distance behind a continuously-moving cursor) -- not a
+  live browser test, blocked again by this session's own recurring
+  dev-server page-boot stall.
+- **Drag by the endcap's own visual TIP -- corrected 2026-09-14 (2nd
+  pass), the original pull-back formula degenerated for realistic drag
+  distances.** The 1st version (`pull = Math.min(extension, rdist -
+  1)`) pulled the target to within 1px of the upstream neighbor
+  (prevPt) for ANY cursor position under roughly `extension` px from
+  it -- and `extension` is easily tens of px (measured live at
+  ~68px for one real configuration), comparable to or larger than a
+  typical short drag distance. Reported directly: "still snaps to the
+  next segment's head, instead of the endcap." Replaced with a smooth
+  blend, `pull = extension * rdist / (rdist + extension)` -- provably
+  always `< rdist` (so a separate invert-guard is no longer needed at
+  all), scales continuously rather than collapsing onto prevPt for a
+  short drag (e.g. only 12.8% of the full extension pulled at `rdist =
+  extension/6.8`, vs. an near-total collapse before), and approaches
+  the full extension for a comfortably-long drag (~91% of it at `rdist
+  = 10x extension`) -- so the endcap's own rendered tip lands
+  close to the cursor for any realistic drag distance and degrades
+  gracefully, rather than snapping, for a very short one. This remains
+  a genuine geometric approximation, not an exact solve (the true
+  tangent direction at the physics point's own eventual position isn't
+  known in advance -- the formula uses the direction from prevPt to
+  the RAW target as a stand-in, same simplification as the 1st
+  version) -- if a future report says the endcap still visibly
+  overshoots or undershoots the cursor by a wide margin on a normal
+  (not especially short) drag, this approximation -- not the general
+  approach -- is the first place to revisit.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as
