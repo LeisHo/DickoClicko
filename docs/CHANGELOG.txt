@@ -13837,3 +13837,51 @@ dragging physic starts" by construction. Live browser verification
 blocked by the same recurring dev-server page-boot stall as several
 prior entries.
 
+--------------------------------------------------------------------------------
+2026-09-15  -  02:28 AM - 02:33 AM EDT
+
+7th pass on Drag Pickup: replaced the catch-up-ease phase with a
+one-time cursor realignment instead, per the user's own suggested
+mechanism. Also investigated (no code change) a follow-up "Leash only
+works sometimes" report.
+
+Fixed:
+- The 6th pass's catch-up ease was functionally correct (no
+  discontinuity) but still an unwanted scripted motion: "the both of
+  them automatically smoothly displace backwards the same amount. I do
+  not want that displacement... Any movement at that point is
+  determined by the true browser... perhaps what you can do is
+  immediately displace the true cursor to align with the frame
+  basepoint." Implemented exactly that: the moment pickup completes,
+  mouseX/mouseY (and FLICK MOUSE's own mfX/mfY mirror) are reset ONCE
+  to match the frozen drag point, discarding whatever real cursor
+  movement was banked during the ~630ms pickup freeze. Neither the
+  rope nor sprite has anything to "catch up" to afterward -- both
+  their normal (un-eased) assignments are already continuous on the
+  transition frame, and all subsequent motion is 100% attributable to
+  the browser's own cursor. The 6th pass's catch-up-ease code (both
+  rope and sprite phases, plus dragCatchupOriginX/Y) was removed
+  entirely, not just bypassed.
+
+Investigated, no change made:
+- "The drag point radius boundary issue... only works sometimes. at
+  other times, the cursor animation frame still seems anchored to the
+  drag point." No code bug found -- the live Drag Pickup Duration
+  (630ms) is long enough that a quick test drag can spend most of its
+  own duration still inside the pickup phase, where looking "anchored"
+  to the drag point IS the correct, intended behavior, not the Leash
+  malfunctioning. A direct simulation of the Leash mechanic in
+  isolation (a continuous drag at a 35px radius) showed a rock-steady
+  35px gap maintained every single frame -- no evidence of an
+  intermittent bug in that math. Suggested testing with a drag held
+  well past dragPickupDuration (or that slider temporarily lowered) to
+  isolate pickup from the Leash before concluding this needs a fix.
+
+Verification: syntax-checked, and the realignment fix verified via a
+Node-level simulation WITH banked cursor movement during pickup --
+confirmed zero displacement at the exact alignment frame, then the
+sprite immediately tracking the real current mouse position (not an
+eased approach) every frame after. Live browser verification blocked
+by the same recurring dev-server page-boot stall as several prior
+entries.
+

@@ -1870,6 +1870,70 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   has needed to be re-checked against an EARLIER, already-validated
   requirement (which point the sprite targets during which phase)
   rather than assumed independent of it.
+- **Drag Pickup's 7th pass (2026-09-15) replaces the catch-up-ease
+  phase (6th pass, see the entry above) with a one-time cursor
+  REALIGNMENT instead -- a different mechanism entirely, not a tuning
+  tweak of the same one.** Real, reported follow-up: the 6th pass's
+  own fix technically worked (no discontinuity) but was still an
+  unwanted SCRIPTED motion: "the both of them automatically smoothly
+  displace backwards the same amount. I do not want that displacement.
+  The moment they align, the[y] shouldnt be triggered to move. Any
+  movement at that point is determined by the true browser... perhaps
+  what you can do is immediately displace the true cursor to align
+  with the frame basepoint" (the user's own suggested mechanism, and
+  the one actually implemented). Instead of moving the ROPE/SPRITE to
+  reconcile with wherever the real cursor drifted during the pickup
+  freeze, this flips which side gets adjusted: the moment
+  `pickupEasedT` first reaches 1, `mouseX`/`mouseY` (and FLICK MOUSE's
+  own `mfX`/`mfY` mirror -- both normally identical, written by 2
+  separate `pointermove` listeners on the same real browser events) are
+  reset ONCE to exactly match the frozen drag point. Neither the rope
+  nor the sprite has anything to "catch up" to -- they're already
+  sitting exactly on the (newly-realigned) cursor -- so both the
+  Leash's own direct assignment (rope) and the free-tracking assignment
+  (sprite) are trivially continuous on the transition frame with NO
+  easing needed at all. Any real mouse movement banked during the
+  ~630ms(-live) pickup freeze is simply DISCARDED rather than
+  reconciled -- the very next genuine `pointermove` event naturally
+  starts measuring movement relative to this realigned position, so
+  100% of subsequent motion is attributable to the browser's own
+  cursor, matching the request exactly. Gated on a one-shot
+  `downInfo.dragCursorRealigned` flag -- **if this ever needs touching
+  again, that gate is load-bearing**: removing it would permanently pin
+  the tracked cursor to the drag point every frame post-pickup,
+  breaking normal tracking entirely, not just the transition. The 6th
+  pass's own catch-up-ease code (both the rope's own phase and the
+  sprite's mirrored phase, plus `downInfo.dragCatchupOriginX/Y`) is
+  REMOVED entirely, not just bypassed -- verify no future change
+  reintroduces it without re-reading why it was replaced (it fixed a
+  real discontinuity but only by adding motion nobody asked for).
+  Verified via a Node-level simulation of the full sequence WITH banked
+  cursor movement during pickup (mouse drifting the whole time from
+  x=100 to x=180 while the drag point stays visually frozen at x=100):
+  confirmed zero displacement at the exact alignment frame (sprite
+  reaches x=100.0 continuously, rope stays at x=100.0 unchanged), then
+  the sprite immediately tracks the REAL current mouse position exactly
+  (not an eased approach) every frame after, while the rope correctly
+  leashes at a constant radius behind it. Not a live browser test --
+  blocked by the same recurring dev-server page-boot stall as several
+  prior entries.
+- **A same-session follow-up report ("the drag point radius boundary
+  issue we were fixing earlier... only works someimes. at other times,
+  the cursor animation frame still seems anchored to the drag point")
+  was investigated but NOT changed -- no code bug was found, and the
+  live `dragPickupDuration` (630ms) is long enough that a quick test
+  drag can easily spend most of its own duration still inside the
+  PICKUP phase, where looking "anchored" to the drag point is the
+  CORRECT, intended behavior (phase 1 of the 6th/7th-pass design),
+  not the Leash malfunctioning.** Before assuming this needs another
+  code change, confirm via a drag held deliberately longer than
+  `cfg.dragPickupDuration` (or with that slider temporarily lowered to
+  near-0 to isolate pickup from the Leash entirely) whether the "still
+  anchored" observation persists well past the pickup window -- only
+  THEN does the previously-verified Leash math (confirmed correct via
+  simulation: a real dragging test at radius=35px showed a rock-steady
+  35px gap maintained between sprite and rope every single frame) need
+  re-investigating.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as
