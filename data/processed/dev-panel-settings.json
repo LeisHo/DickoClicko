@@ -12,7 +12,7 @@
       "endcapHeight": 1.2,
       "ropeThickness": 7.2,
       "segmentLength": 1.3,
-      "ropeLength": 19.06463359858951,
+      "ropeLength": 13.161971100619466,
       "ropeDefaultLength": 13,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -239,7 +239,8 @@
       "overstretchBounceMinAmplitude": 1.7,
       "dragPickupDuration": 630,
       "overstretchThinningSmoothness": 6,
-      "overstretchBounceMaxAmplitude": 200
+      "overstretchBounceMaxAmplitude": 200,
+      "cursorAnimationDragToleranceMult": 1
     },
     "mobile": {},
     "landscape": {}
@@ -395,6 +396,7 @@
         "key": "CURSOR ANIMATION",
         "collapsed": true,
         "settings": [
+          "cursorAnimationDragToleranceMult",
           "mouseFlickEnabledLiveMode",
           "mouseFlickTickleSpeed",
           "snapRepeatDuration",
@@ -523,7 +525,7 @@
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "overstretchThinningSmoothness",
               "overstretchBounceMaxAmplitude",
@@ -571,7 +573,7 @@
           },
           {
             "key": "ROPE GROWTH",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
@@ -725,10 +727,10 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 1242.4625244140625,
-      "top": 62.900001525878906,
-      "width": 293.5249938964844,
-      "height": 570.0125122070312,
+      "left": 1242.453125,
+      "top": 62.890625,
+      "width": 293.515625,
+      "height": 570,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
