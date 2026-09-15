@@ -242,10 +242,10 @@
       "overstretchBounceMaxAmplitude": 200,
       "cursorAnimationDragToleranceMult": 1,
       "endcapDeformableEnabled": true,
-      "endcapBendStrength": 0.6,
+      "endcapBendStrength": 0.1,
       "endcapStretchEnabled": true,
-      "endcapStretchRange": 50,
-      "endcapStretchMaxMult": 3,
+      "endcapStretchRange": 5,
+      "endcapStretchMaxMult": 1.25,
       "maxPunchSegments": 4
     },
     "mobile": {},
