@@ -13390,3 +13390,45 @@ degenerate scaling). Live browser verification was attempted again and
 blocked by the same recurring dev-server page-boot stall as the
 previous 2 entries.
 
+--------------------------------------------------------------------------------
+2026-09-14  -  10:12 PM - 10:19 PM EDT
+
+4th correction on Drag Anchor Tolerance/Pickup: fixed a real
+discontinuous jump at drag-start and re-sequenced pickup so the sprite
+visibly leads and the rope waits for it.
+
+Fixed:
+- Reported: "my cursor frame jumps backwards about the length of
+  itself, then the rope drag point moves towards the cursor frame...
+  the cursor frame should move towards the drag point to initiate the
+  drag. The rope should not be moved until the cursor frame has
+  reached the drag point." Two bugs:
+  1. The jump itself -- the sprite's position formula switched
+     instantly, the moment dragging armed, from "wrist tracks the raw
+     cursor" to "wrist positioned so the annotated point (a different
+     spot on the artwork) lands on the cursor" -- a real discontinuity
+     equal to the wrist-to-annotated-point offset.
+  2. Sequencing -- the rope was still following the Leash immediately
+     while the sprite was easing toward the grab point, backwards from
+     what was asked.
+  Fixed by giving the sprite its own pickup ease (reusing the existing
+  Drag Pickup Duration timer) from its own real pre-drag position
+  (captured at arm time, continuous by construction) toward the rope's
+  own point, while the rope point stays completely frozen -- not even
+  a small step -- for the whole pickup window. Once pickup completes,
+  both switch to their existing post-pickup behavior (rope follows the
+  Leash, sprite freely tracks the cursor) unchanged. Removed the now-
+  dead `dragPickupStartX/Y` fields (the rope's own old pickup-easing
+  start, no longer used since the rope doesn't ease during pickup at
+  all anymore) rather than leaving them as unused data.
+
+Verification: syntax-checked, and verified via a Node-level simulation
+of the full 8-frame sequence -- confirmed zero jump at t=0 (sprite
+target starts exactly at its own captured position), the rope frozen
+at the identical position through the entire pickup window, and (once
+combined with the Leash) a bounded, radius-capped catch-up at the
+pickup/active boundary rather than an instant snap to wherever the
+cursor ended up during pickup. Live browser verification blocked by
+the same recurring dev-server page-boot stall as the several prior
+entries in this feature's history.
+

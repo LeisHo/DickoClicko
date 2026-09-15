@@ -1571,6 +1571,58 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   overshoots or undershoots the cursor by a wide margin on a normal
   (not especially short) drag, this approximation -- not the general
   approach -- is the first place to revisit.
+- **Corrected 2026-09-14 (4th pass on this feature) -- Drag Pickup's
+  own "which side eases" question needed a 2nd inversion, separate from
+  the leash inversion directly above.** Real, reported bug: "my cursor
+  frame jumps backwards about the length of itself, then the rope drag
+  point moves towards the cursor frame. Thats incorrect. Firstly the
+  jump shouldnt happen at all. 2ndly, the cursor frame should move
+  towards the drag point to initiate the drag. The rope should not be
+  moved until the cursor frame has reached the drag point." Two
+  distinct bugs, fixed together:
+  1. **The jump** -- the instant a drag armed, the sprite's position
+     formula switched from "wrist tracks the raw cursor" (normal,
+     non-drag logic) to "wrist positioned so the ANNOTATED point (a
+     DIFFERENT spot on the artwork, offset from the wrist) lands on the
+     cursor" -- an instant discontinuity equal to that wrist-to-
+     annotated-point offset, roughly the sprite's own on-screen length,
+     matching the report exactly. Root cause: the 3rd-pass leash
+     redesign (directly above) made the sprite jump straight to
+     `mainRope.dragCursorClamped` the moment dragging armed, with no
+     transition from wherever it actually was a frame earlier.
+  2. **Sequencing** -- even fixing the jump alone would still have left
+     the ROPE moving immediately (following the cursor via the Leash)
+     while the sprite was still easing toward the grab point, which
+     is backwards from what was asked.
+  Fixed by giving the SPRITE its own pickup ease (reusing the SAME
+  `pickupEasedT`/`Drag Pickup Duration` timer the rope's OWN pickup
+  used to use) and INVERTING what happens on the rope's side during
+  that same window: instead of the rope easing from rest toward the
+  target (the pre-2026-09-14-4th-pass design), the rope point now stays
+  COMPLETELY FROZEN (dragPoint.x/y never reassigned at all -- not even
+  a small step) for as long as `mainRope.dragPickupEasedT < 1`, while
+  the sprite's own annotated point eases from
+  `downInfo.dragSpritePickupStartX/Y` (captured in onPointerDown, the
+  sprite's REAL world position at the exact instant dragging armed --
+  continuous by construction, since that's literally where the sprite
+  already was) toward the rope's own (frozen) point. Once
+  `pickupEasedT` reaches 1, both switch to their round-3 behavior
+  unchanged: rope follows the Leash, sprite freely tracks the raw
+  cursor via `dragCursorClamped`. Verified via a Node-level simulation
+  of the full sequence (8-frame trace: sprite interpolates continuously
+  from its own start position at t=0 with zero jump, rope confirmed at
+  the SAME frozen position through 4 consecutive frames during pickup,
+  then -- combined with the Leash from the entry above -- the rope's
+  post-pickup catch-up is itself bounded to the leash radius rather
+  than snapping instantly to wherever the cursor ended up during the
+  pickup window) -- not a live browser test, blocked again by the same
+  recurring dev-server page-boot stall as every other fix in this
+  feature's history. `downInfo.dragPickupStartX/Y` (the ROPE's own
+  pre-drag position, captured for the old design's own easing) was
+  removed outright from `onPointerDown` rather than left as dead data
+  -- only `dragPickupStartTime` (the shared timer) and the NEW
+  `dragSpritePickupStartX/Y` (the sprite's own start) are captured
+  there now.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as

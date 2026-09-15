@@ -8261,17 +8261,44 @@ function onPointerDown(e){
       const dragPt = mainRope.points[downInfo.dragIndex];
       downInfo.dragAngleRefX = dragPt.x;
       downInfo.dragAngleRefY = dragPt.y;
-      // Drag Pickup (2026-09-14, per explicit request: "I want it to
-      // look like a smooth and naturally picking up of a dangling rope
-      // without any jittering or jumping") -- captured ONCE here, at
-      // the grabbed point's own pre-drag resting position, so update()'s
-      // own drag-follow code can ease the point from HERE toward the
-      // live cursor-derived target over Drag Pickup Duration, instead of
-      // snapping it there on the very first drag frame. Reuses the same
-      // dragPt already captured just above for dragAngleRefX/Y.
-      downInfo.dragPickupStartX = dragPt.x;
-      downInfo.dragPickupStartY = dragPt.y;
+      // Drag Pickup timer (2026-09-14, per explicit request: "I want it
+      // to look like a smooth and naturally picking up of a dangling
+      // rope without any jittering or jumping"). Corrected the SAME day
+      // (4th pass, see update()'s own Drag Pickup comment) -- this used
+      // to also capture the ROPE point's own pre-drag position
+      // (`dragPickupStartX/Y`) so update() could ease THAT point toward
+      // the cursor; the rope point no longer eases at all during pickup
+      // (it stays frozen instead, per that correction), so only the
+      // timer itself is still needed here now -- the SPRITE's own
+      // pickup start is captured separately just below.
       downInfo.dragPickupStartTime = performance.now();
+      // Cursor Animation's own pickup start (2026-09-14, per direct
+      // report: "my cursor frame jumps backwards about the length of
+      // itself, then the rope drag point moves towards the cursor
+      // frame... the cursor frame should move towards the drag point to
+      // initiate the drag. The rope should not be moved until the
+      // cursor frame has reached the drag point"). Root cause of the
+      // jump: the position formula switched, on the very first drag
+      // frame, from "wrist tracks the cursor" to "wrist positioned so
+      // the ANNOTATED point -- a DIFFERENT spot on the artwork, offset
+      // from the wrist -- lands on the cursor," an instant discontinuity
+      // equal to that wrist-to-annotated-point offset (roughly the
+      // sprite's own on-screen length, matching the report exactly).
+      // Captured here, in the SAME annotated-point world-space the drag
+      // anchoring math already works in, so update()'s own pickup ease
+      // (see that block's own comment) can interpolate FROM the sprite's
+      // real current position TO the drag point with zero discontinuity
+      // at t=0 -- solving the inverse transform for this exact captured
+      // point reconstructs very close to today's actual mfEntityX/Y.
+      // Falls back to the raw cursor position when FLICK MOUSE isn't
+      // active/loaded, same defensive convention every other point in
+      // this feature already follows.
+      {
+        const mfDragPtNow = mouseFlickActive() ? MOUSE_FLICK_INTERACTION_POINTS.drag[mfDirectionKey] : null;
+        const mfStartWorld = mfDragPtNow ? mouseFlickDragPointWorld(mfDirectionKey, mfDragPtNow) : null;
+        downInfo.dragSpritePickupStartX = mfStartWorld ? mfStartWorld.x : mfX;
+        downInfo.dragSpritePickupStartY = mfStartWorld ? mfStartWorld.y : mfY;
+      }
       mfSuppressClickFromGrowth = true;
       mfCancelPendingClick();
       // Drag Rope hand animation (2026-09-11): reset the forward-play
@@ -9298,118 +9325,137 @@ function update(rawDt){
     // byte-for-byte identical to before this feature existed).
     const overstretchTol = cfg.overstretchEnabled ? vmin(cfg.overstretchTolerance) : 0;
     const hardLimit = maxDragDist + overstretchTol;
-    // Corrected 2026-09-14 -- REGRESSION FIX (superseded in shape, not
-    // in spirit, by the Drag Leash below). This used to read
-    // `mouseFlickInteractionPos(mouseX, mouseY, 'drag')` (FLICK MOUSE's
-    // own annotated 'drag' point, transformed through the sprite's
-    // CURRENT live position/rotation) as a literal PER-FRAME POSITION
-    // TARGET while dragging -- created a real closed feedback loop with
-    // the sprite's own "anchor to drag point" behavior (see
-    // docs/CHANGELOG.txt for the full account). The fix was to use the
-    // raw live cursor position directly (`mouseX`/`mouseY`, written only
-    // by a real `pointermove` listener) as the base target instead --
-    // still true below, just now filtered through the Leash first.
-    //
-    // Drag Anchor Leash -- 3rd correction on this feature (2026-09-14),
-    // per direct clarification: "I actually dont want it to continuously
-    // chase the drag point... What i want is for the cursor frame to be
-    // able to freely move within the radius boundary. When it hits the
-    // boundary and further is when the rope gets triggered to get
-    // dragged." Both earlier attempts put the "give" on the CURSOR
-    // ANIMATION sprite (easing/clamping IT toward an always-free-moving
-    // rope point) -- backwards from what was actually asked. The give
-    // now belongs to the ROPE POINT itself: it stays frozen exactly
-    // where it already is for as long as the raw cursor sits within
-    // `dragLeashRadius` of it, and only starts moving once the cursor
-    // would exceed that radius -- pulled along just enough to hold the
-    // gap at EXACTLY the radius (a taut leash), never all the way to the
-    // cursor. The sprite, in turn, no longer mirrors this point at all
-    // while dragging -- see the FLICK MOUSE block below, which now
-    // freely tracks the raw (hardLimit-clamped) cursor directly via
-    // `mainRope.dragCursorClamped`, computed further down -- so it's
-    // free to visibly separate from the (possibly-frozen) rope point by
-    // up to the leash radius, exactly as asked.
-    const dragLeashRadius = vmin(cfg.ropeThickness) * 0.5 * cfg.cursorAnimationDragToleranceMult;
-    const ldx = mouseX - dragPoint.x, ldy = mouseY - dragPoint.y;
-    const ldist = Math.hypot(ldx, ldy);
-    let dragTargetPos = (ldist <= dragLeashRadius || ldist <= 1e-6)
-      ? { x: dragPoint.x, y: dragPoint.y }
-      : { x: mouseX - (ldx / ldist) * dragLeashRadius, y: mouseY - (ldy / ldist) * dragLeashRadius };
-    // Drag by the endcap's own visual TIP -- smooth pull-back, corrected
-    // 2026-09-14 (2nd pass). The original version (`Math.min(extension,
-    // rdist - 1)`) pulled the target almost exactly onto the upstream
-    // neighbor (prevPt) for ANY cursor position within roughly
-    // `extension` px of it -- extension is easily tens of px, so this
-    // degenerated into "stuck near the neck" for a wide, easily-
-    // triggered range of realistic drag distances. Reported directly:
-    // "still snaps to the next segment's head, instead of the endcap."
-    // Replaced with a smooth blend, `pull = extension * rdist /
-    // (rdist + extension)` -- provably always < rdist (so it can never
-    // invert past prevPt, no separate clamp needed), vanishes smoothly
-    // as rdist -> 0 instead of collapsing onto prevPt, and approaches
-    // the full extension once the cursor is comfortably far away (e.g.
-    // ~92% of the full offset at rdist = 10x extension) -- the endcap's
-    // own rendered tip lands close to the cursor for any realistic drag
-    // and degrades gracefully, rather than snapping, for a very short
-    // one.
-    if (dragPinIndex === mainRope.points.length - 1){
-      const prevPt = mainRope.points[dragPinIndex - 1];
-      const rdx = dragTargetPos.x - prevPt.x, rdy = dragTargetPos.y - prevPt.y;
-      const rdist = Math.hypot(rdx, rdy);
-      if (rdist > 1e-6){
-        const extension = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
-        const pull = extension * rdist / (rdist + extension);
-        dragTargetPos = { x: dragTargetPos.x - (rdx / rdist) * pull, y: dragTargetPos.y - (rdy / rdist) * pull };
+    // Drag Pickup -- corrected 2026-09-14 (4th pass on this feature),
+    // per direct report: "my cursor frame jumps backwards about the
+    // length of itself, then the rope drag point moves towards the
+    // cursor frame. Thats incorrect... the cursor frame should move
+    // towards the drag point to initiate the drag. The rope should not
+    // be moved until the cursor frame has reached the drag point." This
+    // INVERTS which side eases during pickup: it used to be the ROPE
+    // POINT easing from its own rest position toward the (already-
+    // computed) cursor target, while the SPRITE just mirrored wherever
+    // that eased point currently was -- the reported "jump" was actually
+    // a SEPARATE bug in the sprite's own position formula (see
+    // onPointerDown's own dragSpritePickupStart capture for the full
+    // account), but fixing that alone would still have left the ROPE
+    // moving immediately (toward the cursor) instead of staying put
+    // until the sprite visually "arrives." Now: the SPRITE eases (via
+    // this SAME pickupEasedT) from its own real pre-drag position
+    // (`downInfo.dragSpritePickupStartX/Y`) toward the drag point --
+    // see the FLICK MOUSE block below -- and the ROPE POINT stays
+    // COMPLETELY UNTOUCHED (frozen, zero movement, not even eased) for
+    // as long as pickupEasedT < 1. Only once the pickup completes does
+    // the rope start responding at all, at which point the Drag Anchor
+    // Leash below governs it exactly as before.
+    const pickupMs = cfg.dragPickupDuration;
+    const pickupElapsedMs = performance.now() - downInfo.dragPickupStartTime;
+    const pickupT = pickupMs > 0 ? Math.max(0, Math.min(1, pickupElapsedMs / pickupMs)) : 1;
+    const pickupEasedT = pickupT * pickupT * (3 - 2 * pickupT);
+    mainRope.dragPickupEasedT = pickupEasedT;
+    if (pickupEasedT < 1){
+      // Frozen: don't touch dragPoint.x/y at all. dragPinIndex is still
+      // set below/above (unchanged), so integrateChain() already
+      // excludes this point from gravity/velocity integration and from
+      // both the distance and bend constraints -- genuinely zero
+      // movement, not just a small step, for the whole pickup window.
+      dragPoint.oldx = dragPoint.x;
+      dragPoint.oldy = dragPoint.y;
+    } else {
+      // Corrected 2026-09-14 -- REGRESSION FIX (superseded in shape, not
+      // in spirit, by the Drag Leash below). This used to read
+      // `mouseFlickInteractionPos(mouseX, mouseY, 'drag')` (FLICK MOUSE's
+      // own annotated 'drag' point, transformed through the sprite's
+      // CURRENT live position/rotation) as a literal PER-FRAME POSITION
+      // TARGET while dragging -- created a real closed feedback loop with
+      // the sprite's own "anchor to drag point" behavior (see
+      // docs/CHANGELOG.txt for the full account). The fix was to use the
+      // raw live cursor position directly (`mouseX`/`mouseY`, written only
+      // by a real `pointermove` listener) as the base target instead --
+      // still true below, just now filtered through the Leash first.
+      //
+      // Drag Anchor Leash -- 3rd correction on this feature (2026-09-14),
+      // per direct clarification: "I actually dont want it to continuously
+      // chase the drag point... What i want is for the cursor frame to be
+      // able to freely move within the radius boundary. When it hits the
+      // boundary and further is when the rope gets triggered to get
+      // dragged." Both earlier attempts put the "give" on the CURSOR
+      // ANIMATION sprite (easing/clamping IT toward an always-free-moving
+      // rope point) -- backwards from what was actually asked. The give
+      // now belongs to the ROPE POINT itself: it stays frozen exactly
+      // where it already is for as long as the raw cursor sits within
+      // `dragLeashRadius` of it, and only starts moving once the cursor
+      // would exceed that radius -- pulled along just enough to hold the
+      // gap at EXACTLY the radius (a taut leash), never all the way to the
+      // cursor. The sprite, in turn, no longer mirrors this point at all
+      // while dragging -- see the FLICK MOUSE block below, which now
+      // freely tracks the raw (hardLimit-clamped) cursor directly via
+      // `mainRope.dragCursorClamped`, computed further down -- so it's
+      // free to visibly separate from the (possibly-frozen) rope point by
+      // up to the leash radius, exactly as asked.
+      const dragLeashRadius = vmin(cfg.ropeThickness) * 0.5 * cfg.cursorAnimationDragToleranceMult;
+      const ldx = mouseX - dragPoint.x, ldy = mouseY - dragPoint.y;
+      const ldist = Math.hypot(ldx, ldy);
+      let dragTargetPos = (ldist <= dragLeashRadius || ldist <= 1e-6)
+        ? { x: dragPoint.x, y: dragPoint.y }
+        : { x: mouseX - (ldx / ldist) * dragLeashRadius, y: mouseY - (ldy / ldist) * dragLeashRadius };
+      // Drag by the endcap's own visual TIP -- smooth pull-back, corrected
+      // 2026-09-14 (2nd pass). The original version (`Math.min(extension,
+      // rdist - 1)`) pulled the target almost exactly onto the upstream
+      // neighbor (prevPt) for ANY cursor position within roughly
+      // `extension` px of it -- extension is easily tens of px, so this
+      // degenerated into "stuck near the neck" for a wide, easily-
+      // triggered range of realistic drag distances. Reported directly:
+      // "still snaps to the next segment's head, instead of the endcap."
+      // Replaced with a smooth blend, `pull = extension * rdist /
+      // (rdist + extension)` -- provably always < rdist (so it can never
+      // invert past prevPt, no separate clamp needed), vanishes smoothly
+      // as rdist -> 0 instead of collapsing onto prevPt, and approaches
+      // the full extension once the cursor is comfortably far away (e.g.
+      // ~92% of the full offset at rdist = 10x extension) -- the endcap's
+      // own rendered tip lands close to the cursor for any realistic drag
+      // and degrades gracefully, rather than snapping, for a very short
+      // one.
+      if (dragPinIndex === mainRope.points.length - 1){
+        const prevPt = mainRope.points[dragPinIndex - 1];
+        const rdx = dragTargetPos.x - prevPt.x, rdy = dragTargetPos.y - prevPt.y;
+        const rdist = Math.hypot(rdx, rdy);
+        if (rdist > 1e-6){
+          const extension = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
+          const pull = extension * rdist / (rdist + extension);
+          dragTargetPos = { x: dragTargetPos.x - (rdx / rdist) * pull, y: dragTargetPos.y - (rdy / rdist) * pull };
+        }
       }
+      let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
+      const ddist = Math.hypot(dx, dy) || 1e-6;
+      if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }
+      dragPoint.x = anchor.x + dx;
+      dragPoint.y = anchor.y + dy;
+      dragPoint.oldx = dragPoint.x;
+      dragPoint.oldy = dragPoint.y;
     }
-    let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;
-    const ddist = Math.hypot(dx, dy) || 1e-6;
-    if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }
     // Raw (hardLimit-clamped, but NOT leash- or endcap-offset-adjusted)
     // cursor position, stashed for the Cursor Animation sprite to track
-    // directly (see the FLICK MOUSE block below) -- computed from the
-    // SAME anchor-relative clamp as the rope's own target, just against
-    // the unmodified mouse position rather than the leashed/offset one.
+    // directly once its own pickup completes (see the FLICK MOUSE block
+    // below) -- computed from the SAME anchor-relative clamp as the
+    // rope's own target, just against the unmodified mouse position
+    // rather than the leashed/offset one. Computed unconditionally
+    // (regardless of pickup state) since it's cheap and the sprite
+    // needs it the instant pickup completes, not one frame later.
     {
       let cdx = mouseX - anchor.x, cdy = mouseY - anchor.y;
       const cdist = Math.hypot(cdx, cdy) || 1e-6;
       if (cdist > hardLimit){ cdx *= hardLimit / cdist; cdy *= hardLimit / cdist; }
       mainRope.dragCursorClamped = { x: anchor.x + cdx, y: anchor.y + cdy };
     }
-    // Drag Pickup (2026-09-14) -- eases the point from its own pre-drag
-    // resting position (downInfo.dragPickupStartX/Y, captured once at
-    // arm time) toward the just-clamped cursor-derived target above,
-    // over Drag Pickup Duration, using a smoothstep (3t²-2t³) curve for
-    // a natural ease-in/ease-out rather than a linear blend. At
-    // pickupT=0 the point hasn't moved from where it was grabbed; at
-    // pickupT=1 (and forever after, for the rest of this drag) it's
-    // exactly the clamped cursor target, identical to pre-pickup
-    // behavior. Per explicit request ("I want it to look like a smooth
-    // and naturally picking up of a dangling rope without any
-    // jittering or jumping") -- this is what actually fixes BOTH
-    // complaints at once: the cursor-animation sprite's own snap-to-
-    // anchor (below) reads this SAME eased position every frame, so it
-    // naturally eases in too with no separate sprite-side smoothing
-    // needed; and the REST of the rope only ever feels a small per-
-    // frame correction instead of one large instantaneous jolt, since
-    // the grabbed point itself never teleports.
-    const clampedTargetX = anchor.x + dx, clampedTargetY = anchor.y + dy;
-    const pickupMs = cfg.dragPickupDuration;
-    const pickupElapsedMs = performance.now() - downInfo.dragPickupStartTime;
-    const pickupT = pickupMs > 0 ? Math.max(0, Math.min(1, pickupElapsedMs / pickupMs)) : 1;
-    const pickupEasedT = pickupT * pickupT * (3 - 2 * pickupT);
-    dragPoint.x = downInfo.dragPickupStartX + (clampedTargetX - downInfo.dragPickupStartX) * pickupEasedT;
-    dragPoint.y = downInfo.dragPickupStartY + (clampedTargetY - downInfo.dragPickupStartY) * pickupEasedT;
-    dragPoint.oldx = dragPoint.x;
-    dragPoint.oldy = dragPoint.y;
     // How far past the REST limit (maxDragDist) the point ACTUALLY sits
     // right now, in real px (0 when within limit) -- drives both the
     // thinning depth below and, at release, the bounce's own initial
-    // amplitude. Deliberately measured from the point's own final
-    // (post-pickup-easing) position, not the raw clamped cursor target
-    // computed above -- during the pickup window those two differ, and
-    // overstretch should reflect what's actually being rendered/held,
-    // not where the point is still easing toward.
+    // amplitude. Deliberately measured from dragPoint's own actual
+    // current position (frozen during pickup, per the block above; the
+    // leash/endcap/hardLimit-adjusted target once pickup completes),
+    // never the raw cursor -- overstretch should reflect what's
+    // genuinely being held, correctly reading as 0 for the entire
+    // pickup window since the point hasn't moved from rest yet.
     const actualDist = Math.hypot(dragPoint.x - anchor.x, dragPoint.y - anchor.y);
     mainRope.overstretchPx = Math.max(0, actualDist - maxDragDist);
     const overstretchFrac = overstretchTol > 0 ? Math.min(1, mainRope.overstretchPx / overstretchTol) : 0;
@@ -9834,44 +9880,69 @@ function update(rawDt){
     // point (not the wrist) lands exactly on the anchor -- see that
     // function's own comment. Falls back to the old wrist-pin behavior
     // only when the annotated point/frame data isn't available yet
-    // (never leaves the sprite with no position at all). The anchor
-    // itself is now the EASED pickup position (mainRope.points[dragIndex],
-    // which update()'s own drag-pin block eases in over Drag Pickup
-    // Duration) rather than an instant target, so the sprite naturally
-    // eases in right along with it -- no separate sprite-side smoothing
-    // needed for a smooth pickup.
-    // Corrected 2026-09-14 (3rd pass on this feature) -- per direct
-    // clarification: "I actually dont want it to continuously chase the
-    // drag point... What i want is for the cursor frame to be able to
-    // freely move within the radius boundary. When it hits the boundary
-    // and further is when the rope gets triggered to get dragged." Both
-    // earlier attempts (dead-zone-then-teleport, then an eased chase)
-    // put the "give" on THIS sprite while treating the rope's own drag
-    // point as the one moving freely -- exactly backwards. The give now
-    // lives on the ROPE POINT itself (see update()'s own Drag Anchor
-    // Leash, in the drag-pin block above) -- so the sprite goes back to
-    // simply, freely tracking the raw cursor directly, the same as
-    // every other Cursor Target Mode, just clamped to the SAME
-    // anchor-relative hardLimit the rope's own target uses (so it still
-    // can't fly arbitrarily far from the rope on a huge drag, matching
-    // the original 2026-09-13 "don't visually separate" request) via
-    // `mainRope.dragCursorClamped`, computed once in that same block.
-    // No easing here either, same "must SNAP, never lerp" rule as the
-    // rest of this drag-anchoring feature -- the leash's own "give" is
-    // what makes it read as loose, not a smoothing lag layered on top.
+    // (never leaves the sprite with no position at all).
+    //
+    // Corrected 2026-09-14 (3rd pass) -- per direct clarification: "I
+    // actually dont want it to continuously chase the drag point...
+    // What i want is for the cursor frame to be able to freely move
+    // within the radius boundary. When it hits the boundary and further
+    // is when the rope gets triggered to get dragged." Both earlier
+    // attempts (dead-zone-then-teleport, then an eased chase) put the
+    // "give" on THIS sprite while treating the rope's own drag point as
+    // the one moving freely -- exactly backwards. The give now lives on
+    // the ROPE POINT itself (see update()'s own Drag Anchor Leash) --
+    // POST-PICKUP (see the 4th-pass correction directly below), the
+    // sprite simply, freely tracks the raw cursor, clamped to the same
+    // anchor-relative hardLimit the rope's own target uses (so it can't
+    // fly arbitrarily far from the rope on a huge drag) via
+    // `mainRope.dragCursorClamped`.
+    //
+    // Corrected 2026-09-14 (4th pass) -- per direct report: "my cursor
+    // frame jumps backwards about the length of itself... the cursor
+    // frame should move towards the drag point to initiate the drag."
+    // The 3rd pass above still snapped INSTANTLY to `dragCursorClamped`
+    // the moment dragging armed -- a real discontinuity, since the
+    // WRIST position that satisfies "annotated point = raw cursor" is
+    // generally different from wherever the wrist actually was a moment
+    // earlier (tracking the cursor under NORMAL, non-drag logic).
+    // Pickup easing now happens HERE too (mirroring update()'s own
+    // pickup, which now freezes the rope point for this same window
+    // instead of the ROPE easing as it used to) -- see the branch below.
     // Still resolved here (unchanged) purely for the ROTATION override
     // further down, which continues to point at the rope's own actual
-    // drag point -- rotation was never part of either correction above,
-    // only position was.
+    // drag point -- rotation was never part of any of these corrections.
     const mfDragAnchor = mouseFlickDragAnchorWorld();
     if (mfDragAnchor && mainRope.dragCursorClamped){
-      const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mainRope.dragCursorClamped);
+      // Pickup sequencing -- corrected 2026-09-14 (4th pass), per direct
+      // report: the sprite must visibly MOVE TOWARD the drag point to
+      // "initiate" the drag, not snap there instantly and not chase a
+      // rope point that's simultaneously already moving on its own (see
+      // update()'s own Drag Pickup comment for the full account of why
+      // both bugs needed fixing together). While `mainRope.dragPickupEasedT
+      // < 1`, the target is a lerp from the sprite's own real pre-drag
+      // position (`downInfo.dragSpritePickupStartX/Y`, captured at arm
+      // time in onPointerDown) toward `mfDragAnchor` (the rope's own
+      // point, itself frozen during this exact window) -- continuous by
+      // construction at t=0 (no jump), since that captured start IS
+      // where the sprite already was the instant dragging armed. Once
+      // pickup completes, switches to freely tracking the raw
+      // (hardLimit-clamped) cursor via `dragCursorClamped`, same as
+      // before this correction -- no easing there either, same
+      // "must SNAP, never lerp" rule the rest of this feature follows.
+      const mfPickupT = mainRope.dragPickupEasedT;
+      const mfDragTargetWorld = (mfPickupT < 1)
+        ? {
+            x: downInfo.dragSpritePickupStartX + (mfDragAnchor.x - downInfo.dragSpritePickupStartX) * mfPickupT,
+            y: downInfo.dragSpritePickupStartY + (mfDragAnchor.y - downInfo.dragSpritePickupStartY) * mfPickupT,
+          }
+        : mainRope.dragCursorClamped;
+      const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mfDragTargetWorld);
       if (mfDragOrigin){
         mfEntityX = mfDragOrigin.x;
         mfEntityY = mfDragOrigin.y;
       } else {
-        mfEntityX = mainRope.dragCursorClamped.x;
-        mfEntityY = mainRope.dragCursorClamped.y;
+        mfEntityX = mfDragTargetWorld.x;
+        mfEntityY = mfDragTargetWorld.y;
       }
     } else {
       mfEntityX += (mfX - mfEntityX) * mfPosFactor;
