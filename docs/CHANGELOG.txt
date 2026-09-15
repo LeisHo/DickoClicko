@@ -13885,3 +13885,102 @@ eased approach) every frame after. Live browser verification blocked
 by the same recurring dev-server page-boot stall as several prior
 entries.
 
+--------------------------------------------------------------------------------
+2026-09-15  -  02:42 AM EDT
+
+Fixed a same-day regression: the earlier "pin background rope start to
+main rope" render fix ran unconditionally, silently overriding the
+entire startup/detach climb animation.
+
+Fixed:
+- Real, reported bug via a screen recording (datalog/Recording
+  2026-09-15 023336.mp4): on hard refresh, the background rope's start
+  popped into view "above the circle" then appeared to "fall" to its
+  offset instead of climbing from just-out-of-sight below the circle
+  as designed; after each full-rope cut, the fresh background rope's
+  endcap instead appeared "aligned with the circle centroid." Root
+  cause: today's earlier fix (see the entry a few above, "pin
+  background rope start to main rope") added an UNCONDITIONAL
+  `bgRenderPoints[0] = mainRope.points[0]` in render(), with no
+  introPhase guard -- during 'waiting'/'rising'/'pausing', mainRope
+  hasn't spawned yet and is just a hidden, unpinned, gravity-driven
+  1-segment rope whose own anchor wanders within circleR (see
+  update()'s introUnsettled-boundary comment), completely unrelated to
+  bgRope's own carefully scripted climb. The render substitution was
+  overwriting that entire scripted visual, every frame, with wherever
+  mainRope's hidden anchor happened to be. update()'s own physics-side
+  "pin to main rope" block already excludes exactly these 3 phases
+  (`introPhase !== 'waiting' && introPhase !== 'rising' && introPhase
+  !== 'pausing'`) for the identical reason -- the render-side
+  substitution was simply missing that same guard. Fixed by wrapping
+  the substitution in the identical phase check, so bgRope's own real
+  points[0] (the scripted climb/hold value) renders during the intro
+  sequence, and the anti-separation fix from the earlier entry still
+  applies unchanged once mainRope has actually spawned ('growing'/
+  'done').
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse). Not live-browser-verified -- this environment's
+recurring dev-server page-boot/rAF-tick stall, documented in this
+project's own CLAUDE.md Gotchas, was not re-attempted this pass; the
+fix is a straightforward, narrowly-scoped guard reusing an
+already-proven-correct condition from the adjacent physics block, not
+new logic.
+
+--------------------------------------------------------------------------------
+2026-09-15  -  02:47 AM - 02:53 AM EDT
+
+Fixed the real "Drag Leash only works sometimes" bug -- the prior
+same-day entry's "investigated, no code bug found" conclusion was
+wrong, per a direct, dispositive follow-up report.
+
+Fixed:
+- Reported: "no the leash mechanic i tested and which failed was far
+  after i initially triggered the dragging function. I trigger the
+  drag, then spent the next 5-10 seconds draggin the rope around. So
+  its got nothing to do with mid interaction interruption" -- directly
+  rejecting the earlier "just the pickup window" hypothesis. Root
+  cause: Cursor Animation's drag-anchor SPRITE target
+  (`mainRope.dragCursorClamped`) was the raw cursor independently
+  clamped ONLY by the rope's own large-scale `hardLimit` reach
+  boundary -- the SAME clamp the rope's own Drag Anchor Leash target
+  also gets subjected to once the cursor exceeds it. Once the cursor
+  sat beyond `hardLimit` (easy during any real multi-second drag),
+  sprite and rope collapsed onto the IDENTICAL boundary point,
+  completely hiding the leash's own small-radius separation effect. A
+  Node simulation confirmed a steady 35px leash gap dropped to EXACTLY
+  0.0px the instant the cursor crossed hardLimit, for the entire
+  remainder of a sweep beyond it -- fully deterministic, not random.
+- 1st fix attempt (WRONG, caught by re-simulating before commit, never
+  shipped): tracked the Leash's own pre-clamp output
+  (`dragTargetPos`, captured before the endcap pull-back and before
+  the hardLimit clamp) instead. This traded the 0px collapse for an
+  unbounded-growing gap -- `dragTargetPos` has no hardLimit awareness
+  at all, so the further the cursor moved past hardLimit, the further
+  the sprite visually separated from the rope (696px in one simulated
+  case), violating the pre-existing "don't visually separate on a huge
+  drag" requirement from 2026-09-13.
+- Correct fix: compute the sprite's target (`mainRope.dragSpriteTarget`)
+  relative to the drag point's own FINAL position -- after the endcap
+  pull-back and hardLimit clamp have both already been applied -- as
+  `dragPoint + unit(mouse - dragPoint) * min(dist, dragLeashRadius)`.
+  Free to coincide with the mouse when within the leash radius of the
+  rope's real position; clamped to exactly that radius, pointing
+  toward the (possibly far-off-screen) cursor, once it isn't.
+
+Corrected in CLAUDE.md: the prior same-day "investigated, no bug
+found" gotcha entry is marked corrected rather than deleted, with a
+pointer to the real root cause and fix, and a new dedicated gotcha
+documents both the bug and the rejected 1st attempt in full.
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse). Verified via 2 Node-level simulations: (1) the
+rejected 1st attempt, showing the gap collapsing to 0px within
+hardLimit then growing unbounded beyond it -- caught BEFORE commit;
+(2) the corrected final formula, sweeping cursor distance from 20px to
+3000px for both an interior drag point and the tip (with the endcap
+pull-back's own extra offset), showing the gap held at EXACTLY the
+leash radius at every sampled distance on both sides of hardLimit.
+Live browser verification blocked by the same recurring dev-server
+page-boot stall as several prior entries this session.
+

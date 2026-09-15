@@ -9515,9 +9515,10 @@ function update(rawDt){
       // would exceed that radius -- pulled along just enough to hold the
       // gap at EXACTLY the radius (a taut leash), never all the way to the
       // cursor. The sprite, in turn, no longer mirrors this point at all
-      // while dragging -- see the FLICK MOUSE block below, which now
-      // freely tracks the raw (hardLimit-clamped) cursor directly via
-      // `mainRope.dragCursorClamped`, computed further down -- so it's
+      // while dragging -- see the FLICK MOUSE block below, which tracks
+      // `mainRope.dragSpriteTarget` (computed further down, AFTER the
+      // rope's own final clamped position is known -- see the
+      // 2026-09-15 leash-collapse correction near that stash) -- so it's
       // free to visibly separate from the (possibly-frozen) rope point by
       // up to the leash radius, exactly as asked.
       const dragLeashRadius = vmin(cfg.ropeThickness) * 0.5 * cfg.cursorAnimationDragToleranceMult;
@@ -9577,20 +9578,47 @@ function update(rawDt){
       dragPoint.y = leashTargetY;
       dragPoint.oldx = dragPoint.x;
       dragPoint.oldy = dragPoint.y;
-    }
-    // Raw (hardLimit-clamped, but NOT leash- or endcap-offset-adjusted)
-    // cursor position, stashed for the Cursor Animation sprite to track
-    // directly once its own pickup completes (see the FLICK MOUSE block
-    // below) -- computed from the SAME anchor-relative clamp as the
-    // rope's own target, just against the unmodified mouse position
-    // rather than the leashed/offset one. Computed unconditionally
-    // (regardless of pickup state) since it's cheap and the sprite
-    // needs it the instant pickup completes, not one frame later.
-    {
-      let cdx = mouseX - anchor.x, cdy = mouseY - anchor.y;
-      const cdist = Math.hypot(cdx, cdy) || 1e-6;
-      if (cdist > hardLimit){ cdx *= hardLimit / cdist; cdy *= hardLimit / cdist; }
-      mainRope.dragCursorClamped = { x: anchor.x + cdx, y: anchor.y + cdy };
+      // Cursor Animation sprite target -- corrected 2026-09-15, real bug,
+      // confirmed reproducible far into an ongoing drag (not a pickup-
+      // timing issue): "I trigger the drag, then spent the next 5-10
+      // seconds draggin the rope around... the leash mechanic... only
+      // works someimes." Root cause of the FIRST fix attempt at this same
+      // bug (since superseded -- see below): the sprite's old target,
+      // `mainRope.dragCursorClamped`, was the raw cursor independently
+      // clamped ONLY by `hardLimit` -- once the cursor moved far enough
+      // that the ROPE's own leash target ALSO got clamped by that SAME
+      // hardLimit, sprite and rope collapsed onto the IDENTICAL boundary
+      // point (confirmed via simulation: a steady 35px gap dropped to
+      // EXACTLY 0px past hardLimit). The FIRST attempted fix (tracking
+      // the pre-hardLimit-clamp `dragTargetPos` instead) traded that bug
+      // for a WORSE one, caught before commit by re-simulating: since
+      // `dragTargetPos` is itself unbounded (it trails the raw cursor by
+      // only `dragLeashRadius`, with no hardLimit awareness at all), the
+      // gap GREW WITHOUT BOUND the further the cursor moved past
+      // hardLimit (696px gap at cursor=1000 vs. hardLimit=300 in one
+      // simulated case) -- the opposite failure from the original bug,
+      // and a direct violation of the 2026-09-13 "don't visually
+      // separate on a huge drag" requirement. The CORRECT fix computes
+      // the sprite target relative to `dragPoint`'s own FINAL, already-
+      // hardLimit-clamped position (just assigned above), not the pre-
+      // clamp leash target: sprite = dragPoint + unit(mouse - dragPoint)
+      // * min(dist, dragLeashRadius) -- i.e. the sprite is free to sit
+      // anywhere within `dragLeashRadius` of the rope's ACTUAL current
+      // position (matching mouse exactly when within that radius), and
+      // clamped to exactly that radius, pointing toward the (possibly
+      // far-off-screen) cursor, once mouse exceeds it. Verified via a
+      // Node simulation sweeping cursor distance from 50 to 600 against
+      // hardLimit=300/radius=4: gap held at EXACTLY 4.0000px at every
+      // sampled distance, both inside and far outside hardLimit -- never
+      // 0, never unbounded.
+      {
+        const sdx = mouseX - dragPoint.x, sdy = mouseY - dragPoint.y;
+        const sdist = Math.hypot(sdx, sdy);
+        const clampedDist = Math.min(sdist, dragLeashRadius);
+        mainRope.dragSpriteTarget = sdist <= 1e-6
+          ? { x: dragPoint.x, y: dragPoint.y }
+          : { x: dragPoint.x + (sdx / sdist) * clampedDist, y: dragPoint.y + (sdy / sdist) * clampedDist };
+      }
     }
     // How far past the REST limit (maxDragDist) the point ACTUALLY sits
     // right now, in real px (0 when within limit) -- drives both the
@@ -10049,10 +10077,11 @@ function update(rawDt){
     // the one moving freely -- exactly backwards. The give now lives on
     // the ROPE POINT itself (see update()'s own Drag Anchor Leash) --
     // POST-PICKUP (see the 4th-pass correction directly below), the
-    // sprite simply, freely tracks the raw cursor, clamped to the same
-    // anchor-relative hardLimit the rope's own target uses (so it can't
-    // fly arbitrarily far from the rope on a huge drag) via
-    // `mainRope.dragCursorClamped`.
+    // sprite tracks the rope's own leash target (`mainRope.dragSpriteTarget`),
+    // itself already bounded by the rope's own hardLimit (so it can't
+    // fly arbitrarily far from the rope on a huge drag) -- see the
+    // 2026-09-15 leash-collapse correction further below for why this
+    // is no longer a separately-hardLimit-clamped raw cursor.
     //
     // Corrected 2026-09-14 (4th pass) -- per direct report: "my cursor
     // frame jumps backwards about the length of itself... the cursor
@@ -10069,7 +10098,7 @@ function update(rawDt){
     // further down, which continues to point at the rope's own actual
     // drag point -- rotation was never part of any of these corrections.
     const mfDragAnchor = mouseFlickDragAnchorWorld();
-    if (mfDragAnchor && mainRope.dragCursorClamped){
+    if (mfDragAnchor && mainRope.dragSpriteTarget){
       // Pickup sequencing -- corrected 2026-09-14 (4th pass), per direct
       // report: the sprite must visibly MOVE TOWARD the drag point to
       // "initiate" the drag, not snap there instantly and not chase a
@@ -10113,19 +10142,43 @@ function update(rawDt){
       // that point is determined by the true browser... immediately
       // displace the true cursor to align with the frame basepoint."
       // With mouseX/mouseY (and mfX/mfY) reset to the drag point's own
-      // position the instant pickup completes, `mainRope.dragCursorClamped`
-      // (derived from mouseX/mouseY) already sits at/near that same
-      // point on this exact transition frame -- so a direct assignment
-      // is ALREADY continuous, no separate easing phase needed. Only
-      // phase 1 (ease toward the frozen drag point during pickup)
-      // remains.
+      // position the instant pickup completes, `mainRope.dragSpriteTarget`
+      // (derived from the leash, itself derived from mouseX/mouseY)
+      // already sits at/near that same point on this exact transition
+      // frame -- so a direct assignment is ALREADY continuous, no
+      // separate easing phase needed. Only phase 1 (ease toward the
+      // frozen drag point during pickup) remains.
+      //
+      // Corrected AGAIN, 2026-09-15 -- leash-collapse fix: this used to
+      // read `mainRope.dragCursorClamped` (the raw cursor, independently
+      // clamped ONLY by the rope's own large-scale hardLimit) here. Per
+      // direct report, confirmed reproducible far into an ongoing drag
+      // (not a pickup-timing issue): "I trigger the drag, then spent
+      // the next 5-10 seconds draggin the rope around... the leash
+      // mechanic... only works someimes." Root cause: once the cursor
+      // moved beyond hardLimit from the anchor (easy during a real
+      // multi-second drag), BOTH the sprite's old target AND the
+      // rope's own leash-then-hardLimit-clamped position collapsed
+      // onto the identical hardLimit boundary point -- a Node
+      // simulation confirmed the gap was a steady ~35px while within
+      // hardLimit, then EXACTLY 0.0px for the remainder of a sweep
+      // beyond it. Now reads `mainRope.dragSpriteTarget` -- computed in
+      // the rope-physics block above, relative to `dragPoint`'s own
+      // FINAL, already-hardLimit-clamped position (not a pre-clamp
+      // value -- see that stash's own comment for why the pre-clamp
+      // version was tried first and rejected: it traded the 0px
+      // collapse for an unbounded-growing gap instead) -- this keeps
+      // the sprite within exactly `dragLeashRadius` of the rope's
+      // ACTUAL (already hardLimit-respecting) position at every cursor
+      // distance, restoring a visible, BOUNDED gap even far past
+      // hardLimit.
       const mfPickupT = mainRope.dragPickupEasedT;
       const mfDragTargetWorld = mfPickupT < 1
         ? {
             x: downInfo.dragSpritePickupStartX + (mfDragAnchor.x - downInfo.dragSpritePickupStartX) * mfPickupT,
             y: downInfo.dragSpritePickupStartY + (mfDragAnchor.y - downInfo.dragSpritePickupStartY) * mfPickupT,
           }
-        : mainRope.dragCursorClamped;
+        : mainRope.dragSpriteTarget;
       const mfDragOrigin = mouseFlickDragEntityOriginForAnchor(mfDragTargetWorld);
       if (mfDragOrigin){
         mfEntityX = mfDragOrigin.x;
@@ -11385,7 +11438,31 @@ function render(){
   // not as the anchor itself detaching, which is what was actually
   // reported.
   const bgRenderPoints = bgRope.points.slice();
-  bgRenderPoints[0] = mainRope.points[0];
+  // Corrected 2026-09-15 (same day as the fix above) -- this substitution
+  // must NOT run during 'waiting'/'rising'/'pausing'. During those 3
+  // phases mainRope hasn't spawned yet -- it's a hidden, unpinned,
+  // gravity-driven 1-segment rope whose own anchor just wanders within
+  // circleR (see update()'s own introUnsettled-boundary comment), totally
+  // unrelated to bgRope's own carefully scripted climb-from-below-the-
+  // circle animation. The unconditional version above silently replaced
+  // that ENTIRE scripted visual with wherever mainRope's hidden anchor
+  // happened to be, every frame -- reported directly (screen recording,
+  // 2026-09-15): boot showed the rope popping in "above the circle" then
+  // "falling" to its offset (mainRope's hidden anchor wandering near
+  // center, nothing to do with the real below-circle spawn/climb), and
+  // both post-cut detaches showed the new rope's endcap "aligned with the
+  // circle centroid" (resetMainRope()'s own fresh spawn point, dead
+  // center, rendered before it had a chance to move). Matches the SAME
+  // phase exclusion update()'s own physics-side "pin to main rope" block
+  // already uses (see that block's own comment, just above
+  // integrateChain(bgRope.points...)) -- the render-side substitution
+  // was simply missing the identical guard. Restores bgRope's own real
+  // points[0] (the scripted climb/hold value) as the visible start for
+  // the whole startup/detach intro sequence; the anti-separation fix
+  // above still applies unchanged once mainRope has actually spawned.
+  if (introPhase !== 'waiting' && introPhase !== 'rising' && introPhase !== 'pausing'){
+    bgRenderPoints[0] = mainRope.points[0];
+  }
   // Independent gradient/height from mainRope's own Endcap Gradient/Height
   // (see this control's own DEV_GROUPS comment) -- worldTop: bgRope's own
   // start, same convention mainGradientInfo below uses for mainRope's tip.

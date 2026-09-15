@@ -1917,23 +1917,21 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   leashes at a constant radius behind it. Not a live browser test --
   blocked by the same recurring dev-server page-boot stall as several
   prior entries.
-- **A same-session follow-up report ("the drag point radius boundary
-  issue we were fixing earlier... only works someimes. at other times,
-  the cursor animation frame still seems anchored to the drag point")
-  was investigated but NOT changed -- no code bug was found, and the
-  live `dragPickupDuration` (630ms) is long enough that a quick test
-  drag can easily spend most of its own duration still inside the
-  PICKUP phase, where looking "anchored" to the drag point is the
-  CORRECT, intended behavior (phase 1 of the 6th/7th-pass design),
-  not the Leash malfunctioning.** Before assuming this needs another
-  code change, confirm via a drag held deliberately longer than
-  `cfg.dragPickupDuration` (or with that slider temporarily lowered to
-  near-0 to isolate pickup from the Leash entirely) whether the "still
-  anchored" observation persists well past the pickup window -- only
-  THEN does the previously-verified Leash math (confirmed correct via
-  simulation: a real dragging test at radius=35px showed a rock-steady
-  35px gap maintained between sprite and rope every single frame) need
-  re-investigating.
+- **CORRECTED 2026-09-14/15 -- the entry below (originally: "investigated
+  but NOT changed, no code bug was found, likely just the pickup-
+  duration window") turned out to be WRONG.** The user firmly rejected
+  the pickup-duration hypothesis with a direct, dispositive counter-
+  report: "no the leash mechanic i tested and which failed was far
+  after i initially triggered the dragging function. I trigger the
+  drag, then spent the next 5-10 seconds draggin the rope around. So
+  its got nothing to do with mid interaction interruption." A real,
+  deterministic bug WAS present -- see the dedicated entry below
+  ("Cursor Animation's drag-anchor SPRITE target collapsed to a ZERO
+  gap...") for the actual root cause and fix. Left here, corrected
+  rather than deleted, as a reminder that a same-session "investigated,
+  no bug found" conclusion is not itself proof -- when the user
+  directly and specifically rejects the hypothesis behind it, re-open
+  the investigation rather than defending the earlier conclusion.
 - **Renaming a STATIC `DEV_GROUPS` title does not migrate any
   ALREADY-SAVED custom-group data that referenced the OLD title as its
   own key.** Real, shipped bug (2026-09-13, same investigation as
@@ -2464,3 +2462,83 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   `maintainBgRopeEnd()`, the anchor-sync block itself) correctly keeps
   reading/writing `bgRope.points` directly, unchanged -- this split is
   render-only.
+  **Corrected the SAME DAY (2026-09-15, ~10min later) -- the
+  `bgRenderPoints[0] = mainRope.points[0]` substitution above must be
+  GATED to skip 'waiting'/'rising'/'pausing', not unconditional.**
+  Real, reported bug via a screen recording
+  (`datalog/Recording 2026-09-15 023336.mp4`): on hard refresh, the
+  background rope's start popped into view "above the circle" then
+  appeared to "fall" to its offset, instead of climbing from
+  just-out-of-sight below the circle as designed; after each full-rope
+  cut, the fresh background rope's endcap appeared "aligned with the
+  circle centroid" instead. Root cause: during those 3 phases,
+  mainRope hasn't spawned yet -- it's a hidden, unpinned, gravity-driven
+  1-segment rope whose own anchor wanders within `circleR` (see
+  `introUnsettled`'s own boundary-radius comment in `update()`),
+  completely unrelated to bgRope's own scripted climb. The
+  unconditional substitution silently overwrote that ENTIRE scripted
+  visual, every frame, with wherever mainRope's hidden anchor happened
+  to be. `update()`'s own physics-side "pin to main rope" block (right
+  above its own `integrateChain(bgRope.points...)` call) already
+  excludes exactly these 3 phases for the identical reason -- the
+  render-side version above was simply missing that same guard. Fixed
+  by wrapping it in the identical `introPhase !== 'waiting' &&
+  introPhase !== 'rising' && introPhase !== 'pausing'` check, so
+  bgRope's own real `points[0]` (the scripted climb/hold value) renders
+  during the intro sequence, and the anti-separation fix above still
+  applies unchanged once mainRope has actually spawned ('growing'/
+  'done'). **Any FUTURE render-time substitution/override of
+  `bgRenderPoints[0]` (or any other bgRope render field driven by
+  mainRope) must carry this same phase guard** -- the intro sequence
+  drives bgRope's own values directly and any live-mainRope-linked
+  override will silently fight it otherwise, exactly as this one did.
+- **Cursor Animation's drag-anchor SPRITE target (`mainRope.
+  dragSpriteTarget`) collapsed to a ZERO gap with the rope whenever the
+  cursor sat beyond `hardLimit` -- fixed 2026-09-15, in 2 attempts, the
+  first of which was itself wrong and caught before commit.** Per
+  direct, dispositive report rejecting the earlier "investigated, no
+  bug found / just the pickup window" conclusion (see that entry
+  above): "no the leash mechanic i tested and which failed was far
+  after i initially triggered the dragging function. I trigger the
+  drag, then spent the next 5-10 seconds draggin the rope around. So
+  its got nothing to do with mid interaction interruption." Root cause:
+  the sprite's OLD target, `mainRope.dragCursorClamped`, was the raw
+  cursor independently clamped ONLY by the rope's own large-scale
+  `hardLimit` reach boundary -- the exact same clamp the rope's own
+  Drag Anchor Leash target ALSO gets subjected to once the cursor
+  exceeds it. Whenever the cursor sat beyond `hardLimit` (easy during
+  any real multi-second drag), BOTH sprite and rope collapsed onto the
+  IDENTICAL boundary point -- a Node simulation confirmed a steady 35px
+  leash gap dropped to EXACTLY 0.0px the instant the cursor crossed
+  `hardLimit`, for the entire remainder of the sweep beyond it,
+  perfectly deterministic (not "sometimes"). **1st fix attempt (WRONG,
+  caught by re-simulating before commit, never shipped):** made the
+  sprite track `dragTargetPos` -- the Leash's own OUTPUT, captured
+  BEFORE the endcap pull-back and BEFORE the `hardLimit` clamp. This
+  traded the 0px-collapse bug for a WORSE, opposite one: `dragTargetPos`
+  is itself unbounded (it only ever trails the raw cursor by
+  `dragLeashRadius`, with zero `hardLimit` awareness), so once the
+  cursor moved past `hardLimit`, the gap between sprite and the rope's
+  now-clamped actual position GREW WITHOUT BOUND -- 696px in one
+  simulated case (cursor at 1000 vs. hardLimit 300) -- a direct
+  violation of the pre-existing 2026-09-13 "don't visually separate on
+  a huge drag" requirement. **Correct fix:** compute the sprite target
+  relative to `dragPoint`'s own FINAL position -- i.e. AFTER the
+  endcap pull-back and the `hardLimit` clamp have both already been
+  applied and assigned onto `dragPoint.x/y` -- as `dragPoint + unit(mouse
+  - dragPoint) * min(dist, dragLeashRadius)`: free to coincide with the
+  mouse when within `dragLeashRadius` of the rope's real position,
+  clamped to exactly that radius (pointing toward the, possibly
+  far-off-screen, cursor) once it isn't. Verified via a Node simulation
+  sweeping cursor distance from 20px to 3000px against a representative
+  `hardLimit`/`dragLeashRadius` pair, for BOTH an interior drag point
+  and the tip (with the endcap pull-back's own extra offset folded in):
+  the gap held at EXACTLY `dragLeashRadius` at every single sampled
+  distance, on both sides of `hardLimit` -- never 0, never unbounded.
+  **Any FUTURE change to this sprite-target stash must compute it from
+  `dragPoint`'s own FINAL (post-hardLimit, post-endcap-offset)
+  position, never from an intermediate pre-clamp value** -- the 1st
+  attempt's failure mode (an unbounded-growing gap) is easy to miss in
+  a quick visual check near `hardLimit` and only shows up clearly once
+  the cursor is dragged much further out, which is exactly the
+  "5-10 second drag session" scenario the user's own report described.
