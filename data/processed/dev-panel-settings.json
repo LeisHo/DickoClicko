@@ -7,12 +7,12 @@
       "circleY": 18,
       "circleColor": "#111023",
       "circleBoundaryOffset": 1.5,
-      "anchorWeight": 0,
+      "anchorWeight": 0.5,
       "endcapDesign": "form1-01",
-      "endcapHeight": 1.35,
+      "endcapHeight": 1.2,
       "ropeThickness": 6.4,
       "segmentLength": 0.9,
-      "ropeLength": 13.004852555514221,
+      "ropeLength": 37.004852555514056,
       "ropeDefaultLength": 13,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -103,11 +103,11 @@
       "dragRopeHoldDistance": 9,
       "dragOverridesGrowOnRopeHold": true,
       "dragMaxDistance": 150,
-      "bendStiffness": 0.09,
+      "bendStiffness": 0.05,
       "ropeAnimSpeed": 1.8,
-      "gravityStrength": 0.5,
-      "damping": 0.982,
-      "constraintIterations": 1,
+      "gravityStrength": 1,
+      "damping": 0.988,
+      "constraintIterations": 66,
       "ropeGrowthRate": 12,
       "ropeGrowthOnRopeHold": true,
       "ropeGrowthHoldDistance": 9,
@@ -242,11 +242,11 @@
       "overstretchBounceMaxAmplitude": 200,
       "cursorAnimationDragToleranceMult": 1,
       "endcapDeformableEnabled": true,
-      "endcapBendStrength": 0.08,
+      "endcapBendStrength": 0.05,
       "endcapStretchEnabled": true,
-      "endcapStretchRange": 5,
-      "endcapStretchMaxMult": 1.55,
-      "maxPunchSegments": 4
+      "endcapStretchRange": 42,
+      "endcapStretchMaxMult": 1.05,
+      "maxPunchSegments": 100
     },
     "mobile": {},
     "landscape": {}
@@ -435,11 +435,6 @@
         "key": "ROPE",
         "collapsed": false,
         "settings": [
-          "endcapDeformableEnabled",
-          "endcapBendStrength",
-          "endcapStretchEnabled",
-          "endcapStretchRange",
-          "endcapStretchMaxMult",
           "segmentLength",
           "ropeDefaultLength",
           "ropeThickness",
@@ -461,7 +456,7 @@
           },
           {
             "key": "ROPE ANIMATION",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
@@ -492,7 +487,20 @@
               "endcapGradientEnabled",
               "endcapGradientColors"
             ],
-            "subgroups": []
+            "subgroups": [
+              {
+                "key": "New Group (9)",
+                "collapsed": false,
+                "settings": [
+                  "endcapDeformableEnabled",
+                  "endcapBendStrength",
+                  "endcapStretchEnabled",
+                  "endcapStretchMaxMult",
+                  "endcapStretchRange"
+                ],
+                "subgroups": []
+              }
+            ]
           },
           {
             "key": "New Group (4)",
@@ -531,13 +539,14 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [],
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
+              "maxPunchSegments",
               "clickIntensity",
               "clickDistance"
             ],
@@ -572,7 +581,7 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "holdDistance",
               "clickHoldMaxDuration",
@@ -584,7 +593,6 @@
             "key": "ROPE GROWTH",
             "collapsed": true,
             "settings": [
-              "maxPunchSegments",
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
@@ -593,7 +601,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
@@ -739,9 +747,9 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 1314.453125,
-      "top": 62.890625,
-      "width": 221.515625,
+      "left": 1196.453125,
+      "top": 43.890625,
+      "width": 619.515625,
       "height": 827,
       "style": {
         "titleFontSize": 17,
@@ -855,6 +863,7 @@
     "group:ROPE GROWTH": "CLICK-HOLD-GROW",
     "group:New Group (7)": "CLICK HOLD-DRAG",
     "group:UI": null,
-    "group:New Group (8)": "Drag Overstretch"
+    "group:New Group (8)": "Drag Overstretch",
+    "group:New Group (9)": "DEFORMABLE ENDCAP"
   }
 }
