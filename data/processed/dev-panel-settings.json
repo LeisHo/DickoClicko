@@ -2,7 +2,7 @@
   "valuesByDevice": {
     "desktop": {
       "backgroundColor": "#252546",
-      "circleSize": 30,
+      "circleSize": 18.5,
       "circleX": 50,
       "circleY": 18,
       "circleColor": "#111023",
@@ -12,7 +12,7 @@
       "endcapHeight": 1.35,
       "ropeThickness": 6.4,
       "segmentLength": 0.9,
-      "ropeLength": 27.561971100619363,
+      "ropeLength": 13.004852555514221,
       "ropeDefaultLength": 13,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -98,7 +98,7 @@
       ],
       "arcSeamOverlapPx": 2.8,
       "clickIntensity": 4.1,
-      "holdDistance": 20.5,
+      "holdDistance": 11,
       "dragRopeEnabled": true,
       "dragRopeHoldDistance": 9,
       "dragOverridesGrowOnRopeHold": true,
@@ -110,12 +110,12 @@
       "constraintIterations": 1,
       "ropeGrowthRate": 12,
       "ropeGrowthOnRopeHold": true,
-      "ropeGrowthHoldDistance": 20,
+      "ropeGrowthHoldDistance": 9,
       "clickHoldMaxDuration": 2000,
-      "intensityCeiling": 25,
+      "intensityCeiling": 35,
       "minRopeLength": 0.8,
       "clickDistance": 6.3,
-      "doubleClickDistance": 29,
+      "doubleClickDistance": 2.6,
       "doubleClickThreshold": 180,
       "ropeFallSpeed": 0.3,
       "cutSpeed": 1.1,
@@ -161,7 +161,7 @@
       "introRiseClearOffset": 2.5,
       "debugShowRiseClearOffset": false,
       "bgRopeClipEnabled": true,
-      "bgRopeAnchorMaxSpeed": 60,
+      "bgRopeAnchorMaxSpeed": 215,
       "bgRopeStartEndcapEnabled": true,
       "bgRopeEndcapHeight": 0.85,
       "bgRopeEndcapGradientEnabled": true,
@@ -179,7 +179,7 @@
           "color": "#f4c8a4"
         }
       ],
-      "bgRopeEndcapPauseHeight": 0.55,
+      "bgRopeEndcapPauseHeight": 1.05,
       "mainEndcapGrowSpeed": 3,
       "introPauseDuration": 0.4,
       "introExtendSpeed": 12,
@@ -238,9 +238,15 @@
       "overstretchBounceDamping": 52.3,
       "overstretchBounceMinAmplitude": 1.7,
       "dragPickupDuration": 630,
-      "overstretchThinningSmoothness": 6,
+      "overstretchThinningSmoothness": 16,
       "overstretchBounceMaxAmplitude": 200,
-      "cursorAnimationDragToleranceMult": 1
+      "cursorAnimationDragToleranceMult": 1,
+      "endcapDeformableEnabled": false,
+      "endcapBendStrength": 1,
+      "endcapStretchEnabled": true,
+      "endcapStretchRange": 15,
+      "endcapStretchMaxMult": 1.4,
+      "maxPunchSegments": 4
     },
     "mobile": {},
     "landscape": {}
@@ -427,8 +433,13 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
+          "endcapDeformableEnabled",
+          "endcapBendStrength",
+          "endcapStretchEnabled",
+          "endcapStretchRange",
+          "endcapStretchMaxMult",
           "segmentLength",
           "ropeDefaultLength",
           "ropeThickness",
@@ -527,8 +538,6 @@
             "key": "CLICK",
             "collapsed": true,
             "settings": [
-              "overstretchThinningSmoothness",
-              "overstretchBounceMaxAmplitude",
               "clickIntensity",
               "clickDistance"
             ],
@@ -575,6 +584,7 @@
             "key": "ROPE GROWTH",
             "collapsed": true,
             "settings": [
+              "maxPunchSegments",
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
@@ -600,6 +610,8 @@
                 "settings": [
                   "overstretchEnabled",
                   "overstretchThinningEnabled",
+                  "overstretchThinningSmoothness",
+                  "overstretchBounceMaxAmplitude",
                   "overstretchTolerance",
                   "overstretchMaxThinDepth",
                   "overstretchThinningSharpness",
@@ -727,9 +739,9 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 1242.453125,
+      "left": 1307.453125,
       "top": 62.890625,
-      "width": 293.515625,
+      "width": 228.515625,
       "height": 827,
       "style": {
         "titleFontSize": 17,
