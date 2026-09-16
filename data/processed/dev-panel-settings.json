@@ -6,13 +6,13 @@
       "circleX": 50,
       "circleY": 14,
       "circleColor": "#111023",
-      "circleBoundaryOffset": 1.5,
-      "anchorWeight": 1.5,
+      "circleBoundaryOffset": 1,
+      "anchorWeight": 0.7,
       "endcapDesign": "form1-01",
-      "endcapHeight": 1.6,
+      "endcapHeight": 1,
       "ropeThickness": 6.4,
-      "segmentLength": 0.9,
-      "ropeLength": 8.155325474703753,
+      "segmentLength": 4.75,
+      "ropeLength": 75.25000000000087,
       "ropeDefaultLength": 8,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -97,31 +97,31 @@
         }
       ],
       "arcSeamOverlapPx": 2.8,
-      "clickIntensity": 1.5,
+      "clickIntensity": 2.5,
       "holdDistance": 11,
       "dragRopeEnabled": true,
-      "dragRopeHoldDistance": 5.5,
-      "dragOverridesGrowOnRopeHold": false,
+      "dragRopeHoldDistance": 60,
+      "dragOverridesGrowOnRopeHold": true,
       "dragMaxDistance": 150,
-      "bendStiffness": 0.2,
-      "ropeAnimSpeed": 1.4,
-      "gravityStrength": 1,
-      "damping": 0.99,
-      "constraintIterations": 15,
-      "ropeGrowthRate": 12,
+      "bendStiffness": 0,
+      "ropeAnimSpeed": 1.1,
+      "gravityStrength": 1.8,
+      "damping": 0.984,
+      "constraintIterations": 2,
+      "ropeGrowthRate": 9,
       "ropeGrowthOnRopeHold": true,
       "ropeGrowthHoldDistance": 16,
       "clickHoldMaxDuration": 2000,
-      "intensityCeiling": 35,
-      "minRopeLength": 1,
+      "intensityCeiling": 20.9,
+      "minRopeLength": 1.3,
       "clickDistance": 6.3,
       "doubleClickDistance": 8,
       "doubleClickThreshold": 180,
-      "ropeFallSpeed": 0.3,
+      "ropeFallSpeed": 0.4,
       "cutSpeed": 0.6,
       "endcapAtCutEnd": true,
       "cutSweepColor": "#ffffff",
-      "cutSweepThickness": 0.2,
+      "cutSweepThickness": 0.5,
       "pieceDecayDelay": 10,
       "pieceDecaySpeed": 0.5,
       "pieceMinThickness": 1.2,
@@ -217,7 +217,7 @@
       "mouseFlickScale": 69.5,
       "mouseFlickAnimSpeed": 3.2,
       "mouseFlickTickleSpeed": 3.2,
-      "mouseFlickDragSpeed": 5.6,
+      "mouseFlickDragSpeed": 10.2,
       "mouseFlickPositionSmoothing": 1,
       "mouseFlickRotationSmoothing": 1,
       "mouseFlickAngleOffset": 180,
@@ -232,21 +232,22 @@
       "overstretchEnabled": true,
       "overstretchTolerance": 27,
       "overstretchThinningEnabled": true,
-      "overstretchMaxThinDepth": 0.55,
+      "overstretchMaxThinDepth": 0.6,
       "overstretchThinningSharpness": 1.15,
       "overstretchBounceStiffness": 100,
       "overstretchBounceDamping": 52.3,
       "overstretchBounceMinAmplitude": 1.7,
       "dragPickupDuration": 1000,
       "overstretchThinningSmoothness": 16,
-      "overstretchBounceMaxAmplitude": 200,
+      "overstretchBounceMaxAmplitude": 160,
       "cursorAnimationDragToleranceMult": 1,
       "endcapDeformableEnabled": true,
-      "endcapBendStrength": 0.05,
+      "endcapBendStrength": 0.3,
       "endcapStretchEnabled": true,
-      "endcapStretchRange": 1,
-      "endcapStretchMaxMult": 1,
-      "maxPunchSegments": 10.5
+      "endcapStretchRange": 50,
+      "endcapStretchMaxMult": 2.05,
+      "maxPunchSegments": 10.5,
+      "punchPowerAbsolute": 1
     },
     "mobile": {},
     "landscape": {}
@@ -433,7 +434,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "ropeDefaultLength",
           "ropeLength",
@@ -480,7 +481,7 @@
           },
           {
             "key": "New Group (2)",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "endcapGradientEnabled",
               "endcapDesign",
@@ -490,7 +491,7 @@
             "subgroups": [
               {
                 "key": "New Group (9)",
-                "collapsed": false,
+                "collapsed": true,
                 "settings": [
                   "endcapDeformableEnabled",
                   "endcapStretchEnabled",
@@ -544,9 +545,8 @@
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
-              "maxPunchSegments",
               "clickIntensity",
               "clickDistance"
             ],
@@ -593,6 +593,7 @@
             "key": "ROPE GROWTH",
             "collapsed": true,
             "settings": [
+              "punchPowerAbsolute",
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
@@ -601,7 +602,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
@@ -614,7 +615,7 @@
             "subgroups": [
               {
                 "key": "New Group (8)",
-                "collapsed": true,
+                "collapsed": false,
                 "settings": [
                   "overstretchEnabled",
                   "overstretchThinningEnabled",
@@ -637,7 +638,6 @@
         "key": "STARTUP ANIMATION",
         "collapsed": true,
         "settings": [
-          "bgRopeAnchorMaxSpeed",
           "bgRopeEndcapPauseHeight",
           "mainEndcapGrowSpeed",
           "bgRopeStartEndcapEnabled",
