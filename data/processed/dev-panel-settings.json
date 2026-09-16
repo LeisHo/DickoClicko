@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 4.75,
-      "ropeLength": 66.05000000000074,
+      "ropeLength": 51.15000000000038,
       "ropeDefaultLength": 8,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -237,7 +237,7 @@
       "overstretchBounceStiffness": 41,
       "overstretchBounceDamping": 52.3,
       "overstretchBounceMinAmplitude": 1.7,
-      "dragPickupDuration": 230,
+      "dragPickupDuration": 130,
       "overstretchThinningSmoothness": 16,
       "overstretchBounceMaxAmplitude": 160,
       "cursorAnimationDragToleranceMult": 1,
@@ -602,7 +602,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
