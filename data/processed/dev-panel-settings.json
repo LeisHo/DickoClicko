@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 4.75,
-      "ropeLength": 75.25000000000087,
+      "ropeLength": 66.05000000000074,
       "ropeDefaultLength": 8,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -100,7 +100,7 @@
       "clickIntensity": 2.5,
       "holdDistance": 11,
       "dragRopeEnabled": true,
-      "dragRopeHoldDistance": 60,
+      "dragRopeHoldDistance": 6.5,
       "dragOverridesGrowOnRopeHold": true,
       "dragMaxDistance": 150,
       "bendStiffness": 0,
@@ -217,7 +217,7 @@
       "mouseFlickScale": 69.5,
       "mouseFlickAnimSpeed": 3.2,
       "mouseFlickTickleSpeed": 3.2,
-      "mouseFlickDragSpeed": 10.2,
+      "mouseFlickDragSpeed": 9.1,
       "mouseFlickPositionSmoothing": 1,
       "mouseFlickRotationSmoothing": 1,
       "mouseFlickAngleOffset": 180,
@@ -230,14 +230,14 @@
       "mouseFlickShowInteractionPoints": true,
       "clickLogPositionDataEnabled": true,
       "overstretchEnabled": true,
-      "overstretchTolerance": 27,
+      "overstretchTolerance": 38,
       "overstretchThinningEnabled": true,
-      "overstretchMaxThinDepth": 0.6,
+      "overstretchMaxThinDepth": 0.48,
       "overstretchThinningSharpness": 1.15,
-      "overstretchBounceStiffness": 100,
+      "overstretchBounceStiffness": 41,
       "overstretchBounceDamping": 52.3,
       "overstretchBounceMinAmplitude": 1.7,
-      "dragPickupDuration": 1000,
+      "dragPickupDuration": 230,
       "overstretchThinningSmoothness": 16,
       "overstretchBounceMaxAmplitude": 160,
       "cursorAnimationDragToleranceMult": 1,
@@ -434,7 +434,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "ropeLength",
@@ -602,7 +602,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
@@ -615,7 +615,7 @@
             "subgroups": [
               {
                 "key": "New Group (8)",
-                "collapsed": false,
+                "collapsed": true,
                 "settings": [
                   "overstretchEnabled",
                   "overstretchThinningEnabled",
