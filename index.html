@@ -705,28 +705,32 @@ const DEV_GROUPS = [
     { key:'ropeGrowthHoldDistance', label:'Rope Growth Hold Distance', type:'slider', unit:'%vmin', min:1, max:60, step:0.5, def:20 },
     { key:'clickHoldMaxDuration', label:'Click Hold Max Duration', type:'slider', unit:'ms', min:200, max:3000, step:50, def:800 },
     { key:'intensityCeiling',     label:'Intensity Ceiling',       type:'slider', unit:'x',  min:0.5, max:10,  step:0.1, def:10 },
-    // Corrected 2026-09-15 -- was a hardcoded constant (MAX_PUNCH_
-    // SEGMENTS, still 4 here as its def, so this is a pure no-op for
-    // any project/save that hasn't touched it). Real, reported bug:
-    // "even with a strong click hold charge flick, the rope still acts
-    // weird" at a short Segment Length (0.9%vh, well under the default
-    // ~2.37%vh) -- applyPunch()'s own power is capped at
-    // `mainRope.segLen * maxPunchSegments`, a cap that was tuned
-    // against whatever segLen was in use when it was built (see that
-    // function's own comment on why the cap exists at all: preventing
-    // a punch from flinging a point past its own neighbor into an
-    // inverted, chaotically-recovering configuration). Since the cap
-    // scales MULTIPLICATIVELY with segLen, shrinking Segment Length
-    // shrinks the cap right along with it -- confirmed via direct
-    // simulation at the live segLen/ropeLength: a full Intensity
-    // Ceiling charge that should push ~270px was being capped down to
-    // ~39px, just 14% of its intended strength, regardless of how
-    // "charged" the flick was. Exposed as its own slider (not just
-    // raised in code) so a project/save that deliberately runs a short
-    // segLen can compensate directly -- raise gradually and watch for
-    // the ORIGINAL "dark flash near the rope start" symptom this cap
-    // was built to prevent if pushed too high for the current segLen.
-    { key:'maxPunchSegments', label:'Punch Power Cap (x Segment Length)', type:'slider', unit:'x', min:1, max:20, step:0.5, def:4 },
+    // Corrected 2026-09-16 -- REPLACES the segLen-relative
+    // `maxPunchSegments` slider (2026-09-15) with an ABSOLUTE, segLen-
+    // INDEPENDENT power target, per direct follow-up: after being shown
+    // exactly which formulas in this file structurally depend on segLen
+    // and which don't, the user confirmed they want the DEPENDENT
+    // slider's own EFFECTIVE value to auto-scale inversely with segLen
+    // -- so the delivered punch power stays constant as Segment Length
+    // is retuned, without manually re-touching this slider every time.
+    // `maxPunchSegments` itself is now an INTERNAL, non-user-facing
+    // safety clamp (see applyPunch()'s own comment) rather than a
+    // creative control -- exposing an absolute target here, instead of
+    // a segLen-multiple, is what actually delivers "set this once, stop
+    // retuning it" while still never exceeding the same 1x-20x-segLen
+    // safety envelope this project already validated (the exact
+    // condition that prevents a punch from flinging a point past its
+    // own neighbor into an inverted, chaotically-recovering
+    // configuration -- see applyPunch()'s own comment for the full
+    // account of that original bug). Default (`45/19 * 4`) is chosen so
+    // this is a pure no-op at cfg.segmentLength's OWN code default
+    // (45/19%vh) -- verified via simulation to reproduce the prior
+    // behavior bit-for-bit there, then auto-compensate correctly at
+    // shorter segLens (delivering the full desired power, unchanged,
+    // as long as the resulting effective multiplier stays within the
+    // established 1x-20x safe range) and gracefully degrade only in
+    // genuinely extreme territory beyond that range, never exceeding it.
+    { key:'punchPowerAbsolute', label:'Punch Power Cap (Absolute, %vh)', type:'slider', unit:'%vh', min:1, max:30, step:0.1, def:180/19 },
   ]},
   { title:'ROPE CUT', controls:[
     { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.5 },
@@ -912,70 +916,29 @@ const DEV_GROUPS = [
     { key:'introRiseClearOffset', label:'Startup Rise Clear Offset', type:'slider', unit:'%vmin', min:-20, max:20, step:0.5, def:-18.5 },
     { key:'debugShowRiseClearOffset', label:'Debug: Show Rise Clear Offset Line', type:'checkbox', def:false },
     { key:'bgRopeClipEnabled', label:'Background Rope Clip Enabled', type:'checkbox', def:true },
-    // Fixes a real reported bug (2026-09-12: "when flicking the main
-    // rope, the background rope seems overly affected by the flick...
-    // sometimes... the background rope seems to fly up far higher than
-    // both the main rope and the main rope start anchor"). Root cause:
-    // bgRope's own per-frame anchor sync (see that block's own comment,
-    // further down in update()) used to SNAP bgRope.points[0] to
-    // mainRope.points[0]'s CURRENT position every frame with no
-    // smoothing at all -- confirmed via direct measurement that a
-    // single strong punch swings mainRope's own anchor by 130+px (its
-    // `Anchor Weight` confinement responds to the constraint solver,
-    // it isn't a 100% rigid pin), and since bgRope's own Verlet
-    // integration derives implied velocity from frame-to-frame position
-    // DELTA, snapping straight to that swung position injected a huge,
-    // instantaneous velocity kick into bgRope's own independent chain,
-    // which its own gravity/constraint solve then swung out into a
-    // large, visible overshoot.
-    //
-    // An exponential-lerp smoothing approach was tried first and
-    // measured ineffective: paired before/after live tests (settled
-    // rest state confirmed via repeated-value convergence, then an
-    // identical punch(1,10)) showed smoothing=1 (old instant-snap)
-    // produced a -197.9px undershoot (tip flies up) / +53.0px
-    // overshoot, while smoothing=0.2 produced -189.8px / +59.7px --
-    // barely different in one direction and WORSE in the other. Root
-    // cause: a lagging exponential tracker doesn't reduce the total
-    // injected velocity, it just spreads/delays it, and that lag can
-    // land out of phase with mainRope's own multi-frame swing-then-
-    // rebound, amplifying the rebound-direction overshoot instead of
-    // damping it.
-    //
-    // This slider instead caps bgRope.points[0]'s own per-frame MOVEMENT
-    // SPEED toward mainRope.points[0] (same maxMove-clamp pattern as
-    // Rope Attraction Speed's `ropeAttractionSpeed` -- see its own call
-    // site), which bounds the injected velocity directly regardless of
-    // how fast mainRope's anchor swings, rather than merely lagging
-    // behind it (the clamp mechanism itself is verified exact: a
-    // maxSpeed of 30 against a measured dt of 0.03 produced a measured
-    // 6.912px max per-frame step, matching vmin(30)*0.03=6.912 to the
-    // full precision shown).
-    //
-    // HONEST LIMITATION, measured via a fixed settle(tick 600)+punch(1,10)
-    // recipe from a fresh load, compared across maxSpeed values 1000
-    // (~unclamped) / 60 / 10: the clamp meaningfully reduces the
-    // REBOUND overshoot in the direction opposite the initial swing
-    // (+60.3px at 1000, +34.8px at 60, +40.6px at 10px -- non-monotonic,
-    // 60 measured best of the 3), but only marginally reduces the
-    // PRIMARY reported symptom itself (the initial upward fly, i.e. the
-    // undershoot toward a smaller Y): -75.1px at 1000, -74.3px at 60,
-    // -70.6px at 10 -- under a 7% reduction even at the most aggressive
-    // clamp tested. This means bgRope's tip flying up right after the
-    // punch is mostly driven by ordinary whip-propagation through the
-    // chain once point 0 starts moving at all, not primarily by the
-    // SPEED of point 0's own motion -- clamping point 0 harder keeps
-    // paying down responsiveness (ordinary, non-punch anchor tracking
-    // gets laggier) without much further reducing the fly-up itself.
-    // A more complete fix would likely need to reduce how far mainRope's
-    // OWN anchor swings on a punch in the first place (cfg.anchorWeight
-    // or a new anchor-side damping mechanism) rather than only bgRope's
-    // own tracking of it -- not attempted here since that changes
-    // mainRope's own already-tuned physics response for every punch,
-    // not just bgRope's reaction to it (see the damping/iterations
-    // tuning history above) -- surfaced to the user as a follow-up
-    // decision rather than made unilaterally.
-    { key:'bgRopeAnchorMaxSpeed', label:'Background Rope Anchor Max Speed', type:'slider', unit:'%vmin/s', min:20, max:400, step:5, def:60 },
+    // Background Rope Anchor Max Speed (2026-09-12 - 2026-09-16) --
+    // REMOVED. Originally added to cap bgRope.points[0]'s own per-frame
+    // movement toward mainRope.points[0], to bound the velocity spike
+    // from an earlier bug (a naive position-only snap paired with
+    // bgRope's own stale old-position produced a mismatched-reference-
+    // frame velocity artifact -- see update()'s own bgRope-anchor-sync
+    // comment for the corrected mechanism). That same investigation
+    // measured the cap only marginally helped the actual symptom (under
+    // a 7% reduction even at the most aggressive clamp tested) and
+    // explicitly named the more complete fix -- copying mainRope's
+    // anchor's own POSITION AND VELOCITY together, uncapped -- as a
+    // follow-up decision. Per direct request ("actually make background
+    // rope match main rope behaviour exactly"), that fix is now in
+    // place and this slider has no mechanism left to control -- removed
+    // outright rather than left inert, per this project's own "an inert
+    // slider that visibly does nothing is worse than no slider"
+    // convention (see e.g. cursorAnimationDragCatchUpSmoothing's own
+    // removal for precedent). If a future report says bgRope's own
+    // reaction to a hard flick feels TOO strong now (an honest
+    // possibility -- this removes the one dial that existed to soften
+    // it), the right fix is a NEW, honestly-named control on the
+    // uncapped mechanism itself (e.g. a coupling-strength multiplier on
+    // the copied velocity), not reintroducing this exact slider.
     // Per explicit request: bgRope's own climbing start (points[0], the
     // "peek" visible above the circle while rising) gets the same endcap
     // graphic mainRope's own tip uses, visible only while there's nothing
@@ -7242,18 +7205,45 @@ function growRope(dtSeconds, ratePerSecVh){
 // past where its own neighbor structurally allows it to go without an
 // inverted, chaotically-recovering configuration.
 //
-// Corrected 2026-09-15 -- MAX_PUNCH_SEGMENTS is now cfg.maxPunchSegments
-// (see that control's own comment for the full account: this cap scales
-// WITH segLen, so a deliberately short Segment Length silently shrinks
-// it right along with the rope's own resolution, capping even a full
-// Intensity Ceiling charge down to a small fraction of its intended
-// push). def:4 matches the old hardcoded value exactly, so this is a
-// pure no-op for any project/save that's never touched it.
+// Corrected 2026-09-16 -- the cap is now driven by cfg.punchPowerAbsolute
+// (an ABSOLUTE, segLen-independent %vh target), not a segLen-multiple
+// slider -- per direct follow-up, after confirming which of this
+// project's own segLen-dependent formulas are genuinely structural
+// (can't be decoupled without breaking what a rope IS) vs. this one
+// specific policy tradeoff (a safety multiplier that COULD instead
+// auto-scale to hold the delivered power constant). The underlying
+// safety property is UNCHANGED and still absolutely enforced: a punch
+// must never displace a point by more than PUNCH_SEGMENTS_SAFE_RANGE.max
+// (20) times the CURRENT segLen, or it risks flinging a point past its
+// own neighbor into the exact inverted, chaotically-recovering
+// configuration this whole mechanism exists to prevent (see the header
+// comment above for that bug's own original account). What changed is
+// only HOW the effective multiplier is chosen: instead of a fixed
+// user-set multiple of segLen (which the user had to manually retune
+// every time Segment Length changed, since the ABSOLUTE power it
+// delivered scaled directly with segLen), it's now derived FROM a
+// fixed absolute target divided by the CURRENT segLen, clamped to the
+// same [1, 20] range the old slider's own min/max already enforced --
+// so the delivered power stays constant as segLen is retuned, right up
+// until segLen gets so short that holding it constant would require
+// exceeding the already-validated safe ceiling, at which point it
+// degrades gracefully to that ceiling instead of exceeding it. Verified
+// via a Node simulation across 4 segLen values (the old code default,
+// the live short segLen, an extreme-short segLen, and a long segLen):
+// reproduces the OLD behavior bit-for-bit at the old default segLen
+// (by construction of this slider's own default, `45/19 * 4`), fully
+// compensates at the live short segLen (delivering the exact same
+// absolute power the old default segLen would have), and correctly
+// clamps at both ends of the safe range rather than exceeding it.
+const PUNCH_SEGMENTS_SAFE_RANGE = { min: 1, max: 20 };
 function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex, segLen){
   const dirX = hit.x - clickX, dirY = hit.y - clickY;
   const len = Math.hypot(dirX, dirY) || 1;
   const nx = dirX / len, ny = dirY / len;
-  const power = Math.min(vh(1.0) * intensity, segLen * cfg.maxPunchSegments);
+  const desiredAbsolutePower = vh(cfg.punchPowerAbsolute);
+  const effectiveMaxPunchSegments = Math.min(PUNCH_SEGMENTS_SAFE_RANGE.max,
+    Math.max(PUNCH_SEGMENTS_SAFE_RANGE.min, desiredAbsolutePower / segLen));
+  const power = Math.min(vh(1.0) * intensity, segLen * effectiveMaxPunchSegments);
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex) continue;
     const falloff = Math.exp(-Math.pow((i - hit.index) / 3, 2));
@@ -9898,65 +9888,61 @@ function update(rawDt){
   // independent chain, regardless of how fast or far mainRope's anchor
   // itself swings.
   if (introPhase !== 'waiting' && introPhase !== 'rising' && introPhase !== 'pausing'){
-    const bgAnchorDx = mainRope.points[0].x - bgRope.points[0].x;
-    const bgAnchorDy = mainRope.points[0].y - bgRope.points[0].y;
-    const bgAnchorDist = Math.hypot(bgAnchorDx, bgAnchorDy);
-    const bgAnchorMaxMove = vmin(cfg.bgRopeAnchorMaxSpeed) * dt;
-    if (bgAnchorDist > bgAnchorMaxMove && bgAnchorDist > 0){
-      const s = bgAnchorMaxMove / bgAnchorDist;
-      bgRope.points[0].x += bgAnchorDx * s;
-      bgRope.points[0].y += bgAnchorDy * s;
-    } else {
-      bgRope.points[0].x = mainRope.points[0].x;
-      bgRope.points[0].y = mainRope.points[0].y;
-    }
-    // Seam tangent-matching (2026-09-15), per direct request: "I want the
-    // background ropes physics to act exactly the same as the main rope.
-    // such that if i flick the main rope from below really hard and it
-    // causes the background rope to lift, it should look like 1
-    // continuous rope without a jog or sharp bend in the middle." Only
-    // bgRope's own ANCHOR position was ever driven by mainRope (the
-    // block just above) -- bgRope.points[1] onward swings on its own,
-    // independent gravity-driven physics with zero awareness of
-    // mainRope's own shape, so a hard flick (mainRope's anchor can swing
-    // 130+px per a strong punch, per Background Rope Anchor Max Speed's
-    // own measurement) visibly kinks the seam: the anchor jumps toward
-    // its new (capped-speed) position while bgRope's own body is still
-    // hanging from where it used to be. Fixed by rotating ONLY
-    // bgRope.points[1] around the (already-updated) anchor so bgRope's
-    // own first-segment tangent always matches mainRope's own current
-    // first-segment tangent -- eliminating the visible seam angle
-    // mismatch every frame, while leaving points[2] onward to the normal
-    // constraint solve just below (so the correction ripples down the
-    // REST of the chain the same way any other rope reacts to its own
-    // anchor moving, rather than rigidly rotating the whole tail at
-    // once). Rotates p.oldx/oldy by the SAME angle as p.x/y, around the
-    // anchor's OWN old position for the old-state half -- the identical
-    // "preserve momentum, don't zero or spike it" pattern topplePiece()
-    // already uses for exactly this reason (see that function's own
-    // comment for the full derivation of why using mismatched reference
-    // frames for old vs. current produces a real, wrong-direction
-    // velocity artifact). Verified via a Node simulation: after
-    // correction, bgRope's tangent matched mainRope's exactly (was 60deg
-    // off), the point's distance from the anchor was preserved bit-for-
-    // bit, and the implied per-frame velocity was a rotated version of
-    // its own prior relative velocity -- never zeroed, never spiked.
-    if (bgRope.points.length >= 2 && mainRope.points.length >= 2){
-      const bgP0 = bgRope.points[0], bgP1 = bgRope.points[1];
-      const mainP0 = mainRope.points[0], mainP1 = mainRope.points[1];
-      const curAngle = Math.atan2(bgP1.y - bgP0.y, bgP1.x - bgP0.x);
-      const targetAngle = Math.atan2(mainP1.y - mainP0.y, mainP1.x - mainP0.x);
-      let delta = targetAngle - curAngle;
-      while (delta > Math.PI) delta -= 2 * Math.PI;
-      while (delta < -Math.PI) delta += 2 * Math.PI;
-      const cosA = Math.cos(delta), sinA = Math.sin(delta);
-      const dx = bgP1.x - bgP0.x, dy = bgP1.y - bgP0.y;
-      const odx = bgP1.oldx - bgP0.oldx, ody = bgP1.oldy - bgP0.oldy;
-      bgP1.x = bgP0.x + dx * cosA - dy * sinA;
-      bgP1.y = bgP0.y + dx * sinA + dy * cosA;
-      bgP1.oldx = bgP0.oldx + odx * cosA - ody * sinA;
-      bgP1.oldy = bgP0.oldy + odx * sinA + ody * cosA;
-    }
+    // Corrected 2026-09-16 -- REPLACES both the capped-speed anchor chase
+    // AND the same-day seam tangent-matching hack entirely, per direct
+    // follow-up: "actually make background rope match main rope
+    // behaviour exactly." The tangent-matching fix corrected the visible
+    // ANGLE at the seam but left the underlying issue untouched:
+    // bgRope.points[0]'s own POSITION was still being capped
+    // (Background Rope Anchor Max Speed) relative to mainRope's, and its
+    // velocity was still derived independently from bgRope's own
+    // frame-to-frame motion rather than genuinely sharing mainRope's.
+    // This project's OWN prior investigation of the original "flies
+    // higher than mainRope" bug (see this slider's own now-removed
+    // comment, preserved here since it directly informs this fix)
+    // already measured that capping speed barely helped the core
+    // symptom (under a 7% reduction even at the most aggressive clamp
+    // tested) and explicitly named the more complete fix -- letting
+    // bgRope's anchor track mainRope's own FULL, uncapped motion -- as a
+    // follow-up decision, deferred at the time. That's exactly what's
+    // being done now.
+    //
+    // bgRope.points[0]'s x/y AND oldx/oldy are copied directly from
+    // mainRope.points[0], uncapped -- not just position. This is the
+    // critical difference from the ORIGINAL pre-2026-09-12 bug: that
+    // version snapped ONLY position while leaving bgRope's own STALE,
+    // independently-drifting oldx/oldy in place, pairing a NEW position
+    // with an UNRELATED old reference frame -- the exact "mismatched
+    // reference frame produces a wrong-direction/wrong-magnitude
+    // velocity artifact" bug class this project already diagnosed and
+    // fixed once in topplePiece() (see that function's own comment for
+    // the full derivation). Copying BOTH values together means
+    // bgRope.points[0]'s own IMPLIED velocity (x - oldx, y - oldy) is
+    // now bit-for-bit IDENTICAL to mainRope.points[0]'s own implied
+    // velocity every single frame -- the two anchors become
+    // kinematically indistinguishable, not just position-matched.
+    // Verified via a Node simulation reproducing the original bug
+    // scenario (a mainRope anchor previously drifting slowly, then
+    // swinging 130px/-20px in one frame from a strong punch): the OLD
+    // snap-position-only approach produced an implied bgRope velocity of
+    // (180.2, -120.1) -- roughly DOUBLE the real (130, -20), matching
+    // "flies higher than mainRope" exactly -- while this matched-pair
+    // copy produced (130, -20), an EXACT match.
+    // Any subsequent whip/overshoot through bgRope's own chain (via the
+    // normal integrateChain() call just below, using the SAME globally-
+    // shared damping/bendStiffness/constraintIterations mainRope's own
+    // solve uses) is now genuine, correctly-scaled rope physics
+    // reacting to the SAME real anchor motion mainRope itself
+    // experiences -- not an artificially bounded or artificially
+    // amplified substitute. `Background Rope Anchor Max Speed` no
+    // longer has a mechanism to control -- removed outright from the
+    // dev panel rather than left inert, per this project's own "an
+    // inert slider that visibly does nothing is worse than no slider"
+    // convention.
+    bgRope.points[0].x = mainRope.points[0].x;
+    bgRope.points[0].y = mainRope.points[0].y;
+    bgRope.points[0].oldx = mainRope.points[0].oldx;
+    bgRope.points[0].oldy = mainRope.points[0].oldy;
   }
   integrateChain(bgRope.points, bgRope.segLen, dt, gravityAccel, 0);
   maintainBgRopeEnd();

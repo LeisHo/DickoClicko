@@ -2819,3 +2819,95 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   scripted climb instead, and this correction would fight it). Not
   live-browser-verified (this environment's recurring dev-server
   page-boot stall, documented elsewhere in this file).
+- **SUPERSEDED the SAME DAY, 2026-09-16 -- the tangent-matching entry
+  directly above only fixed the visible ANGLE at the bgRope/mainRope
+  seam; the underlying position+velocity coupling was still capped and
+  independent.** Per direct follow-up: "actually make background rope
+  match main rope behaviour exactly." Replaced BOTH the capped-speed
+  anchor chase (`Background Rope Anchor Max Speed`, since REMOVED --
+  see its own now-corrected comment) AND the tangent-matching rotation
+  above with a single, simpler mechanism: every frame,
+  `bgRope.points[0].x/y` AND `.oldx/.oldy` are copied DIRECTLY from
+  `mainRope.points[0]`, uncapped -- not just position. This is the
+  critical difference from the ORIGINAL pre-2026-09-12 bug ("the
+  background rope seems to fly up far higher than... the main rope
+  start anchor"): that version snapped ONLY position while leaving
+  bgRope's own stale, independently-drifting old-position in place --
+  pairing a NEW position with an UNRELATED old reference frame, the
+  exact "mismatched reference frame produces a wrong-direction/
+  wrong-magnitude velocity artifact" bug class this project already
+  diagnosed and fixed once in `topplePiece()`. Copying BOTH values
+  together makes bgRope's anchor's own IMPLIED velocity bit-for-bit
+  IDENTICAL to mainRope's, every frame -- the two anchors become
+  kinematically indistinguishable, not merely position- or angle-
+  matched. **Verified via a Node simulation reproducing the ORIGINAL
+  bug's exact scenario** (a mainRope anchor drifting slowly, then
+  swinging 130px/-20px in one frame from a strong punch, per that
+  slider's own prior measurement): the OLD snap-position-only approach
+  produced an implied bgRope velocity of `(180.2, -120.1)` -- roughly
+  DOUBLE the real `(130, -20)`, matching "flies higher than mainRope"
+  exactly -- while this matched-pair copy produced `(130, -20)`, an
+  EXACT match. This project's own prior investigation of the original
+  bug (see `Background Rope Anchor Max Speed`'s own former comment,
+  preserved in the CHANGELOG) had ALREADY measured that capping speed
+  barely helped the core symptom (under a 7% reduction even at the
+  most aggressive clamp tested) and explicitly named this exact fix as
+  the more complete one, deferred at the time as a follow-up decision
+  -- this entry is that follow-up. Any subsequent whip/overshoot
+  through bgRope's own chain is now genuine, correctly-scaled rope
+  physics reacting to the SAME real anchor motion mainRope itself
+  experiences (both use the same globally-shared damping/bendStiffness/
+  constraintIterations already) -- not an artificially bounded or
+  amplified substitute. `Background Rope Anchor Max Speed` had no
+  mechanism left to control and was removed outright, per this
+  project's own "an inert slider that visibly does nothing is worse
+  than no slider" convention. **If a future report says bgRope's own
+  reaction to a hard flick now feels TOO strong, the right fix is a
+  NEW, honestly-named coupling-strength control on this exact
+  mechanism (e.g. a multiplier on the copied velocity before it's
+  applied) -- not reintroducing the old capped-chase slider**, which
+  this entry's own simulation shows barely worked anyway. Not
+  live-browser-verified (same recurring dev-server page-boot stall).
+- **`cfg.maxPunchSegments` (a segLen-MULTIPLE slider) is REPLACED by
+  `cfg.punchPowerAbsolute` (an ABSOLUTE, segLen-INDEPENDENT %vh target)
+  -- 2026-09-16.** Per direct follow-up, after being shown exactly
+  which of this file's own segLen-dependent formulas are genuinely
+  structural (the rope's own rest-length, total-length bookkeeping,
+  reach limits, growth-completion tracking -- these can't be
+  "decoupled" without changing what a rope even IS) vs. this one
+  specific policy tradeoff (a safety multiplier that could instead
+  auto-scale): "yeah tahts right" to auto-scaling the dependent
+  slider's own effective value inversely with segLen, so the delivered
+  punch power stays constant as Segment Length is retuned, without
+  manually re-touching the punch slider every time. **The underlying
+  safety property is completely UNCHANGED** -- a punch must still never
+  displace a point by more than `PUNCH_SEGMENTS_SAFE_RANGE.max` (20,
+  a new internal, non-user-facing constant, same value the old
+  slider's own max already was) times the CURRENT segLen, preventing
+  the exact "dark flash" chain-inversion bug this whole mechanism
+  exists to prevent (see `applyPunch()`'s own header comment for that
+  bug's full account) -- what changed is only HOW the effective
+  multiplier gets chosen each call: `effectiveMaxPunchSegments =
+  clamp(vh(cfg.punchPowerAbsolute) / segLen, 1, 20)`, then
+  `power = min(vh(1.0)*intensity, segLen * effectiveMaxPunchSegments)`
+  exactly as before. Default (`180/19`, i.e. `45/19 * 4`) is chosen so
+  this reproduces the OLD behavior bit-for-bit at `cfg.segmentLength`'s
+  own CODE default (`45/19`%vh) -- verified via a Node simulation
+  across 4 segLen values: exact match at the old default segLen
+  (`effective=4, powerCap=9.4737`), full compensation at the live short
+  segLen (`effective=10.53, powerCap` still exactly `9.4737` -- the
+  SAME absolute power, not degraded), correct clamping to the safe
+  ceiling at an extreme-short segLen (`effective=20` exactly, never
+  higher), and correct clamping to the safe floor at a long segLen
+  (`effective=1` exactly, never lower). **If `cfg.segmentLength` is
+  ever retuned, this now needs NO companion retune of the punch power
+  setting** -- the whole point of this change -- **unless segLen moves
+  so far that even the established-safe 1x-20x range can't reach the
+  desired absolute power, in which case it degrades gracefully to
+  whichever end of that range is closer, exactly as intended, not a
+  bug to chase.** `cfg.maxPunchSegments` no longer exists anywhere in
+  this file (the key is gone from `DEV_GROUPS`/the controls array;
+  any live saved settings file's own stray `maxPunchSegments` value or
+  group-order reference is harmless and will self-clean on the next
+  real Save -- same precedent as `bgRopeAnchorMaxSpeed`'s own removal
+  above).

@@ -14228,6 +14228,94 @@ via a dedicated Node-level simulation before being written into the
 live code (the endcap fix's simulation caught the exact amplification
 factor; the bgRope fix's simulation confirmed momentum preservation).
 Not live-browser-verified (this environment's recurring dev-server
-page-boot stall, documented elsewhere in this file). Not yet committed
+page-boot stall, documented elsewhere in this file).
+
+--------------------------------------------------------------------------------
+2026-09-16  -  12:19 AM - 00:30 AM EDT
+
+Superseded the same-day tangent-matching fix with genuine position+
+velocity coupling between the background rope and main rope anchors.
+
+Per direct follow-up: "actually make background rope match main rope
+behaviour exactly." The tangent-matching fix (previous entry) only
+corrected the visible ANGLE at the seam -- the underlying anchor
+position was still speed-capped and its velocity still derived
+independently from bgRope's own motion, not genuinely shared with
+mainRope's.
+
+Fixed (index.html):
+- Replaced BOTH the capped-speed anchor chase (Background Rope Anchor
+  Max Speed) AND the tangent-matching rotation with a single simpler
+  mechanism: bgRope.points[0]'s x/y AND oldx/oldy are now copied
+  directly from mainRope.points[0] every frame, uncapped. Copying both
+  values together (not position alone) avoids the exact bug the
+  ORIGINAL pre-2026-09-12 issue had -- pairing a new position with a
+  stale, unrelated old-position produces a wrong-magnitude velocity
+  artifact (the same bug class already fixed once in topplePiece()).
+- Removed the now-mechanism-less Background Rope Anchor Max Speed
+  slider outright, per this project's own "an inert slider that
+  visibly does nothing is worse than no slider" convention.
+
+This project's own prior investigation of the original "flies higher
+than mainRope" bug had already measured that capping speed barely
+helped the core symptom (under 7% reduction even at the most
+aggressive clamp tested) and explicitly named this exact fix -- full
+uncapped position+velocity coupling -- as the more complete follow-up,
+deferred at the time. This is that follow-up.
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse). Verified via a Node simulation reproducing the
+ORIGINAL bug's exact measured scenario (a mainRope anchor swinging
+130px/-20px in one frame from a strong punch): the OLD snap-position-
+only approach produced an implied bgRope velocity of (180.2, -120.1)
+-- roughly double the real (130, -20) -- while the new matched-pair
+copy produced (130, -20), an EXACT match. Not live-browser-verified
+(this environment's recurring dev-server page-boot stall).
+
+--------------------------------------------------------------------------------
+2026-09-16  -  00:40 AM - 00:45 AM EDT
+
+Replaced the segLen-multiple punch power cap with an absolute,
+segLen-independent target, so Segment Length can be retuned without
+also re-touching the punch power slider.
+
+Context: after explaining why a short Segment Length makes physics
+hard to fine-tune (several stability formulas scale WITH segLen by
+design), the user asked whether all segLen-reading settings could be
+made to not do so. Grepped every reference to confirm most are
+structural (the rope's own rest-length, total-length bookkeeping,
+reach limits, growth tracking) and can't be decoupled without changing
+what a rope is -- only applyPunch()'s own power cap is a genuine
+policy tradeoff. Proposed auto-scaling that one instead of removing
+its segLen-relativity outright (which would reopen the original chain-
+inversion bug); user confirmed that's what they wanted.
+
+Fixed (index.html):
+- cfg.maxPunchSegments (a segLen-MULTIPLE slider, "Punch Power Cap (x
+  Segment Length)") replaced with cfg.punchPowerAbsolute (an ABSOLUTE
+  %vh target, "Punch Power Cap (Absolute, %vh)").
+- applyPunch() now derives the effective multiplier per-call:
+  effectiveMaxPunchSegments = clamp(vh(punchPowerAbsolute) / segLen,
+  1, 20) -- the same [1,20] safe range the old slider's own min/max
+  already enforced, now an internal PUNCH_SEGMENTS_SAFE_RANGE constant
+  rather than a user-facing bound. power = min(vh(1.0)*intensity,
+  segLen * effectiveMaxPunchSegments), unchanged in shape.
+- Default (180/19, i.e. 45/19 * 4) chosen so this reproduces the OLD
+  behavior bit-for-bit at cfg.segmentLength's own code default.
+
+The underlying safety property (a punch can never displace a point by
+more than 20x the CURRENT segLen, preventing the "dark flash" chain-
+inversion bug) is completely unchanged -- only HOW the effective
+multiplier is chosen changed, from a fixed user-set value to one
+auto-derived from a fixed absolute target.
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse). Verified via a Node simulation across 4 segLen values:
+exact match to old behavior at the old default segLen, full
+compensation (same absolute power, not degraded) at the live short
+segLen, and correct clamping to both ends of the safe range at
+extreme-short and long segLens respectively -- never exceeding the
+already-validated envelope. Not live-browser-verified (this
+environment's recurring dev-server page-boot stall). Not yet committed
 or pushed.
 
