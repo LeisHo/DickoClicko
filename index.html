@@ -578,6 +578,38 @@ const DEV_GROUPS = [
     // behavior change. See update()'s own `Math.min(...)` call for
     // exactly how the 2 clamps combine.
     { key:'dragMaxDistance', label:'Drag Max Distance', type:'slider', unit:'%vmin', min:5, max:150, step:1, def:150 },
+    // Drag Mouse Sensitivity (2026-09-16), per direct request: "When
+    // dragging the rope i want the mouse sensitivity to be less than
+    // normal. Provide me a slider to set the dragging mouse sensitivity
+    // scaler. so if ts set to 0.5, it will be half as sensitive as
+    // normal." 1 (default) reproduces the exact prior behavior --
+    // update()'s own drag-pin block now tracks a SEPARATE,
+    // sensitivity-scaled cursor position (downInfo.dragSensCursorX/Y),
+    // incremented each frame by the REAL cursor's own frame-to-frame
+    // DELTA times this multiplier (not an absolute position remap --
+    // scaling the delta is what makes "half as sensitive" mean "the
+    // rope moves half as far for the same mouse movement," rather than
+    // just being pulled toward half the real cursor's own distance from
+    // the anchor). See that block's own comment for the full mechanism.
+    { key:'dragMouseSensitivity', label:'Drag Mouse Sensitivity (x)', type:'slider', unit:'x', min:0.05, max:2, step:0.05, def:1 },
+    // Overstretch Min Sensitivity (2026-09-16), per direct request:
+    // "When the rope gets overstetched, I want the mouse sensitivity to
+    // decrease progressively. Provide me a slider for minimum
+    // sensitivity and a curve graph input ui to set the linear
+    // relationship of overstretch to mouse sensitivity." Defines the
+    // sensitivity multiplier at FULL overstretch (100%, i.e.
+    // overstretchFrac=1) -- at 0% overstretch, the multiplier is always
+    // 1.0 (full, undiminished sensitivity), linearly interpolating down
+    // to this value as overstretch increases. Composes MULTIPLICATIVELY
+    // with cfg.dragMouseSensitivity (item 3, above) -- 2 independent,
+    // orthogonal reductions, not a replacement for one another. def:1
+    // (no reduction at all, even at full overstretch) is a pure no-op
+    // for any project/save that's never touched it. The interactive
+    // curve-graph widget (see buildOverstretchSensitivityCurveWidget())
+    // drives/mirrors this SAME value -- dragging the widget's own
+    // endpoint updates this slider and vice versa, 2 views of one
+    // number, not 2 separate settings to keep in sync.
+    { key:'dragOverstretchMinSensitivity', label:'Overstretch Min Sensitivity (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:1 },
     // Rope Overstretch (2026-09-14, per explicit spec) -- Drag Max
     // Distance above stays the REST limit; this adds a genuinely elastic
     // "give" zone beyond it (the true hard limit becomes maxDragDist +
@@ -605,6 +637,26 @@ const DEV_GROUPS = [
     // (see render()'s own strokeRopeCurveVariableWidth() call) -- never
     // touches mainRope.segLen, rest lengths, or the constraint solver.
     { key:'overstretchThinningEnabled', label:'Overstretch Thinning Enabled', type:'checkbox', def:true },
+    // Drag Minimum Thinning Depth (2026-09-16), per direct report: "When
+    // the rope is short, a drag causes no thinning. Im sure thats as
+    // intended by the code, but i dont liek the way it looks. i want
+    // atleast some thinning." Root cause: thinning was 100% gated on
+    // overstretchFrac > 0, i.e. on actually EXCEEDING maxDragDist -- for
+    // a short rope, maxDragDist (segLen * dragPinIndex, roughly) is
+    // itself small, so an ordinary drag well within that already-small
+    // limit produced zero thinning, not just less of it. This slider
+    // floors the thinning depth to a constant baseline whenever ANY
+    // drag is active (see update()'s own overstretchDepth computation --
+    // now Math.max(this floor, the existing progressive overstretch
+    // depth) -- so a short rope shows this same baseline "give" look
+    // immediately on any drag, while a rope that DOES overstretch still
+    // ramps up smoothly PAST this floor toward Overstretch Max Thinning
+    // Depth exactly as before. Still gated by Overstretch Thinning
+    // Enabled (the checkbox above) -- that toggle's own scope broadens
+    // slightly with this addition, from "thinning caused by overstretch"
+    // to "rope thinning while dragging" in general, since the two are
+    // now the same rendering mechanism at different depths.
+    { key:'dragMinThinDepth', label:'Drag Minimum Thinning Depth (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:0.15 },
     { key:'overstretchMaxThinDepth', label:'Overstretch Max Thinning Depth (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:0.6 },
     // Exponent on sin(pi*t) -- 1 reproduces the exact profile from spec
     // (the default, so this control adds tunability without changing the
@@ -906,6 +958,16 @@ const DEV_GROUPS = [
     // only ever touches the TANGENTIAL component -- this is the first
     // slider in this file to touch the wall clamp's own NORMAL axis.
     { key:'wallBounciness', label:'Wall Bounciness',      type:'slider',   unit:'x', min:0, max:1, step:0.01, def:0 },
+    // Ceiling Bounciness (2026-09-16), per direct request: "Provide a
+    // slider for ceiling and wall bounciness. as in when the rope
+    // collides with the browser top edge or side edges, what level of
+    // bounce there will be." clampToWalls() previously used the SAME
+    // wallBounciness value for all 3 edges it handles (left/right/top)
+    // -- this gives the TOP edge (the ceiling) its own independently-
+    // tunable value, leaving wallBounciness governing left/right only.
+    // Same unit/range/default (0) as wallBounciness, so this is a pure
+    // no-op for any project/save that's never touched it.
+    { key:'ceilingBounciness', label:'Ceiling Bounciness', type:'slider',   unit:'x', min:0, max:1, step:0.01, def:0 },
   ]},
   { title:'STARTUP ANIMATION', controls:[
     { key:'introEnabled',        label:'Startup Animation Enabled', type:'checkbox', def:true },
@@ -2690,6 +2752,129 @@ function captureGroup(g){
 // be either depending on what's been dragged where.
 function findRowByKey(key){
   return document.getElementById('devPanel').querySelector('.dp-row[data-key="' + CSS.escape(key) + '"]');
+}
+// Interactive draggable curve-graph widget for Overstretch Min
+// Sensitivity (2026-09-16) -- per direct request: "Provide me a slider
+// for minimum sensitivity and a curve graph input ui to set the linear
+// relationship of overstretch to mouse sensitivity," with a genuinely
+// interactive draggable editor explicitly chosen over a static preview
+// graph or plain slider-only. Hand-built DOM injected directly after
+// the dragOverstretchMinSensitivity slider's own row, following this
+// project's OWN established pattern for a custom widget that doesn't
+// fit the generic slider/checkbox/dropdown system -- Mouse Log is the
+// precedent (hand-built DOM, wired to its own state separately from
+// the standard control-registration pipeline, per that feature's own
+// gotcha). NOT registered as its own DEV_GROUPS control -- the SLIDER
+// it sits beside (dragOverstretchMinSensitivity) stays the single
+// source of truth cfg/Save/Copy/Reset all read; this widget is purely
+// an ADDITIONAL way to view/edit that same value, kept in sync in both
+// directions (dragging the widget's handle updates the slider live via
+// the existing syncControlDisplay() helper; moving the slider updates
+// the widget's own rendered handle position via a plain 'input'
+// listener).
+//
+// The curve is a straight line from a FIXED left point (0% overstretch
+// -> sensitivity 1.0, deliberately never draggable -- "at zero
+// overstretch, always full sensitivity" isn't something this feature
+// asked to be adjustable) to a DRAGGABLE right point (100% overstretch
+// -> sensitivity = the slider's own current value). Only the right
+// point's Y position is meaningful to drag, since its X is fixed at
+// the 100% mark by definition.
+//
+// HONEST LIMITATION: this widget re-renders on its own drag and on the
+// paired slider's own 'input' event, but NOT on every possible way
+// cfg.dragOverstretchMinSensitivity could change externally (e.g. a
+// Reset/Load calling syncControlDisplay() directly sets the slider's
+// OWN value without dispatching an 'input' event, so this widget can
+// go briefly stale until next interacted with). Acceptable for a
+// visual-preview/alt-input widget where the slider remains the
+// authoritative control; not worth a fuller observer/event system for
+// one small widget. NOT reorder-aware either -- if the paired row is
+// ever drag-reordered elsewhere in the panel, this widget stays a
+// plain DOM sibling of wherever that row USED to be.
+//
+// Not live-browser-verified (this environment's recurring dev-server
+// page-boot stall) -- the drag-interaction code itself follows the
+// SAME tryCapture()/pointer-capture pattern every other draggable
+// element in this panel already uses (group/row drag-reorder, the 8
+// panel resize handles), and the pure coordinate math (valueToY/
+// yToValue) was checked by hand for both directions round-tripping
+// correctly, but the actual live pointer-drag GESTURE has not been
+// exercised in a real browser the way this session's pure physics/
+// logic changes have been via Node simulation.
+function buildOverstretchSensitivityCurveWidget(){
+  const anchorRow = findRowByKey('dragOverstretchMinSensitivity');
+  if (!anchorRow) return; // control not found (shouldn't happen) -- skip rather than throw
+  const W = 240, H = 90, PAD = 10;
+  const wrap = document.createElement('div');
+  wrap.className = 'dp-row dp-curve-widget-row';
+  wrap.style.paddingLeft = '18px';
+  wrap.style.paddingBottom = '6px';
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('width', String(W));
+  svg.setAttribute('height', String(H));
+  svg.style.background = 'rgba(255,255,255,0.05)';
+  svg.style.borderRadius = '4px';
+  svg.style.touchAction = 'none'; // a touch-drag on the handle shouldn't also scroll the panel
+
+  const border = document.createElementNS(svgNS, 'rect');
+  border.setAttribute('x', '0.5'); border.setAttribute('y', '0.5');
+  border.setAttribute('width', String(W - 1)); border.setAttribute('height', String(H - 1));
+  border.setAttribute('fill', 'none'); border.setAttribute('stroke', 'rgba(255,255,255,0.15)');
+  svg.appendChild(border);
+
+  const line = document.createElementNS(svgNS, 'line');
+  line.setAttribute('stroke', 'var(--dp-accent, #6cf)'); line.setAttribute('stroke-width', '2');
+  svg.appendChild(line);
+
+  const leftDot = document.createElementNS(svgNS, 'circle');
+  leftDot.setAttribute('r', '3'); leftDot.setAttribute('fill', 'rgba(255,255,255,0.4)');
+  svg.appendChild(leftDot);
+
+  const handle = document.createElementNS(svgNS, 'circle');
+  handle.setAttribute('r', '6'); handle.setAttribute('fill', 'var(--dp-accent, #6cf)');
+  handle.style.cursor = 'ns-resize';
+  svg.appendChild(handle);
+
+  function valueToY(v){ return PAD + (1 - v) * (H - 2 * PAD); }
+  function yToValue(y){ return Math.max(0, Math.min(1, 1 - (y - PAD) / (H - 2 * PAD))); }
+
+  function render(){
+    const v = cfg.dragOverstretchMinSensitivity;
+    const x0 = PAD, y0 = valueToY(1); // left point fixed at sensitivity=1
+    const x1 = W - PAD, y1 = valueToY(v);
+    line.setAttribute('x1', String(x0)); line.setAttribute('y1', String(y0));
+    line.setAttribute('x2', String(x1)); line.setAttribute('y2', String(y1));
+    leftDot.setAttribute('cx', String(x0)); leftDot.setAttribute('cy', String(y0));
+    handle.setAttribute('cx', String(x1)); handle.setAttribute('cy', String(y1));
+  }
+  render();
+
+  let dragging = false;
+  handle.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    tryCapture(handle, e.pointerId);
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const rect = svg.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const v = round(yToValue(y), 2);
+    cfg.dragOverstretchMinSensitivity = v;
+    syncControlDisplay('dragOverstretchMinSensitivity', v);
+    render();
+  });
+  window.addEventListener('pointerup', () => { dragging = false; });
+
+  const sliderEls = numEls['dragOverstretchMinSensitivity'];
+  if (sliderEls && sliderEls.slider){
+    sliderEls.slider.addEventListener('input', render);
+  }
+
+  wrap.appendChild(svg);
+  anchorRow.insertAdjacentElement('afterend', wrap);
 }
 // order.ungrouped: the row keys currently sitting directly in
 // #dpUngrouped, in order -- new field, alongside the pre-existing
@@ -9572,10 +9757,72 @@ function update(rawDt){
       // otherwise permanently pin the tracked cursor to the drag point,
       // breaking normal tracking entirely.
       if (!downInfo.dragCursorRealigned){
-        mouseX = dragPoint.x; mouseY = dragPoint.y;
-        mfX = dragPoint.x; mfY = dragPoint.y;
+        // Corrected 2026-09-16 -- when dragging the TIP with an active
+        // endcap, realign to dragPoint PLUS the endcap's own drag-point
+        // extension, not dragPoint alone. Real, reported bug: "the
+        // Drag Pickup Duration is working as i intended... The problem
+        // is that once that duration is over, the app uses my (now
+        // moved) true cursor position. so the cursor frame and the rope
+        // suddenly snap to the moved location." Root cause: this
+        // realignment targets the RAW physics joint's own position, but
+        // the endcap pull-back (see that block's own comment, a few
+        // lines below) assumes the tracked cursor represents where the
+        // endcap's own rendered drag point (now the annotated dot, see
+        // dragPointExtensionPx()'s own comment) wants to be -- pulling
+        // the joint BACKWARD by up to that extension distance the very
+        // next line, even with ZERO real cursor movement, since the
+        // realignment target and the pull-back's own reference point
+        // never agreed on what "the drag point" means. Fixed by
+        // realigning to the SAME point the pull-back itself targets.
+        let realignX = dragPoint.x, realignY = dragPoint.y;
+        if (dragPinIndex === mainRope.points.length - 1 && cfg.endcapDesign !== 'none'){
+          const tipDir = tipDirection(mainRope.points);
+          const ext = dragPointExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight) * (mainRope.endcapStretchMult || 1);
+          realignX += tipDir.x * ext;
+          realignY += tipDir.y * ext;
+        }
+        mouseX = realignX; mouseY = realignY;
+        mfX = realignX; mfY = realignY;
         downInfo.dragCursorRealigned = true;
+        // Drag Mouse Sensitivity's own tracked state -- initialized
+        // HERE (the same realignment instant) so it starts exactly
+        // continuous with the just-realigned cursor, not from wherever
+        // the real mouse happened to be during the pickup freeze. See
+        // cfg.dragMouseSensitivity's own comment for the full mechanism.
+        downInfo.dragSensCursorX = realignX;
+        downInfo.dragSensCursorY = realignY;
+        downInfo.dragSensLastRawX = realignX;
+        downInfo.dragSensLastRawY = realignY;
       }
+      // Drag Mouse Sensitivity -- advance the scaled cursor by this
+      // frame's REAL mouse delta times cfg.dragMouseSensitivity, rather
+      // than snapping to a scaled ABSOLUTE position -- so "0.5" means
+      // "the rope moves half as far for a given mouse movement" at any
+      // point during the drag, not "the rope tracks a point halfway
+      // between the anchor and the real cursor" (a different, less
+      // useful effect). At the default of 1, dragSensCursorX/Y always
+      // exactly equals mouseX/mouseY (pure no-op, byte-for-byte the
+      // prior behavior).
+      //
+      // Composed with Overstretch Min Sensitivity here too -- reads
+      // mainRope.overstretchPx from LAST FRAME (a genuine circular
+      // dependency otherwise: this frame's own overstretch amount can
+      // only be known AFTER this same leash/sensitivity computation
+      // decides where the drag point ends up) -- same one-frame-lag
+      // convention this file already establishes for the identical
+      // problem (see mainRope.endcapStretchMult's own comment a few
+      // lines below). Linearly interpolates from 1.0 (no reduction, at
+      // 0% overstretch) down to cfg.dragOverstretchMinSensitivity (at
+      // 100% overstretch), then MULTIPLIES with cfg.dragMouseSensitivity
+      // -- 2 independent reductions compose, neither replaces the other.
+      const lastFrameOverstretchFrac = (cfg.overstretchEnabled && overstretchTol > 0)
+        ? Math.min(1, mainRope.overstretchPx / overstretchTol) : 0;
+      const overstretchSensitivityMult = 1 - lastFrameOverstretchFrac * (1 - cfg.dragOverstretchMinSensitivity);
+      const effectiveDragSensitivity = cfg.dragMouseSensitivity * overstretchSensitivityMult;
+      downInfo.dragSensCursorX += (mouseX - downInfo.dragSensLastRawX) * effectiveDragSensitivity;
+      downInfo.dragSensCursorY += (mouseY - downInfo.dragSensLastRawY) * effectiveDragSensitivity;
+      downInfo.dragSensLastRawX = mouseX;
+      downInfo.dragSensLastRawY = mouseY;
       // Corrected 2026-09-14 -- REGRESSION FIX (superseded in shape, not
       // in spirit, by the Drag Leash below). This used to read
       // `mouseFlickInteractionPos(mouseX, mouseY, 'drag')` (FLICK MOUSE's
@@ -9609,11 +9856,18 @@ function update(rawDt){
       // free to visibly separate from the (possibly-frozen) rope point by
       // up to the leash radius, exactly as asked.
       const dragLeashRadius = vmin(cfg.ropeThickness) * 0.5 * cfg.cursorAnimationDragToleranceMult;
-      const ldx = mouseX - dragPoint.x, ldy = mouseY - dragPoint.y;
+      // Drag Mouse Sensitivity -- the leash targets the SENSITIVITY-
+      // SCALED cursor (dragSensCursorX/Y, tracked above), not the raw
+      // mouseX/mouseY directly. The Cursor Animation sprite's own
+      // position (mainRope.dragSpriteTarget, computed further down FROM
+      // dragPoint's own final position) automatically inherits this same
+      // reduced sensitivity as a side effect, with no separate change
+      // needed there.
+      const ldx = downInfo.dragSensCursorX - dragPoint.x, ldy = downInfo.dragSensCursorY - dragPoint.y;
       const ldist = Math.hypot(ldx, ldy);
       let dragTargetPos = (ldist <= dragLeashRadius || ldist <= 1e-6)
         ? { x: dragPoint.x, y: dragPoint.y }
-        : { x: mouseX - (ldx / ldist) * dragLeashRadius, y: mouseY - (ldy / ldist) * dragLeashRadius };
+        : { x: downInfo.dragSensCursorX - (ldx / ldist) * dragLeashRadius, y: downInfo.dragSensCursorY - (ldy / ldist) * dragLeashRadius };
       // Drag by the endcap's own visual TIP -- EXACT pull-back, corrected
       // 2026-09-15 (3rd pass). Per direct report: "when i initiate the
       // drag sequence... I line [the interaction point] to the tip of
@@ -9753,8 +10007,14 @@ function update(rawDt){
     const actualDist = Math.hypot(dragPoint.x - anchor.x, dragPoint.y - anchor.y);
     mainRope.overstretchPx = Math.max(0, actualDist - maxDragDist);
     const overstretchFrac = overstretchTol > 0 ? Math.min(1, mainRope.overstretchPx / overstretchTol) : 0;
-    mainRope.overstretchActive = cfg.overstretchEnabled && cfg.overstretchThinningEnabled && overstretchFrac > 0;
-    mainRope.overstretchDepth = overstretchFrac * cfg.overstretchMaxThinDepth;
+    // Corrected 2026-09-16 -- overstretchActive no longer requires
+    // overstretchFrac > 0 (see dragMinThinDepth's own comment for the
+    // full account): this code only ever RUNS while actively dragging,
+    // so thinning now always renders whenever the 2 existing toggles
+    // allow it, with overstretchDepth itself floored at
+    // cfg.dragMinThinDepth rather than starting from a hard 0.
+    mainRope.overstretchActive = cfg.overstretchEnabled && cfg.overstretchThinningEnabled;
+    mainRope.overstretchDepth = Math.max(cfg.dragMinThinDepth, overstretchFrac * cfg.overstretchMaxThinDepth);
     mainRope.overstretchDragIndex = dragPinIndex;
     // Deformable Endcap stretch multiplier -- converts endcapPullPx
     // (captured above) into the actual elongation applied by
@@ -10173,10 +10433,16 @@ function update(rawDt){
           p.oldx = p.x + vx * cfg.wallBounciness;
         }
         if (p.y < minY){
+          // Ceiling Bounciness (2026-09-16) -- the TOP edge now uses its
+          // own independent bounciness value, cfg.ceilingBounciness,
+          // instead of sharing cfg.wallBounciness with the left/right
+          // edges above. Wall Friction (the tangential component) is
+          // deliberately UNCHANGED/shared -- only the normal-axis
+          // bounce was asked to be split out.
           const vy = p.y - p.oldy;
           p.y = minY;
           if (cfg.wallFriction > 0) p.oldx = p.x - (p.x - p.oldx) * (1 - cfg.wallFriction);
-          p.oldy = p.y + vy * cfg.wallBounciness;
+          p.oldy = p.y + vy * cfg.ceilingBounciness;
         }
       });
     };
@@ -10507,7 +10773,18 @@ function update(rawDt){
     // button/touch is actually down, and only locks once SNAP is
     // genuinely playing out its remaining frames after release.
     const mfSnapHeld = mfMode === 'snap' && (mfRightDown || mfTripleHeld);
-    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'dragRelease' && (mfMode !== 'snap' || mfSnapHeld)){
+    // !mfDragActiveForAngle (2026-09-16), per direct request: "WHen i
+    // initiate a drag, during the drag animation sequeunce as well as
+    // the drag pickup duration, dont transition to a different
+    // animation type." mfDragActiveForAngle (already computed above,
+    // for the angle-reference override) is true for the ENTIRE drag
+    // lifecycle -- both the pickup-easing window and the active-
+    // dragging window -- and only becomes false once a real release has
+    // happened, at which point 'dragRelease' mode's own existing
+    // exclusion (just above) takes over. Reusing this exact flag rather
+    // than adding a new one keeps both drag-related locks agreeing on
+    // the identical definition of "currently dragging."
+    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'dragRelease' && (mfMode !== 'snap' || mfSnapHeld) && !mfDragActiveForAngle){
       mfDirectionKey = mfTargetDirKey;
       // 2026-09-12, per explicit follow-up: "whilst right click and hold
       // is holding, i would still like the animation type to change...
@@ -12245,6 +12522,7 @@ if (DEV_MODE){
   buildDevPanel();
   buildPanelStyleGroup();
   applyDefaultDevPanelSubgroupOrder();
+  buildOverstretchSensitivityCurveWidget();
   // Row (setting) dragging, registered ONCE here -- delegation-based
   // (see makeReorderable()'s own comment), so this single call reaches
   // every row in every group AND #dpUngrouped, including ones created/

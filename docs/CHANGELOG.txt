@@ -14362,5 +14362,68 @@ This is a separate fix from the still-unfixed Drag Pickup jump bug
 (diagnosed 2026-09-15, documented in CLAUDE.md, not yet addressed) --
 that bug is about a timing/handoff discontinuity; this fix is about
 where the drag target sits. Both may be needed for endcap-tip dragging
-to feel fully correct. Not yet committed or pushed.
+to feel fully correct.
+
+--------------------------------------------------------------------------------
+2026-09-16  -  03:52 AM - 04:02 AM EDT
+
+6 drag/physics feature requests, landed together: fixed the pickup
+jump for real this time, always-on thinning, drag mouse sensitivity
+(with an overstretch-linked interactive curve), locked animation type
+during drag, and a separate ceiling bounciness slider.
+
+1. Pickup-realignment jump (tip drags) -- FIXED. Same root cause as the
+   still-open "Drag Pickup jump" diagnosis: the realignment targets the
+   raw physics joint, but the endcap pull-back assumes the cursor
+   represents the endcap's own rendered drag point (extension
+   included), yanking the joint backward the instant pickup ends even
+   with zero cursor movement. Fixed by realigning to
+   dragPoint + tipDirection*dragPointExtensionPx(...) when dragging the
+   tip with an active endcap. Verified via simulation: residual
+   displacement with zero cursor movement dropped from the full
+   extension (30px simulated) to exactly the leash radius (4px).
+2. No thinning on a short rope -- FIXED. New dragMinThinDepth slider
+   (def 0.15) floors the thinning depth whenever any drag is active,
+   with the existing overstretch-based depth still ramping past that
+   floor exactly as before.
+3. Drag Mouse Sensitivity -- ADDED. New dragMouseSensitivity slider
+   (def 1, no-op). Tracks a separate scaled-cursor state, advanced each
+   frame by the real cursor's OWN delta times the multiplier -- so 0.5
+   means half the rope movement for the same mouse movement, not "track
+   a point halfway to the cursor". The Drag Anchor Leash now targets
+   this scaled cursor; the Cursor Animation sprite inherits the effect
+   automatically since its position derives from the rope's own result.
+4. Overstretch -> sensitivity with an interactive draggable curve graph
+   -- ADDED, the largest item. New dragOverstretchMinSensitivity slider
+   (def 1, no-op) composes multiplicatively with item 3. A new hand-
+   built SVG widget (buildOverstretchSensitivityCurveWidget()) sits
+   next to the slider, following this project's Mouse Log precedent for
+   custom dev-panel widgets outside the generic control system -- a
+   fixed left point (0% overstretch, sensitivity 1.0) to a draggable
+   right point (100%, mirrors the slider), 2-way synced. Functional
+   formula verified via simulation (5 cases, including the composed
+   item-3 x item-4 scenario). The widget's pure coordinate math
+   verified to round-trip exactly; the actual live pointer-drag gesture
+   has NOT been tested in a real browser (this environment's recurring
+   dev-server page-boot stall) -- stated honestly, not glossed over.
+5. Direction/animation-type lock during drag -- EXTENDED. Added
+   !mfDragActiveForAngle to the existing lock condition (reusing the
+   flag already computed for the angle-reference override) -- covers
+   both the pickup window and the active-dragging window, since
+   downInfo.dragging is true throughout both.
+6. Ceiling Bounciness -- ADDED, separate from Wall Bounciness.
+   clampToWalls() previously shared one bounciness value across all 3
+   edges (left/right/top); the top edge now uses its own
+   cfg.ceilingBounciness (def 0, no-op).
+
+Verification: syntax-checked after every edit (Node `new Function()`
+extraction, all scripts parse). Items 1/2/3/5/6 verified via dedicated
+Node simulations. Item 4's formula equally well-verified; its
+interactive-widget UI layer has the stated live-testing gap above.
+
+Landed unusually fast relative to the combined initial estimate (a
+6-item, ~50-78 minute plan completed in under 10 minutes) -- worth
+noting as a possible recalibration signal for similarly-scoped work,
+though this is one data point, not yet a pattern. Not yet committed or
+pushed.
 

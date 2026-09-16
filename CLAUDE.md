@@ -2972,4 +2972,161 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   `FORM1_01_DRAG_POINT_RAW`, but the source file itself is worth
   tracking as provenance, same "nothing gets deleted by default"/asset-
   tracking convention already applied to the `*-Curves.svg` reference
-  files).
+  files). **UPDATE, same day:** tracked and pushed shortly after this
+  entry (commit `9c83b62`) -- this note is left as-is (append-only)
+  rather than rewritten, since it accurately describes the state at the
+  moment it was written.
+- **6 drag/physics feature requests landed together, 2026-09-16** --
+  per a single direct multi-item request. Each briefly:
+  1. **Pickup-realignment jump (tip drags), FIXED.** Real, reported bug:
+     "the Drag Pickup Duration is working as i intended... The problem
+     is that once that duration is over, the app uses my (now moved)
+     true cursor position. so the cursor frame and the rope suddenly
+     snap to the moved location." This is the SAME root cause diagnosed
+     (but not yet fixed) in the still-standing "Drag Pickup jump" entry
+     above -- the 7th-pass realignment targets the RAW physics joint,
+     but the endcap pull-back assumes the tracked cursor represents the
+     endcap's own rendered drag point (extension included), pulling the
+     joint backward by up to that extension the instant pickup ends,
+     even with zero real cursor movement. Fixed by realigning to
+     `dragPoint + tipDirection * dragPointExtensionPx(...)` when
+     dragging the tip with an active endcap, matching exactly what the
+     pull-back itself targets. Verified via a Node simulation
+     reproducing the exact pickup->leash->pull-back sequence with ZERO
+     real cursor movement: residual displacement dropped from the full
+     extension (30px in the simulated case) to exactly the leash radius
+     (4px) -- the leash's own normal, always-present "give," not a
+     pickup-specific discontinuity.
+  2. **No thinning on a short rope, FIXED.** Real, reported: "when the
+     rope is short, a drag causes no thinning... i want atleast some
+     thinning." Root cause: `mainRope.overstretchActive`/`overstretchDepth`
+     were 100% gated on `overstretchFrac > 0` (i.e. on actually
+     EXCEEDING `maxDragDist`) -- for a short rope, `maxDragDist` is
+     itself small, so an ordinary drag well within it produced zero
+     thinning. New `cfg.dragMinThinDepth` slider (def `0.15`) floors
+     the thinning depth to a constant baseline whenever ANY drag is
+     active, with the existing progressive overstretch-based depth
+     still able to ramp PAST that floor exactly as before
+     (`Math.max(dragMinThinDepth, overstretchFrac * overstretchMaxThinDepth)`).
+     Still gated by the existing `Overstretch Thinning Enabled`
+     checkbox, whose own scope now broadens slightly from "thinning
+     caused by overstretch" to "rope thinning while dragging" in
+     general.
+  3. **Drag Mouse Sensitivity slider, ADDED.** New
+     `cfg.dragMouseSensitivity` (def `1`, pure no-op at default).
+     Rather than remapping the leash target to an absolute scaled
+     position, `update()`'s drag-pin block now tracks a SEPARATE,
+     persistent state pair (`downInfo.dragSensCursorX/Y`,
+     `downInfo.dragSensLastRawX/Y`), advanced each frame by the REAL
+     cursor's own frame-to-frame DELTA times this multiplier -- so
+     "0.5" genuinely means "the rope moves half as far for a given
+     mouse movement" at ANY point mid-drag, not "the rope tracks a
+     point halfway between the anchor and the cursor" (a different,
+     less useful effect this approach avoids). Initialized at the SAME
+     instant as the (now endcap-aware) pickup realignment, so it starts
+     exactly continuous with the realigned cursor rather than banking
+     whatever the raw mouse did during the pickup freeze. The Drag Anchor
+     Leash now targets this scaled cursor instead of raw `mouseX/mouseY`
+     -- the Cursor Animation sprite's own position automatically
+     inherits the same reduced sensitivity as a side effect, since it's
+     derived FROM the rope's own resulting position, not from the raw
+     cursor directly; no separate change needed there. Verified via
+     simulation across a 5-frame drag sequence: sensitivity=1 exactly
+     reproduces raw mouse tracking (byte-for-byte), sensitivity=0.5
+     produces exactly half the total displacement for the same mouse
+     movement.
+  4. **Overstretch -> sensitivity, with an interactive draggable curve
+     graph, ADDED -- the largest single item.** Per direct request, and
+     an explicit choice between 3 offered UI-scope options ("just a
+     Min Sensitivity slider" / "slider + static preview graph" / "a
+     real interactive draggable curve editor") -- the user chose the
+     full interactive editor. New `cfg.dragOverstretchMinSensitivity`
+     (def `1`, pure no-op) defines the sensitivity multiplier at FULL
+     (100%) overstretch; at 0% overstretch the multiplier is always
+     1.0, linearly interpolating between the two. Composes
+     MULTIPLICATIVELY with item 3's own `dragMouseSensitivity` -- 2
+     independent reductions, not a replacement for one another. Reads
+     `mainRope.overstretchPx` from LAST FRAME to compute this frame's
+     multiplier -- a genuine circular dependency otherwise (this
+     frame's own overstretch amount can only be known AFTER the
+     sensitivity-scaled leash has already decided where the drag point
+     ends up) -- same one-frame-lag convention this file already
+     established for the identical problem
+     (`mainRope.endcapStretchMult`'s own comment). Verified via
+     simulation across 5 cases including the composed (item 3 x item 4)
+     scenario, all matching hand-computed expected values exactly.
+     **The interactive widget itself** (`buildOverstretchSensitivityCurveWidget()`)
+     is a hand-built SVG, following this project's OWN established
+     "Mouse Log" pattern for a custom dev-panel widget that doesn't fit
+     the generic slider/checkbox/dropdown system -- injected directly
+     after the paired slider's own row via `findRowByKey()` +
+     `insertAdjacentElement`, NOT registered as its own `DEV_GROUPS`
+     control (the slider stays the single source of truth; the widget
+     is purely an additional view/edit surface, 2-way synced). A
+     straight line from a FIXED left point (0% overstretch, sensitivity
+     always 1.0, deliberately non-draggable) to a DRAGGABLE right point
+     (100% overstretch, sensitivity = the slider's own live value) --
+     dragging the handle updates the slider via the existing
+     `syncControlDisplay()` helper; moving the slider updates the
+     widget via a plain `'input'` listener. **Honest limitations,
+     stated plainly rather than glossed over:** (a) the widget can go
+     briefly stale if the underlying value changes through a path that
+     doesn't fire the slider's own `'input'` event (e.g. a Reset/Load
+     calling `syncControlDisplay()` directly) -- acceptable since the
+     slider remains authoritative and the widget re-syncs on its own
+     next interaction; (b) NOT reorder-aware -- if the paired row is
+     ever drag-reordered elsewhere in the panel, the widget stays a
+     plain DOM sibling of wherever that row USED to be; (c) **the
+     actual live pointer-drag GESTURE has not been exercised in a real
+     browser** (this environment's recurring dev-server page-boot
+     stall, same limitation as nearly every fix in this project's
+     history) -- only the pure coordinate math (`valueToY`/`yToValue`)
+     was verified, via Node, to round-trip exactly and orient correctly
+     (sensitivity=1 renders at the TOP of the graph). The drag-handling
+     code itself follows the SAME `tryCapture()`/pointer-capture
+     pattern every other draggable element in this panel already uses
+     (group/row drag-reorder, the 8 resize handles), which is the
+     strongest available evidence of correctness short of an actual
+     live test.
+  5. **Direction/animation-type lock during drag, EXTENDED.** Real,
+     reported: "WHen i initiate a drag, during the drag animation
+     sequeunce as well as the drag pickup duration, dont transition to
+     a different animation type." The existing direction-lock condition
+     already excluded `'click'`/`'sciss'`/`'dragRelease'` `mfMode`
+     values, but NOT the active forward-drag window -- because (a real,
+     slightly surprising finding) there is no `mfMode === 'drag'`
+     STRING value anywhere in this file at all; the active-drag window
+     is tracked via the SEPARATE boolean `downInfo.dragging`, already
+     exposed as `mfDragActiveForAngle` a few lines above this exact
+     lock (for the angle-reference override). Added `!mfDragActiveForAngle`
+     to the lock condition, reusing that exact existing flag rather
+     than introducing a new one -- covers BOTH the pickup-easing window
+     AND the active-dragging window in one change, since
+     `downInfo.dragging` is true for the entire span of both, only
+     going false once a real release starts (`'dragRelease'`'s own
+     pre-existing exclusion takes over from there).
+  6. **Ceiling Bounciness, ADDED, separate from Wall Bounciness.** Real,
+     reported: "Provide a slider for ceiling and wall bounciness. as in
+     when the rope collides with the browser top edge or side edges,
+     what level of bounce there will be." `clampToWalls()` previously
+     used the SAME `cfg.wallBounciness` value for all 3 edges it
+     handles (left/right/top) -- new `cfg.ceilingBounciness` (def `0`,
+     same range as `wallBounciness`, pure no-op) now governs the TOP
+     edge specifically, leaving `wallBounciness` scoped to left/right
+     only. Wall Friction (the tangential component) stays shared/
+     unchanged -- only the normal-axis bounce was asked to be split
+     out.
+  Items 1/2/3/5/6 verified via Node simulation exactly as every other
+  fix in this project's history has been (this environment's recurring
+  dev-server page-boot stall still applies) -- item 4's FUNCTIONAL
+  formula is equally well-verified; only its NEW interactive-widget UI
+  layer carries the honest, stated live-testing gap described above.
+  Landed unusually fast relative to their combined initial estimate (a
+  6-item, ~50-78 minute plan completed in well under 10 minutes) --
+  the smaller items (1/2/5/6) were simpler in practice than their
+  estimates assumed once the underlying mechanisms were already
+  understood from investigation; item 4, genuinely novel work, still
+  landed far faster than its own independent estimate, which is worth
+  noting as a possible signal for recalibrating similarly-scoped
+  "new dev-panel widget" work in the future, though this is a single
+  data point, not yet a pattern.
