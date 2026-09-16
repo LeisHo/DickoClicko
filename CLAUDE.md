@@ -2911,3 +2911,65 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   group-order reference is harmless and will self-clean on the next
   real Save -- same precedent as `bgRopeAnchorMaxSpeed`'s own removal
   above).
+- **Drag Rope by the endcap's own visual TIP now targets an artist-
+  ANNOTATED point (`data/Rope/Form 1--01-Dot.svg`), not the shape's own
+  literal geometric bottom-most pixel -- 2026-09-16.** Per direct
+  data drop: "i exported an svg with the word dot or point in it. its
+  for End 1 Form 1. Its the same endcap shape, but theres a circle as
+  well. the centroid of that circle is where the drag point should be
+  if dragging by the endcap." Confirmed the new file's own `<path>` `d`
+  is BYTE-IDENTICAL to `ENDCAP_DESIGNS['form1-01'].d` before trusting
+  its coordinate space -- the circle's centroid (`cx=69.09, cy=134.34`)
+  is therefore directly usable in the SAME raw coordinate system
+  `ENDCAP_ALIGNMENT`/`FORM1_01_SKIN` already use, no separate alignment
+  needed. `ENDCAP_BOTTOM_Y['form1-01']` (the browser's own `getBBox()`-
+  derived shape bottom, used to normalize every other annotated point
+  in this file) isn't available outside a live browser, so it was
+  independently recomputed via exact cubic-bezier extrema math (not
+  just anchor/control-point bounds, which would be inexact for a
+  curved shape) -- `135.99375726547783` -- cross-checked against
+  `ENDCAP_ALIGNMENT`'s own already-hand-measured `topY`/width, which
+  matched to within 0.01 units, giving high confidence in the
+  computation. The dot resolves to `t ≈ 0.9703` (97% of the way down
+  the shape's own local axis, NOT `t=1.0` -- the true grabbable spot
+  sits noticeably short of the shape's absolute tip) and
+  `lx ≈ 0.275` (a small, ~0.5%-of-width lateral offset from
+  centerline, DELIBERATELY DROPPED when feeding the drag pull-back math
+  -- that math has always been 1-dimensional, along-tangent only, and
+  this lateral component is too small relative to the existing
+  precision to justify extending it to 2D). New `dragPointExtensionPx()`
+  wraps the existing `endcapExtensionPx()`, multiplying by
+  `FORM1_01_DRAG_POINT_T` ONLY when the live endcap design IS
+  `form1-01` (the sole shape with this annotation) -- every other
+  design falls through to the unmodified full-extension behavior,
+  exactly as before this feature existed. Wired into BOTH of Drag
+  Rope's own endcap-tip mechanisms so they agree on the identical
+  target: the arm-time qualifier (deciding whether a press is close
+  enough to the endcap tip to grab it) and the per-frame pull-back
+  (positioning the underlying physics point so the endcap's own
+  rendered extension reaches the cursor). `FORM1_01_DRAG_POINT_T` is
+  computed from the live `ENDCAP_BOTTOM_Y['form1-01']` at load time
+  (not a hardcoded precomputed fraction), so it stays correct
+  automatically if `form1-01`'s own source SVG shape is ever replaced
+  again -- same "computed from real path data, not hand-measured"
+  convention `ENDCAP_BOTTOM_Y`/`ENDCAP_TIP_WIDTH` already established.
+  Verified via Node: the raw constants as actually written in the file
+  were extracted and independently recomputed, matching the original
+  derivation to full floating-point precision. Not live-browser-
+  verified (this environment's recurring dev-server page-boot stall).
+  **This is a SEPARATE fix from the still-UNFIXED Drag Pickup jump
+  bug** (see that dedicated entry above,
+  "endcap-tip qualifier... makes grabbing the tip succeed far more
+  reliably... newly exposes a real, pre-existing, 100%-reproducible
+  discontinuity") -- this entry changes WHERE the drag target sits;
+  that entry is about a timing/handoff discontinuity in reaching it.
+  Both may need to be addressed for "dragging the endcap" to feel
+  fully correct.
+- **`data/Rope/Form 1--01-Dot.svg` is a NEW, currently-UNTRACKED asset
+  file as of this entry** -- the source of the annotation above. Should
+  be `git add`ed alongside the code change that consumes it (its own
+  raw data is now hardcoded into `index.html` as
+  `FORM1_01_DRAG_POINT_RAW`, but the source file itself is worth
+  tracking as provenance, same "nothing gets deleted by default"/asset-
+  tracking convention already applied to the `*-Curves.svg` reference
+  files).

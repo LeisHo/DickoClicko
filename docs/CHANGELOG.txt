@@ -14316,6 +14316,51 @@ compensation (same absolute power, not degraded) at the live short
 segLen, and correct clamping to both ends of the safe range at
 extreme-short and long segLens respectively -- never exceeding the
 already-validated envelope. Not live-browser-verified (this
-environment's recurring dev-server page-boot stall). Not yet committed
-or pushed.
+environment's recurring dev-server page-boot stall).
+
+--------------------------------------------------------------------------------
+2026-09-16  -  03:29 AM - 03:33 AM EDT
+
+Drag Rope by the endcap's own visual tip now targets an artist-
+annotated point instead of the shape's literal geometric tip.
+
+Reported, with a new asset provided: "the dragging the endcap thing
+isnt working. so i exported an svg with the word dot or point in it.
+its for End 1 Form 1. Its the same endcap shape, but theres a circle
+as well. the centroid of that circle is where the drag point should be
+if dragging by the endcap."
+
+Fixed (index.html):
+- Found data/Rope/Form 1--01-Dot.svg (previously untracked). Confirmed
+  its <path> d is byte-identical to ENDCAP_DESIGNS['form1-01'].d before
+  trusting its coordinate space -- the circle's centroid
+  (cx=69.09, cy=134.34) is directly usable in the same raw space
+  ENDCAP_ALIGNMENT/FORM1_01_SKIN already use.
+- ENDCAP_BOTTOM_Y['form1-01'] (browser getBBox()-derived, unavailable
+  outside a live browser) was independently recomputed via exact
+  cubic-bezier extrema math (135.99375726547783) -- cross-checked
+  against ENDCAP_ALIGNMENT's own hand-measured topY/width, matching to
+  within 0.01 units.
+- The dot resolves to t=0.9703 (97% down the shape's own local axis,
+  not the full t=1.0) and lx=0.275 (a small lateral offset,
+  deliberately dropped -- the existing pull-back math is 1D,
+  along-tangent only, and this offset is under 0.6% of the shape's
+  width).
+- New dragPointExtensionPx() wraps the existing endcapExtensionPx(),
+  applying the t=0.9703 scale factor only for form1-01 -- every other
+  endcap design is unaffected. Wired into both of Drag Rope's own
+  endcap-tip mechanisms (the arm-time proximity qualifier and the
+  per-frame pull-back) so they agree on the identical target.
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse). The raw constants as actually written in the file were
+extracted and independently recomputed in Node, matching the original
+derivation to full floating-point precision. Not live-browser-verified
+(this environment's recurring dev-server page-boot stall).
+
+This is a separate fix from the still-unfixed Drag Pickup jump bug
+(diagnosed 2026-09-15, documented in CLAUDE.md, not yet addressed) --
+that bug is about a timing/handoff discontinuity; this fix is about
+where the drag target sits. Both may be needed for endcap-tip dragging
+to feel fully correct. Not yet committed or pushed.
 

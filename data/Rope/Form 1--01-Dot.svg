@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 129.7 183.44">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #ee1c4e;
+      }
+
+      .cls-2 {
+        fill: none;
+        stroke: #231f20;
+        stroke-miterlimit: 10;
+      }
+    </style>
+  </defs>
+  <g id="END_FORM1">
+    <path class="cls-2" d="M45.87,80.26h-4.3c.03,4.64.23,9.27.68,13.96l1.04,5.33c3.14,15.25,11.02,22.58,17.66,35.25.46.89,1.43,1.36,2.38,1.14,1.37-.32,3.48-1.54,5.76-1.59,1.91-.04,3.8,1.2,5.1,1.56.99.28,2.02-.19,2.49-1.13,6.55-12.84,14.45-19.97,17.69-35.24l1.04-5.39c.41-4.67.6-9.26.64-13.88h-50.19Z"/>
+  </g>
+  <g id="Isolation_Mode" data-name="Isolation Mode">
+    <circle class="cls-1" cx="69.09" cy="134.34" r="1.49"/>
+  </g>
+</svg>

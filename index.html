@@ -8391,7 +8391,12 @@ function onPointerDown(e){
       if (cfg.endcapDesign !== 'none'){
         const tipPt = mainRope.points[mainRope.points.length - 1];
         const tipDir = tipDirection(mainRope.points);
-        const ext = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
+        // dragPointExtensionPx() (2026-09-16), not the plain
+        // endcapExtensionPx() -- for form1-01 specifically, the real
+        // grabbable "drag point" sits at the annotated dot (~97% of the
+        // way to the shape's own geometric tip), not the literal
+        // bottom-most pixel -- see that function's own comment.
+        const ext = dragPointExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
         const tipX = tipPt.x + tipDir.x * ext, tipY = tipPt.y + tipDir.y * ext;
         const distToEndcapTip = Math.hypot(x - tipX, y - tipY);
         if (distToEndcapTip < hit.dist) dragGrabIndex = mainRope.points.length - 1;
@@ -9660,7 +9665,12 @@ function update(rawDt){
         const rdx = dragTargetPos.x - prevPt.x, rdy = dragTargetPos.y - prevPt.y;
         const rdist = Math.hypot(rdx, rdy);
         if (rdist > 1e-6){
-          const extension = endcapExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight) * (mainRope.endcapStretchMult || 1);
+          // dragPointExtensionPx() (2026-09-16), not the plain
+          // endcapExtensionPx() -- see that function's own comment;
+          // matches the SAME target the arm-time qualifier above uses,
+          // so the point you actually grab and the point the pull-back
+          // aims for agree on where "the drag point" is.
+          const extension = dragPointExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight) * (mainRope.endcapStretchMult || 1);
           const pull = Math.min(extension, rdist);
           dragTargetPos = { x: dragTargetPos.x - (rdx / rdist) * pull, y: dragTargetPos.y - (rdy / rdist) * pull };
         }
@@ -11093,6 +11103,48 @@ const FORM1_01_SKIN = (function(){
   }
   return { segments: tagged, hideRange };
 })();
+// Form 1-01's own annotated DRAG POINT (2026-09-16) -- per direct
+// request/data drop: "i exported an svg with the word dot or point in
+// it. its for End 1 Form 1. Its the same endcap shape, but theres a
+// circle as well. the centroid of that circle is where the drag point
+// should be if dragging by the endcap." Raw coordinates taken directly
+// from data/Rope/Form 1--01-Dot.svg's own <circle cx="69.09"
+// cy="134.34">, in the SAME coordinate space as
+// ENDCAP_DESIGNS['form1-01'].d -- confirmed BYTE-IDENTICAL path data
+// between that file and this one's own ENDCAP_DESIGNS entry before
+// trusting this (both files ship the exact same `d` string), so no
+// separate alignment/scale reference is needed for this shape.
+// Previously, "drag by the endcap tip" assumed the drag target was the
+// shape's own literal geometric bottom-most pixel (t=1,
+// endcapExtensionPx()'s own full return value) -- this annotation says
+// otherwise: the real intended grab point sits at t~0.97, not t=1.0,
+// and very slightly off the shape's own centerline (lx~0.275, out of
+// a ~54.49-unit-wide shape -- under 0.6% of the width). Computed as a
+// (t, lx) pair the SAME way every other point in FORM1_01_SKIN is
+// tagged, reusing the SAME live ENDCAP_BOTTOM_Y['form1-01'] reference
+// (so this stays correct automatically if the source SVG's own bbox
+// ever changes) rather than hardcoding a precomputed t. Deliberately
+// DROPS the lx (lateral) component when this feeds the drag pull-back
+// math below -- that math has always been purely 1-dimensional (along
+// the tangent only, no perpendicular offset support), and lx's own
+// magnitude here is small enough (well under 1% of the shape's width)
+// that adding lateral-offset support to the pull-back formula for this
+// alone isn't a proportionate change; t (the depth fraction) is what
+// actually matters for "how far past the physics point does the
+// grabbable spot sit."
+const FORM1_01_DRAG_POINT_RAW = { x: 69.09, y: 134.34 };
+const FORM1_01_DRAG_POINT_T = FORM1_01_SKIN
+  ? (FORM1_01_DRAG_POINT_RAW.y - ENDCAP_ALIGNMENT.topY) / (ENDCAP_BOTTOM_Y['form1-01'] - ENDCAP_ALIGNMENT.topY)
+  : 1; // FORM1_01_SKIN parse failed -- fall back to the old "full extension" behavior rather than a broken 0
+// Endcap-tip pull-back's own extension distance, honoring the
+// annotated drag point above when the live endcap design IS form1-01
+// (the only shape with this annotation) -- every OTHER design falls
+// back to the plain, unmodified endcapExtensionPx() (t=1, the shape's
+// own full geometric extent), exactly as before this feature existed.
+function dragPointExtensionPx(designKey, heightThicknessPx, heightMult){
+  const full = endcapExtensionPx(designKey, heightThicknessPx, heightMult);
+  return designKey === 'form1-01' ? full * FORM1_01_DRAG_POINT_T : full;
+}
 // Walks forward `s` world px from `origin` (already ENDCAP_SEAM_OVERLAP_PX
 // -shifted, see drawEndcapDeformable()) along a constant-curvature arc
 // extrapolated from the rope's own last 2 real segments -- the curvature
