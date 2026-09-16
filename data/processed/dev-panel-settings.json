@@ -433,16 +433,16 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
-          "segmentLength",
           "ropeDefaultLength",
-          "ropeThickness",
           "ropeLength",
+          "minRopeLength",
+          "ropeThickness",
+          "segmentLength",
           "ropeGradientEnabled",
           "ropeGradientColors",
-          "ropeColor",
-          "minRopeLength"
+          "ropeColor"
         ],
         "subgroups": [
           {
