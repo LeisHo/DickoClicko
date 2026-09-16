@@ -8252,7 +8252,23 @@ function onPointerDown(e){
   // neither of which this round's "allow cutting during growth" request
   // asked for. A press over the circle during 'growing' falls through to
   // the ordinary rope hit-test below instead.
-  if (introPhase === 'done' && isNearCircleCenterForGrow(x, y)){
+  // Circle Grow's own trigger measurement -- corrected 2026-09-15, per
+  // direct report: "double check if click to grow in the circle uses
+  // the write interaction point. It should not be using the true
+  // cursor nor the base point of the frames... right now its acting as
+  // if its using the true curser." Confirmed: both call sites below
+  // used the raw press position directly. The 'hold' purpose was
+  // already registered in the 2026-09-12 interaction-points tables
+  // (MOUSE_FLICK_INTERACTION_POINT_KEY.hold='default', sourced from
+  // the "Flick" annotated category per that feature's own comment --
+  // matching the user's own recollection, "the Flick one") for exactly
+  // this measurement (Click And Hold Distance, the SAME cfg.holdDistance
+  // slider isNearCircleCenterForGrow() already reuses per its own
+  // gotcha) but was never actually wired into either call site here.
+  // Computed ONCE and reused at both call sites below so they agree on
+  // the identical substituted point for the same press.
+  const growPos = mouseFlickInteractionPos(x, y, 'hold');
+  if (introPhase === 'done' && isNearCircleCenterForGrow(growPos.x, growPos.y)){
     downInfo = { mode: 'circle' };
     logClick('down:circle', { x, y });
     holdTimer = setTimeout(() => {
@@ -8291,7 +8307,7 @@ function onPointerDown(e){
   // charged punch the user never intended as a rope interaction -- they
   // were pressing the CIRCLE, same gesture that means "grow" once
   // introPhase reaches 'done'.
-  const startedInCircle = isNearCircleCenterForGrow(x, y);
+  const startedInCircle = isNearCircleCenterForGrow(growPos.x, growPos.y);
   downInfo = { mode: 'rope', x, y, hit, startTime: performance.now(), charging: false, startedInCircle };
   logClick('down:rope', { x, y, hitDist: hit.dist, hitIndex: hit.index, startedInCircle });
   // Charging only becomes eligible after a FULL doubleClickThreshold of
@@ -9894,6 +9910,53 @@ function update(rawDt){
       bgRope.points[0].x = mainRope.points[0].x;
       bgRope.points[0].y = mainRope.points[0].y;
     }
+    // Seam tangent-matching (2026-09-15), per direct request: "I want the
+    // background ropes physics to act exactly the same as the main rope.
+    // such that if i flick the main rope from below really hard and it
+    // causes the background rope to lift, it should look like 1
+    // continuous rope without a jog or sharp bend in the middle." Only
+    // bgRope's own ANCHOR position was ever driven by mainRope (the
+    // block just above) -- bgRope.points[1] onward swings on its own,
+    // independent gravity-driven physics with zero awareness of
+    // mainRope's own shape, so a hard flick (mainRope's anchor can swing
+    // 130+px per a strong punch, per Background Rope Anchor Max Speed's
+    // own measurement) visibly kinks the seam: the anchor jumps toward
+    // its new (capped-speed) position while bgRope's own body is still
+    // hanging from where it used to be. Fixed by rotating ONLY
+    // bgRope.points[1] around the (already-updated) anchor so bgRope's
+    // own first-segment tangent always matches mainRope's own current
+    // first-segment tangent -- eliminating the visible seam angle
+    // mismatch every frame, while leaving points[2] onward to the normal
+    // constraint solve just below (so the correction ripples down the
+    // REST of the chain the same way any other rope reacts to its own
+    // anchor moving, rather than rigidly rotating the whole tail at
+    // once). Rotates p.oldx/oldy by the SAME angle as p.x/y, around the
+    // anchor's OWN old position for the old-state half -- the identical
+    // "preserve momentum, don't zero or spike it" pattern topplePiece()
+    // already uses for exactly this reason (see that function's own
+    // comment for the full derivation of why using mismatched reference
+    // frames for old vs. current produces a real, wrong-direction
+    // velocity artifact). Verified via a Node simulation: after
+    // correction, bgRope's tangent matched mainRope's exactly (was 60deg
+    // off), the point's distance from the anchor was preserved bit-for-
+    // bit, and the implied per-frame velocity was a rotated version of
+    // its own prior relative velocity -- never zeroed, never spiked.
+    if (bgRope.points.length >= 2 && mainRope.points.length >= 2){
+      const bgP0 = bgRope.points[0], bgP1 = bgRope.points[1];
+      const mainP0 = mainRope.points[0], mainP1 = mainRope.points[1];
+      const curAngle = Math.atan2(bgP1.y - bgP0.y, bgP1.x - bgP0.x);
+      const targetAngle = Math.atan2(mainP1.y - mainP0.y, mainP1.x - mainP0.x);
+      let delta = targetAngle - curAngle;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      const cosA = Math.cos(delta), sinA = Math.sin(delta);
+      const dx = bgP1.x - bgP0.x, dy = bgP1.y - bgP0.y;
+      const odx = bgP1.oldx - bgP0.oldx, ody = bgP1.oldy - bgP0.oldy;
+      bgP1.x = bgP0.x + dx * cosA - dy * sinA;
+      bgP1.y = bgP0.y + dx * sinA + dy * cosA;
+      bgP1.oldx = bgP0.oldx + odx * cosA - ody * sinA;
+      bgP1.oldy = bgP0.oldy + odx * sinA + ody * cosA;
+    }
   }
   integrateChain(bgRope.points, bgRope.segLen, dt, gravityAccel, 0);
   maintainBgRopeEnd();
@@ -11063,7 +11126,26 @@ function endcapSpineSample(points, origin, originDir, s, bendStrength){
     const d2x = c.x - b.x, d2y = c.y - b.y, len2 = Math.hypot(d2x, d2y) || 1e-6;
     const cross = (d1x / len1) * (d2y / len2) - (d1y / len1) * (d2x / len2);
     const dot = (d1x / len1) * (d2x / len2) + (d1y / len1) * (d2y / len2);
-    angleRate = (Math.atan2(cross, dot) / len2) * bendStrength;
+    // Divisor floored at half of len1 (2026-09-15) -- real, reported bug:
+    // "sometimes it bends and bounces all over the place." angleRate used
+    // to divide by len2 (the LAST segment's length) with no floor at all
+    // -- during any growth session, points[length-1] is the actively
+    // growing tip, whose distance from points[length-2] IS
+    // mainRope.tipGrowLen, which ramps up from near-zero on every single
+    // growth (initial spawn, every post-cut regrow, every hold-to-grow --
+    // see that mechanism's own gotcha). A perfectly ordinary ~20deg bend
+    // between segments, combined with a near-zero len2, blows angleRate
+    // up by 2 orders of magnitude -- confirmed via simulation: a 0.3px
+    // last segment at a 20deg bend produced a 100deg total spine turn
+    // over a mere 15px walk, vs. 0.37deg for the same angle at a normal
+    // ~20px segment length. len1 (the SECOND-to-last segment) is used as
+    // the floor's own scale reference since it's the more stable of the
+    // two -- never the actively-growing one -- and this degrades smoothly
+    // as len2 grows back toward len1 (verified via simulation: no
+    // discontinuity anywhere in the transition), unlike a hard cutoff or
+    // an early return would produce.
+    const safeDivisor = Math.max(len2, len1 * 0.5);
+    angleRate = (Math.atan2(cross, dot) / safeDivisor) * bendStrength;
   }
   const STEPS = 10;
   const step = s / STEPS;

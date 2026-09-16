@@ -14174,3 +14174,60 @@ math: a true click at distance 15.03 from the anchor (outside a
 resolved the target. Not live-browser-verified (this environment's
 recurring dev-server page-boot stall). Not yet committed or pushed.
 
+--------------------------------------------------------------------------------
+2026-09-15  -  08:57 PM - 09:06 PM EDT
+
+Fixed 3 separate reported issues: Deformable Endcap bounce/whip during
+growth, Circle Grow's interaction-point measurement, and background
+rope seam continuity during a hard flick.
+
+Fixed:
+- Reported: "the physics of the new endcap model looks nice, but
+  sometimes it bends and bounces all over the place." Root cause:
+  endcapSpineSample()'s curvature formula divided by the rope's LAST
+  segment length with no floor -- during any growth session that last
+  segment IS the actively-growing tip (mainRope.tipGrowLen, which ramps
+  from near-zero on every growth), so a perfectly ordinary bend angle
+  got amplified by 2 orders of magnitude. Verified via Node simulation:
+  a 0.3px last segment at a 20deg bend produced a 100deg total spine
+  turn over a 15px walk, vs 0.37deg at a normal ~20px segment. Fixed by
+  flooring the divisor at len1*0.5 (the more stable second-to-last
+  segment) -- verified this degrades smoothly with no discontinuity as
+  the segment regrows, and leaves the settled-rope case unchanged.
+- Reported: "double check if click to grow in the circle uses the
+  write interaction point... right now its acting as if its using the
+  true curser." Confirmed: isNearCircleCenterForGrow()'s 2 call sites
+  in onPointerDown both used the raw press position. The 'hold' purpose
+  was already registered in the 2026-09-12 interaction-points tables
+  (sourced from the Flick category) for exactly this measurement but
+  was never wired in. Fixed by routing both call sites through
+  mouseFlickInteractionPos(x, y, 'hold').
+- Reported: "I want the background ropes physics to act exactly the
+  same as the main rope. such that if i flick the main rope from below
+  really hard and it causes the background rope to lift, it should
+  look like 1 continuous rope without a jog or sharp bend in the
+  middle." Root cause: bgRope is a fully separate physics chain --
+  only its anchor point was ever driven toward mainRope's anchor
+  (capped-speed); the rest of its body swings on independent gravity
+  with no awareness of mainRope's shape, so a hard flick (mainRope's
+  anchor can swing 130+px) visibly kinks the seam. Presented 2 options
+  (lighter kinematic tangent-matching vs. fuller anchor-velocity
+  coupling) -- user chose tangent-matching. Implemented by rotating
+  ONLY bgRope.points[1] around the anchor so bgRope's own first-segment
+  tangent always matches mainRope's current one, rotating oldx/oldy by
+  the same angle to preserve momentum (same pattern topplePiece()
+  already uses) -- points[2] onward still go through the normal
+  constraint solve afterward. Verified via a Node simulation of a 60deg
+  sudden tangent swing: tangent matched exactly post-correction,
+  distance from anchor preserved bit-for-bit, implied velocity was a
+  rotated (never zeroed/spiked) version of the prior relative velocity.
+
+Verification: syntax-checked (Node `new Function()` extraction, all
+scripts parse) after each of the 3 edits. Each fix's own math verified
+via a dedicated Node-level simulation before being written into the
+live code (the endcap fix's simulation caught the exact amplification
+factor; the bgRope fix's simulation confirmed momentum preservation).
+Not live-browser-verified (this environment's recurring dev-server
+page-boot stall, documented elsewhere in this file). Not yet committed
+or pushed.
+

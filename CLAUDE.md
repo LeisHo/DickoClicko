@@ -2732,3 +2732,90 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   fix doesn't revive it; the comment is stale and should be corrected
   whenever that area is next touched, not urgent enough on its own to
   justify a separate pass right now.
+- **Deformable Endcap's own curvature formula (`endcapSpineSample()`)
+  divided by the rope's LAST segment length with no floor -- fixed
+  2026-09-15.** Real, reported bug: "the physics of the new endcap
+  model looks nice, but sometimes it bends and bounces all over the
+  place." `angleRate = atan2(cross,dot) / len2 * bendStrength` used
+  `len2` (the last segment's own length) as the divisor -- during ANY
+  growth session, `points[length-1]` is the actively growing tip, whose
+  distance from `points[length-2]` IS `mainRope.tipGrowLen`, which
+  ramps up from near-zero on EVERY growth (initial spawn, every
+  post-cut regrow, every hold-to-grow -- see that mechanism's own
+  gotcha). A perfectly ordinary ~20deg bend between segments, combined
+  with a near-zero `len2`, blew `angleRate` up by 2 orders of
+  magnitude -- confirmed via Node simulation: a 0.3px last segment at a
+  20deg bend produced a 100deg total spine turn over a mere 15px walk,
+  vs. 0.37deg for the same angle at a normal ~20px segment length.
+  Fixed by flooring the divisor at `len1 * 0.5` (`len1` = the SECOND-
+  to-last segment, the more stable of the two since it's never the
+  actively-growing one) -- verified via simulation this degrades
+  smoothly as `len2` grows back toward `len1` (no discontinuity
+  anywhere in the sweep) and leaves the settled-rope case unchanged
+  (same `angleRate` as before whenever `len2 >= len1`, which is the
+  normal at-rest case). **If a future report says the deformable
+  endcap still whips/bounces, check whether some OTHER path can also
+  produce a very short last segment** (a near-anchor cut leaving a
+  2-point rope, an extreme drag, etc.) before assuming this exact fix
+  is insufficient -- the floor is relative to `len1`, so it only helps
+  when `len1` itself is a normal, stable length.
+- **Circle Grow's own trigger measurement (`isNearCircleCenterForGrow()`)
+  was using the raw press position directly at both its call sites,
+  never any FLICK MOUSE-substituted interaction point -- fixed
+  2026-09-15.** Real, reported bug: "double check if click to grow in
+  the circle uses the write [right] interaction point. It should not
+  be using the true cursor nor the base point of the frames... right
+  now its acting as if its using the true curser." The `'hold'` purpose
+  was already registered in the 2026-09-12 interaction-points tables
+  (`MOUSE_FLICK_INTERACTION_POINT_KEY.hold = 'default'`, sourced from
+  the "Flick" annotated category per that feature's own comment --
+  matching the user's own recollection, "the Flick one") specifically
+  for Click And Hold Distance -- the SAME `cfg.holdDistance` slider
+  `isNearCircleCenterForGrow()` already reuses per its own gotcha --
+  but neither of `onPointerDown`'s 2 call sites (the circle-branch gate,
+  and `startedInCircle`) ever actually routed through it. Fixed by
+  computing `mouseFlickInteractionPos(x, y, 'hold')` ONCE at the top of
+  `onPointerDown` (both call sites must agree on the identical
+  substituted point for the same press) and passing that into both
+  calls instead of the raw `x, y`.
+- **Background rope now tangent-matches the main rope at their shared
+  seam every frame (2026-09-15)** -- per direct request: "I want the
+  background ropes physics to act exactly the same as the main rope.
+  such that if i flick the main rope from below really hard and it
+  causes the background rope to lift, it should look like 1 continuous
+  rope without a jog or sharp bend in the middle." Root cause: `bgRope`
+  is a completely separate physics chain from `mainRope` -- only its
+  own ANCHOR (`bgRope.points[0]`) was ever driven toward `mainRope`'s
+  anchor (capped at Background Rope Anchor Max Speed); everything past
+  that swings on its own independent gravity, with zero awareness of
+  `mainRope`'s own shape (this was explicit prior design -- see that
+  slider's own gotcha: "so it swings on its own rather than mirroring
+  mainRope's body shape... per explicit request"). A hard flick can
+  swing `mainRope`'s own anchor 130+px (measured elsewhere in this
+  file); `bgRope`'s anchor chases it at a bounded speed while its own
+  body is still hanging from where it used to be, visibly kinking the
+  seam. **Of 2 possible fixes presented (lighter kinematic tangent-
+  matching vs. fuller anchor-velocity coupling), the user chose the
+  lighter one.** Implemented by rotating ONLY `bgRope.points[1]` around
+  the (already anchor-updated) `bgRope.points[0]` so bgRope's own
+  first-segment tangent always exactly matches `mainRope`'s current
+  first-segment tangent -- `points[2]` onward are left to the normal
+  constraint solve immediately after (`integrateChain()`), so the
+  correction ripples down the rest of the chain the same way any rope
+  reacts to its own anchor moving, rather than rigidly rotating the
+  whole tail at once every frame. Rotates `p.oldx/oldy` by the SAME
+  angle as `p.x/y` -- the identical "preserve momentum, don't zero or
+  spike it" pattern `topplePiece()` already uses (see that function's
+  own comment for the full derivation of why mismatched old/current
+  reference frames produce a real, wrong-direction velocity artifact).
+  Verified via a Node simulation (a simulated 60deg sudden tangent
+  swing): post-correction, bgRope's tangent matched mainRope's exactly,
+  the point's distance from the anchor was preserved bit-for-bit, and
+  the implied per-frame velocity was a rotated version of its own prior
+  relative velocity -- never zeroed, never spiked. Gated inside the
+  SAME `introPhase !== 'waiting'/'rising'/'pausing'` block as the
+  anchor-follow code just above it, for the identical reason (during
+  those phases bgRope's own position is driven by the intro's own
+  scripted climb instead, and this correction would fight it). Not
+  live-browser-verified (this environment's recurring dev-server
+  page-boot stall, documented elsewhere in this file).
