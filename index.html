@@ -711,27 +711,42 @@ const DEV_GROUPS = [
     // (see render()'s own strokeRopeCurveVariableWidth() call) -- never
     // touches mainRope.segLen, rest lengths, or the constraint solver.
     { key:'overstretchThinningEnabled', label:'Overstretch Thinning Enabled', type:'checkbox', def:true },
-    // Drag Minimum Thinning Depth (2026-09-16), per direct report: "When
-    // the rope is short, a drag causes no thinning. Im sure thats as
-    // intended by the code, but i dont liek the way it looks. i want
-    // atleast some thinning." Root cause: thinning was 100% gated on
-    // overstretchFrac > 0, i.e. on actually EXCEEDING maxDragDist -- for
-    // a short rope, maxDragDist (segLen * dragPinIndex, roughly) is
-    // itself small, so an ordinary drag well within that already-small
-    // limit produced zero thinning, not just less of it. This slider
-    // floors the thinning depth to a constant baseline whenever ANY
-    // drag is active (see update()'s own overstretchDepth computation --
-    // now Math.max(this floor, the existing progressive overstretch
-    // depth) -- so a short rope shows this same baseline "give" look
-    // immediately on any drag, while a rope that DOES overstretch still
-    // ramps up smoothly PAST this floor toward Overstretch Max Thinning
-    // Depth exactly as before. Still gated by Overstretch Thinning
-    // Enabled (the checkbox above) -- that toggle's own scope broadens
-    // slightly with this addition, from "thinning caused by overstretch"
-    // to "rope thinning while dragging" in general, since the two are
-    // now the same rendering mechanism at different depths.
-    { key:'dragMinThinDepth', label:'Drag Minimum Thinning Depth (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:0.15 },
+    // Drag Minimum Thinning Depth -- REMOVED 2026-09-17 (was here
+    // 2026-09-16 through 2026-09-17). Real, direct correction, opposite
+    // of the request that added it: "When i click and hold to initate
+    // drag, even if i dont move the cursor, I see a sudden thinning of
+    // the rope segment. That should not happen [until actual
+    // overstretch]." This floor unconditionally applied the instant
+    // ANY drag started (overstretchActive only ever required the 2
+    // checkboxes, never overstretchFrac>0), which is exactly what
+    // produced the reported "sudden thinning with zero cursor
+    // movement." The ORIGINAL problem this floor was built to solve
+    // (a short rope showing no thinning at all) has a different root
+    // cause that's since been fixed on its own merits: Drag Overstretch
+    // Tolerance used to be a FIXED vmin() absolute, which made it a
+    // large relative allowance near the anchor (tiny maxDragDist) and
+    // negligible far from it -- see that slider's own 2026-09-17
+    // correction. Now that it's proportional to maxDragDist instead, a
+    // short rope overstretches (and therefore starts thinning) on an
+    // ordinary drag almost immediately, on its own, with no floor
+    // needed. Keeping this floor after that fix landed made it
+    // actively WRONG rather than merely redundant -- it forced thinning
+    // to start before any real overstretch, which the proportional fix
+    // no longer requires.
     { key:'overstretchMaxThinDepth', label:'Overstretch Max Thinning Depth (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:0.6 },
+    // Overstretch Thinning Release Duration (2026-09-17), per direct
+    // request: "on release of the drag, the thinning should also not
+    // bounce back sddenly, but transition back to normal thickenss
+    // depending on the overstretch length." This is the BASE duration
+    // (at full Overstretch Max Thinning Depth); update()'s own
+    // release-transition code scales it down proportionally to how deep
+    // the thinning actually was at the moment of release (startDepth /
+    // overstretchMaxThinDepth) -- a release from a shallow overstretch
+    // eases back quickly, a release from deep overstretch takes the
+    // full duration, matching "depending on the overstretch length"
+    // directly rather than using one fixed duration regardless of how
+    // stretched the rope actually was.
+    { key:'overstretchThinningReleaseDuration', label:'Overstretch Thinning Release Duration (Ms)', type:'slider', unit:'ms', min:0, max:2000, step:10, def:400 },
     // Exponent on sin(pi*t) -- 1 reproduces the exact profile from spec
     // (the default, so this control adds tunability without changing the
     // out-of-the-box look); >1 narrows the thin "neck" toward the exact
@@ -3147,7 +3162,33 @@ function buildOverstretchSensitivityCurveWidget(){
   const W = 240, H = 90, PAD = 10;
   const wrap = document.createElement('div');
   wrap.className = 'dp-row dp-curve-widget-row';
-  wrap.style.paddingLeft = '18px';
+  // Reorder/persistence fix (2026-09-17), real reported bug: "I cant
+  // seem to reorder or move the curve graph input." Root cause: this
+  // row was built with NO drag-handle element at all -- makeReorderable()'s
+  // delegated pointerdown listener (see its own call site,
+  // `makeReorderable(dpBody, 'dp-row', 'dp-row-handle', ...)`) only ever
+  // starts a reorder-drag when the pointerdown TARGET is inside a real
+  // `.dp-row-handle` element (per this project's own established
+  // "reordering starts only from a dedicated drag-handle icon"
+  // convention -- every other row gets one from buildRow(), this
+  // hand-built one never did). With no such element anywhere inside
+  // `wrap`, `e.target.closest('.dp-row-handle')` was ALWAYS null for a
+  // pointerdown here, so the function returned immediately every time --
+  // this row could never be grabbed for reordering at all, not just
+  // "doesn't move with its slider." A `data-key` is also set now (this
+  // row never had one) -- getPanelOrder()/captureGroup() read
+  // `row.dataset.key` generically for EVERY `.dp-row` in a group
+  // (this widget's own extra `dp-curve-widget-row` class doesn't
+  // exempt it from that generic query), so a future Save now genuinely
+  // remembers this row's own position via the same mechanism every
+  // other row already uses -- findRowByKey() on restore, no special-
+  // casing needed anywhere else.
+  wrap.dataset.key = 'dragOverstretchMinSensitivityCurve';
+  const reorderHandle = document.createElement('span');
+  reorderHandle.className = 'dp-row-handle dp-drag-handle';
+  reorderHandle.textContent = '⠿';
+  wrap.appendChild(reorderHandle);
+  wrap.style.paddingLeft = '2px';
   wrap.style.paddingBottom = '6px';
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
@@ -9411,6 +9452,28 @@ function onPointerUp(e){
     if (cfg.overstretchEnabled && mainRope.overstretchPx > 0){
       mainRope.overstretchBounce = { active: true, t: 0, amplitude: Math.min(mainRope.overstretchPx, cfg.overstretchBounceMaxAmplitude), subChainLen: info.dragIndex };
     }
+    // Overstretch thinning release transition (2026-09-17) -- armed
+    // alongside the bounce above, same "only when it was genuinely
+    // overstretched" gate, per direct request: "on release of the
+    // drag, the thinning should also not bounce back sddenly, but
+    // transition back to normal thickenss depending on the overstretch
+    // length." Without this, update()'s own unconditional per-frame
+    // reset (mainRope.overstretchDepth = 0, runs every frame regardless
+    // of drag state) snapped the rope back to full thickness the exact
+    // instant dragging ended -- see that reset's own comment for where
+    // this transition overrides it. Duration scales with how deep the
+    // thinning actually was at release (startDepth relative to its own
+    // max), not a single fixed duration regardless of how stretched the
+    // rope was -- see cfg.overstretchThinningReleaseDuration's own
+    // comment.
+    if (cfg.overstretchEnabled && cfg.overstretchThinningEnabled && mainRope.overstretchDepth > 0){
+      mainRope.overstretchReleaseTransition = {
+        active: true, t: 0,
+        startDepth: mainRope.overstretchDepth,
+        dragIndex: info.dragIndex,
+        durationSec: (cfg.overstretchThinningReleaseDuration / 1000) * (mainRope.overstretchDepth / Math.max(1e-6, cfg.overstretchMaxThinDepth)),
+      };
+    }
     logClick('up:drag-end', { x: e.clientX, y: e.clientY, index: info.dragIndex, overstretchPx: round(mainRope.overstretchPx, 2) });
     return;
   }
@@ -10163,6 +10226,28 @@ function update(rawDt){
   mainRope.overstretchDepth = 0;
   mainRope.overstretchDragIndex = 0;
   mainRope.overstretchPx = 0;
+  // Overstretch thinning release transition (2026-09-17) -- overrides
+  // the unconditional reset directly above, EASING overstretchDepth
+  // back down from wherever it was at release instead of leaving it
+  // hard-snapped to 0, for as long as the transition armed in
+  // onPointerUp is still running. Only ever relevant while NOT
+  // currently dragging -- the `if (downInfo && ... dragging)` block
+  // further down recomputes overstretchActive/Depth fresh every frame
+  // while a drag IS active, which always takes priority over (and
+  // implicitly ends, since a new drag never runs with this transition
+  // also active) whatever this block does.
+  if (mainRope.overstretchReleaseTransition && mainRope.overstretchReleaseTransition.active){
+    const rt = mainRope.overstretchReleaseTransition;
+    rt.t += dt;
+    if (rt.durationSec <= 0 || rt.t >= rt.durationSec){
+      rt.active = false;
+    } else {
+      const eased = 1 - (rt.t / rt.durationSec);
+      mainRope.overstretchDepth = rt.startDepth * eased;
+      mainRope.overstretchActive = cfg.overstretchEnabled && cfg.overstretchThinningEnabled;
+      mainRope.overstretchDragIndex = rt.dragIndex;
+    }
+  }
   // Deformable Endcap's own stretch-on-drag signal (2026-09-14) -- reset
   // every frame for the same reason as the Overstretch fields just above
   // (a stale value must never leak into a frame where dragging has
@@ -10589,14 +10674,15 @@ function update(rawDt){
     const actualDist = Math.hypot(dragPoint.x - anchor.x, dragPoint.y - anchor.y);
     mainRope.overstretchPx = Math.max(0, actualDist - maxDragDist);
     const overstretchFrac = overstretchTol > 0 ? Math.min(1, mainRope.overstretchPx / overstretchTol) : 0;
-    // Corrected 2026-09-16 -- overstretchActive no longer requires
-    // overstretchFrac > 0 (see dragMinThinDepth's own comment for the
-    // full account): this code only ever RUNS while actively dragging,
-    // so thinning now always renders whenever the 2 existing toggles
-    // allow it, with overstretchDepth itself floored at
-    // cfg.dragMinThinDepth rather than starting from a hard 0.
-    mainRope.overstretchActive = cfg.overstretchEnabled && cfg.overstretchThinningEnabled;
-    mainRope.overstretchDepth = Math.max(cfg.dragMinThinDepth, overstretchFrac * cfg.overstretchMaxThinDepth);
+    // Corrected 2026-09-17 -- back to purely proportional, no floor
+    // (the 2026-09-16 dragMinThinDepth floor was removed -- see that
+    // control's own comment for the full account of why it became
+    // actively wrong once Drag Overstretch Tolerance became
+    // proportional). Thinning is exactly 0 at 0 overstretch now,
+    // matching direct request: "thinning should only occur after
+    // overstretching."
+    mainRope.overstretchActive = cfg.overstretchEnabled && cfg.overstretchThinningEnabled && overstretchFrac > 0;
+    mainRope.overstretchDepth = overstretchFrac * cfg.overstretchMaxThinDepth;
     mainRope.overstretchDragIndex = dragPinIndex;
     // Deformable Endcap stretch multiplier -- converts endcapPullPx
     // (captured above) into the actual elongation applied by

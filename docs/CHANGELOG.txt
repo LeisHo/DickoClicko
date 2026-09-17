@@ -14612,3 +14612,43 @@ Verification: syntax-checked; the gate-fix scenario and the
 linear-in-heightMult claim both verified via dedicated Node checks.
 Not live-browser-verified (recurring dev-server page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-17  -  06:55 AM - 07:01 AM EDT
+
+1. Overstretch Sensitivity Curve widget can now be reordered/moved --
+   it had no drag-handle element at all, so makeReorderable() could
+   never grab it (not just "doesn't follow its slider"). Added the
+   same handle span + a stable data-key every other row already has.
+
+2. Overstretch thinning timing fixed, 2 parts:
+   - No more instant thinning the moment a drag starts with zero
+     cursor movement -- removed dragMinThinDepth's floor (now
+     obsolete/actively wrong since Overstretch Tolerance became
+     proportional to reach); depth is purely overstretchFrac *
+     overstretchMaxThinDepth now, exactly 0 at 0 overstretch.
+   - Thinning now eases back to full thickness on release instead of
+     snapping instantly -- new overstretchReleaseTransition, armed
+     alongside the existing bounce, duration scaled to how deep the
+     thinning was at release (new overstretchThinningReleaseDuration
+     slider, ms).
+
+3. Drag by the endcap's own visual tip -- DIAGNOSED ONLY, not fixed,
+   per direct instruction. Found a deeper cause beyond the arm-time
+   gate fixed earlier today: the gate's own distance measurement
+   (dragPos) is computed via mouseFlickInteractionPos(), which
+   substitutes the Cursor Animation SPRITE's own current position
+   (not the real press position) whenever Cursor Animation is active
+   -- confirmed live (mouseFlickEnabled/mouseFlickEnabledLiveMode both
+   true in the saved settings). No amount of endcap-awareness in the
+   distance comparison helps if the point it's measured FROM is
+   untethered from the endcap's actual screen position. Isolated to
+   ARMING a drag near the endcap specifically -- the per-frame,
+   already-armed follow code was fixed to use the raw cursor back on
+   2026-09-14, so this doesn't affect an in-progress drag. See
+   CLAUDE.md for the full account and the 2 candidate fix directions,
+   neither attempted.
+
+Verification: syntax-checked; the depth/release-ease math verified via
+Node simulation. Not live-browser-verified (recurring dev-server
+page-boot stall).
+

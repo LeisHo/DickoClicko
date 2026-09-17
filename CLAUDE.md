@@ -3551,3 +3551,137 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   mechanism) -- unlike those prior passes, though, this fix is backed
   by a concrete numeric reproduction of the actual failure mode, not
   just corrected reasoning about the code.
+- **Overstretch Sensitivity Curve widget could never actually be
+  reordered/moved (2026-09-17), real reported bug.** Root cause: the
+  hand-built `wrap` row (`buildOverstretchSensitivityCurveWidget()`)
+  had NO drag-handle element inside it at all -- every OTHER row gets
+  one from `buildRow()`, but this one, built by hand, never did.
+  `makeReorderable()`'s delegated pointerdown listener only ever starts
+  a reorder-drag when the event target is inside a real
+  `.dp-row-handle` element (this project's own established "reordering
+  starts only from a dedicated drag-handle icon" convention) -- with no
+  such element anywhere in `wrap`, that check failed on every single
+  pointerdown inside it, so this row could never be grabbed for
+  reordering at all, not merely "doesn't move with its slider" (the
+  ALREADY-documented, narrower limitation from when this widget was
+  first built). Fixed by adding the same `<span class="dp-row-handle
+  dp-drag-handle">⠿</span>` structure every other row already has, plus
+  a stable `data-key` (`'dragOverstretchMinSensitivityCurve'`) it never
+  had either -- `getPanelOrder()`/`captureGroup()` read `.dataset.key`
+  generically off EVERY `.dp-row` in a group (this widget's own extra
+  `dp-curve-widget-row` class doesn't exempt it), so a future Save now
+  genuinely remembers this row's position the same way every other row
+  already does, via `findRowByKey()` on restore -- no special-casing
+  needed anywhere else in the reorder/persistence system.
+- **Overstretch thinning timing corrected, 2026-09-17 -- 2 related but
+  distinct fixes, both direct corrections of the SAME mechanism's OWN
+  earlier design.**
+  1. **No more instant thinning the moment a drag starts.** Real,
+     reported bug: "When i click and hold to initate drag, even if i
+     dont move the cursor, I see a sudden thinning of the rope segment.
+     That should not happen." Root cause: `dragMinThinDepth` (added
+     2026-09-16, see that control's OWN now-removed comment) floored
+     `overstretchDepth` to a constant baseline the INSTANT any drag
+     started, regardless of `overstretchFrac` -- exactly what produced
+     visible thinning with zero cursor movement. That floor's ORIGINAL
+     purpose (a short rope showing no thinning at all) has since been
+     solved on its own separate merits: `overstretchTolerance` used to
+     be a fixed `vmin()` absolute, disproportionately generous relative
+     to a small `maxDragDist` near the anchor (see that control's own
+     2026-09-17 correction) -- now that it's proportional, a short rope
+     genuinely overstretches (and starts thinning) on an ordinary drag
+     almost immediately, with no floor needed. Keeping the floor after
+     THAT fix landed made it actively wrong, not just redundant --
+     removed the control entirely (`overstretchDepth` is now purely
+     `overstretchFrac * overstretchMaxThinDepth`, exactly 0 at 0
+     overstretch) rather than leaving an inert slider around, per this
+     project's own "an inert slider that visibly does nothing is worse
+     than no slider" convention.
+  2. **Thinning now eases back to full thickness on release instead of
+     snapping instantly.** Real, reported bug: "on release of the drag,
+     the thinning should also not bounce back sddenly, but transition
+     back to normal thickenss depending on the overstretch length."
+     `update()`'s own per-frame reset (`mainRope.overstretchDepth = 0`,
+     runs unconditionally every frame regardless of drag state) is what
+     produced the instant snap -- nothing overrode it once dragging
+     ended. New `mainRope.overstretchReleaseTransition`, armed in
+     `onPointerUp`'s Drag Rope release branch alongside the EXISTING
+     release bounce (same "only when genuinely overstretched" gate),
+     captures the depth at release and eases it linearly down to 0 --
+     the reset block now checks for an active transition FIRST and
+     overrides its own hard-zero with the eased value when one's
+     running. Duration scales with how deep the thinning actually was
+     at release (`startDepth / overstretchMaxThinDepth`, against a new
+     `cfg.overstretchThinningReleaseDuration` BASE duration in ms) --
+     a shallow release eases back quickly, a release from deep
+     overstretch takes the full duration, matching "depending on the
+     overstretch length" directly rather than one fixed duration
+     regardless of how stretched the rope was. Verified via a Node
+     simulation of both the no-floor depth formula (exactly 0 at
+     frac=0, confirmed) and the release-ease curve (monotonically
+     decreasing to 0, duration scaling correctly with starting depth --
+     a full-depth release took the full base duration, a
+     quarter-depth release took exactly a quarter of it). Not
+     live-browser-verified (this environment's recurring dev-server
+     page-boot stall).
+- **Drag by the endcap's own visual TIP -- INVESTIGATED FURTHER,
+  2026-09-17, per explicit instruction NOT to fix yet, only diagnose.
+  A DEEPER, more structural cause found beyond the arm-time gate fixed
+  earlier the same day.** The 2026-09-17 `dragHit` fix made the ARM-TIME
+  DISTANCE COMPARISON endcap-aware, but never questioned WHAT POSITION
+  that comparison is actually measured FROM -- and that position turns
+  out to be the real remaining problem. `onPointerDown`'s holdTimer
+  callback computes `const dragPos = mouseFlickInteractionPos(x, y,
+  'drag');` before ever reaching `dragHit` -- and
+  `mouseFlickInteractionPointWorld('drag')` (what this actually calls,
+  whenever Cursor Animation is active -- confirmed live in the saved
+  settings: `mouseFlickEnabled: true`, `mouseFlickEnabledLiveMode:
+  true`) returns a point derived ENTIRELY from `mfEntityX/Y` (the
+  Cursor Animation SPRITE's own current rendered position) plus a
+  fixed local offset (a specific spot on the hand artwork) rotated by
+  `mfEntityAngleDeg` (the sprite's own current rotation) -- the REAL
+  press position `x, y` is used ONLY as a fallback when the sprite/
+  frame data isn't loaded yet, never when Cursor Animation is
+  genuinely active. This substitution is DELIBERATE, ORIGINAL design
+  from 2026-09-12 ("Drag Rope Hold Distance is measured against FLICK
+  MOUSE's own annotated 'drag' interaction point... not the literal
+  press position"), not something introduced by any of the 9 endcap-
+  drag passes -- but it means the entire Drag Rope Hold Distance gate
+  is measured from WHEREVER THE SPRITE CURRENTLY IS, not from where the
+  user is actually pressing. If the sprite's own annotated 'drag' point
+  (a fixed spot on specific hand artwork) doesn't happen to land near
+  the endcap's own extended position -- plausible for a long endcap
+  extension, or whenever the sprite's current pose/rotation puts that
+  specific point somewhere else on screen -- then NO amount of endcap-
+  awareness in the DISTANCE COMPARISON helps, because the reference
+  point the comparison starts FROM is already untethered from the
+  endcap's real screen location. Every endcap-awareness fix so far
+  (this one included) treated "which distance formula" as the problem;
+  this is evidence the deeper issue may be "which POINT that formula is
+  measured from" for this one purpose specifically.
+  **Why this explains "still can't drag, even after the gate fix":**
+  the PER-FRAME, ALREADY-ARMED drag-follow code was fixed back in
+  2026-09-14 to use the RAW cursor (`mouseX`/`mouseY`), never this
+  substituted point (see that gotcha: "Drag Rope's own continuous
+  per-frame drag TARGET must always be the raw live cursor... never
+  mouseFlickInteractionPos(...)") -- so ONLY the ARM-TIME gate still
+  reads the sprite-relative point. This means the failure is isolated
+  to GETTING a drag to START at all near the endcap, never to
+  continuing one already in progress -- which matches the report
+  exactly ("i still cant drag by the endcap," not "dragging near the
+  endcap feels wrong once started").
+  **Not fixed, per direct instruction ("Dont fix this yet").** The
+  2 most likely directions, if/when a fix is authorized: (a) measure
+  `dragHit` against the REAL press position instead of the substituted
+  one (mirrors the exact precedent already set for `isOnCircle()`'s own
+  exclusion gate, corrected 2026-09-15 for the identical reason: "must
+  always check the REAL press/release position, never a FLICK
+  MOUSE-substituted interaction point") -- the simpler change, but
+  would quietly narrow the scope of the ORIGINAL 2026-09-12 spec for
+  every OTHER (non-endcap) drag target too, not just this one case; or
+  (b) keep the substitution for the general case but ALSO compare
+  against the raw press position specifically for the endcap-tip
+  qualifier, taking whichever measurement is closer -- preserves the
+  original spec's intent everywhere else, more surgical, but adds a 2nd
+  parallel measurement path to reason about. Neither has been
+  attempted or verified -- this entry documents the DIAGNOSIS only.
