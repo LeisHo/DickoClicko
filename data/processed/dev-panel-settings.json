@@ -4,7 +4,7 @@
       "backgroundColor": "#252546",
       "circleSize": 18.5,
       "circleX": 50,
-      "circleY": 14,
+      "circleY": 22,
       "circleColor": "#111023",
       "circleBoundaryOffset": 1,
       "anchorWeight": 0.7,
@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 32.04999999999997,
+      "ropeLength": 25.011053960903862,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -395,7 +395,7 @@
       },
       {
         "key": "WALLS",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ceilingBounciness",
           "wallBounciness",
@@ -436,7 +436,7 @@
       },
       {
         "key": "CIRCLE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "circleSize",
           "circleX",
