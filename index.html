@@ -290,6 +290,18 @@
     <div class="dp-header-buttons">
       <button type="button" class="dp-icon-btn" id="dpTextEditModeBtn" title="Toggle Label Rename Mode">✎</button>
       <button type="button" class="dp-icon-btn" id="dpAddGroupBtn" title="Add Group (right-click: select settings/groups to fold in)">+</button>
+      <!-- Delete Group/Setting (2026-09-17, ported from TEMPLATE_DEV_PANEL.html)
+           -- a plain click arms it (no left/right distinction needed,
+           unlike Add Group); the next click on any group OR individual
+           setting deletes it. Refuses the 2 mandatory built-in groups
+           (data-key "DEV PANEL"/"DEBUG") or a setting inside one -- see
+           findDevDeleteProtectionReason(). -->
+      <button type="button" class="dp-icon-btn" id="dpDeleteGroupBtn" title="Delete Group/Setting (click, then click a group or setting to delete it)">🗑</button>
+      <!-- Undo (2026-09-17, ported from TEMPLATE_DEV_PANEL.html) --
+           session-only, in-memory, cleared on Save. See
+           setupDevPanelUndo() for the full mechanism, including the
+           native-color-picker stuck-gesture fix. -->
+      <button type="button" class="dp-icon-btn" id="dpUndoBtn" title="Undo (Ctrl+Z) -- undoes any dev panel change back to the last Save">↶</button>
       <button type="button" class="dp-icon-btn" id="dpCollapseAllBtn" title="Collapse All Groups">⊟</button>
       <button type="button" class="dp-icon-btn" id="dpCollapseBtn" title="Collapse">–</button>
     </div>
@@ -2134,10 +2146,26 @@ function setupDevHeaderIconButtons(){
     // Right click: arms select mode on the FIRST right-click (no group
     // created yet -- just starts letting plain left-clicks select). A
     // SECOND right-click, while already armed, finalizes instead.
+    // Also disarms Delete (2026-09-17) -- both armed at once would make
+    // a single group-title click ambiguous between "select it" and
+    // "delete it".
     addGroupBtn.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (devGroupSelectionArmed){ addDevGroup(); disarmDevGroupSelection(); }
-      else { devGroupSelectionArmed = true; addGroupBtn.classList.add('armed'); }
+      else { disarmDevDeleteGroup(); devGroupSelectionArmed = true; addGroupBtn.classList.add('armed'); }
+    });
+  }
+  // Delete Group/Setting (2026-09-17, ported from TEMPLATE_DEV_PANEL.html)
+  // -- a plain click toggles armed/disarmed (unlike Add Group, Delete
+  // has no OTHER click behavior to stay compatible with, so it doesn't
+  // need a left-vs-right-click distinction). Arming this also disarms
+  // Add Group's own selection-arm mode (and vice versa, above) -- both
+  // armed at once would make a single group-title click ambiguous.
+  const deleteGroupBtn = document.getElementById('dpDeleteGroupBtn');
+  if (deleteGroupBtn){
+    deleteGroupBtn.addEventListener('click', () => {
+      if (devDeleteGroupArmed){ disarmDevDeleteGroup(); }
+      else { disarmDevGroupSelection(); devDeleteGroupArmed = true; deleteGroupBtn.classList.add('armed'); }
     });
   }
   const collapseAllBtn = document.getElementById('dpCollapseAllBtn');
@@ -2146,6 +2174,201 @@ function setupDevHeaderIconButtons(){
       document.getElementById('dpGroups').querySelectorAll('.dp-group').forEach(g => g.classList.add('collapsed'));
     });
   }
+}
+// Delete Group/Setting -- click-to-select-and-delete, ported from
+// TEMPLATE_DEV_PANEL.html (2026-09-17). Same "title takes priority over
+// row" pattern as setupDevGroupSelection() (reused, not duplicated) so
+// it works uniformly for a group (any nesting depth) or an individual
+// setting row; preventDefault/stopPropagation stop the click from also
+// collapsing the group via its own click handler.
+let devDeleteGroupArmed = false;
+function disarmDevDeleteGroup(){
+  devDeleteGroupArmed = false;
+  const btn = document.getElementById('dpDeleteGroupBtn');
+  if (btn) btn.classList.remove('armed');
+}
+// Walks target's own .dp-group AND every ancestor .dp-group, refusing
+// deletion if any of them is mandatory standing scaffolding (the
+// built-in "DEV PANEL"/"DEBUG" groups, workspace CLAUDE.md §12i/§12i-1)
+// -- checking the WHOLE ancestor chain (not just the immediate parent)
+// means a setting living inside either mandatory group is refused the
+// same way the group itself already is.
+function findDevDeleteProtectionReason(el){
+  let g = el.closest('.dp-group');
+  while (g){
+    if (g.dataset.key === 'DEV PANEL' || g.dataset.key === 'DEBUG'){
+      return 'mandatory standing scaffolding (workspace CLAUDE.md §12i/§12i-1)';
+    }
+    g = g.parentElement ? g.parentElement.closest('.dp-group') : null;
+  }
+  return null;
+}
+function setupDevDeleteGroup(){
+  const devPanel = document.getElementById('devPanel');
+  devPanel.addEventListener('click', e => {
+    if (!devDeleteGroupArmed) return;
+    if (e.target.closest('#dpDeleteGroupBtn')) return;
+    const titleEl = e.target.closest('.dp-group-title');
+    const target = titleEl ? titleEl.closest('.dp-group') : e.target.closest('.dp-row');
+    if (!target) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const reason = findDevDeleteProtectionReason(target);
+    if (reason){
+      console.warn('Delete: refused -- ' + reason);
+      disarmDevDeleteGroup();
+      return;
+    }
+    // pushDevDeleteUndoEntry(), not the generic pointerdown-based
+    // snapshot push -- see that function's own comment for why a plain
+    // value snapshot can't actually undo a deletion. parent/nextSibling
+    // captured BEFORE remove() so undo can put the node back in its
+    // exact original spot.
+    const parent = target.parentElement;
+    const nextSibling = target.nextElementSibling;
+    target.remove();
+    pushDevDeleteUndoEntry(target, parent, nextSibling);
+    disarmDevDeleteGroup();
+  }, true);
+  document.addEventListener('click', e => {
+    if (devPanel.contains(e.target)) return;
+    if (devDeleteGroupArmed) disarmDevDeleteGroup();
+  }, true);
+}
+// Infinite undo, ported from TEMPLATE_DEV_PANEL.html (2026-09-17) --
+// per direct request ("Add... an undo button. It will undo any dev
+// panel changes be it reordering, setting input change, renaming,
+// group nesting, anything. And allow me to undo infinitely until the
+// last save click"), later clarified as session-only ("the undo only
+// remembers changes within that browser session. so if i refresh, the
+// undo wont do anything... it rememebrs all changes from that moment,
+// until i click save, then it starts new again").
+//
+// A plain in-memory stack of FULL PANEL SNAPSHOTS (captureFullDevPanelState()
+// -- the exact same object Copy/Save/Named Setting States already
+// build) for ordinary value/order/rename changes, PLUS a separate entry
+// kind for deletions specifically -- see pushDevDeleteUndoEntry()'s own
+// comment for why a value snapshot alone can't undo a deletion (it can
+// recreate a deleted GROUP only as an empty shell, and has no way to
+// recreate a deleted SETTING's actual control markup at all).
+//
+// WHEN a snapshot gets pushed: not wired into each of the dev panel's
+// dozen+ mutation code paths individually. Instead, ONE capturing
+// 'pointerdown' listener on the whole panel pushes a snapshot the FIRST
+// time the pointer goes down inside it, gated to once per "gesture"
+// (reset on pointerup/pointercancel/window-focus) -- pointerdown fires
+// before essentially every kind of interaction this panel has, so this
+// single hook captures the pre-action state for all of them without
+// touching their own individual handlers. A multi-tick drag (a slider
+// dragged across many 'input' events, or a reorder dragged across many
+// pointermove events) is correctly captured as ONE undo step, not one
+// per tick, since the gesture gate only pushes on the drag's own
+// initial pointerdown.
+let devUndoStack = [];
+let devUndoGestureActive = false;
+function pushDevPanelUndoSnapshot(){
+  // Deep-cloned (JSON round-trip -- every field captureFullDevPanelState()
+  // returns is already plain JSON-safe data) -- REQUIRED, not a
+  // defensive extra: some fields are returned by plain reference (the
+  // SAME live objects later edits mutate in place) -- pushing the
+  // object literal as-is would let every snapshot already on the stack
+  // silently change underneath Undo the moment ANY later edit touched
+  // the same underlying state object.
+  devUndoStack.push({ kind: 'snapshot', data: JSON.parse(JSON.stringify(captureFullDevPanelState())) });
+}
+// A SEPARATE undo-entry kind, specifically for deleting a group or
+// setting (called from setupDevDeleteGroup()'s own click handler) --
+// NOT just another pushDevPanelUndoSnapshot() call. Captures the REAL,
+// LIVE DOM node being removed (not a clone -- a live node keeps its own
+// already-wired event listeners, so no re-wiring is needed on restore)
+// plus exactly where it sat (parent + nextSibling), and puts it straight
+// back on undo -- full-fidelity by construction, for a group (with all
+// its own contents, at any nesting depth) or a single setting row alike.
+function pushDevDeleteUndoEntry(node, parent, nextSibling){
+  devUndoStack.push({ kind: 'delete', node, parent, nextSibling });
+}
+function undoDevPanelChange(){
+  if (!devUndoStack.length) return;
+  const entry = devUndoStack.pop();
+  if (entry.kind === 'delete'){
+    if (entry.nextSibling && entry.nextSibling.parentNode === entry.parent){
+      entry.parent.insertBefore(entry.node, entry.nextSibling);
+    } else {
+      entry.parent.appendChild(entry.node);
+    }
+  } else {
+    applySnapshotToPanel(entry.data, false);
+  }
+}
+// How long a "gesture" is allowed to hold the undo-push gate open with
+// no matching pointerup -- a real, confirmed bug on the source project
+// before this port: opening a NATIVE color picker (this panel's own
+// <input type="color"> controls) never delivers a pointerup back to the
+// page at all -- the OS-level picker dialog eats it -- which permanently
+// stuck devUndoGestureActive at true and silently broke EVERY undo push
+// for the rest of the session after the first color picker use.
+// Generous on purpose -- real slider/reorder drags can legitimately run
+// a few seconds; this is a safety net for a genuinely abandoned/
+// swallowed gesture, not a normal timer.
+const DEV_UNDO_GESTURE_TIMEOUT_MS = 2000;
+let devUndoGestureTimer = null;
+function resetDevUndoGesture(){
+  devUndoGestureActive = false;
+  if (devUndoGestureTimer){ clearTimeout(devUndoGestureTimer); devUndoGestureTimer = null; }
+}
+function setupDevPanelUndo(){
+  const devPanel = document.getElementById('devPanel');
+  devPanel.addEventListener('pointerdown', e => {
+    if (devUndoGestureActive) return;
+    // While Delete Group/Setting is armed, the very next click either
+    // deletes something (which pushes its own precise
+    // pushDevDeleteUndoEntry() instead) or is refused/disarms with no
+    // mutation at all -- a plain value snapshot here would be a dead,
+    // unpoppable-to-any-useful-state entry either way, so skip it.
+    if (devDeleteGroupArmed) return;
+    // Avoids a real, confirmed "Undo does literally nothing" bug: the
+    // Undo button is itself inside devPanel, so clicking it ALSO fires
+    // this same capturing pointerdown listener -- without this guard, a
+    // click on Undo would push a snapshot of the CURRENT (already-
+    // changed) state, then its own 'click' handler immediately pops
+    // that SAME just-pushed entry, restoring the current state onto
+    // itself -- a complete no-op that leaves the user's real prior
+    // change buried, untouched, one slot deeper on the stack.
+    if (e.target.closest('#dpUndoBtn')) return;
+    devUndoGestureActive = true;
+    pushDevPanelUndoSnapshot();
+    // Belt-and-suspenders reset, on top of the real pointerup/
+    // pointercancel/focus listeners below.
+    devUndoGestureTimer = setTimeout(resetDevUndoGesture, DEV_UNDO_GESTURE_TIMEOUT_MS);
+  }, true);
+  document.addEventListener('pointerup', resetDevUndoGesture, true);
+  document.addEventListener('pointercancel', resetDevUndoGesture, true);
+  // Catches the native-picker-eats-pointerup case directly -- the window
+  // reliably regains focus the moment a native color/file/date picker
+  // (or any other OS-level dialog) closes, even though the page itself
+  // never saw a pointerup for the click that opened it.
+  window.addEventListener('focus', resetDevUndoGesture);
+  const undoBtn = document.getElementById('dpUndoBtn');
+  if (undoBtn) undoBtn.addEventListener('click', undoDevPanelChange);
+  // Ctrl+Z -- standard undo shortcut, a SEPARATE listener from the
+  // existing D/R single-key shortcuts (not merged into that listener,
+  // to keep this feature's own diff isolated). Ignored while focus is
+  // in a genuine text-input context (a rename textarea, the search box)
+  // so it doesn't fight the browser/OS's own native text-field undo.
+  document.addEventListener('keydown', e => {
+    if (!(e.key === 'z' || e.key === 'Z') || !(e.ctrlKey || e.metaKey)) return;
+    const tag = document.activeElement ? document.activeElement.tagName : '';
+    if (tag === 'TEXTAREA' || (tag === 'INPUT' && document.activeElement.type === 'text')) return;
+    e.preventDefault();
+    undoDevPanelChange();
+  });
+}
+// Clears the undo stack -- called from saveSettings() itself (per the
+// request's own explicit "until i click save, then it starts new
+// again"), so a real Save draws a hard line under everything before it
+// -- nothing before a genuinely successful Save is ever undoable after it.
+function clearDevPanelUndoStack(){
+  devUndoStack = [];
 }
 
 // Any .dp-group-body ANYWHERE in the tree is a valid nest target, at
@@ -3664,6 +3887,7 @@ async function saveSettings(){
     const result = await writeSettingsViaApi(snapshot);
     if (result.ok){
       lastLoadedSnapshot = snapshot;
+      clearDevPanelUndoStack();
       flash('Saved to repo!');
       return;
     }
@@ -3691,6 +3915,7 @@ async function saveSettings(){
     const ok = await writeGitSettingsLog(snapshot);
     if (ok){
       lastLoadedSnapshot = snapshot;
+      clearDevPanelUndoStack();
       flash('Saved!');
       return;
     }
@@ -3708,6 +3933,7 @@ async function saveSettings(){
     downloadSettingsAsFile(snapshot);
     sessionStorage.setItem(SESSION_FALLBACK_KEY, JSON.stringify(snapshot));
     lastLoadedSnapshot = snapshot;
+    clearDevPanelUndoStack();
     flash('Saved (session only)');
   } catch (err) {
     flash('Save failed');
@@ -13387,6 +13613,8 @@ if (DEV_MODE){
   initPanelScrollStrength();
   setupDevHeaderIconButtons();
   setupDevGroupSelection();
+  setupDevDeleteGroup();
+  setupDevPanelUndo();
   setupDevTextEditMode();
   applyDevTextOverrides();
   initMouseLog();

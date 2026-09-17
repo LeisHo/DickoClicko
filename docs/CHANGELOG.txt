@@ -14725,3 +14725,31 @@ Verification: syntax-checked. Not live-browser-verified. The endcap
 geometry itself has already been Node-verified multiple times earlier
 this session; this only wires it into one more call site.
 
+--------------------------------------------------------------------------------
+2026-09-17  -  07:21 AM - 07:24 AM EDT
+
+Undo + Delete Group/Setting ported from TEMPLATE_DEV_PANEL.html (landed
+in the template, from Clicko, after this project's earlier same-day
+sync pass -- confirmed missing via direct question, ported on request).
+
+Delete Group/Setting: header icon button (between Add Group and Undo),
+plain click arms it, next click on a group or setting deletes it.
+Refuses the 2 mandatory built-in groups (data-key 'DEV PANEL'/'DEBUG',
+this project's own real key values) or anything nested inside them.
+Arming Delete disarms Add Group's own selection-arm mode and vice versa.
+
+Undo (Ctrl+Z): full-panel-snapshot stack for ordinary changes, plus a
+separate entry kind for deletions (the real removed DOM node + its
+exact former position, full-fidelity restore). Reused this project's
+existing captureFullDevPanelState()/applySnapshotToPanel() -- no new
+capture/apply machinery needed. One snapshot per gesture via a single
+pointerdown listener; explicitly skips pushing when clicking Undo
+itself (a real bug on the source project otherwise -- Undo would pop
+its own just-pushed snapshot, a silent no-op). Cleared on every
+successful Save (all 3 tiers), not on a failed one.
+
+Verification: syntax-checked; 2 Node DOM-stub simulations (delete-
+protection across 5 nesting scenarios, delete-undo restore for both a
+middle and a last-item deletion) all correct. Not live-browser-
+verified.
+

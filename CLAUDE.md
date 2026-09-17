@@ -3821,3 +3821,75 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   Node-verified multiple times earlier this session; this change only
   wires an EXISTING, already-verified function into one more call site,
   so a fresh numeric re-verification wasn't repeated for this pass.
+- **Undo + Delete Group/Setting ported from `TEMPLATE_DEV_PANEL.html`
+  (2026-09-17).** Both landed in the template (from Clicko) after this
+  project's earlier same-day sync pass, so neither was caught by that
+  pass -- confirmed missing via direct user question ("where is my undo
+  and delete button"), found in the template, ported on request.
+  **Delete Group/Setting** -- a header icon button (🗑, between Add
+  Group and Undo): a PLAIN click arms it (unlike Add Group, no left/
+  right-click distinction needed, since Delete has no other click
+  behavior to stay compatible with), and the next click on any group OR
+  individual setting deletes it. `findDevDeleteProtectionReason()`
+  walks the target's own `.dp-group` AND every ancestor `.dp-group`,
+  refusing deletion of (or of anything living inside) the 2 mandatory
+  built-in groups -- `data-key === 'DEV PANEL'` or `'DEBUG'`, this
+  project's own actual key values (confirmed via direct inspection,
+  NOT the template's own `'Dev Panel'`/`'Debug'` string casing -- a
+  literal copy-paste of the template's own check would have silently
+  never matched anything here). Arming Delete disarms Add Group's own
+  selection-arm mode and vice versa (both armed at once would make a
+  single group-title click ambiguous between "select it" and "delete
+  it"). **Undo** (↶, Ctrl+Z) -- a plain in-memory stack of FULL PANEL
+  SNAPSHOTS (`captureFullDevPanelState()`, the exact same object Copy/
+  Save/Named Setting States already build -- this project already had
+  this function and its own restore counterpart,
+  `applySnapshotToPanel(snap, false)`, from the Named Setting States
+  port, so the underlying capture/apply machinery needed NO new code,
+  only the stack/timing logic on top) for ordinary value/order/rename
+  changes, PLUS a separate entry kind specifically for deletions (the
+  REAL, LIVE removed DOM node + its exact former parent/nextSibling,
+  restorable with full fidelity via a plain `insertBefore`/
+  `appendChild` -- a value snapshot alone can only recreate a deleted
+  GROUP as an empty shell and can't recreate a deleted SETTING's actual
+  control markup at all). A snapshot is pushed once per "gesture" via a
+  single capturing `pointerdown` listener on the whole panel (gated by
+  `devUndoGestureActive`, reset on pointerup/pointercancel/window-focus
+  -- the window-focus reset specifically catches a native color-picker
+  dialog eating the pointerup event entirely, a real bug already found
+  and fixed on the source project before this port) -- NOT wired into
+  each of the panel's own dozen+ individual mutation code paths, so a
+  multi-tick drag (a slider dragged across many `input` events, a
+  reorder dragged across many `pointermove` events) is correctly
+  captured as ONE undo step. **Load-bearing guard**: the pointerdown
+  listener explicitly skips pushing a snapshot when the click target is
+  inside `#dpUndoBtn` itself -- without this, clicking Undo pushes a
+  snapshot of the CURRENT (already-changed) state, and Undo's own click
+  handler immediately pops that SAME snapshot, restoring the current
+  state onto itself -- a silent no-op that buries the user's real prior
+  change one slot deeper on the stack every time Undo is pressed (a
+  real, confirmed bug on the source project before this port, which
+  went undetected in that project's own earlier testing specifically
+  because `button.click()` -- the JS method, used in that testing --
+  does NOT fire `pointerdown`/`mousedown` at all, only `click` directly;
+  only a genuine mouse click exposes it). The undo stack is cleared on
+  every genuinely SUCCESSFUL Save (`clearDevPanelUndoStack()`, added at
+  all 3 of `saveSettings()`'s own success points -- Tier 1 API write,
+  Tier 2 local file write, Tier 3 session-only fallback -- but NOT on a
+  failed/refused save, matching the request's own "until i click save,
+  then it starts new again"). Ctrl+Z is a separate, standalone
+  `keydown` listener (not merged into the pre-existing D/R single-key
+  shortcut listener, keeping this feature's own diff isolated),
+  ignored while focus is in a genuine text-input context. Verified via
+  2 Node DOM-stub simulations: `findDevDeleteProtectionReason()` across
+  5 cases (deleting the DEV PANEL group directly, a nested subgroup
+  inside it, a row nested inside that subgroup, a custom unprotected
+  group, and a row inside that custom group -- all 5 resolved
+  correctly), and the delete-undo restore logic across both a middle-
+  of-the-list deletion and a last-item deletion (both correctly
+  reproduced the exact original child order via the real
+  `nextSibling`-vs-`appendChild` branch). Not live-browser-verified
+  (this environment's recurring dev-server page-boot stall) -- the
+  actual click/arm/pointerdown-gesture wiring hasn't been exercised in
+  a real browser, though it's a near-verbatim port of the template's
+  own already-live, already-working code.
