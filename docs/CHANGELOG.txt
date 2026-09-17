@@ -14804,3 +14804,28 @@ likely downstream (rendering/pull-back) than in this comparison logic.
 
 Syntax-checked. Not live-browser-verified.
 
+--------------------------------------------------------------------------------
+2026-09-17  -  08:14 AM - 08:18 AM EDT
+
+Drag by the endcap's own visual tip -- 14th pass, actual root cause
+finally isolated with a concrete reproduction. dragHit (arming) and
+dragGrabHit (point-selection) were both calling the SAME function with
+IDENTICAL arguments (dragPos, the Cursor Animation-substituted point) --
+a pure function of (x,y), so they always resolved to the same index.
+"Arming works" was never evidence dragPos sits near the endcap; it only
+proved dragPos was close enough to SOME segment.
+
+Reproduced concretely: with dragPos placed near an unrelated interior
+point (wherever the sprite's own pose happens to put it) and the real
+press genuinely reaching toward the endcap, the old logic grabbed the
+unrelated interior point every time. Fixed by splitting the two
+measurements back apart -- dragHit keeps reading dragPos (confirmed
+working for arming); dragGrabHit goes back to the raw press position
+(the original design intent). The 13th pass's augmented-array
+comparison logic is unchanged -- this was purely about which position
+feeds it.
+
+Verification: syntax-checked; verified via a concrete Node
+reproduction of the actual failure mechanism (not just abstract
+comparison logic). Not live-browser-verified.
+

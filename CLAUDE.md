@@ -4016,3 +4016,55 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   bug is more likely to be downstream of point-selection (rendering/
   pull-back) if it's still not fixed. Syntax-checked. Not
   live-browser-verified.
+- **Drag by the endcap's own visual TIP -- 14th pass, 2026-09-17,
+  ACTUAL root cause finally isolated with a concrete reproduction, not
+  just corrected reasoning.** Real, direct, continued follow-up: "right
+  now when i try to drag the endcap, it still sets the dragpoint to the
+  end of the last normal rope segment." The 13th pass's own structural
+  fix (segment-vs-segment, not point-vs-segment) was genuinely correct
+  but couldn't have mattered here: `dragHit` (the arming gate) and
+  `dragGrabHit` (point-selection, set by the 4th pass to ALSO read
+  `dragPos`) were calling `nearestMainRopePointWithEndcap(dragPos.x,
+  dragPos.y)` with IDENTICAL arguments -- a pure function of `(x,y)`
+  given the same rope/cfg state, so they ALWAYS resolved to the exact
+  SAME index. The earlier report "it now does work as a distance
+  measuring point" was never actual evidence that `dragPos` (the Cursor
+  Animation-substituted interaction point) sits near the endcap
+  specifically -- it only proved `dragPos` sits close enough to SOME
+  real segment to pass Drag Rope Hold Distance, which is unsurprising
+  on its own (especially at a short Segment Length) and has nothing to
+  do with the endcap. Since both checks read the exact same call,
+  "arming succeeds" and "grabs the wrong point" were never 2
+  independently-measured outcomes that could disagree -- they were the
+  SAME resolution, every time, by construction.
+  **Confirmed via a concrete Node reproduction** (not just algebraic
+  reasoning this time): with `dragPos` placed near an UNRELATED
+  interior point (index 6 of 10, positioned there only because that's
+  wherever the sprite's own pose/lag happens to put it -- nothing to do
+  with the endcap) and the REAL press genuinely reaching toward the
+  endcap, the OLD (4th-pass) logic resolved `dragGrabHit.index` to `6`
+  -- an arbitrary interior point, not even "the segment before the
+  endcap," matching the report's own description of consistent,
+  reproducible wrongness rather than an edge case. The NEW logic
+  (`dragGrabHit` reverted to raw `x, y`, keeping the 13th pass's own
+  augmented-array comparison unchanged) correctly resolved to `9`
+  (`points.length-1`, the endcap) in the same scenario, regardless of
+  where `dragPos` happened to be.
+  **Fixed by splitting the 2 measurements back apart** -- `dragHit`
+  (arming) keeps reading `dragPos`, exactly as confirmed working;
+  `dragGrabHit` (point-selection) goes back to the RAW press position,
+  restoring the original 2026-09-15 design intent for THIS specific
+  purpose ("hit... anchored by the point on the rope that is clicked")
+  that the 4th pass had overwritten. The 13th pass's own comparison
+  METHODOLOGY (segment-vs-segment via the augmented points array) is
+  UNCHANGED -- this correction is purely about which position feeds it,
+  not how it compares once fed; both corrections needed to land
+  together for point-selection to actually work. Syntax-checked;
+  verified via a concrete Node reproduction of the exact failure
+  mechanism (not just the abstract comparison logic in isolation, which
+  is what every prior pass's own verification checked). Not
+  live-browser-verified (this environment's recurring dev-server
+  page-boot stall) -- but this is the first pass on this mechanism
+  where the verification actually reproduced a scenario matching the
+  report's own description of the failure, rather than constructing
+  synthetic presses that happened not to trigger it.

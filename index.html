@@ -9445,29 +9445,41 @@ function onPointerDown(e){
       // exactly on the tip (nearestPointOnRope resolving index 36 of 37
       // points) still armed dragIndex 25 via dragHit.
       //
-      // Corrected 2026-09-17, 4th pass -- real, direct follow-up report:
-      // "it now does work as a distance measuring point [dragHit, the
-      // gate], but when i initiate drag, it still drags from the last
-      // segments endpoint, not the endcap endpoint." Root cause: this
-      // used to measure from the RAW press position (x, y) -- a
-      // DIFFERENT reference point than `dragHit` above, which measures
-      // from `dragPos` (the Cursor Animation-substituted interaction
-      // point). The gate can correctly recognize "close enough to the
-      // endcap" via `dragPos` while this SEPARATE raw-position check
-      // disagrees and resolves to an ordinary segment instead -- arming
-      // succeeds, but the WRONG point gets grabbed. Per the user's own
-      // running spec across this whole feature's history ("my drag
-      // interaction point is next to the Endcap Endpoint... it should
-      // be measuring the drag distance from that endpoint, then if drag
-      // is triggered, the cursor frame should be using the endcap
-      // endpoint as the drag point"), both the arming gate AND the
-      // point-selection should agree on the SAME reference point --
-      // `dragPos`, not two independent measurements that can disagree.
-      // "Grabbing the endcap tip" always means grabbing the LAST real
-      // point (points.length-1) -- there's nothing else it could mean,
-      // the tip position only exists as a render-time offset (see the
-      // drag-pin block's own endcap pull-back correction further down).
-      const dragGrabHit = nearestMainRopePointWithEndcap(dragPos.x, dragPos.y);
+      // Corrected 2026-09-17, 5th pass -- REVERTS the 4th pass's own
+      // "use dragPos for both" change, per continued direct follow-up:
+      // "it still sets the dragpoint to the end of the last normal rope
+      // segment." Root cause of why the 4th pass's fix didn't actually
+      // work: `dragHit` (the arming gate, above) and this `dragGrabHit`
+      // were BOTH calling `nearestMainRopePointWithEndcap(dragPos.x,
+      // dragPos.y)` with IDENTICAL arguments -- a pure function of
+      // (x,y) given the same rope/cfg state, so they ALWAYS resolved to
+      // the SAME index. The report that "it now does work as a distance
+      // measuring point" was never evidence that `dragPos` sits near
+      // the endcap specifically -- it only proves `dragPos` sits close
+      // enough to SOME real segment to pass Drag Rope Hold Distance
+      // (plausible on its own, especially at a short Segment Length,
+      // regardless of the endcap). Since both checks read the exact
+      // same call, arming "succeeding" and grabbing "the wrong point"
+      // are the SAME underlying resolution, not 2 independently-
+      // measured outcomes that could disagree -- confirming `dragPos`
+      // itself (the Cursor Animation-substituted interaction point) is
+      // simply not a reliable stand-in for "where the endcap visually
+      // is" for this specific purpose, however well it may work for the
+      // GATE's own coarse proximity check. Back to the original
+      // 2026-09-15 design for point-SELECTION specifically ("hit...
+      // anchored by the point on the rope that is clicked" -- the REAL
+      // press position, deliberately not the interaction point) --
+      // `dragHit` (arming) keeps reading `dragPos`, unchanged; only
+      // this selection call goes back to raw `x, y`. The 13th-pass
+      // augmented-array comparison methodology (segment vs segment, not
+      // point vs segment) is UNCHANGED and still applies here -- this
+      // correction is purely about WHICH position feeds it, not how it
+      // compares once fed. "Grabbing the endcap tip" always means
+      // grabbing the LAST real point (points.length-1) -- there's
+      // nothing else it could mean, the tip position only exists as a
+      // render-time offset (see the drag-pin block's own endcap
+      // pull-back correction further down).
+      const dragGrabHit = nearestMainRopePointWithEndcap(x, y);
       downInfo.dragIndex = Math.max(1, dragGrabHit.index);
       // Direction-angle reference point for this drag (2026-09-12, per
       // explicit request) -- captured ONCE here, at the grabbed point's
