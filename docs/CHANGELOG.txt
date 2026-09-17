@@ -14700,3 +14700,28 @@ threshold, raw-only 0.0px passes, combined logic correctly resolves to
 wins over a hypothetical far-away press, confirming no regression).
 Not live-browser-verified.
 
+--------------------------------------------------------------------------------
+2026-09-17  -  07:16 AM - 07:18 AM EDT
+
+Drag by the endcap's own visual tip -- 11th pass, 2 corrections:
+
+1. Reverted the 10th pass's "whichever of substituted/raw press is
+   closer" gate change, per direct correction ("the distance measuring
+   should still be from the interaction point i had stated from
+   earlier"). dragHit is back to measuring purely from the Cursor
+   Animation-substituted interaction point, matching the original
+   2026-09-12 spec -- the endcap-aware FORMULA (9th pass) stays.
+
+2. Found and fixed the actual remaining bug, per direct correction:
+   "the cursor frame should be using the endcap endpoint as the drag
+   point. Currently, it is still the endpoint of the non endcap rope."
+   mouseFlickDragAnchorWorld() -- what both the drag-time rotation
+   target and the pickup-phase sprite position target resolve through
+   -- always returned the raw physics point with no endcap awareness,
+   even while dragging the tip with an endcap active. Fixed with the
+   same endcap-aware branch every other call site already uses.
+
+Verification: syntax-checked. Not live-browser-verified. The endcap
+geometry itself has already been Node-verified multiple times earlier
+this session; this only wires it into one more call site.
+

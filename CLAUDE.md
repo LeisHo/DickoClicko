@@ -3782,3 +3782,42 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   live-browser-verified (this environment's recurring dev-server
   page-boot stall, the same limitation as every prior pass on this
   mechanism).
+- **Drag by the endcap's own visual TIP -- 11th pass, 2026-09-17 (3rd
+  pass today), 2 corrections in one.** Direct, blunt correction of the
+  10th pass's own "whichever is closer" gate change: "your earlier
+  diagnosis was wrong. The distance measuring should still be from the
+  interaction point i had stated from earlier." Reverted `dragHit` back
+  to measuring purely from `dragPos` (the Cursor Animation-substituted
+  interaction point), matching the ORIGINAL 2026-09-12 spec exactly --
+  the endcap-aware distance FORMULA from the 9th pass
+  (`nearestMainRopePointWithEndcap()`) stays, only the "also compare
+  against the raw press position" addition from the 10th pass is gone.
+  **The user then identified the ACTUAL remaining bug, precisely**:
+  "if drag is triggered, the cursor frame should be using the endcap
+  endpoint as the drag point. Currently, it is still the endpoint of
+  the non endcap rope." Root cause: `mouseFlickDragAnchorWorld()` --
+  what BOTH the drag-time ROTATION target
+  (`mouseFlickTargetPosition()`'s own comment even said so explicitly:
+  "rotation... continues to point at the rope's own actual drag
+  point... rotation was never part of any of these corrections" -- an
+  honest admission that turned out to be exactly the bug) AND the
+  pickup-phase sprite POSITION target (`mfDragAnchor`) resolve through
+  -- always returned `mainRope.points[downInfo.dragIndex]` directly,
+  the RAW physics point, with NO endcap awareness at all, even while
+  actively dragging the tip with an endcap selected. Every OTHER
+  consumer of "where is the endcap's own true drag point" (the arm-time
+  qualifier, the per-frame pull-back, the cursor realignment) already
+  routed through `endcapDragPointWorld()` -- this was the one remaining
+  call site that never did, and it happens to be exactly what the user
+  is LOOKING AT while dragging (the sprite itself), which is why it was
+  the most immediately, persistently obvious symptom despite 2 earlier
+  passes already having fixed the arm-time gate. Fixed by adding the
+  same `dragIndex === points.length-1 && cfg.endcapDesign !== 'none'`
+  branch this file already uses at every other endcap-aware call site,
+  routing through `endcapDragPointWorld()` instead of returning the raw
+  point directly. Syntax-checked. Not live-browser-verified (this
+  environment's recurring dev-server page-boot stall) -- the underlying
+  `endcapDragPointWorld()` geometry has already been independently
+  Node-verified multiple times earlier this session; this change only
+  wires an EXISTING, already-verified function into one more call site,
+  so a fresh numeric re-verification wasn't repeated for this pass.

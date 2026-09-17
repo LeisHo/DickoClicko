@@ -5225,7 +5225,28 @@ function mouseFlickResolvedTargetMode(){
 function mouseFlickDragAnchorWorld(){
   if (!(downInfo && downInfo.mode === 'rope' && downInfo.dragging)) return null;
   const p = mainRope.points[downInfo.dragIndex];
-  return p ? { x: p.x, y: p.y } : null;
+  if (!p) return null;
+  // Endcap-aware (2026-09-17, 3rd pass on this feature) -- real,
+  // reported bug: "if drag is triggered, the cursor frame should be
+  // using the endcap endpoint as the drag point. Currently, it is
+  // still the endpoint of the non endcap rope." This function is what
+  // BOTH the drag-time ROTATION target (mouseFlickTargetPosition()
+  // calls it directly, its own comment: "rotation... continues to
+  // point at the rope's own actual drag point... rotation was never
+  // part of any of these corrections" -- true, and the actual bug)
+  // AND the pickup-phase sprite POSITION target (`mfDragAnchor`,
+  // update()'s own FLICK MOUSE block) resolve through -- it always
+  // returned the RAW physics point, with no endcap awareness at all,
+  // even while dragging the tip with an active endcap. Every OTHER
+  // consumer of "where is the endcap's own true drag point" already
+  // routes through endcapDragPointWorld() (the arm-time qualifier, the
+  // per-frame pull-back, the cursor realignment) -- this was the one
+  // remaining call site that never did, despite being exactly what the
+  // user is looking at (the sprite itself) while dragging.
+  if (downInfo.dragIndex === mainRope.points.length - 1 && cfg.endcapDesign !== 'none'){
+    return endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+  }
+  return { x: p.x, y: p.y };
 }
 function mouseFlickTargetPosition(){
   // Drag Rope override: while actively dragging, the sprite's own
@@ -9108,32 +9129,20 @@ function onPointerDown(e){
     // reads it, unaffected by this substitution) since this callback
     // already only fires after doubleClickThreshold has elapsed.
     const dragPos = mouseFlickInteractionPos(x, y, 'drag');
-    // Corrected 2026-09-17, 2nd pass -- endcap-aware distance (see
-    // nearestMainRopePointWithEndcap()'s own header comment) fixed the
-    // GATE's own distance FORMULA, but not what it measured that
-    // distance FROM: `dragPos` above is the Cursor Animation SPRITE's
-    // own annotated 'drag' point (a fixed spot on the hand artwork,
-    // transformed through the sprite's CURRENT position/rotation) --
-    // NOT the real press position -- whenever Cursor Animation is
-    // active (mouseFlickInteractionPos()'s own fallback to the real
-    // x,y only applies when the sprite/frame data isn't ready). Per
-    // the ORIGINAL 2026-09-12 spec this is deliberate ("measured
-    // against FLICK MOUSE's own annotated 'drag' interaction point...
-    // not the literal press position"), so simply discarding it for
-    // every drag target would regress that intent -- instead, this now
-    // measures BOTH the substituted point AND the real press position
-    // against the rope/endcap, and takes whichever one resolves
-    // closer. The substituted point still wins for an ordinary drag
-    // where the sprite is tracking the rope normally (preserving the
-    // original design everywhere it already worked); the REAL press
-    // position now wins whenever the sprite's own annotated point is
-    // off doing something else while the user is genuinely pressing
-    // near the endcap's own extended tip -- exactly the gap that kept
-    // "I still cant drag the endcap" true even after the 1st pass's
-    // formula fix.
-    const dragHitSubstituted = nearestMainRopePointWithEndcap(dragPos.x, dragPos.y);
-    const dragHitRaw = nearestMainRopePointWithEndcap(x, y);
-    const dragHit = dragHitRaw.dist < dragHitSubstituted.dist ? dragHitRaw : dragHitSubstituted;
+    // Corrected 2026-09-17, 3rd pass -- reverted the 2nd pass's "whichever
+    // of the substituted point or the real press is closer" comparison,
+    // per direct correction: "your earlier diagnosis was wrong. The
+    // distance measuring should still be from the interaction point i
+    // had stated from earlier." Back to measuring purely from `dragPos`
+    // (the Cursor Animation-substituted/annotated 'drag' interaction
+    // point), matching the original 2026-09-12 spec exactly, now made
+    // endcap-aware via nearestMainRopePointWithEndcap() (the 1st pass's
+    // own fix, kept). The REAL remaining bug this pass actually found
+    // and fixed is downstream of this gate entirely -- see
+    // mouseFlickDragAnchorWorld()'s own comment: once a drag genuinely
+    // arms, the Cursor Animation SPRITE was still anchoring to the raw
+    // rope point instead of the endcap's own extended tip.
+    const dragHit = nearestMainRopePointWithEndcap(dragPos.x, dragPos.y);
     // Drag Overrides Grow On Rope Hold (per explicit request: "provide
     // a checkbox to turn off the Drag trigger overriding the Click
     // Hold to Grow trigger") -- default true preserves the existing
