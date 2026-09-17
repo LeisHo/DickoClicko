@@ -3130,3 +3130,53 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   noting as a possible signal for recalibrating similarly-scoped
   "new dev-panel widget" work in the future, though this is a single
   data point, not yet a pattern.
+- **Dev Panel search bar (2026-09-17)** -- a Ctrl+F-style finder for
+  group/setting names, sitting above the "Saved Dev Settings" group.
+  Went through 4 direct rounds of clarification before landing on its
+  final shape, each one changing a real behavioral assumption, not just
+  wording:
+  1. Original ask: highlight every match live, expanding groups as
+     needed, "until next click."
+  2. "dont do the expanding and scroll thing if i havent hit enter yet"
+     -- typing alone (`input` event) only recomputes
+     `devPanelSearchMatches` and shows a plain `N found` count; nothing
+     expands, scrolls, or highlights until Enter.
+  3. "also, like ctrl F ... if i hit enter, it will auto scroll me to
+     the first instance, then if i hit enter again, it goes to the next
+     one" -- Enter navigates (first press = index 0, since
+     `devPanelSearchActiveIndex` starts at `-1` and `+1` wraps to `0`);
+     Shift+Enter goes backward, both wrapping via
+     `((index % n) + n) % n`.
+  4. "when i hit enter agian ... it un highlights and unexpands the
+     instances from before" -- ONLY the current match is ever expanded/
+     highlighted; navigating to a new one first undoes the previous
+     match's own effect (`dpSearchUndoCurrentMatch()`), not just adds a
+     new highlight on top.
+  **`devPanelSearchExpandedGroups` tracks only the groups THIS
+  mechanism actually had to expand** (i.e. were genuinely collapsed at
+  the moment of navigation) -- re-collapsing walks that list, not the
+  full ancestor chain, so a group the user had already left open on
+  their own is never wrongly re-collapsed by the search moving past it.
+  Matches are collected via a single combined query,
+  `'#dpGroups .dp-group-title, #dpGroups .dp-row, #dpUngrouped .dp-row'`
+  -- `querySelectorAll` with a comma-separated selector returns nodes in
+  real document order regardless of which branch matched, so no
+  separate sort is needed to make Enter-cycling visit matches
+  top-to-bottom. A `.dp-row` with no `<label>` (the Saved Dev Settings
+  group's own hand-built row, just a `<select>`) is silently skipped,
+  not an error -- only `buildRow()`-produced rows have a label to
+  text-match against. The "until next click" clear (any document click
+  that isn't on the search input itself) reuses the exact same
+  undo-current-match function as Enter-cycling, so there's only one
+  code path for "stop showing this match," not two that could drift.
+  Verified via a Node-level DOM-stub simulation of the full sequence
+  (2 matches, one nested 2 levels inside 2 initially-collapsed groups,
+  one already-expanded) -- confirmed correct document-order collection,
+  correct expand-only-what-was-collapsed bookkeeping, correct
+  re-collapse-only-what-this-mechanism-touched on moving to the next
+  match, and correct forward/backward wrap-around at both list
+  boundaries. Not live-browser-verified (this environment's recurring
+  dev-server page-boot stall, same limitation as most fixes in this
+  project's history) -- `scrollIntoView`/real click-event propagation
+  specifically are unverified beyond the stub's own faithful mirroring
+  of the DOM APIs actually called.

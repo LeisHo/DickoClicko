@@ -182,6 +182,18 @@
     background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
     padding:2px 4px;
   }
+  /* Dev Panel search bar (2026-09-17) -- Ctrl+F-style group/setting
+     finder, sits above the "Saved Dev Settings" group. Only the CURRENT
+     match (cycled via Enter/Shift+Enter) is highlighted at any time --
+     see dpSearchActiveHighlight()'s own comment for why there's no
+     "highlight every match at once" mode. */
+  .dp-search-input {
+    flex:1 1 auto; min-width:0; font-size:11px;
+    background:#0f0f18; color:#e8e8f0; border:1px solid #3a3a4a; border-radius:4px;
+    padding:2px 4px;
+  }
+  .dp-search-count { flex:0 0 auto; font-size:10px; color:#8a8a9a; min-width:34px; text-align:right; }
+  .dp-search-highlight-active { background:#ffb400; color:#1a1a1a; border-radius:2px; padding:0 2px; }
   .dp-gradient { flex:1 1 auto; min-width:80px; position:relative; }
   .dp-gradient-bar {
     position:relative; height:22px; border:1px solid #3a3a4a; border-radius:4px;
@@ -270,6 +282,16 @@
       <button type="button" id="dpCopyBtn">Copy Settings</button>
       <button type="button" id="dpSaveBtn">Save Settings</button>
       <button type="button" id="dpResetBtn">Reset</button>
+    </div>
+    <!-- Search (2026-09-17) -- Ctrl+F-style finder for group/setting
+         names. Live typing only updates the match count; Enter jumps
+         to (and expands/scrolls to) the first match, each further
+         Enter/Shift+Enter cycles to the next/previous match -- see
+         initDevPanelSearch()'s own comment for the full mechanism. -->
+    <div class="dp-row dp-search-row">
+      <label>Search</label>
+      <input type="text" id="dpSearchInput" class="dp-search-input" autocomplete="off">
+      <span id="dpSearchCount" class="dp-search-count"></span>
     </div>
     <!-- Named Setting States (2026-09-14, ported from TEMPLATE_DEV_PANEL.html's
          own [JS-13b] "Saved Dev Settings") -- multiple named, full-panel
@@ -802,6 +824,18 @@ const DEV_GROUPS = [
     { key:'pieceDecayDelay',   label:'Piece Decay Delay',      type:'slider', unit:'s',      min:0, max:10, step:0.1,  def:1 },
     { key:'pieceDecaySpeed',   label:'Piece Decay Speed',      type:'slider', unit:'%vmin/s', min:0, max:5,  step:0.05, def:0.5 },
     { key:'pieceMinThickness', label:'Piece Minimum Thickness', type:'slider', unit:'%vmin',  min:0.1, max:10, step:0.1, def:1 },
+    // Decay color/brightness (2026-09-17), per explicit request:
+    // "Provide me a color brightness and color tint that occurs with the
+    // decay. So it gradually changes to that brightness and color as it
+    // decays." Progress reuses the SAME decay mechanism thickness
+    // already tracks -- see pieceDecayedColor()'s own comment -- 0 the
+    // instant decay starts, 1 exactly once thickness bottoms out at
+    // Piece Minimum Thickness, no separate timer/state needed. §12n:
+    // tint color and brightness are 2 independently-tunable controls,
+    // not one bundled "decay amount" dial.
+    { key:'pieceDecayTintColor',  label:'Piece Decay Tint Color',  type:'color',  def:'#2a1810' },
+    { key:'pieceDecayTintAmount', label:'Piece Decay Tint Amount (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:0.5 },
+    { key:'pieceDecayBrightness', label:'Piece Decay Brightness (x)', type:'slider', unit:'x', min:0, max:2, step:0.01, def:1 },
   ]},
   { title:'CUT SPLATTER', controls:[
     // "blood splatter on the background" when a cut actually separates
@@ -2753,6 +2787,141 @@ function captureGroup(g){
 function findRowByKey(key){
   return document.getElementById('devPanel').querySelector('.dp-row[data-key="' + CSS.escape(key) + '"]');
 }
+// Dev Panel search (2026-09-17) -- Ctrl+F-style finder for group/
+// setting names, per direct request. Scoped to #dpGroups + #dpUngrouped
+// (every real project group/setting, including the built-in Dev Panel/
+// Debug groups -- both are appended into #dpGroups same as any other
+// group) via a single combined query so matches come back in real
+// document order for free (querySelectorAll with a comma-separated
+// selector preserves document order regardless of which branch of the
+// selector matched a given node -- no separate sort needed).
+//
+// Deliberately does NOT highlight/expand every match at once -- per
+// direct correction ("dont do the expanding and scroll thing if i
+// havent hit enter yet"): typing only recomputes devPanelSearchMatches
+// and shows a plain "N found" count. Only Enter (first press = jump to
+// match 0, since devPanelSearchActiveIndex starts at -1 and +1 wraps to
+// 0) or Shift+Enter (previous, wrapping) actually navigates -- and per
+// a 2nd direct correction, navigating to a NEW match first UNDOES
+// whatever the PREVIOUS match's own navigation did (un-highlight,
+// re-collapse), so only ONE match is ever expanded/highlighted at a
+// time, never a trail of previously-visited ones left open.
+//
+// devPanelSearchExpandedGroups tracks ONLY the groups THIS mechanism
+// itself had to expand (i.e. they were actually collapsed at the
+// moment of navigation) -- re-collapsing blindly walks the whole
+// ancestor chain instead, which would wrongly re-collapse a group the
+// user had already left open on their own, unrelated to this search.
+let devPanelSearchMatches = [];
+let devPanelSearchActiveIndex = -1;
+let devPanelSearchActiveEl = null;
+let devPanelSearchExpandedGroups = [];
+
+function dpSearchCollectMatches(query){
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const dpBody = document.getElementById('dpBody');
+  if (!dpBody) return [];
+  const nodes = dpBody.querySelectorAll('#dpGroups .dp-group-title, #dpGroups .dp-row, #dpUngrouped .dp-row');
+  const matches = [];
+  nodes.forEach(node => {
+    if (node.classList.contains('dp-group-title')){
+      if (node.textContent.toLowerCase().includes(q)){
+        matches.push({ type: 'group', targetEl: node, groupEl: node.closest('.dp-group') });
+      }
+    } else {
+      // A row can be a real setting (has its own <label>, per buildRow())
+      // or the Saved Dev Settings group's own hand-built row (just a
+      // <select>, no label) -- the latter has nothing to text-match
+      // against and is silently skipped, not an error.
+      const label = node.querySelector('label');
+      if (label && label.textContent.toLowerCase().includes(q)){
+        matches.push({ type: 'row', targetEl: label, rowEl: node });
+      }
+    }
+  });
+  return matches;
+}
+
+function dpSearchCollapseExpanded(){
+  devPanelSearchExpandedGroups.forEach(g => g.classList.add('collapsed'));
+  devPanelSearchExpandedGroups = [];
+}
+
+function dpSearchClearActiveHighlight(){
+  if (devPanelSearchActiveEl) devPanelSearchActiveEl.classList.remove('dp-search-highlight-active');
+  devPanelSearchActiveEl = null;
+}
+
+// Undoes whatever the CURRENT match's own navigation did -- always call
+// this before moving to a different match (or abandoning the search),
+// never only on a fresh query.
+function dpSearchUndoCurrentMatch(){
+  dpSearchClearActiveHighlight();
+  dpSearchCollapseExpanded();
+}
+
+function dpSearchExpandAncestors(startEl){
+  let g = startEl.parentElement ? startEl.parentElement.closest('.dp-group') : null;
+  while (g){
+    if (g.classList.contains('collapsed')){
+      g.classList.remove('collapsed');
+      devPanelSearchExpandedGroups.push(g);
+    }
+    g = g.parentElement ? g.parentElement.closest('.dp-group') : null;
+  }
+}
+
+function dpSearchUpdateCount(){
+  const countEl = document.getElementById('dpSearchCount');
+  if (!countEl) return;
+  const total = devPanelSearchMatches.length;
+  if (!document.getElementById('dpSearchInput').value.trim()) countEl.textContent = '';
+  else if (!total) countEl.textContent = '0 found';
+  else if (devPanelSearchActiveIndex === -1) countEl.textContent = total + ' found';
+  else countEl.textContent = (devPanelSearchActiveIndex + 1) + '/' + total;
+}
+
+function dpSearchGoTo(index){
+  if (!devPanelSearchMatches.length) return;
+  dpSearchUndoCurrentMatch();
+  const n = devPanelSearchMatches.length;
+  devPanelSearchActiveIndex = ((index % n) + n) % n;
+  const m = devPanelSearchMatches[devPanelSearchActiveIndex];
+  dpSearchExpandAncestors(m.type === 'row' ? m.rowEl : m.groupEl);
+  m.targetEl.classList.add('dp-search-highlight-active');
+  devPanelSearchActiveEl = m.targetEl;
+  m.targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  dpSearchUpdateCount();
+}
+
+function initDevPanelSearch(){
+  const input = document.getElementById('dpSearchInput');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    dpSearchUndoCurrentMatch();
+    devPanelSearchActiveIndex = -1;
+    devPanelSearchMatches = dpSearchCollectMatches(input.value);
+    dpSearchUpdateCount();
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (e.shiftKey) dpSearchGoTo(devPanelSearchActiveIndex - 1);
+    else dpSearchGoTo(devPanelSearchActiveIndex + 1);
+  });
+  // "highlight ... until next click" -- any click that isn't on the
+  // search input itself (so continuing to type/click into the field to
+  // keep searching is unaffected) undoes the current match's own
+  // highlight/expansion, same as moving to a different match does.
+  document.addEventListener('click', e => {
+    if (e.target === input) return;
+    if (devPanelSearchActiveIndex === -1) return;
+    dpSearchUndoCurrentMatch();
+    devPanelSearchActiveIndex = -1;
+    dpSearchUpdateCount();
+  }, true);
+}
 // Interactive draggable curve-graph widget for Overstretch Min
 // Sensitivity (2026-09-16) -- per direct request: "Provide me a slider
 // for minimum sensitivity and a curve graph input ui to set the linear
@@ -3723,6 +3892,7 @@ function initDeviceTabs(){
 }
 
 function initDevPanelChrome(){
+  initDevPanelSearch();
   document.getElementById('dpCopyBtn').addEventListener('click', copySettings);
   document.getElementById('dpSaveBtn').addEventListener('click', saveSettings);
   document.getElementById('dpResetBtn').addEventListener('click', resetSettings);
@@ -5864,6 +6034,44 @@ function pieceThickness(piece){
   return Math.max(vmin(cfg.pieceMinThickness), piece.baseThickness - vmin(cfg.pieceDecaySpeed) * decaying);
 }
 
+function hexToRgbArr(hex){
+  const h = hex.replace('#', '');
+  return [parseInt(h.substring(0, 2), 16), parseInt(h.substring(2, 4), 16), parseInt(h.substring(4, 6), 16)];
+}
+function rgbArrToHex(rgb){
+  return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+}
+// A fallen piece's own rope/endcap COLOR at its current decay progress --
+// 2026-09-17, per explicit request: "Provide me a color brightness and
+// color tint that occurs with the decay. So it gradually changes to that
+// brightness and color as it decays." Progress (0-1) is DERIVED from the
+// SAME thickness-decay mechanism pieceThickness() already tracks -- 0 the
+// instant a piece is created (thickness still at its own baseThickness),
+// 1 exactly once thickness has bottomed out at Piece Minimum Thickness --
+// rather than a separate timer, so tint/brightness and thinning always
+// finish together by construction, never drifting out of sync. Blends
+// cfg.ropeColor toward Piece Decay Tint Color by (decayFrac * Piece Decay
+// Tint Amount), THEN applies Piece Decay Brightness as a per-channel
+// multiplier (1 = no change) scaled the same way -- 2 independent knobs,
+// per this project's own §12n decomposition philosophy, not one combined
+// "decay amount" dial. Falls back to the plain cfg.ropeColor unconditionally
+// for anything that isn't a real, aging fallen piece (mainRope, bgRope,
+// or a piece missing its own decay fields), matching pieceThickness()'s
+// own defensive fallback.
+function pieceDecayedColor(piece){
+  if (piece.baseThickness === undefined || piece.age === undefined) return cfg.ropeColor;
+  const minThick = vmin(cfg.pieceMinThickness);
+  const span = piece.baseThickness - minThick;
+  const decayFrac = span > 1e-6 ? Math.max(0, Math.min(1, (piece.baseThickness - pieceThickness(piece)) / span)) : 1;
+  if (decayFrac <= 0) return cfg.ropeColor;
+  const rgb = hexToRgbArr(cfg.ropeColor);
+  const tint = hexToRgbArr(cfg.pieceDecayTintColor);
+  const tintT = decayFrac * cfg.pieceDecayTintAmount;
+  const brightnessMult = 1 + (cfg.pieceDecayBrightness - 1) * decayFrac;
+  const blended = rgb.map((v, i) => (v + (tint[i] - v) * tintT) * brightnessMult);
+  return rgbArrToHex(blended);
+}
+
 // How far a piece's own endcap graphic actually extends PAST the
 // physics point it's anchored to, in world px, once fully emerged --
 // mirrors drawEndcap()'s own geometry exactly (ENDCAP_ALIGNMENT.topY ->
@@ -6624,6 +6832,39 @@ function pieceCollision(dt){
         }
         resolveChainCollision(mainData, pieceCollisionRadii(piece.points, thick, tipCircle, cutCircle), maxPush);
       });
+    }
+  }
+
+  // mainRope's own SELF-collision -- 2026-09-17, real, reported bug: "If
+  // i grow a rope so much that it reaches the floor, when it comes into
+  // contact with other rope segments, they all react in a crazy way and
+  // flash and jump around." mainRope had NO self-collision at all before
+  // this: the block above only ever repels mainRope against a DIFFERENT,
+  // already-fallen piece (and requires fallenPieces.length > 0 to even
+  // run), and the piece self-collision loop below only ever iterates
+  // fallenPieces, never mainRope. A rope grown long enough to coil/pile
+  // against the floor has plenty of far-apart-by-index points that end up
+  // geometrically close, exactly like a fallen piece folding on itself --
+  // but with nothing pushing those points apart, the bend/distance solver
+  // (integrateChain()'s own cfg.bendStiffness) has to fight an
+  // increasingly self-overlapping, degenerate geometry every iteration
+  // with no repulsion term to prevent that overlap from happening in the
+  // first place, which is exactly the instability class self-collision
+  // was already built to prevent for pieces (see resolveSelfCollision()'s
+  // own SELF_COLLISION_NORMAL_DAMP_FRAC/frac=0.05 tuning history). Gated
+  // on the tip being near the floor (NOT `fallenPieces.length > 0`, which
+  // would wrongly skip this for a rope grown long with zero cuts ever
+  // made) -- same "ambient sway shouldn't trigger collision" reasoning as
+  // the mainRope-vs-piece gate above, just measured against the floor's
+  // own Y instead of a pile's topmost point. THICKNESS-ONLY radii (no
+  // endcap inflation), matching piece self-collision's own established
+  // reasoning directly above (the endcap graphic overlapping itself is a
+  // much rarer, more extreme event than the rope BODY folding on itself).
+  if (cfg.floorEnabled){
+    const mainThickSelf = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
+    const mainTipYSelf = mainRope.points[mainRope.points.length - 1].y;
+    if (mainTipYSelf >= floorY() - vh(10)){
+      resolveSelfCollision(pieceCollisionRadii(mainRope.points, mainThickSelf, null, null), maxPush);
     }
   }
 
@@ -8276,7 +8517,26 @@ function hitTestRope(x, y, maxDist, circleCheckX, circleCheckY){
   const ccx = circleCheckX !== undefined ? circleCheckX : x;
   const ccy = circleCheckY !== undefined ? circleCheckY : y;
   if (isOnCircle(ccx, ccy)) return null; // clicking the circle itself never counts as a rope hit
-  const hit = nearestPointOnRope(x, y, mainRope.points);
+  let hit = nearestPointOnRope(x, y, mainRope.points);
+  // Endcap-tip qualifier (2026-09-17), extending Drag Rope's own
+  // arm-time qualifier to every OTHER click-distance measurement too --
+  // real, reported request: "the endcap endpoint which i provided
+  // should also be used to calculate the click funciton distances as
+  // well. Right now its not doing that." hitTestRope() is the shared
+  // distance measurement behind BOTH the single-tap punch-arm check and
+  // double-click-cut targeting (see hitTestAny()'s own callers) --
+  // nearestPointOnRope() only ever walks real physics segments, so
+  // (same root cause as Drag Rope's own pre-2026-09-15 bug) a press
+  // visually closer to the endcap's own decorative rendered tip than to
+  // any real rope point still resolved to an earlier real point. Same
+  // fix, same shared helper: compute the endcap's own true (possibly
+  // Deformable-Endcap-curved) drag point and let it win the comparison
+  // whenever it's genuinely closer.
+  if (cfg.endcapDesign !== 'none'){
+    const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+    const distToTip = Math.hypot(x - tipWorld.x, y - tipWorld.y);
+    if (distToTip < hit.dist) hit = { dist: distToTip, index: mainRope.points.length - 1, x: tipWorld.x, y: tipWorld.y };
+  }
   return hit.dist <= maxDist ? hit : null;
 }
 
@@ -8574,16 +8834,13 @@ function onPointerDown(e){
       // the existing hit.index-based selection above.
       let dragGrabIndex = hit.index;
       if (cfg.endcapDesign !== 'none'){
-        const tipPt = mainRope.points[mainRope.points.length - 1];
-        const tipDir = tipDirection(mainRope.points);
-        // dragPointExtensionPx() (2026-09-16), not the plain
-        // endcapExtensionPx() -- for form1-01 specifically, the real
-        // grabbable "drag point" sits at the annotated dot (~97% of the
-        // way to the shape's own geometric tip), not the literal
-        // bottom-most pixel -- see that function's own comment.
-        const ext = dragPointExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight);
-        const tipX = tipPt.x + tipDir.x * ext, tipY = tipPt.y + tipDir.y * ext;
-        const distToEndcapTip = Math.hypot(x - tipX, y - tipY);
+        // endcapDragPointWorld() (2026-09-17), not a hand-rolled
+        // straight-line walk -- see that function's own comment. Must
+        // agree with the Deformable Endcap's own CURVED geometry when
+        // active, or a press aimed at the true, curved, on-screen tip
+        // keeps losing this comparison to a real nearby rope point.
+        const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+        const distToEndcapTip = Math.hypot(x - tipWorld.x, y - tipWorld.y);
         if (distToEndcapTip < hit.dist) dragGrabIndex = mainRope.points.length - 1;
       }
       downInfo.dragIndex = Math.max(1, dragGrabIndex);
@@ -9774,25 +10031,51 @@ function update(rawDt){
         // realignment target and the pull-back's own reference point
         // never agreed on what "the drag point" means. Fixed by
         // realigning to the SAME point the pull-back itself targets.
+        //
+        // Corrected 2026-09-17 -- this used to also reassign the RAW,
+        // GLOBAL mouseX/mouseY/mfX/mfY to realignX/Y directly. Real,
+        // reported bug: "the moment i move the cursor, the cursor frame
+        // and dragpoint immediatly jumps to the true cursors location.
+        // I dont want that." Root cause: mouseX/mouseY/mfX/mfY are
+        // written UNCONDITIONALLY and ABSOLUTELY by 2 separate real
+        // `pointermove` listeners (`mouseX = e.clientX` etc.) -- a
+        // browser can't actually move the OS cursor, so this synthetic
+        // assignment only ever "stuck" for as long as the user's hand
+        // stayed perfectly still. The very first genuine pointermove
+        // event afterward overwrote these variables straight back to
+        // the TRUE absolute screen position, discarding the synthetic
+        // realignment in one frame -- reading as a huge instantaneous
+        // jump from realignX/Y to wherever the real cursor actually
+        // was, even for a tiny real hand movement. Fixed per the user's
+        // own suggested resolution ("move the true cursors location
+        // along with the cursor frame... do whatever translation math
+        // you need"): mouseX/mfX are never touched at all now -- only
+        // `dragSensCursorX/Y` (the drag's own VIRTUAL cursor, already
+        // used by the Leash/sprite-target math below) starts at
+        // realignX/Y, and `dragSensLastRawX/Y` is seeded with the REAL
+        // current mouseX/mouseY (not the synthetic realignX/Y) so the
+        // very next frame's delta (mouseX - dragSensLastRawX) reflects
+        // genuine cursor movement, not the gap between a fake position
+        // and the real one. This is a pure TRANSLATION from here on:
+        // the virtual cursor starts at the drag point and moves by
+        // exactly the real cursor's own future deltas (scaled by Drag
+        // Mouse Sensitivity), continuously, with nothing to "jump" to.
         let realignX = dragPoint.x, realignY = dragPoint.y;
         if (dragPinIndex === mainRope.points.length - 1 && cfg.endcapDesign !== 'none'){
-          const tipDir = tipDirection(mainRope.points);
-          const ext = dragPointExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight) * (mainRope.endcapStretchMult || 1);
-          realignX += tipDir.x * ext;
-          realignY += tipDir.y * ext;
+          // endcapDragPointWorld() (2026-09-17), not a straight-line
+          // tipDir walk -- see that function's own comment. Keeps this
+          // realignment agreeing with the pull-back below on where the
+          // endcap's own (possibly CURVED, Deformable-Endcap) tip
+          // actually renders.
+          const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+          realignX = tipWorld.x;
+          realignY = tipWorld.y;
         }
-        mouseX = realignX; mouseY = realignY;
-        mfX = realignX; mfY = realignY;
         downInfo.dragCursorRealigned = true;
-        // Drag Mouse Sensitivity's own tracked state -- initialized
-        // HERE (the same realignment instant) so it starts exactly
-        // continuous with the just-realigned cursor, not from wherever
-        // the real mouse happened to be during the pickup freeze. See
-        // cfg.dragMouseSensitivity's own comment for the full mechanism.
         downInfo.dragSensCursorX = realignX;
         downInfo.dragSensCursorY = realignY;
-        downInfo.dragSensLastRawX = realignX;
-        downInfo.dragSensLastRawY = realignY;
+        downInfo.dragSensLastRawX = mouseX;
+        downInfo.dragSensLastRawY = mouseY;
       }
       // Drag Mouse Sensitivity -- advance the scaled cursor by this
       // frame's REAL mouse delta times cfg.dragMouseSensitivity, rather
@@ -9919,12 +10202,21 @@ function update(rawDt){
         const rdx = dragTargetPos.x - prevPt.x, rdy = dragTargetPos.y - prevPt.y;
         const rdist = Math.hypot(rdx, rdy);
         if (rdist > 1e-6){
-          // dragPointExtensionPx() (2026-09-16), not the plain
-          // endcapExtensionPx() -- see that function's own comment;
-          // matches the SAME target the arm-time qualifier above uses,
-          // so the point you actually grab and the point the pull-back
-          // aims for agree on where "the drag point" is.
-          const extension = dragPointExtensionPx(cfg.endcapDesign, vmin(cfg.ropeThickness), cfg.endcapHeight) * (mainRope.endcapStretchMult || 1);
+          // endcapDragPointWorld() (2026-09-17), not a straight-line
+          // dragPointExtensionPx() distance -- see that function's own
+          // comment. `extension` here is measured as the distance from
+          // prevPt to the endcap's own TRUE (possibly curved) rendered
+          // drag point, using THIS frame's still-pre-pull-back geometry
+          // (the same one-frame-lag convention already established for
+          // endcapStretchMult a few lines below) -- so this converges to
+          // the actual on-screen curved extension over a frame or two,
+          // rather than assuming a straight line that Deformable Endcap
+          // doesn't actually draw. Matches the SAME target the arm-time
+          // qualifier above uses, so the point you actually grab and the
+          // point the pull-back aims for agree on where "the drag point"
+          // is.
+          const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+          const extension = Math.hypot(tipWorld.x - prevPt.x, tipWorld.y - prevPt.y);
           const pull = Math.min(extension, rdist);
           dragTargetPos = { x: dragTargetPos.x - (rdx / rdist) * pull, y: dragTargetPos.y - (rdy / rdist) * pull };
         }
@@ -9987,7 +10279,16 @@ function update(rawDt){
       // sampled distance, both inside and far outside hardLimit -- never
       // 0, never unbounded.
       {
-        const sdx = mouseX - dragPoint.x, sdy = mouseY - dragPoint.y;
+        // Corrected 2026-09-17 -- uses the drag's own virtual cursor
+        // (dragSensCursorX/Y) now, not raw mouseX/mouseY -- see the
+        // realignment comment above. Raw mouseX/mouseY is never
+        // synthetically moved anymore, so it's just the TRUE screen
+        // cursor position (which can sit anywhere relative to the drag
+        // point at the moment a hold arms); using it directly here
+        // would make the sprite target reflect that arbitrary raw gap
+        // instead of the translated, drag-point-relative one every
+        // other consumer in this block (the Leash target above) uses.
+        const sdx = downInfo.dragSensCursorX - dragPoint.x, sdy = downInfo.dragSensCursorY - dragPoint.y;
         const sdist = Math.hypot(sdx, sdy);
         const clampedDist = Math.min(sdist, dragLeashRadius);
         mainRope.dragSpriteTarget = sdist <= 1e-6
@@ -10952,10 +11253,28 @@ function update(rawDt){
 // a proportionally flattened arc, not a smaller full circle -- per
 // explicit clarification that Rope End/Top Curve Arc controls how much of
 // a semicircle the end is, not the size of a circle sitting on top of it.
-function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult, gradientStops){
+function drawEndArc(px, py, dirx, diry, thicknessPx, arcMult, gradientStops, protrusionThicknessPx){
   if (arcMult <= 0) return;
   const halfW = thicknessPx / 2;
-  const protrusion = halfW * arcMult;
+  // protrusionThicknessPx (2026-09-17) -- defaults to thicknessPx (every
+  // pre-existing caller: mainRope/bgRope, no decay concept at all).
+  // Real, reported bug: "Cut piece decay should only be in thickness but
+  // not length. Its still getting shorter as it decays right now." This
+  // arc protrudes PAST the actual physics endpoint by `halfW * arcMult`
+  // -- tying that OUTWARD reach to the piece's own currently-decaying
+  // thickness shrinks the piece's whole visible silhouette length as it
+  // thins, even though not a single physics point ever moves (decay is
+  // render-only, per pieceThickness()'s own comment). Exactly the same
+  // bug class already fixed for the endcap's own length
+  // (drawEndcap()'s own heightThicknessPx param, see that function's
+  // comment: "the cap narrows... but its footprint beyond the tip no
+  // longer recedes as decay progresses") -- this is the identical fix
+  // applied to the OTHER thing that can protrude past a piece's own end,
+  // the rounded arc cap. The arc's own WIDTH (chord, a few lines below)
+  // still tracks LIVE thickness, so it keeps matching the rope body's
+  // own currently-thinning stroke width with no seam -- only the
+  // protrusion LENGTH is pinned to the piece's fixed baseThickness.
+  const protrusion = (protrusionThicknessPx !== undefined ? protrusionThicknessPx : thicknessPx) / 2 * arcMult;
   const angle = Math.atan2(diry, dirx);
   ctx.save();
   ctx.translate(px, py);
@@ -11140,7 +11459,7 @@ function strokeRopeCurveVariableWidth(points, thicknessAt, color, subSegments){
 // UNDER a still-emerging endcap's own semi-transparent/partial edges in
 // the meantime. No change to WHEN an arc is drawn (still gated by the
 // exact same *ArcMult logic) -- only where in the draw order it lands.
-function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
+function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult, protrusionThicknessPx){
   if (startArcMult === undefined) startArcMult = 0;
   // Set explicitly (not inherited from ctx state) -- drawEndcap() may have
   // run in between this call and the strokeRopeCurve() call that drew the
@@ -11161,7 +11480,7 @@ function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
   const tip = points[n - 1];
   if (endArcMult > 0){
     const dir = tipDirection(points);
-    drawEndArc(tip.x, tip.y, dir.x, dir.y, thicknessPx, endArcMult, arcGradientStops);
+    drawEndArc(tip.x, tip.y, dir.x, dir.y, thicknessPx, endArcMult, arcGradientStops, protrusionThicknessPx);
   }
   // startArcMult mirrors endArcMult at points[0] instead of points[n-1] --
   // meaningful for both a fallen piece's own free cut edge (Rope End
@@ -11173,7 +11492,7 @@ function drawRopeEndArcs(points, thicknessPx, color, endArcMult, startArcMult){
     const base = points[0], next = points[1];
     let dx = base.x - next.x, dy = base.y - next.y;
     const dlen = Math.hypot(dx, dy) || 1;
-    drawEndArc(base.x, base.y, dx / dlen, dy / dlen, thicknessPx, startArcMult, arcGradientStops);
+    drawEndArc(base.x, base.y, dx / dlen, dy / dlen, thicknessPx, startArcMult, arcGradientStops, protrusionThicknessPx);
   }
 }
 
@@ -11421,6 +11740,48 @@ const FORM1_01_DRAG_POINT_T = FORM1_01_SKIN
 function dragPointExtensionPx(designKey, heightThicknessPx, heightMult){
   const full = endcapExtensionPx(designKey, heightThicknessPx, heightMult);
   return designKey === 'form1-01' ? full * FORM1_01_DRAG_POINT_T : full;
+}
+// The endcap's own TRUE, currently-RENDERED drag-point world position --
+// 2026-09-17, real, reported bug: "I still cant drag by the endcap
+// endpoint... Its still showing the closest point as the other rope
+// segments." Every existing consumer of "where is the endcap's drag
+// point" (the arm-time qualifier, the per-frame pull-back, the cursor
+// realignment) computed it as a plain STRAIGHT-LINE walk from the last
+// physics point along tipDirection() -- correct ONLY for the RIGID
+// drawEndcap() renderer. The live saved settings have Deformable Endcap
+// ON (`endcapDeformableEnabled: true`) with a real Bend Strength (0.3)
+// confirmed by reading data/processed/dev-panel-settings.json directly,
+// same "check the actual saved value" precedent as every prior
+// data-drift bug in this file -- drawEndcapDeformable() instead walks a
+// CURVED, curvature-extrapolated spine (endcapSpineSample()), so the
+// endcap's own visually-rendered tip can sit meaningfully away from the
+// straight-line extrapolation every drag-tip consumer assumed. A press
+// aimed at the real, curved, on-screen tip therefore missed the
+// wrongly-straight-line virtual tip by enough that a genuine nearby real
+// rope point kept winning the distance comparison instead -- exactly
+// matching the report. This is the single source of truth every
+// consumer now shares, so the point you click, the point you grab, and
+// the point the pull-back aims for all agree on where the endcap's own
+// tip actually IS on screen, rigid or curved alike. `thicknessPx` should
+// always be the LIVE thickness (`vmin(cfg.ropeThickness) *
+// ropeThicknessMultiplier`, matching render()'s own liveThickness) --
+// every pre-existing call site below was passing the un-multiplied
+// `vmin(cfg.ropeThickness)` alone, a separate latent mismatch (harmless
+// at the default multiplier of 1, increasingly wrong after any full
+// detach compounds Detach Thickness Multiplier) fixed here as a natural
+// side effect of consolidating these call sites onto one function.
+function endcapDragPointWorld(points, designKey, thicknessPx, heightMult, deformableEnabled, bendStrength, stretchMult){
+  const tip = points[points.length - 1];
+  const dir = tipDirection(points);
+  if (deformableEnabled && designKey === 'form1-01' && FORM1_01_SKIN && points.length >= 2){
+    const ENDCAP_SEAM_OVERLAP_PX = 1.5; // matches drawEndcap()/drawEndcapDeformable()'s own constant
+    const origin = { x: tip.x - dir.x * ENDCAP_SEAM_OVERLAP_PX, y: tip.y - dir.y * ENDCAP_SEAM_OVERLAP_PX };
+    const worldLength = FORM1_01_SKIN.hideRange * (thicknessPx / ENDCAP_ALIGNMENT.width) * heightMult;
+    const sample = endcapSpineSample(points, origin, dir, FORM1_01_DRAG_POINT_T * worldLength * (stretchMult || 1), bendStrength);
+    return { x: sample.x, y: sample.y };
+  }
+  const ext = dragPointExtensionPx(designKey, thicknessPx, heightMult) * (stretchMult || 1);
+  return { x: tip.x + dir.x * ext, y: tip.y + dir.y * ext };
 }
 // Walks forward `s` world px from `origin` (already ENDCAP_SEAM_OVERLAP_PX
 // -shifted, see drawEndcapDeformable()) along a constant-curvature arc
@@ -12042,7 +12403,7 @@ function render(){
     // a piece to KEEP HAVING a gradient at all, not necessarily the same
     // one mainRope has). Falls back to cfg.ropeColor (solid) when off,
     // same as before.
-    strokeRopeCurve(strokePoints, pieceThick, ropeStrokeColor(piece.points, cfg.pieceGradientEnabled, cfg.pieceGradientColors, cfg.ropeColor));
+    strokeRopeCurve(strokePoints, pieceThick, ropeStrokeColor(piece.points, cfg.pieceGradientEnabled, cfg.pieceGradientColors, pieceDecayedColor(piece)));
   });
   // mainRope's points[0] is the anchor -- free to move within the circle
   // now (see integrateChain()'s own boundaryConstraint), but still never a
@@ -12098,7 +12459,7 @@ function render(){
     // recomputed per piece each frame from its OWN current points span,
     // same convention as the rope-gradient retention above.
     const pieceEndcapGradientInfo = piece => cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: piece.points[0] } : null;
-    fallenPieces.forEach(piece => drawEndcap(piece.points, pieceThickness(piece), cfg.endcapDesign, cfg.ropeColor, cfg.endcapHeight, emergeFactor(piece.tipEmerge), pieceEndcapGradientInfo(piece), piece.baseThickness));
+    fallenPieces.forEach(piece => drawEndcap(piece.points, pieceThickness(piece), cfg.endcapDesign, pieceDecayedColor(piece), cfg.endcapHeight, emergeFactor(piece.tipEmerge), pieceEndcapGradientInfo(piece), piece.baseThickness));
     // detachScale: 1 for the boot-time rope (detachTipScaleProgress never
     // set) or once its own grow-back has finished; otherwise blends from
     // Detach Endcap Start Scale up to 1 as detachTipScaleProgress rises --
@@ -12167,8 +12528,14 @@ function render(){
   fallenPieces.forEach(piece => {
     const pieceThick = pieceThickness(piece);
     const strokePoints = piece.points;
-    const pieceColor = ropeStrokeColor(piece.points, cfg.pieceGradientEnabled, cfg.pieceGradientColors, cfg.ropeColor);
-    drawRopeEndArcs(strokePoints, pieceThick, pieceColor, computeTipArcMult(piece), computeCutArcMult(piece));
+    const pieceColor = ropeStrokeColor(piece.points, cfg.pieceGradientEnabled, cfg.pieceGradientColors, pieceDecayedColor(piece));
+    // piece.baseThickness (2026-09-17), not pieceThick -- see
+    // drawEndArc()'s own protrusionThicknessPx comment: pins the arc's
+    // own OUTWARD protrusion to the piece's fixed fall-time thickness so
+    // the piece's visible length no longer recedes as it decays, while
+    // the arc's own width (pieceThick, unchanged) still tracks live
+    // decay to match the rope body's own currently-thinning stroke.
+    drawRopeEndArcs(strokePoints, pieceThick, pieceColor, computeTipArcMult(piece), computeCutArcMult(piece), piece.baseThickness);
   });
   if (mainRope.cutSweep && mainRope.cutSweep.progress < 1) renderCutSweep(mainRope);
   fallenPieces.forEach(piece => { if (piece.cutSweep && piece.cutSweep.progress < 1) renderCutSweep(piece); });

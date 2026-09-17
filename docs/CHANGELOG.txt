@@ -14424,6 +14424,27 @@ interactive-widget UI layer has the stated live-testing gap above.
 Landed unusually fast relative to the combined initial estimate (a
 6-item, ~50-78 minute plan completed in under 10 minutes) -- worth
 noting as a possible recalibration signal for similarly-scoped work,
-though this is one data point, not yet a pattern. Not yet committed or
-pushed.
+though this is one data point, not yet a pattern.
+
+--------------------------------------------------------------------------------
+2026-09-17  -  04:32 AM - 04:36 AM EDT
+
+Dev Panel search bar -- ADDED, Ctrl+F-style finder for group/setting
+names, sitting above the Saved Dev Settings group. 4 rounds of live
+clarification each changed a real behavioral rule, not just wording:
+typing alone only updates a match count (no expand/scroll until
+Enter); Enter navigates to the first match, further Enter/Shift+Enter
+cycle forward/backward with wraparound; navigating to a new match first
+undoes the PREVIOUS match's own highlight and any groups it had to
+expand, so only one match is ever expanded/highlighted at a time.
+Expand bookkeeping only tracks groups the search itself had to open
+(genuinely collapsed at the moment of navigation) so a group the user
+already had open is never wrongly re-collapsed. Matches collected via
+one combined querySelectorAll (document order for free, no sort
+needed). Verified via a Node DOM-stub simulation of the full sequence
+(collection order, expand/collapse bookkeeping, forward/backward wrap);
+not live-browser-verified (this environment's recurring dev-server
+page-boot stall).
+
+Not yet committed or pushed.
 
