@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 4.75,
-      "ropeLength": 15.149999999999997,
+      "ropeLength": 70.85000000000053,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -151,8 +151,8 @@
       "floorFriction": 1,
       "pieceFriction": 0,
       "wallEnabled": true,
-      "wallFriction": 0,
-      "wallBounciness": 0,
+      "wallFriction": 0.74,
+      "wallBounciness": 0.64,
       "introEnabled": true,
       "introWaitDuration": 1.5,
       "introRiseSpeed": 5.5,
@@ -248,10 +248,13 @@
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
       "punchPowerAbsolute": 1,
-      "dragMouseSensitivity": 1,
-      "dragOverstretchMinSensitivity": 1,
+      "dragMouseSensitivity": 0.4,
+      "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
-      "ceilingBounciness": 0
+      "ceilingBounciness": 0.64,
+      "pieceDecayTintColor": "#2a1810",
+      "pieceDecayTintAmount": 0.5,
+      "pieceDecayBrightness": 1
     },
     "mobile": {},
     "landscape": {}
@@ -265,7 +268,13 @@
     }
   },
   "visibility": {
-    "settings": {}
+    "settings": {
+      "ceilingBounciness": false,
+      "wallBounciness": false,
+      "wallEnabled": false,
+      "wallFriction": false,
+      "backgroundColor": false
+    }
   },
   "order": {
     "ungrouped": [
@@ -439,7 +448,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "segmentLength",
@@ -550,11 +559,11 @@
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
+              null,
               "dragMouseSensitivity",
               "dragOverstretchMinSensitivity",
-              null,
               "dragMinThinDepth",
               "clickIntensity",
               "clickDistance"
@@ -565,6 +574,9 @@
             "key": "ROPE CUT",
             "collapsed": true,
             "settings": [
+              "pieceDecayTintColor",
+              "pieceDecayTintAmount",
+              "pieceDecayBrightness",
               "doubleClickDistance",
               "doubleClickThreshold",
               "ropeFallSpeed",
@@ -723,7 +735,7 @@
       },
       {
         "key": "FLOOR",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "floorFriction",
           "pieceFriction",
