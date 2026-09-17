@@ -3743,3 +3743,42 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   disappearing while dragging, the browser's own lock-acquired
   indicator if any, and an Esc-mid-drag scenario) before trusting this
   fully.
+- **Drag by the endcap's own visual TIP -- ACTUALLY FIXED, 2026-09-17
+  (10th pass; 2nd pass the same day, on top of the diagnosis entry
+  directly above).** Implemented one of the 2 candidate directions that
+  diagnosis identified: (b), the more surgical one. `dragHit` (the
+  arm-time GATE) now measures BOTH the Cursor-Animation-substituted
+  point (`dragPos`, the ORIGINAL 2026-09-12 design) AND the real press
+  position against the rope/endcap via
+  `nearestMainRopePointWithEndcap()`, taking WHICHEVER resolves closer
+  -- `dragHit = dragHitRaw.dist < dragHitSubstituted.dist ? dragHitRaw
+  : dragHitSubstituted`. Deliberately NOT direction (a) (discarding the
+  substitution entirely) -- that would have silently regressed the
+  original, explicitly-requested 2026-09-12 design for every OTHER
+  drag target, not just the endcap. This way, the substituted point
+  still wins for an ordinary drag where the sprite is tracking the rope
+  normally (the original design keeps working exactly as before,
+  unchanged); the REAL press position now wins specifically whenever
+  the sprite's own annotated 'drag' point is off doing something else
+  (a different pose, lag, leash) while the user is genuinely pressing
+  near the endcap's own extended tip -- exactly the gap that kept
+  Drag Rope from arming there even after the 1st pass's endcap-aware
+  distance FORMULA fix. `dragGrabHit` (the downstream point-SELECTION
+  logic, already fixed in the 1st pass) is intentionally UNCHANGED --
+  it already used the raw press position only, matching its own
+  separate 2026-09-15 design ("hit... is the correct source for WHICH
+  point gets grabbed... anchored by the point on the rope that is
+  clicked"), a different decision than the distance-gate's own.
+  Verified via 2 Node simulations: the actual failure scenario (press
+  exactly on the endcap tip, sprite substituted 150px+ away) --
+  substituted-only would have measured 151.3px (fails the live
+  dragRopeHoldDistance threshold of 65px), raw-only measures 0.0px
+  (passes), and the combined "whichever is closer" logic correctly
+  resolves to 0.0px, passing; and the REVERSE case (sprite tracking
+  normally near the rope, a hypothetical press far away) correctly
+  keeps using the substituted point (15.8px) rather than the far-away
+  raw one (500.1px), confirming the original design is preserved
+  wherever it already worked, not just patched around. Not
+  live-browser-verified (this environment's recurring dev-server
+  page-boot stall, the same limitation as every prior pass on this
+  mechanism).

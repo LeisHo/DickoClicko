@@ -14680,3 +14680,23 @@ precedent to lean on; worth a deliberate real-browser test (cursor
 disappearing while dragging, an Esc-mid-drag scenario) before fully
 trusting it.
 
+--------------------------------------------------------------------------------
+2026-09-17  -  07:09 AM - 07:10 AM EDT
+
+Drag by the endcap's own visual tip -- ACTUALLY FIXED (10th pass; 2nd
+pass today, on top of the earlier diagnosis-only entry). dragHit (the
+arm-time gate) now measures BOTH the Cursor-Animation-substituted
+point (the original 2026-09-12 design) AND the real press position
+against the rope/endcap, taking whichever resolves closer. The
+substituted point still wins for an ordinary drag where the sprite is
+tracking normally (original design unchanged); the real press position
+now wins when the sprite is off elsewhere while the user genuinely
+presses near the endcap's own extended tip.
+
+Verification: syntax-checked; verified via 2 Node simulations -- the
+actual failure scenario (substituted-only 151.3px fails the 65px live
+threshold, raw-only 0.0px passes, combined logic correctly resolves to
+0.0px/passes) and the reverse case (sprite tracking normally still
+wins over a hypothetical far-away press, confirming no regression).
+Not live-browser-verified.
+

@@ -9108,13 +9108,32 @@ function onPointerDown(e){
     // reads it, unaffected by this substitution) since this callback
     // already only fires after doubleClickThreshold has elapsed.
     const dragPos = mouseFlickInteractionPos(x, y, 'drag');
-    // Corrected 2026-09-17 -- was a bare nearestPointOnRope() with zero
-    // endcap awareness, which is what actually kept Drag Rope from
-    // arming at all near the endcap's own visual tip (this GATE runs
-    // before the dragGrabIndex qualifier further down ever gets a
-    // chance to). See nearestMainRopePointWithEndcap()'s own header
-    // comment for the full account.
-    const dragHit = nearestMainRopePointWithEndcap(dragPos.x, dragPos.y);
+    // Corrected 2026-09-17, 2nd pass -- endcap-aware distance (see
+    // nearestMainRopePointWithEndcap()'s own header comment) fixed the
+    // GATE's own distance FORMULA, but not what it measured that
+    // distance FROM: `dragPos` above is the Cursor Animation SPRITE's
+    // own annotated 'drag' point (a fixed spot on the hand artwork,
+    // transformed through the sprite's CURRENT position/rotation) --
+    // NOT the real press position -- whenever Cursor Animation is
+    // active (mouseFlickInteractionPos()'s own fallback to the real
+    // x,y only applies when the sprite/frame data isn't ready). Per
+    // the ORIGINAL 2026-09-12 spec this is deliberate ("measured
+    // against FLICK MOUSE's own annotated 'drag' interaction point...
+    // not the literal press position"), so simply discarding it for
+    // every drag target would regress that intent -- instead, this now
+    // measures BOTH the substituted point AND the real press position
+    // against the rope/endcap, and takes whichever one resolves
+    // closer. The substituted point still wins for an ordinary drag
+    // where the sprite is tracking the rope normally (preserving the
+    // original design everywhere it already worked); the REAL press
+    // position now wins whenever the sprite's own annotated point is
+    // off doing something else while the user is genuinely pressing
+    // near the endcap's own extended tip -- exactly the gap that kept
+    // "I still cant drag the endcap" true even after the 1st pass's
+    // formula fix.
+    const dragHitSubstituted = nearestMainRopePointWithEndcap(dragPos.x, dragPos.y);
+    const dragHitRaw = nearestMainRopePointWithEndcap(x, y);
+    const dragHit = dragHitRaw.dist < dragHitSubstituted.dist ? dragHitRaw : dragHitSubstituted;
     // Drag Overrides Grow On Rope Hold (per explicit request: "provide
     // a checkbox to turn off the Drag trigger overriding the Click
     // Hold to Grow trigger") -- default true preserves the existing
