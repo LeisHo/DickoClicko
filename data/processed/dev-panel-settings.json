@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 4.75,
-      "ropeLength": 61.547368421053015,
+      "ropeLength": 25.160512013012752,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -254,7 +254,8 @@
       "ceilingBounciness": 0.64,
       "pieceDecayTintColor": "#2a1810",
       "pieceDecayTintAmount": 0.5,
-      "pieceDecayBrightness": 1
+      "pieceDecayBrightness": 1,
+      "overstretchThinningReleaseDuration": 400
     },
     "mobile": {},
     "landscape": {}
@@ -559,7 +560,7 @@
             "key": "CLICK",
             "collapsed": false,
             "settings": [
-              null,
+              "overstretchThinningReleaseDuration",
               "clickIntensity",
               "clickDistance"
             ],
@@ -624,8 +625,8 @@
               "dragOverridesGrowOnRopeHold",
               "mouseFlickShowInteractionPoints",
               "dragMouseSensitivity",
-              "dragMinThinDepth",
               "dragOverstretchMinSensitivity",
+              "dragOverstretchMinSensitivityCurve",
               "dragPickupDuration",
               "dragRopeHoldDistance",
               "mouseFlickDragSpeed",
