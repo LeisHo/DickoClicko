@@ -12,8 +12,8 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 4.75,
-      "ropeLength": 51.15000000000038,
-      "ropeDefaultLength": 8,
+      "ropeLength": 15.149999999999997,
+      "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
       "ropeGradientColors": [
@@ -148,8 +148,8 @@
       "floorColor": "#ffffff",
       "floorThickness": 10,
       "floorHeight": 5,
-      "floorFriction": 0.72,
-      "pieceFriction": 0.92,
+      "floorFriction": 1,
+      "pieceFriction": 0,
       "wallEnabled": true,
       "wallFriction": 0,
       "wallBounciness": 0,
@@ -247,7 +247,11 @@
       "endcapStretchRange": 50,
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
-      "punchPowerAbsolute": 1
+      "punchPowerAbsolute": 1,
+      "dragMouseSensitivity": 1,
+      "dragOverstretchMinSensitivity": 1,
+      "dragMinThinDepth": 0.15,
+      "ceilingBounciness": 0
     },
     "mobile": {},
     "landscape": {}
@@ -385,6 +389,7 @@
         "key": "WALLS",
         "collapsed": true,
         "settings": [
+          "ceilingBounciness",
           "wallBounciness",
           "wallEnabled",
           "wallFriction"
@@ -434,13 +439,13 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "ropeDefaultLength",
+          "segmentLength",
           "ropeLength",
           "minRopeLength",
           "ropeThickness",
-          "segmentLength",
           "ropeGradientEnabled",
           "ropeGradientColors",
           "ropeColor"
@@ -481,7 +486,7 @@
           },
           {
             "key": "New Group (2)",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "endcapGradientEnabled",
               "endcapDesign",
@@ -547,6 +552,10 @@
             "key": "CLICK",
             "collapsed": true,
             "settings": [
+              "dragMouseSensitivity",
+              "dragOverstretchMinSensitivity",
+              null,
+              "dragMinThinDepth",
               "clickIntensity",
               "clickDistance"
             ],
@@ -602,7 +611,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
@@ -714,7 +723,7 @@
       },
       {
         "key": "FLOOR",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "floorFriction",
           "pieceFriction",
@@ -747,10 +756,10 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 1161.2874755859375,
-      "top": 43.88750076293945,
-      "width": 374.70001220703125,
-      "height": 642.0375366210938,
+      "left": 1521.28125,
+      "top": 19.875,
+      "width": 374.6875,
+      "height": 642.03125,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
