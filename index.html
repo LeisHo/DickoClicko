@@ -62,6 +62,13 @@
     cursor:pointer; font-size:12px; padding:0;
     letter-spacing:var(--dp-button-letter-spacing, 0);
   }
+  /* Header icon buttons (2026-09-17, ported from TEMPLATE_DEV_PANEL.html)
+     -- Text Edit Mode's own ON state (no checkbox any more, see its own
+     wiring comment) and Add Group's "armed" (right-clicked, waiting for
+     a selection) state both read the same way: a visibly pressed/
+     inverted look, distinct from the plain .dp-icon-btn default above. */
+  .dp-icon-btn.active, .dp-icon-btn.armed { outline:2px solid #e8e8f0; outline-offset:-2px; }
+  .dp-header-buttons { display:flex; gap:4px; flex:0 0 auto; }
   .dp-body { padding:4px 8px 10px; overflow-y:auto; flex:1 1 auto; min-height:0; }
   .dp-actions { display:flex; gap:6px; padding:2px 2px 8px; }
   .dp-actions button {
@@ -79,12 +86,12 @@
   }
   .dp-tab-btn.active { background:var(--dp-accent, #3a3a4a); color:#e8e8f0; font-weight:600; }
   #devPanel.dp-bold-tab .dp-tab-btn { font-weight:700; }
-  .dp-add-group-btn {
-    display:block; width:100%; margin:2px 0 8px; background:none; color:var(--dp-text-color, #c9c9d8);
-    border:1px dashed #3a3a4a; border-radius:4px; padding:5px 4px; font-size:11px; cursor:pointer;
-  }
-  .dp-add-group-btn:hover { background:#1c1c2c; border-color:var(--dp-accent, #3a3a4a); }
   .dp-group { border-top:1px solid #33333f; }
+  /* Shift+click / right-click-armed selection (2026-09-17, ported from
+     TEMPLATE_DEV_PANEL.html) -- a plain outline on whichever .dp-row or
+     .dp-group is currently selected, waiting to be folded into a new
+     group. Purely transient UI state, never persisted. */
+  .dp-selected { outline:2px solid #e8e8f0; outline-offset:-2px; }
   .dp-group:first-child { border-top:none; }
   .dp-group.dp-dragging, .dp-row.dp-dragging { opacity:.4; }
   /* Nested group, UNLIMITED depth (§12e/template parity) -- a
@@ -270,7 +277,22 @@
   <div class="dp-header" id="dpHeader">
     <span class="dp-title">DEV</span>
     <span id="dpFps">--fps</span>
-    <button type="button" class="dp-icon-btn" id="dpCollapseBtn" title="Collapse">–</button>
+    <!-- Text Edit Mode / Add Group / Collapse All (2026-09-17, ported
+         from TEMPLATE_DEV_PANEL.html) -- moved here from their previous
+         spots (a standalone checkbox above the tabs, and a per-tab
+         "+ Add Group" text button) per the template's own direct
+         request precedent. See setupDevHeaderIconButtons() for their
+         wiring -- Add Group/Collapse All operate directly on #dpGroups,
+         with no "which tab" concept to resolve (unlike the template,
+         this project keeps one shared group tree across all 3 device
+         tabs, not 3 separate ones -- see this project's own CLAUDE.md
+         on that architectural difference). -->
+    <div class="dp-header-buttons">
+      <button type="button" class="dp-icon-btn" id="dpTextEditModeBtn" title="Toggle Label Rename Mode">✎</button>
+      <button type="button" class="dp-icon-btn" id="dpAddGroupBtn" title="Add Group (right-click: select settings/groups to fold in)">+</button>
+      <button type="button" class="dp-icon-btn" id="dpCollapseAllBtn" title="Collapse All Groups">⊟</button>
+      <button type="button" class="dp-icon-btn" id="dpCollapseBtn" title="Collapse">–</button>
+    </div>
   </div>
   <div class="dp-body" id="dpBody">
     <div class="dp-tabs" id="dpTabs">
@@ -325,7 +347,6 @@
         </div>
       </div>
     </div>
-    <button type="button" id="dpAddGroupBtn" class="dp-add-group-btn">+ Add Group</button>
     <div id="dpUngrouped" class="dp-ungrouped"></div>
     <div id="dpGroups"></div>
     <div class="dp-click-log-wrap">
@@ -646,7 +667,38 @@ const DEV_GROUPS = [
     // clamp (it becomes the rest limit; the hard limit adds the
     // tolerance on top, only while this checkbox is on).
     { key:'overstretchEnabled', label:'Rope Overstretch Enabled', type:'checkbox', def:false },
-    { key:'overstretchTolerance', label:'Drag Overstretch Tolerance (%vmin)', type:'slider', unit:'%vmin', min:0, max:100, step:1, def:15 },
+    // Corrected 2026-09-17 -- this used to be `vmin(cfg.overstretchTolerance)`,
+    // a FIXED absolute px amount independent of maxDragDist. Real,
+    // reported bug: "Why is it that i can overstretch a lot when i am
+    // dragging close from the rope start vs very little when im far
+    // away? It should be the opposite... the more stretchy rope i have
+    // to stretch, the more it overstretches, the less i have, the less
+    // it stretches." A fixed absolute tolerance is a HUGE proportion of
+    // a small maxDragDist (dragging near the anchor, few segments
+    // between it and the drag point) but a tiny proportion of a large
+    // maxDragDist (dragging far from the anchor) -- exactly backwards
+    // from "more rope available to stretch = more it can overstretch."
+    // Now a PERCENTAGE OF maxDragDist itself (see update()'s own
+    // `overstretchTol = maxDragDist * (cfg.overstretchTolerance/100)`),
+    // so the maximum proportional "give" is the same everywhere along
+    // the rope, regardless of which point is being dragged -- same
+    // numeric default (15) kept under the new unit, since no specific
+    // target feel was requested, just consistency; retune by feel via
+    // the dev panel same as any slider. This also directly explains the
+    // 2nd half of the same report ("i still dont see any thinning...
+    // near the rope start... on a long rope") -- near the anchor the
+    // OLD fixed tolerance was large relative to maxDragDist, so a
+    // modest, everyday drag rarely pushed overstretchFrac (and
+    // therefore thinning depth) anywhere near its own max; the new
+    // proportional tolerance is small in absolute px near the anchor,
+    // so the SAME modest drag now reaches full depth almost
+    // immediately. The remaining visual subtlety -- only the anchor-
+    // to-drag-point sub-chain thins (render()'s own explicit design,
+    // "not the whole rope") -- is inherently a short, easy-to-miss
+    // span when dragging near the anchor of a long rope; that part is
+    // unchanged by this fix and isn't a bug, just a smaller thinned
+    // area.
+    { key:'overstretchTolerance', label:'Drag Overstretch Tolerance (% of Reach)', type:'slider', unit:'%', min:0, max:200, step:1, def:15 },
     // Thinning: thickness(t) = base * (1 - depth * sin(pi*t)^sharpness),
     // t = 0..1 along the anchor->drag-point sub-chain (0 anchor, 1 drag
     // point) -- full thickness at both ends, thinnest at the sub-chain's
@@ -1356,13 +1408,18 @@ const PANEL_STYLE_CONTROLS = [
   { key:'buttonBold',   type:'checkbox', label:'Bold Button Text',        def:true },
   { key:'settingsBold', type:'checkbox', label:'Bold Settings Text',      def:false },
   { key:'titleCapitalize', type:'checkbox', label:'Capitalize Dev Panel Title', def:false },
-  // Text Edit Mode (§12-adjacent, ported from the template's own
-  // checkboxDevTextEditMode) -- per explicit request. When on, clicking
-  // a group title or setting label opens an inline rename editor instead
-  // of the group's normal collapse/expand toggle -- see
-  // openDevTextEditFor()/applyDevTextOverrides()'s own comments.
-  { key:'textEditMode',        type:'checkbox', label:'Enable Label Rename Mode',         def:false },
 ];
+// Text Edit Mode (2026-09-17, ported from TEMPLATE_DEV_PANEL.html's own
+// header-icon-button conversion) -- was a PANEL_STYLE_CONTROLS checkbox
+// (persisted, like every other Dev Panel chrome setting); now a plain,
+// NON-persisted runtime toggle driven by the #dpTextEditModeBtn header
+// icon button instead, matching the template's own current design
+// exactly (its own comment: "no backing checkbox any more"). When on,
+// clicking a group title or setting label opens an inline rename editor
+// instead of the group's normal collapse/expand toggle -- see
+// openDevTextEditFor()/applyDevTextOverrides()'s own comments, and
+// setupDevHeaderIconButtons() for this button's own wiring.
+let textEditModeEnabled = false;
 const panelStyle = {};
 PANEL_STYLE_CONTROLS.forEach(c => panelStyle[c.key] = c.def);
 // Which of the 19 newly-ported fields (above) are shared/desktop-
@@ -1549,19 +1606,7 @@ function buildPanelStyleGroup(){
       row.appendChild(cb);
       panelStyleNumEls[ctrl.key] = { cb };
     }
-    // Text Edit Mode lives OUTSIDE any group by default -- per explicit
-    // request ("place the text edit mode checkbox outside of any
-    // group"). Every other panel-style control still builds into this
-    // group's own body as before; this is a build-time PLACEMENT
-    // choice only -- PANEL_STYLE_CONTROLS/applyPanelStyleValues() and
-    // every other value/persistence path are completely unchanged, and
-    // per rowDragTargets() this row (like any other) can still be
-    // dragged right back into a group afterward if the user wants that.
-    if (ctrl.key === 'textEditMode'){
-      document.getElementById('dpUngrouped').appendChild(row);
-    } else {
-      gb.appendChild(row);
-    }
+    gb.appendChild(row);
   });
 
   g.appendChild(h); g.appendChild(gb);
@@ -1773,7 +1818,7 @@ function openDevTextEditFor(el, key){
 function setupDevTextEditMode(){
   const groupsEl = document.getElementById('dpGroups');
   groupsEl.addEventListener('click', e => {
-    if (!panelStyle.textEditMode) return;
+    if (!textEditModeEnabled) return;
     const label = e.target.closest('.dp-row label');
     if (!label || label.querySelector('textarea')) return;
     const row = label.closest('.dp-row');
@@ -1916,7 +1961,7 @@ function createGroupElement(name, opts){
     // title text) while it's on -- matches the template's own
     // toggleSection() behavior -- so collapse/expand is unreachable
     // via a plain click until the mode is switched off again.
-    if (panelStyle.textEditMode){
+    if (textEditModeEnabled){
       openDevTextEditFor(title, 'group:' + g.dataset.key);
       return;
     }
@@ -1949,6 +1994,68 @@ function buildDevPanel(){
 // comment). Considers every group already on the panel, top-level AND
 // nested (querySelectorAll('.dp-group') reaches both), so a new name
 // can't collide with a nested group's name either.
+// Shift+click (or a right-click-armed plain click) selection, so
+// "+ Add Group" can fold the current selection into the new group
+// instead of leaving it empty (2026-09-17, ported from
+// TEMPLATE_DEV_PANEL.html). Holds real DOM elements directly (a
+// .dp-row for a selected setting, a .dp-group for a selected group)
+// rather than keys/ids -- simpler since a selection is a short-lived,
+// purely-runtime UI gesture with no persistence of its own (never
+// saved/copied). This project has no per-tab DOM split (one shared
+// #dpGroups tree across Desktop/Mobile/Landscape, unlike the
+// template's 3 separate TabContent roots), so there's no "cross-tab
+// selection" edge case to guard against either -- every selected item
+// is always in the one tree addDevGroup() itself operates on.
+const devPanelSelectedItems = new Set();
+// Set by #dpAddGroupBtn's own contextmenu handler below -- while true,
+// a PLAIN left click also selects (no Shift needed). Shift+click keeps
+// working regardless of this flag -- the two triggers are additive,
+// not mutually exclusive.
+let devGroupSelectionArmed = false;
+function toggleDevSelection(el){
+  if (devPanelSelectedItems.has(el)){ devPanelSelectedItems.delete(el); el.classList.remove('dp-selected'); }
+  else { devPanelSelectedItems.add(el); el.classList.add('dp-selected'); }
+}
+function clearDevSelection(){
+  devPanelSelectedItems.forEach(el => el.classList.remove('dp-selected'));
+  devPanelSelectedItems.clear();
+}
+function disarmDevGroupSelection(){
+  devGroupSelectionArmed = false;
+  const btn = document.getElementById('dpAddGroupBtn');
+  if (btn) btn.classList.remove('armed');
+}
+// A capturing listener on the panel itself (not each row/title
+// individually) so it works uniformly for every control type.
+// Capturing + preventDefault/stopPropagation together ensure a
+// Shift+click (or an armed plain click) SELECTS instead of also
+// operating the control under the cursor (toggling a checkbox,
+// collapsing a group via the title's own click handler, etc.). A
+// group's own TITLE takes priority over a row match -- Shift/armed-
+// clicking a group's title bar selects the WHOLE group (the entire
+// .dp-group, to be moved as one nested unit), not some nearby row.
+function setupDevGroupSelection(){
+  const devPanel = document.getElementById('devPanel');
+  devPanel.addEventListener('click', e => {
+    if (!e.shiftKey && !devGroupSelectionArmed) return;
+    const titleEl = e.target.closest('.dp-group-title');
+    const target = titleEl ? titleEl.closest('.dp-group') : e.target.closest('.dp-row');
+    if (!target) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleDevSelection(target);
+  }, true);
+  // Per the template's own explicit clear condition -- only a click
+  // OUTSIDE the panel clears the selection; normal clicks/drags inside
+  // the panel (adjusting a slider, collapsing a group, switching tabs)
+  // leave it alone. Also disarms right-click select-mode, same
+  // reasoning.
+  document.addEventListener('click', e => {
+    if (devPanel.contains(e.target)) return;
+    if (devPanelSelectedItems.size) clearDevSelection();
+    if (devGroupSelectionArmed) disarmDevGroupSelection();
+  }, true);
+}
 function addDevGroup(){
   const container = document.getElementById('dpGroups');
   const existingNames = new Set(Array.from(container.querySelectorAll('.dp-group')).map(g => g.dataset.key));
@@ -1956,11 +2063,74 @@ function addDevGroup(){
   let n = 2;
   while (existingNames.has(name)){ name = 'New Group (' + n + ')'; n++; }
   const g = createGroupElement(name);
-  container.appendChild(g);
+  // Inserted at the TOP of the project-specific group list, not the
+  // bottom (2026-09-17, ported from TEMPLATE_DEV_PANEL.html) -- right
+  // after the built-in Dev Panel ('DEV PANEL')/Debug ('DEBUG') groups,
+  // which stay first regardless (workspace CLAUDE.md §12i/§12i-1's own
+  // mandatory ordering). Falls back through Debug -> Dev Panel ->
+  // position 0, not straight to position 0 the moment Debug isn't
+  // found at the top level -- a legally-reorganized panel (Debug
+  // dragged into a subgroup, or folded into a PREVIOUS "+ Add Group"
+  // group) would otherwise place a subsequent new group above Dev
+  // Panel too, same bug the template's own history already caught and
+  // fixed once.
+  const debugGroup = container.querySelector(':scope > .dp-group[data-key="DEBUG"]');
+  const devPanelGroup = container.querySelector(':scope > .dp-group[data-key="DEV PANEL"]');
+  const anchor = debugGroup || devPanelGroup;
+  if (anchor) container.insertBefore(g, anchor.nextSibling);
+  else container.insertBefore(g, container.firstChild);
+  // Fold any current selection into the group just created (2026-09-17,
+  // ported from TEMPLATE_DEV_PANEL.html).
+  const gb = g.querySelector('.dp-group-body');
+  if (devPanelSelectedItems.size){
+    devPanelSelectedItems.forEach(el => gb.appendChild(el));
+    clearDevSelection();
+  }
   // No per-group row registration needed -- the single delegated row
   // listener (see makeReorderable()'s own comment) already reaches
   // this new group's body via event delegation.
   g.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+// Wires the 3 header icon buttons (2026-09-17, ported from
+// TEMPLATE_DEV_PANEL.html). Called once from the boot sequence,
+// alongside the D-key listener and setupDevGroupSelection() -- always
+// on, regardless of whether the panel's own controls have finished
+// building yet.
+function setupDevHeaderIconButtons(){
+  const textEditBtn = document.getElementById('dpTextEditModeBtn');
+  if (textEditBtn){
+    textEditBtn.classList.toggle('active', textEditModeEnabled);
+    textEditBtn.addEventListener('click', () => {
+      textEditModeEnabled = !textEditModeEnabled;
+      textEditBtn.classList.toggle('active', textEditModeEnabled);
+    });
+  }
+  const addGroupBtn = document.getElementById('dpAddGroupBtn');
+  if (addGroupBtn){
+    // A plain left click: if armed (a right-click already started a
+    // selection), this is the "finalize" click -- create the group and
+    // fold the selection in, same as a right-click would. If NOT armed,
+    // it's the original, unchanged behavior -- create an empty group
+    // immediately.
+    addGroupBtn.addEventListener('click', () => {
+      addDevGroup();
+      disarmDevGroupSelection();
+    });
+    // Right click: arms select mode on the FIRST right-click (no group
+    // created yet -- just starts letting plain left-clicks select). A
+    // SECOND right-click, while already armed, finalizes instead.
+    addGroupBtn.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (devGroupSelectionArmed){ addDevGroup(); disarmDevGroupSelection(); }
+      else { devGroupSelectionArmed = true; addGroupBtn.classList.add('armed'); }
+    });
+  }
+  const collapseAllBtn = document.getElementById('dpCollapseAllBtn');
+  if (collapseAllBtn){
+    collapseAllBtn.addEventListener('click', () => {
+      document.getElementById('dpGroups').querySelectorAll('.dp-group').forEach(g => g.classList.add('collapsed'));
+    });
+  }
 }
 
 // Any .dp-group-body ANYWHERE in the tree is a valid nest target, at
@@ -7427,7 +7597,18 @@ function tipGrowDirection(pts){
   const prev = pts[n - 2] || pts[0];
   const beforePrev = pts[n - 3] || pts[0];
   const dx = prev.x - beforePrev.x, dy = prev.y - beforePrev.y;
-  const dlen = Math.hypot(dx, dy);
+  // Divisor floored at half the rope's own REST segLen -- a defensive
+  // guard against a transient near-zero prev-beforePrev distance (e.g.
+  // right after a commit, before the new segment has settled), same
+  // general shape as the degenerate-chain fallback below. Kept, but NOT
+  // itself the fix for the jitter investigated below -- see that
+  // comment for why: this floor only ever engages when the 2 points are
+  // ALREADY abnormally close, whereas the reported jitter shows up
+  // under perfectly ordinary conditions where the distance constraint
+  // keeps prev/beforePrev within a fraction of a percent of the real
+  // segLen at all times (this floor is a genuine no-op then).
+  const rawDlen = Math.hypot(dx, dy);
+  const dlen = Math.max(rawDlen, mainRope.segLen * 0.5);
   // A chain this short (n<=2, e.g. right after a cut leaves just the anchor
   // + 1 point) has no real local tangent yet -- prev and beforePrev both
   // resolve to the SAME point (pts[n-3] underflows to undefined, falling
@@ -7443,11 +7624,47 @@ function tipGrowDirection(pts){
   // very short and then repeatedly growing it. Falls back to straight down
   // (the rope's own authored default direction) whenever there's no real
   // direction to measure yet.
-  const raw = dlen < 1e-6 ? { x: 0, y: 1 } : { x: dx / dlen, y: dy / dlen };
+  // Degenerate check stays against rawDlen (the true, UN-floored
+  // distance) -- the floor above dampens NOISE in a real, nonzero
+  // tangent, it must never mask this genuinely-zero-tangent case
+  // (dx=dy=0 exactly, a chain too short to have any tangent at all) --
+  // that still needs its own "straight down" fallback below, unchanged.
+  const raw = rawDlen < 1e-6 ? { x: 0, y: 1 } : { x: dx / dlen, y: dy / dlen };
   if (!mainRope.growDir){
     mainRope.growDir = { x: raw.x, y: raw.y };
   } else {
-    const s = 0.15; // low-pass factor -- low enough to filter single-frame solver noise, high enough to still track real swinging within a few frames
+    // Scaled by segLen relative to Segment Length's own code default
+    // (45/19%vh) -- 2026-09-17, real, reported bug: "Rope growth is
+    // jittery especially with shorter segment lengths." Root cause,
+    // confirmed via simulation (not the dlen-floor above, which turned
+    // out to be a no-op under normal conditions -- see its own comment):
+    // converting (dx,dy) to a unit vector divides by dlen, which the
+    // distance constraint keeps within a fraction of a percent of the
+    // REST segLen at all times -- so the SAME absolute per-frame solver
+    // "breathing" noise (already documented elsewhere in this file as a
+    // real, measured, unavoidable source of positional noise on every
+    // settled point) produces an angular deviation that scales as
+    // 1/segLen. At a short segLen this is a REAL, physically-inherent
+    // amplification (a shorter lever arm reads the same wobble as a
+    // bigger angle), not a bug in the geometry itself -- there's nothing
+    // to "fix" about the math, only the FILTERING needs to adapt. A
+    // simulated 2000-frame comparison (0.1px noise std, matched
+    // random seed) measured the pre-fix angular noise stdev at a short
+    // 0.9%vh segLen running 2.60x higher than at the default 2.368%vh
+    // segLen (1.0951deg vs 0.4212deg) -- reducing `s` proportionally
+    // (down to ~0.057 at that same short segLen) brought it back down to
+    // 0.6166deg, a real, measured ~44% reduction, though not a full
+    // return to the default's own noise floor (a stronger reduction
+    // trades away more real-swing responsiveness -- this specific ratio
+    // is a judgment call, not a "correct" derived value). Capped at 1 so
+    // this is a pure NO-OP at the default segLen and never STRENGTHENS
+    // responsiveness for a longer-than-default rope. Not a live-browser
+    // test (this environment's own recurring dev-server page-boot
+    // stall, documented elsewhere in this file, still applies) -- the
+    // 2.60x amplification and 44% reduction are both from a Node-level
+    // simulation of this exact formula, not a measurement of the real
+    // rendered rope.
+    const s = 0.15 * Math.min(1, mainRope.segLen / vh(45 / 19));
     mainRope.growDir.x += (raw.x - mainRope.growDir.x) * s;
     mainRope.growDir.y += (raw.y - mainRope.growDir.y) * s;
     const glen = Math.hypot(mainRope.growDir.x, mainRope.growDir.y) || 1;
@@ -7670,9 +7887,39 @@ function applyPunch(points, hit, clickX, clickY, intensity, pinnedIndex, segLen)
   const effectiveMaxPunchSegments = Math.min(PUNCH_SEGMENTS_SAFE_RANGE.max,
     Math.max(PUNCH_SEGMENTS_SAFE_RANGE.min, desiredAbsolutePower / segLen));
   const power = Math.min(vh(1.0) * intensity, segLen * effectiveMaxPunchSegments);
+  // Falloff sigma scaled by segLen relative to Segment Length's own code
+  // default (2026-09-17) -- real, reported bug: "click and click hold
+  // flick functions are so much weaker when segment length is short."
+  // The falloff below was always sigma=3 POINT-INDICES, a fixed count of
+  // NEIGHBORS regardless of how physically far apart they are -- at a
+  // short segLen, more points exist per unit of rope LENGTH, so the same
+  // 3-point-index falloff radius covers a proportionally SMALLER
+  // physical span of the rope. `punchPowerAbsolute` (see this function's
+  // own header comment) already keeps the PEAK power segLen-independent,
+  // but the peak alone isn't what makes a flick feel strong -- it's how
+  // much of the rope's actual physical length receives a real kick,
+  // since anything outside the falloff has to be dragged along
+  // indirectly by the distance/bend solver instead of moving directly.
+  // Confirmed via simulation: at this project's own recently-reported
+  // short segLen (0.9%vh) vs. its default (2.368%vh), the OLD fixed
+  // sigma=3 falloff's physical half-max reach shrank to 38% of the
+  // default's -- the same peak power, concentrated into well under half
+  // the physical span of rope, reads as a visibly weaker overall flick
+  // even though the exact hit point moves just as far. Scaling sigma by
+  // `defaultSegLen/segLen` restores an IDENTICAL physical half-max reach
+  // at any segLen (verified exactly 1.000x via the same simulation) --
+  // a pure no-op at the default segLen (sigma stays exactly 3), and
+  // MORE points get a meaningful kick at a shorter segLen, correctly
+  // reproducing the wider-reaching flick a longer-segLen rope already
+  // had. Not a live-browser test (this environment's own recurring
+  // dev-server page-boot stall, documented elsewhere in this file,
+  // still applies) -- the reach-matching and total-impulse numbers
+  // above are from a Node-level simulation of this exact formula.
+  const FALLOFF_SIGMA_REF_SEGLEN_PX = vh(45 / 19);
+  const sigmaPoints = 3 * (FALLOFF_SIGMA_REF_SEGLEN_PX / segLen);
   for (let i = 0; i < points.length; i++){
     if (i === pinnedIndex) continue;
-    const falloff = Math.exp(-Math.pow((i - hit.index) / 3, 2));
+    const falloff = Math.exp(-Math.pow((i - hit.index) / sigmaPoints, 2));
     points[i].x += nx * power * falloff;
     points[i].y += ny * power * falloff;
   }
@@ -8512,31 +8759,47 @@ function isNearCircleCenterForGrow(x, y){
 // position, passed explicitly from each call site, while the
 // DISTANCE-to-rope measurement below is untouched -- still exactly
 // the annotated point, per the original 2026-09-12 spec.
+// Endcap-aware nearest-point lookup for mainRope -- the ONE shared place
+// this comparison lives now (2026-09-17), replacing 2 separately hand-
+// duplicated copies (hitTestRope()'s own qualifier below, and the Drag
+// Rope arm-time dragGrabIndex qualifier further down) plus fixing a
+// 3rd, load-bearing call site that had NO endcap awareness at all until
+// now. Real, blunt, direct correction after 8 prior narrower passes at
+// this exact problem never actually fixed it: "I still cant drag the
+// endcap. I dont get the issue. I provided you the point data. So just
+// include that point along with every rope segment point when you are
+// measuring all click functions. And when The endcap end point is the
+// closest, that will the dragpoint at which we will be dragging."
+//
+// The missing 3rd call site was the actual root cause of the persistent
+// failure: Drag Rope's own ARM-TIME GATE (dragHit, in onPointerDown's
+// holdTimer callback) -- `cfg.dragRopeEnabled && dragHit.dist <=
+// vmin(cfg.dragRopeHoldDistance)` -- decides whether dragging arms AT
+// ALL, and used a bare nearestPointOnRope() call with zero endcap
+// awareness. That gate runs BEFORE the (already-correct, since
+// 2026-09-15) dragGrabIndex qualifier ever gets a chance to run. A
+// press near the endcap's own visual tip, but further than Drag Rope
+// Hold Distance from any REAL physics segment (exactly what pressing
+// near a decorative extension past the last point produces, since the
+// endcap can easily extend 1x+ segLen past it), was silently rejected
+// at this gate every time -- so Drag Rope never armed at all, regardless
+// of how correct the downstream index-selection logic was. All 3 call
+// sites now share this one function instead of drifting independently.
+function nearestMainRopePointWithEndcap(x, y){
+  let best = nearestPointOnRope(x, y, mainRope.points);
+  if (cfg.endcapDesign !== 'none'){
+    const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+    const distToTip = Math.hypot(x - tipWorld.x, y - tipWorld.y);
+    if (distToTip < best.dist) best = { dist: distToTip, index: mainRope.points.length - 1, x: tipWorld.x, y: tipWorld.y };
+  }
+  return best;
+}
 function hitTestRope(x, y, maxDist, circleCheckX, circleCheckY){
   if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
   const ccx = circleCheckX !== undefined ? circleCheckX : x;
   const ccy = circleCheckY !== undefined ? circleCheckY : y;
   if (isOnCircle(ccx, ccy)) return null; // clicking the circle itself never counts as a rope hit
-  let hit = nearestPointOnRope(x, y, mainRope.points);
-  // Endcap-tip qualifier (2026-09-17), extending Drag Rope's own
-  // arm-time qualifier to every OTHER click-distance measurement too --
-  // real, reported request: "the endcap endpoint which i provided
-  // should also be used to calculate the click funciton distances as
-  // well. Right now its not doing that." hitTestRope() is the shared
-  // distance measurement behind BOTH the single-tap punch-arm check and
-  // double-click-cut targeting (see hitTestAny()'s own callers) --
-  // nearestPointOnRope() only ever walks real physics segments, so
-  // (same root cause as Drag Rope's own pre-2026-09-15 bug) a press
-  // visually closer to the endcap's own decorative rendered tip than to
-  // any real rope point still resolved to an earlier real point. Same
-  // fix, same shared helper: compute the endcap's own true (possibly
-  // Deformable-Endcap-curved) drag point and let it win the comparison
-  // whenever it's genuinely closer.
-  if (cfg.endcapDesign !== 'none'){
-    const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
-    const distToTip = Math.hypot(x - tipWorld.x, y - tipWorld.y);
-    if (distToTip < hit.dist) hit = { dist: distToTip, index: mainRope.points.length - 1, x: tipWorld.x, y: tipWorld.y };
-  }
+  const hit = nearestMainRopePointWithEndcap(x, y);
   return hit.dist <= maxDist ? hit : null;
 }
 
@@ -8774,7 +9037,13 @@ function onPointerDown(e){
     // reads it, unaffected by this substitution) since this callback
     // already only fires after doubleClickThreshold has elapsed.
     const dragPos = mouseFlickInteractionPos(x, y, 'drag');
-    const dragHit = nearestPointOnRope(dragPos.x, dragPos.y, mainRope.points);
+    // Corrected 2026-09-17 -- was a bare nearestPointOnRope() with zero
+    // endcap awareness, which is what actually kept Drag Rope from
+    // arming at all near the endcap's own visual tip (this GATE runs
+    // before the dragGrabIndex qualifier further down ever gets a
+    // chance to). See nearestMainRopePointWithEndcap()'s own header
+    // comment for the full account.
+    const dragHit = nearestMainRopePointWithEndcap(dragPos.x, dragPos.y);
     // Drag Overrides Grow On Rope Hold (per explicit request: "provide
     // a checkbox to turn off the Drag trigger overriding the Click
     // Hold to Grow trigger") -- default true preserves the existing
@@ -8805,45 +9074,20 @@ function onPointerDown(e){
       // pointerdown -- see this comment's own original claim, "anchored
       // by the point on the rope that is clicked," which the code had
       // stopped actually doing) is the correct source for WHICH point
-      // gets grabbed; dragHit stays exactly as before for the distance
-      // gate only.
-      // Endcap-tip qualifier (2026-09-15, per direct request: "its
-      // still making me drag from the end of the last non endcap
-      // segment... add a qualifier that when the click drag is
-      // triggered a certain distance from the endcap base or end, you
-      // compare that with the closest rope point, then whichever is
-      // closer you make that the drag point"). The endcap's own
-      // rendered TIP is purely decorative -- a point `endcapExtensionPx()`
-      // world-px PAST `points[length-1]` along the last segment's own
-      // tangent (tipDirection()) -- nearestPointOnRope() has no
-      // knowledge of it at all, since it only ever walks real physics
-      // segments. A press that's visually closer to the drawn endcap
-      // tip than to any real rope point can still resolve hit.index to
-      // an EARLIER point (e.g. length-2) whenever that real segment
-      // happens to be the closer one in straight-line distance -- there
-      // is no separate physics point actually located at the endcap
-      // tip for hit-testing to find. Fixed by computing this same
-      // virtual tip point here and comparing its distance to the press
-      // against hit.dist: whichever is closer decides. "Grabbing the
-      // endcap tip" always means grabbing the LAST real point
-      // (points.length-1) -- there's nothing else it could mean, the
-      // tip position only exists as a render-time offset (see the
-      // drag-pin block's own endcap pull-back correction further down)
-      // -- this qualifier only decides WHETHER that's the right point
-      // to grab for a given press, layered on top of (not replacing)
-      // the existing hit.index-based selection above.
-      let dragGrabIndex = hit.index;
-      if (cfg.endcapDesign !== 'none'){
-        // endcapDragPointWorld() (2026-09-17), not a hand-rolled
-        // straight-line walk -- see that function's own comment. Must
-        // agree with the Deformable Endcap's own CURVED geometry when
-        // active, or a press aimed at the true, curved, on-screen tip
-        // keeps losing this comparison to a real nearby rope point.
-        const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
-        const distToEndcapTip = Math.hypot(x - tipWorld.x, y - tipWorld.y);
-        if (distToEndcapTip < hit.dist) dragGrabIndex = mainRope.points.length - 1;
-      }
-      downInfo.dragIndex = Math.max(1, dragGrabIndex);
+      // gets grabbed -- but re-measured HERE via
+      // nearestMainRopePointWithEndcap() (2026-09-17), not the plain,
+      // endcap-blind `hit` frozen in downInfo, so a press near the
+      // endcap's own visual tip actually resolves to grabbing it. Same
+      // x/y as downInfo.hit's own original computation (this closure's
+      // own press-position variable, untouched since pointerdown), so
+      // this reproduces the exact same result for every OTHER press,
+      // just endcap-aware for this one. "Grabbing the endcap tip"
+      // always means grabbing the LAST real point (points.length-1) --
+      // there's nothing else it could mean, the tip position only
+      // exists as a render-time offset (see the drag-pin block's own
+      // endcap pull-back correction further down).
+      const dragGrabHit = nearestMainRopePointWithEndcap(x, y);
+      downInfo.dragIndex = Math.max(1, dragGrabHit.index);
       // Direction-angle reference point for this drag (2026-09-12, per
       // explicit request) -- captured ONCE here, at the grabbed point's
       // own position BEFORE any kinematic override moves it, not read
@@ -9948,7 +10192,15 @@ function update(rawDt){
     // elastic tolerance on top, only while explicitly enabled (0 when
     // off, so `hardLimit === maxDragDist` exactly and behavior is
     // byte-for-byte identical to before this feature existed).
-    const overstretchTol = cfg.overstretchEnabled ? vmin(cfg.overstretchTolerance) : 0;
+    //
+    // Corrected 2026-09-17 -- PROPORTIONAL to maxDragDist now, not a
+    // fixed vmin() absolute -- see cfg.overstretchTolerance's own
+    // DEV_GROUPS comment for the full report/reasoning. A fixed
+    // absolute tolerance made the elastic "give" a huge proportion of a
+    // small maxDragDist (near the anchor) and a tiny proportion of a
+    // large one (far from it) -- backwards from "more rope available to
+    // stretch should overstretch more."
+    const overstretchTol = cfg.overstretchEnabled ? maxDragDist * (cfg.overstretchTolerance / 100) : 0;
     const hardLimit = maxDragDist + overstretchTol;
     // Drag Pickup -- corrected 2026-09-14 (4th pass on this feature),
     // per direct report: "my cursor frame jumps backwards about the
@@ -10098,9 +10350,38 @@ function update(rawDt){
       // 0% overstretch) down to cfg.dragOverstretchMinSensitivity (at
       // 100% overstretch), then MULTIPLIES with cfg.dragMouseSensitivity
       // -- 2 independent reductions compose, neither replaces the other.
+      //
+      // Corrected 2026-09-17 -- the reduction now applies ONLY while the
+      // user is actively pulling FURTHER from the anchor (stretching),
+      // never while moving back toward it (un-stretching). Real,
+      // reported bug: "i dont feel a decreasing sensitivity as i
+      // stretch... if i am unstretching the rope, the mouse sensitivity
+      // should be at normal drag mouse sensitivity. So the lowering
+      // sensitivity only applies if i am dragging away from the rope
+      // start." Before this, effectiveDragSensitivity scaled BOTH
+      // directions of raw mouse movement equally, so releasing tension
+      // near max overstretch was ALSO sluggish -- the opposite of what
+      // was asked. Detected via the dot product of this frame's raw
+      // mouse delta against the outward radial direction (anchor ->
+      // dragPoint, the rope's own current stretched segment): positive
+      // means the raw cursor is moving further out along that same
+      // line (stretching), so the reduction applies; zero/negative
+      // (moving inward, or purely sideways) keeps full
+      // dragMouseSensitivity with no reduction. (This also compounds
+      // naturally with the same-day overstretchTolerance fix above --
+      // overstretchFrac now actually ramps across a meaningful range of
+      // drag distances instead of staying near 0 or jumping straight to
+      // 1, so the sensitivity reduction itself becomes gradual and
+      // perceptible for the first time, not just direction-gated.)
+      const radialX = dragPoint.x - anchor.x, radialY = dragPoint.y - anchor.y;
+      const radialLen = Math.hypot(radialX, radialY) || 1e-6;
+      const rawDeltaX = mouseX - downInfo.dragSensLastRawX, rawDeltaY = mouseY - downInfo.dragSensLastRawY;
+      const outwardComponent = (rawDeltaX * radialX + rawDeltaY * radialY) / radialLen;
       const lastFrameOverstretchFrac = (cfg.overstretchEnabled && overstretchTol > 0)
         ? Math.min(1, mainRope.overstretchPx / overstretchTol) : 0;
-      const overstretchSensitivityMult = 1 - lastFrameOverstretchFrac * (1 - cfg.dragOverstretchMinSensitivity);
+      const overstretchSensitivityMult = outwardComponent > 0
+        ? 1 - lastFrameOverstretchFrac * (1 - cfg.dragOverstretchMinSensitivity)
+        : 1;
       const effectiveDragSensitivity = cfg.dragMouseSensitivity * overstretchSensitivityMult;
       downInfo.dragSensCursorX += (mouseX - downInfo.dragSensLastRawX) * effectiveDragSensitivity;
       downInfo.dragSensCursorY += (mouseY - downInfo.dragSensLastRawY) * effectiveDragSensitivity;
@@ -12490,7 +12771,31 @@ function render(){
     // stays the untouched default.
     if (showMainRope){
       if (cfg.endcapDeformableEnabled && cfg.endcapDesign === 'form1-01' && mainTipFactor >= 1){
-        drawEndcapDeformable(mainRope.points, liveThickness, cfg.ropeColor, mainEndcapHeight, mainGradientInfo, undefined, cfg.endcapBendStrength, mainRope.endcapStretchMult);
+        // Bend Strength forced to 0 while Rope Attraction is active
+        // (2026-09-17) -- real, reported bug: "on double click-attract,
+        // the new endcap seems to curl away from the cursor direction
+        // for some reason. the rest of the rope is acting normally, its
+        // just the new endcap." Root cause: update()'s own Rope
+        // Attraction block kinematically forces points[length-2] so the
+        // LAST segment (length-2 -> length-1) points exactly at the
+        // mouse -- correct for the RIGID drawEndcap() renderer, whose
+        // own rotation reads tipDirection() from that exact same
+        // segment. But endcapSpineSample()'s curvature reads the angle
+        // between BOTH of the last 2 segments (length-3->length-2 AND
+        // length-2->length-1) -- the FIRST of those 2 is whatever the
+        // rope's own natural physics settled it to, completely
+        // unrelated to the mouse. Attraction's own kinematic override
+        // creates a real, artificial kink exactly where the deformable
+        // curvature measures, so the endcap curled according to that
+        // fake kink instead of pointing straight at the cursor like the
+        // rigid renderer does. The tip's own direction is being
+        // deliberately, externally controlled during attraction, not
+        // genuinely curving -- so bend strength should read as 0 for
+        // this one render call, matching what the rigid renderer already
+        // shows (a straight stamp, unaffected by this bug at all, per
+        // the report's own "the rest of the rope is acting normally").
+        const mainEndcapBendStrength = ropeAttractionActive ? 0 : cfg.endcapBendStrength;
+        drawEndcapDeformable(mainRope.points, liveThickness, cfg.ropeColor, mainEndcapHeight, mainGradientInfo, undefined, mainEndcapBendStrength, mainRope.endcapStretchMult);
       } else {
         drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo);
       }
@@ -12902,7 +13207,8 @@ if (DEV_MODE){
   initDevPanelChrome();
   initDeviceTabs();
   initPanelScrollStrength();
-  document.getElementById('dpAddGroupBtn').addEventListener('click', addDevGroup);
+  setupDevHeaderIconButtons();
+  setupDevGroupSelection();
   setupDevTextEditMode();
   applyDevTextOverrides();
   initMouseLog();

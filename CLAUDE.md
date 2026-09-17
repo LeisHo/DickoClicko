@@ -3180,3 +3180,374 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   project's history) -- `scrollIntoView`/real click-event propagation
   specifically are unverified beyond the stub's own faithful mirroring
   of the DOM APIs actually called.
+- **8 real, reported bugs/requests landed together, 2026-09-17.** Each
+  briefly:
+  1. **Drag cursor "jump on first move," FIXED.** Real report: "say i
+     didnt move the cursor at all from the moment i click and holded,
+     then the moment i move the cursor, the cursor frame and dragpoint
+     immediatly jumps to the true cursors location." Root cause: the
+     7th-pass cursor realignment (`mouseX = realignX` etc.) synthetically
+     overwrote the GLOBAL, real-`pointermove`-driven `mouseX`/`mouseY`/
+     `mfX`/`mfY` variables -- a browser can't actually move the OS
+     cursor, so the very next genuine `pointermove` event unconditionally
+     overwrote them straight back to the TRUE absolute screen position,
+     discarding the synthetic realignment in one frame and reading as a
+     huge jump for even a tiny real hand movement (confirmed via
+     simulation: a 150px spurious jump with ZERO real cursor movement).
+     Fixed per the user's own suggested resolution ("do whatever
+     translation math you need"): `mouseX`/`mfX` are never touched at
+     all now -- only `downInfo.dragSensCursorX/Y` (the drag's own
+     virtual cursor) starts at the realigned position, seeded against
+     the REAL current `mouseX`/`mouseY` (not the synthetic one), making
+     every subsequent frame a pure translation with nothing to jump to.
+     The sprite-target stash was also switched from raw `mouseX/mouseY`
+     to this same virtual cursor, for the identical reason.
+  2. **Animation type changing mid-drag with the cursor stationary --
+     NOT a separate bug, resolved as a side effect of #1.** The
+     direction-bucket lock (`!mfDragActiveForAngle`, 2026-09-16) already
+     covers the ENTIRE drag session unconditionally (armed the instant
+     `downInfo.dragging` becomes true, released only at genuine
+     release) -- confirmed by inspection, no gap found. What actually
+     looked like "the animation type changing" was almost certainly the
+     SPRITE'S ROTATION visibly snapping (rotation is never locked, by
+     design, and reads raw `mfX/mfY`) in reaction to #1's own spurious
+     jump -- fixing #1 removes the false-jump input rotation was
+     reacting to. No separate code change made for this item.
+  3. **mainRope had NO self-collision at all, FIXED.** Real report:
+     "If i grow a rope so much that it reaches the floor, when it comes
+     into contact with other rope segments, they all react in a crazy
+     way and flash and jump around." Confirmed via code inspection: the
+     existing self-collision loop only ever iterates `fallenPieces`,
+     never `mainRope`, and the pre-existing mainRope-vs-piece block
+     requires `fallenPieces.length > 0` to run at all -- so a rope grown
+     long enough to coil against the floor with ZERO pieces ever cut had
+     nothing preventing its own far-apart-by-index points from
+     overlapping, leaving the bend/distance solver to fight an
+     increasingly degenerate self-overlapping geometry every iteration
+     with no repulsion term at all. Fixed by adding a new mainRope
+     self-collision call (`resolveSelfCollision`, thickness-only radii,
+     same reasoning as piece self-collision's own endcap exclusion),
+     gated on the tip being near the floor (`cfg.floorEnabled` +
+     proximity to `floorY()`) rather than `fallenPieces.length > 0`, so
+     it engages regardless of whether anything has ever been cut.
+  4. **Endcap-tip drag/click targeting, FIXED -- root cause was
+     Deformable Endcap's own curvature, not the qualifier logic.**
+     Real report: "I still cant drag by the endcap endpoint... Its
+     still showing the closest point as the other rope segments...
+     the endcap endpoint... should also be used to calculate the click
+     funciton distances as well." Checked the live saved settings
+     directly (same "check the actual value" precedent as prior
+     data-drift bugs) and confirmed `endcapDeformableEnabled: true`,
+     `endcapBendStrength: 0.3` -- every existing consumer of "where is
+     the endcap's drag point" (the arm-time qualifier, the per-frame
+     pull-back, the cursor realignment) computed it as a plain
+     STRAIGHT-LINE walk from the tip along `tipDirection()`, correct
+     ONLY for the rigid `drawEndcap()` renderer. `drawEndcapDeformable()`
+     instead walks a CURVED spine (`endcapSpineSample()`) -- a Node
+     simulation of a representative bend confirmed a 26px divergence
+     between the 2 formulas at the annotated drag point's own `t≈0.97`,
+     easily enough to make a real on-screen click miss. Fixed by adding
+     one shared `endcapDragPointWorld()` helper (curved-aware when
+     Deformable Endcap is active on form1-01, straight-line fallback
+     otherwise) and routing all 4 consumers through it, including a
+     brand-new 5th one: `hitTestRope()` now ALSO checks this same point
+     (gated on `cfg.endcapDesign !== 'none'`), extending the same
+     qualifier to ordinary click/cut targeting, not just Drag Rope,
+     directly answering the 2nd half of the report. Also fixed a
+     separate, latent thickness mismatch found while consolidating these
+     call sites: every one of them was passing the un-multiplied
+     `vmin(cfg.ropeThickness)` instead of the LIVE
+     `vmin(cfg.ropeThickness) * ropeThicknessMultiplier` render() itself
+     uses -- harmless at the default multiplier of 1, increasingly wrong
+     after any full detach compounds Detach Thickness Multiplier.
+     **A real editing mistake was caught and fixed during this pass**:
+     an early edit to the cursor-realignment block accidentally deleted
+     the `let realignX = dragPoint.x...` declaration entirely, which
+     would have thrown a ReferenceError the instant a drag pickup
+     completed -- caught via a full syntax check immediately after,
+     before any other work continued; flagging here as a reminder that
+     `new Function()` syntax checks catch parse errors, not this class
+     of logic mistake, so re-reading the actual diff after a large
+     `old_string`/`new_string` replacement matters even when the syntax
+     check passes clean.
+  5. **Cut piece "getting shorter" during decay, FIXED.** Real report:
+     "Cut piece decay should only be in thickness but not length. Its
+     still getting shorter as it decays right now." `pieceThickness()`
+     itself was always thickness-only (confirmed by inspection), and the
+     endcap's own LENGTH was already correctly decoupled from decay
+     (`piece.baseThickness` passed as `heightThicknessPx`) -- but
+     `drawRopeEndArcs()`'s own rounded end-cap arcs (the plain "no
+     endcap selected" rounded-rope-end look) protrude PAST the true
+     physics endpoint by `thicknessPx/2 * arcMult`, and were passed the
+     piece's DECAYING `pieceThickness()` value for this protrusion too
+     -- shrinking that outward reach (and therefore the piece's whole
+     visible silhouette length) as it thins, even though not a single
+     physics point ever moves. Fixed with the exact same fix SHAPE
+     already applied to the endcap's own length: a new
+     `protrusionThicknessPx` param on `drawEndArc()`/`drawRopeEndArcs()`
+     (defaulting to `thicknessPx`, a no-op for mainRope/bgRope, which
+     have no baseThickness/decay concept), with the piece's own render
+     call site passing `piece.baseThickness` for it specifically -- the
+     arc's own WIDTH still tracks live thickness (matching the
+     rope body's own currently-thinning stroke), only its protrusion
+     LENGTH is pinned.
+  6. **Decay color/brightness, ADDED.** Real report: "Provide me a
+     color brightness and color tint that occurs with the decay. So it
+     gradually changes to that brightness and color as it decays." New
+     `pieceDecayTintColor` (color, def `#2a1810`), `pieceDecayTintAmount`
+     (0-1x, def 0.5), `pieceDecayBrightness` (0-2x, def 1) -- 2
+     independently-tunable controls per §12n, not one bundled "decay
+     amount" dial. `pieceDecayedColor(piece)` derives progress (0-1)
+     from the SAME thickness-decay math `pieceThickness()` already
+     tracks (0 at fall time, 1 exactly once thickness bottoms out at
+     Piece Minimum Thickness) rather than a separate timer, so tint/
+     brightness and thinning always finish together by construction.
+     Wired into all 3 downstream consumers of a piece's own color (rope
+     body stroke, endcap, end arcs -- the last 2 already derive from the
+     first). Verified via Node: exact `ropeColor` at fall time, a real
+     intermediate blend mid-decay, and correct fallback for any
+     non-decaying entity (mainRope, bgRope).
+  7. **Rope growth jitter at short Segment Length, IMPROVED (not fully
+     eliminated) -- 2 diagnoses attempted, the first proved to be a
+     no-op before shipping.** Real report: "Rope growth is jittery
+     especially with shorter segment lengths." **1st attempt (caught as
+     ineffective via simulation before finalizing, corrected in the same
+     pass):** flooring `tipGrowDirection()`'s own `dlen` divisor at half
+     of `segLen`, on the theory it was shrinking abnormally short. A
+     Node simulation disproved this: `dlen` stays close to the REAL
+     segLen under ordinary conditions (the distance constraint keeps
+     prev/beforePrev within a fraction of a percent of it at all times),
+     so the floor never actually engages -- kept only as a harmless,
+     honestly-relabeled defensive guard against a genuinely-degenerate
+     transient, not claimed as the fix. **Real mechanism, confirmed via
+     simulation:** the SAME absolute per-frame solver "breathing" noise
+     (already documented elsewhere in this file) produces an angular
+     deviation in the tip's own growth direction that scales as
+     `1/segLen` -- an inherent property of a shorter lever arm reading
+     the same wobble as a bigger angle, not a bug in the geometry. A
+     2000-frame simulated comparison measured this at 2.60x more
+     angular noise stdev at a short 0.9%vh segLen vs. the code's own
+     2.368%vh default (1.0951deg vs 0.4212deg). Fixed by scaling
+     `mainRope.growDir`'s own low-pass filter rate (`s`, previously a
+     flat `0.15`) DOWN proportionally to `segLen` relative to that same
+     default -- stronger filtering at a shorter segLen, since the raw
+     noise it's filtering is itself proportionally larger. The same
+     simulation measured a real ~44% reduction at the short segLen
+     (0.6166deg, down from 1.0951deg) -- NOT a full return to the
+     default's own noise floor (a stronger reduction trades away more
+     real-swing responsiveness; the exact tradeoff point is a judgment
+     call, not a derived "correct" value) -- capped so this is a pure
+     no-op at/above the default segLen, never a change for a
+     longer-than-default rope.
+  8. **Deformable Endcap curling away from the cursor during Rope
+     Attraction, FIXED.** Real report: "on double click-attract, the
+     new endcap seems to curl away from the cursor direction for some
+     reason. the rest of the rope is acting normally, its just the new
+     endcap." Root cause: `update()`'s own Rope Attraction block
+     kinematically forces `points[length-2]` so the LAST segment points
+     exactly at the mouse -- correct for the rigid renderer (whose
+     rotation reads exactly that segment via `tipDirection()`), but
+     `endcapSpineSample()`'s own curvature reads the angle between BOTH
+     of the last 2 segments, and the FIRST of those 2 is whatever the
+     rope's natural physics settled it to, unrelated to the mouse --
+     Attraction's own override therefore creates a real, artificial kink
+     exactly where the deformable curvature measures from, curling the
+     endcap according to that fake kink instead of pointing straight at
+     the cursor. Fixed by forcing the deformable renderer's own bend
+     strength to 0 for this one render call while
+     `ropeAttractionActive` is true -- the tip's direction is being
+     deliberately, externally controlled during attraction, not
+     genuinely curving, matching what the (already-correct, per the
+     report's own "rest of the rope is acting normally") rigid renderer
+     shows.
+  Items 1/3/5/6/8 verified via Node-level simulation of the exact
+  production formulas, same established convention as every other fix
+  in this project's history; item 4 additionally caught and fixed a
+  real self-introduced ReferenceError bug before it shipped, via a
+  full-file syntax check. Item 7 is the one item shipped with an
+  explicitly PARTIAL fix, honestly labeled as such rather than claimed
+  complete. Not live-browser-verified (this environment's own
+  recurring dev-server page-boot stall, documented extensively
+  elsewhere in this file, still applies). A concurrent session's own
+  commit (`87dccee`, its own dev-panel search-bar feature) ended up
+  containing items 1/3/4/5/6 of this same batch -- the Nth occurrence
+  of this project's own recurring cross-session commit-attribution
+  mixup; confirmed via `git show 87dccee:index.html | grep` that all
+  markers of this work are present, no content lost -- not corrected
+  further, per this project's own established precedent for this exact
+  situation.
+- **`applyPunch()`'s own falloff was sigma=3 POINT-INDICES, a fixed
+  NEIGHBOR COUNT regardless of physical spacing -- fixed 2026-09-17,
+  direct follow-up to the SAME DAY's own `punchPowerAbsolute` fix.**
+  Real, reported bug: "i still dont get why the click and click hold
+  flick functions are so much weaker when segment length is short. The
+  overstretch bounce back looks right so why cant the click?"
+  `punchPowerAbsolute` already keeps the PEAK power segLen-independent
+  (see that fix's own gotcha entry, directly above) -- but the peak
+  alone isn't what makes a flick feel strong. At a short segLen, more
+  points exist per unit of ACTUAL ROPE LENGTH, so the same fixed
+  3-point-index falloff radius covers a proportionally SMALLER physical
+  span of rope -- anything outside that span never gets a direct kick
+  at all, only an indirect pull from the distance/bend solver over
+  several frames, which is exactly why it reads as "weaker" overall
+  even though the exact hit point still moves the full, correctly-
+  segLen-independent distance. Confirmed via simulation: at this
+  project's own recently-reported short segLen (0.9%vh) vs. its default
+  (2.368%vh), the OLD fixed-sigma falloff's physical half-max reach
+  shrank to 38% of the default's. **Overstretch's own bounce "looks
+  right" for a genuinely different reason, not because it does anything
+  more clever** -- it's a scripted, position-based radial nudge
+  (amplitude/damping/stiffness, all real px values) with no point-index
+  falloff involved at all, so it was never exposed to this exact bug
+  class in the first place; this is why the user's own comparison
+  ("overstretch... looks right so why cant the click") was a correct
+  and useful diagnostic clue, not a coincidence. Fixed by scaling sigma
+  by `defaultSegLen/segLen` (the SAME `45/19` code-default reference
+  the growth-jitter fix above already established as this file's own
+  convention for this exact kind of scaling) -- verified via simulation
+  this restores an IDENTICAL physical half-max reach at any segLen
+  (exactly 1.000x match), a pure no-op at the default segLen (sigma
+  stays exactly 3), and correctly INCREASES total delivered impulse at
+  a shorter segLen (measured ~2.6x more, matching how much MORE of the
+  rope's own length is now receiving a direct kick) rather than merely
+  redistributing the same fixed total. Not live-browser-verified (this
+  environment's own recurring dev-server page-boot stall, documented
+  extensively elsewhere in this file, still applies).
+- **3 dev-panel features ported from `.claude/TEMPLATE_DEV_PANEL.html`
+  (2026-09-17), per direct request to sync forward.** All 3 needed real
+  adaptation, not a literal copy-paste, since this project's dev panel
+  keeps ONE shared `#dpGroups`/`#dpUngrouped` tree across all 3 device
+  tabs (unlike the template's own 3 separate per-tab `TabContent`
+  roots) -- see this file's own "Dev-panel behavior" section for that
+  established architectural difference.
+  1. **Header icon buttons for Text Edit Mode / Add Group / Collapse
+     All**, replacing a standalone checkbox (Text Edit Mode) and a
+     per-tab "+ Add Group" text button below the tabs. Reused the
+     EXISTING `.dp-icon-btn` class (this project's own established
+     header-icon-button style, already used by the Collapse button)
+     rather than introducing the template's separate `.dev-header-
+     icon-btn` class -- same visual system, no new CSS variable
+     plumbing needed. **Text Edit Mode's own persistence changed as a
+     direct, deliberate consequence**: it used to be a real
+     `PANEL_STYLE_CONTROLS` checkbox (persisted per-device like every
+     other Dev Panel chrome setting); it's now a plain, NON-persisted
+     runtime variable (`textEditModeEnabled`), matching the template's
+     own current design exactly (its own comment: "no backing checkbox
+     any more"). Since Text Edit Mode was never really "developer
+     preference to remember," this is a fitting simplification. Add
+     Group's OWN click handler is now wired centrally from
+     `setupDevHeaderIconButtons()` (removed the old, separate
+     `document.getElementById('dpAddGroupBtn').addEventListener('click',
+     addDevGroup)` boot-time line -- leaving both would have double-
+     fired `addDevGroup()` on every click).
+  2. **Shift+click, or a right-click-armed plain click, selects one or
+     more settings/groups; "+ Add Group" then folds the selection into
+     the new group instead of leaving it empty.** Ported
+     `devPanelSelectedItems`/`setupDevGroupSelection()`/
+     `toggleDevSelection()`/`clearDevSelection()`/
+     `disarmDevGroupSelection()` near-verbatim, swapping only class
+     names (`.dp-group-title`/`.dp-group`/`.dp-row` for the template's
+     `.dev-section-title`/`.dev-section`/`.dev-row`). Since this
+     project has no per-tab DOM split, there's no "cross-tab selection"
+     edge case to guard against either -- every selected item is
+     always in the one tree `addDevGroup()` itself operates on, unlike
+     the template's own `selectedInTab` filter. A capturing click
+     listener on `#devPanel` with `stopPropagation()` is what makes
+     Shift/armed-clicking a group's title SELECT it instead of also
+     toggling collapse -- verified this reasoning holds for this
+     project's own DOM shape (the group header's own collapse-toggle
+     listener sits on the header element itself, a descendant of
+     `#devPanel`, so a capture-phase `stopPropagation()` higher up
+     never lets the event reach it).
+  3. **A new group is now created at the TOP of the project-specific
+     group list** (right after the built-in Dev Panel/Debug groups),
+     not the bottom -- `addDevGroup()` now resolves an anchor via
+     `container.querySelector(':scope > .dp-group[data-key="DEBUG"]')`
+     falling back to `data-key="DEV PANEL"`, falling back to position 0
+     if neither is found as a direct child (the same 3-tier fallback
+     the template's own history already needed, after an earlier
+     Debug-only version misplaced a subsequent new group once Debug
+     itself had been legally reorganized into a subgroup). Verified via
+     a Node-level DOM-stub simulation of all 3 fallback tiers -- correct
+     insertion point in every case.
+  **Deliberately NOT ported this pass**: the group drag-handle's own
+  `position:absolute` + `calc()`-based vertical-centering fix (template
+  `[CSS-8]`) -- this project's own `.dp-group-header` is `display:flex;
+  align-items:center`, with the handle as a normal in-flow flex child,
+  not an absolutely-positioned overlay next to the title. The bug that
+  fix solves (a handle overlapping/misaligned against the title at
+  different nesting depths/font-sizes) is specific to the template's
+  OWN absolute-positioning approach; this project's flexbox layout
+  centers the handle automatically and was confirmed to have no
+  equivalent bug to fix. The Search bar (Ctrl+F-style group/setting
+  finder) was NOT ported either -- it's the other direction: this
+  project's OWN `dpSearchInput` mechanism (built 2026-09-17, earlier
+  the same day) was the SOURCE the template's own search feature was
+  generalized FROM, confirmed by reading the template's own comment
+  crediting "DickoClicko's own dpSearchInput mechanism."
+  Syntax-checked after every edit; the anchor-fallback logic verified
+  via a dedicated Node simulation (3 scenarios: normal order, Debug
+  reorganized elsewhere falling back to Dev Panel, neither present
+  falling back to position 0 -- all 3 produced the correct insertion
+  point). Not live-browser-verified (this environment's recurring
+  dev-server page-boot stall) -- the Shift+click/right-click selection
+  gesture and the header buttons' own click/contextmenu wiring haven't
+  been exercised in a real browser, though the mechanism is a
+  near-verbatim port of the template's own already-live, already-
+  working code, adapted only in class names and the (simpler, single-
+  tree) group-lookup logic.
+- **Drag by the endcap's own visual TIP -- ROOT CAUSE FOUND AND FIXED,
+  2026-09-17 (9th and, per the numeric evidence below, actually
+  conclusive pass on this mechanism).** Every prior pass (2026-09-14
+  through 2026-09-17) correctly fixed the DOWNSTREAM index-selection
+  logic (which point gets grabbed once a hold is confirmed to be a
+  Drag Rope hold) but never touched the UPSTREAM GATE that decides
+  whether Drag Rope arms at all -- `onPointerDown`'s holdTimer
+  callback: `if (cfg.dragRopeEnabled && dragHit.dist <=
+  vmin(cfg.dragRopeHoldDistance) && ...)`. `dragHit` was computed via
+  a bare `nearestPointOnRope()` call with ZERO endcap awareness, so a
+  press near the endcap's own visual tip -- but further than Drag Rope
+  Hold Distance from any REAL physics segment, which is exactly what
+  pressing near a decorative extension past the last point produces --
+  was silently rejected at this gate, every time, regardless of how
+  correct the downstream qualifier was. Confirmed via a Node
+  simulation using the live saved geometry (segmentLength=4.75,
+  ropeThickness=6.4, dragRopeHoldDistance=6.5, at an assumed 1000px
+  vmin): a press at the EXACT pixel-perfect tip barely squeaked past
+  the old gate (63.5px measured vs. a 65px threshold -- essentially no
+  margin for error), but a press just 30px further out (a thoroughly
+  realistic amount of click imprecision) measured 93.5px under the old
+  gate and was rejected outright, while resolving correctly (30px,
+  well under threshold) once the gate itself became endcap-aware --
+  concretely explaining why the bug felt "always broken" rather than
+  "occasionally works."
+  New shared helper `nearestMainRopePointWithEndcap(x, y)` is now the
+  ONE place this "nearestPointOnRope(), then let the endcap's own true
+  (possibly Deformable-Endcap-curved) drag point win if it's closer"
+  comparison lives -- replacing 2 separately hand-duplicated copies
+  (`hitTestRope()`'s own qualifier, and the Drag Rope arm-time
+  `dragGrabIndex` qualifier) AND fixing the 3rd, previously-untouched,
+  load-bearing call site (`dragHit`) that was the actual root cause.
+  All 3 real callers (the click-distance gate behind punch/cut, the
+  Drag Rope arming gate, and the point-selection logic) now agree by
+  CONSTRUCTION, not by 3 independently-maintained copies staying in
+  sync through luck.
+  **Item 1 from the same report ("the endcap drag point should also
+  move if the endcap height is changed") was investigated and found to
+  already be mathematically correct** -- every consumer of
+  `endcapDragPointWorld()` already reads `cfg.endcapHeight` live
+  (confirmed: the underlying extension formula is linear in
+  `heightMult`, verified via a direct numeric check), including the
+  PER-FRAME pull-back during an active drag. This was very likely
+  simply unobservable while dragging itself could essentially never
+  reliably arm near the tip -- expected to resolve as a natural
+  consequence of the gate fix above; flagged for the user to re-test
+  rather than assumed fixed, since it was never independently
+  reproduced as a separate defect.
+  Syntax-checked; both the gate-fix numeric scenario and the
+  linear-in-heightMult claim verified via dedicated Node checks. Not
+  live-browser-verified (this environment's recurring dev-server
+  page-boot stall, the same limitation as every prior pass on this
+  mechanism) -- unlike those prior passes, though, this fix is backed
+  by a concrete numeric reproduction of the actual failure mode, not
+  just corrected reasoning about the code.
