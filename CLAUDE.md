@@ -3893,3 +3893,78 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   actual click/arm/pointerdown-gesture wiring hasn't been exercised in
   a real browser, though it's a near-verbatim port of the template's
   own already-live, already-working code.
+- **Rope growth jitter -- diagnosed 2026-09-17 (no code change), the
+  ACTUAL fix landed as pure DATA, same day.** Per direct request ("dont
+  change anyting yet" initially, diagnosis only) -- checked the live
+  saved settings against this project's own previously-measured-safe
+  values (the same "check the actual saved value" precedent this file
+  has already confirmed the real cause of several prior "physics feels
+  wrong" reports) and found 3 had drifted severely: `bendStiffness: 0`
+  (measured-safe: `0.15`), `damping: 0.984` (measured-safe: `0.85`),
+  `constraintIterations: 2` (measured-safe: `10`). `bendStiffness: 0`
+  specifically reproduces the EXACT already-documented pre-fix failure
+  mode this file's own bend-stiffness gotcha describes in detail:
+  "Pure distance constraints have ZERO resistance to folding... The
+  SAME root cause was also the real source of the endcap-rotation
+  instability during growth (tipDirection()'s angle was flipping by up
+  to 180° between frames)" -- rope-growth-angle instability, matching
+  the report almost word for word. `constraintIterations: 2` (vs. 10)
+  compounds it by leaving far more raw per-frame solver noise
+  unresolved for the growth-direction smoothing code to filter in the
+  first place; `damping: 0.984` (vs. 0.85) lets whatever motion results
+  ring out far longer instead of settling. Restored all 3 to their
+  established-safe values as a pure data change in
+  `data/processed/dev-panel-settings.json` (desktop only -- confirmed
+  mobile/landscape hold no independent entries for any of the 3, so
+  they already mirror Desktop via `resolveValuesForTab()`) -- no code
+  touched, since the check logic itself was never the problem.
+  **Honest caveat carried over from the diagnosis**: the EXISTING
+  `tipGrowDirection()` low-pass-filter fix for segLen-dependent jitter
+  (2026-09-17, earlier the same day) was only ever verified via a
+  Node-level math simulation, never against the real rendered rope --
+  its own comment already admits it's a partial (~44% simulated)
+  reduction, not a full fix, so some residual jitter at a short segment
+  length is expected even with these 3 settings restored, not itself a
+  sign anything is still broken.
+- **Drag by the endcap's own visual TIP -- 12th pass, 2026-09-17 (4th
+  pass today).** Real, direct follow-up after the 11th pass: "it now
+  does work as a distance measuring point, but when i initiate drag,
+  it still drags from the last segments endpoint, not the endcap
+  endpoint." Root cause: `dragGrabHit` (the point-SELECTION logic
+  setting `downInfo.dragIndex`) measured from the RAW press position
+  (`x, y`) -- a DIFFERENT reference point than `dragHit` (the arming
+  GATE, just above it, measuring from `dragPos`, the Cursor Animation-
+  substituted interaction point). The gate can correctly recognize
+  "close enough to arm" via `dragPos` while this separate raw-position
+  check disagrees and resolves to an ordinary segment instead -- arming
+  succeeds (confirmed working per the report's own first half), but the
+  WRONG point gets grabbed (the report's own 2nd half). Per the user's
+  own running spec across this entire feature's history, both the
+  arming gate and the point-selection should agree on the SAME
+  reference point -- fixed by changing `dragGrabHit` to also measure
+  from `dragPos` instead of raw `x, y`. **This directly reverses the
+  original 2026-09-15 design intent** ("hit... is the correct source
+  for WHICH point gets grabbed... anchored by the point on the rope
+  that is clicked" -- raw press, deliberately NOT the interaction
+  point) -- a genuine, explicit correction of that earlier decision,
+  not an oversight; if a future report says an ORDINARY (non-endcap)
+  drag now grabs a slightly different point than where the user
+  literally clicked, this is the tradeoff that decision made, not a
+  new bug. Syntax-checked. Not live-browser-verified.
+- **Drag Frame 48's own point now shown by Show Interaction Points**
+  (2026-09-17), per direct request. The pre-existing overlay
+  (`cfg.mouseFlickShowInteractionPoints`) only ever drew the 4
+  Frame-1-based purposes (click/hold/cut/drag) via
+  `mouseFlickInteractionPointWorld()` -- Frame 48's own point
+  (`MOUSE_FLICK_DRAG_END_POINTS`, the LIVE dragging anchor every active
+  drag actually targets, per `mouseFlickDragEntityOriginForAnchor()`'s
+  own 2026-09-14 correction) was never part of this debug visualization
+  at all, even though it's arguably the MORE important point to see
+  while tuning. Added as a 5th dot, resolved via the SAME
+  `MOUSE_FLICK_DRAG_END_POINTS[mfDirectionKey]` ->
+  `mouseFlickDragPointWorld()` lookup already used elsewhere in this
+  file (`downInfo.dragSpritePickupStartX/Y`'s own capture) -- a
+  distinct color (`#00bcd4`, cyan) from the existing green 'drag' dot,
+  since the two can visibly separate once the sprite's live pose
+  diverges from its own frame-1 reference. Syntax-checked. Not
+  live-browser-verified.

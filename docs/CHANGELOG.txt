@@ -14753,3 +14753,30 @@ protection across 5 nesting scenarios, delete-undo restore for both a
 middle and a last-item deletion) all correct. Not live-browser-
 verified.
 
+--------------------------------------------------------------------------------
+2026-09-17  -  07:28 AM - 07:30 AM EDT
+
+1. Rope growth jitter -- fixed as pure DATA (no code change). The
+   earlier same-day diagnosis found 3 physics settings had drifted
+   severely from their established-safe values: bendStiffness 0 (safe:
+   0.15), damping 0.984 (safe: 0.85), constraintIterations 2 (safe:
+   10). bendStiffness: 0 specifically reproduces this project's own
+   already-documented pre-fix instability (zero bend resistance ->
+   angle flipping during growth). Restored all 3 in
+   dev-panel-settings.json.
+
+2. Drag by the endcap's own visual tip -- 12th pass. The arm-time gate
+   now correctly recognizes proximity to the endcap (fixed last pass),
+   but point-SELECTION (dragGrabHit, setting downInfo.dragIndex) still
+   measured from the raw press position instead of the same interaction
+   point the gate uses -- so arming succeeded but the wrong point got
+   grabbed. Now both measure from the same reference point.
+
+3. Drag Frame 48's own point is now shown by Show Interaction Points --
+   this is the actual LIVE dragging anchor (not Frame 1's point, which
+   only gates arming), previously missing from this debug overlay
+   entirely. New cyan dot alongside the existing 4.
+
+Verification: syntax-checked after each change. Not live-browser-
+verified.
+

@@ -9409,24 +9409,31 @@ function onPointerDown(e){
       // anatomical spot on the hand sprite's own artwork, which rarely
       // lines up with the rope's true tip; confirmed live that pressing
       // exactly on the tip (nearestPointOnRope resolving index 36 of 37
-      // points) still armed dragIndex 25 via dragHit. `hit` (this
-      // press's own real hit-test, computed and frozen into downInfo at
-      // pointerdown -- see this comment's own original claim, "anchored
-      // by the point on the rope that is clicked," which the code had
-      // stopped actually doing) is the correct source for WHICH point
-      // gets grabbed -- but re-measured HERE via
-      // nearestMainRopePointWithEndcap() (2026-09-17), not the plain,
-      // endcap-blind `hit` frozen in downInfo, so a press near the
-      // endcap's own visual tip actually resolves to grabbing it. Same
-      // x/y as downInfo.hit's own original computation (this closure's
-      // own press-position variable, untouched since pointerdown), so
-      // this reproduces the exact same result for every OTHER press,
-      // just endcap-aware for this one. "Grabbing the endcap tip"
-      // always means grabbing the LAST real point (points.length-1) --
-      // there's nothing else it could mean, the tip position only
-      // exists as a render-time offset (see the drag-pin block's own
-      // endcap pull-back correction further down).
-      const dragGrabHit = nearestMainRopePointWithEndcap(x, y);
+      // points) still armed dragIndex 25 via dragHit.
+      //
+      // Corrected 2026-09-17, 4th pass -- real, direct follow-up report:
+      // "it now does work as a distance measuring point [dragHit, the
+      // gate], but when i initiate drag, it still drags from the last
+      // segments endpoint, not the endcap endpoint." Root cause: this
+      // used to measure from the RAW press position (x, y) -- a
+      // DIFFERENT reference point than `dragHit` above, which measures
+      // from `dragPos` (the Cursor Animation-substituted interaction
+      // point). The gate can correctly recognize "close enough to the
+      // endcap" via `dragPos` while this SEPARATE raw-position check
+      // disagrees and resolves to an ordinary segment instead -- arming
+      // succeeds, but the WRONG point gets grabbed. Per the user's own
+      // running spec across this whole feature's history ("my drag
+      // interaction point is next to the Endcap Endpoint... it should
+      // be measuring the drag distance from that endpoint, then if drag
+      // is triggered, the cursor frame should be using the endcap
+      // endpoint as the drag point"), both the arming gate AND the
+      // point-selection should agree on the SAME reference point --
+      // `dragPos`, not two independent measurements that can disagree.
+      // "Grabbing the endcap tip" always means grabbing the LAST real
+      // point (points.length-1) -- there's nothing else it could mean,
+      // the tip position only exists as a render-time offset (see the
+      // drag-pin block's own endcap pull-back correction further down).
+      const dragGrabHit = nearestMainRopePointWithEndcap(dragPos.x, dragPos.y);
       downInfo.dragIndex = Math.max(1, dragGrabHit.index);
       // Direction-angle reference point for this drag (2026-09-12, per
       // explicit request) -- captured ONCE here, at the grabbed point's
@@ -13526,6 +13533,29 @@ function render(){
           ctx.arc(mfIpPt.x, mfIpPt.y, vmin(0.6), 0, Math.PI * 2);
           ctx.fillStyle = mfIpColors[mfIpPurpose];
           ctx.fill();
+        }
+        // Drag Frame 48's own point (2026-09-17, per direct request) --
+        // a SEPARATE point from the 'drag' dot above (Frame 1's own
+        // annotated point, used only for the arm-time distance gate/
+        // point-selection). This is the LIVE dragging anchor itself --
+        // see mouseFlickDragEntityOriginForAnchor()'s own 2026-09-14
+        // comment for why frame 48 (not frame 1) is what every ACTIVE
+        // drag consumer targets. Same read pattern as
+        // downInfo.dragSpritePickupStartX/Y's own capture: look up the
+        // normalized point via MOUSE_FLICK_DRAG_END_POINTS, then resolve
+        // it to a world position via mouseFlickDragPointWorld(). A
+        // distinct color (not reusing 'drag''s own green) since the two
+        // dots can visibly separate once the sprite's pose diverges from
+        // its own frame-1 reference.
+        if (mouseFlickActive()){
+          const mfDrag48Pt = MOUSE_FLICK_DRAG_END_POINTS[mfDirectionKey];
+          const mfDrag48World = mfDrag48Pt ? mouseFlickDragPointWorld(mfDirectionKey, mfDrag48Pt) : null;
+          if (mfDrag48World){
+            ctx.beginPath();
+            ctx.arc(mfDrag48World.x, mfDrag48World.y, vmin(0.6), 0, Math.PI * 2);
+            ctx.fillStyle = '#00bcd4';
+            ctx.fill();
+          }
         }
       }
     }
