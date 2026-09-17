@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 18.699999999999967,
+      "ropeLength": 32.04999999999997,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -152,7 +152,7 @@
       "pieceFriction": 0,
       "wallEnabled": true,
       "wallFriction": 0.74,
-      "wallBounciness": 0.64,
+      "wallBounciness": 1,
       "introEnabled": true,
       "introWaitDuration": 1.5,
       "introRiseSpeed": 5.5,
@@ -251,7 +251,7 @@
       "dragMouseSensitivity": 2,
       "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
-      "ceilingBounciness": 0.64,
+      "ceilingBounciness": 1,
       "pieceDecayTintColor": "#2a1810",
       "pieceDecayTintAmount": 0.5,
       "pieceDecayBrightness": 1,
@@ -395,7 +395,7 @@
       },
       {
         "key": "WALLS",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "ceilingBounciness",
           "wallBounciness",
@@ -553,7 +553,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [],
         "subgroups": [
           {
