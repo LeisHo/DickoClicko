@@ -14652,3 +14652,31 @@ Verification: syntax-checked; the depth/release-ease math verified via
 Node simulation. Not live-browser-verified (recurring dev-server
 page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-17  -  07:04 AM - 07:07 AM EDT
+
+Drag Rope now uses Pointer Lock, so dragging no longer stalls when the
+real cursor hits the browser window's edge. Per direct request; 2 fix
+directions were presented (Pointer Lock vs. a lighter edge-pinned
+heuristic) and Pointer Lock was chosen.
+
+Both cursor-tracking pointermove listeners (mouseX/mouseY for the
+rope, mfX/mfY for Cursor Animation's rotation target) now branch on
+document.pointerLockElement === canvas: while locked, e.movementX/Y
+(unclamped relative motion) accumulate instead of e.clientX/Y
+overwriting the tracked position. requestPointerLock() is called at
+the exact instant Drag Rope arms; exitPointerLock() unconditionally at
+release. Both degrade silently on failure/rejection. No manual
+resync-on-unlock needed -- the next real pointermove event after
+unlock naturally falls back to absolute tracking.
+
+Verification: syntax-checked; the accumulation/resync logic verified
+via Node simulation (10 locked moves pushed the virtual cursor well
+past any real screen width; the next unlocked event snapped it back
+to absolute with zero special-cased code). This is the first use of
+the Pointer Lock API anywhere in this file -- not live-browser-
+verified, and unlike most fixes here there's no prior in-codebase
+precedent to lean on; worth a deliberate real-browser test (cursor
+disappearing while dragging, an Esc-mid-drag scenario) before fully
+trusting it.
+

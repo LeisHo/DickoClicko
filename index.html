@@ -8396,7 +8396,37 @@ let downInfo = null;   // {mode:'circle'} or {mode:'rope', x,y,hit,startTime,cha
 // instead of stale/undefined coordinates from before the right-click.
 let ropeAttractionActive = false;
 let mouseX = 0, mouseY = 0;
-window.addEventListener('pointermove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+// Pointer Lock for Drag Rope (2026-09-17), per direct request: "when
+// my true cursor hits the edge of the browser, i can no longer
+// further drag the rope even though there is more space... I want to
+// be able to continue dragging without hitting a boundary threshold."
+// The OS cursor physically cannot move past the window edge, so its
+// absolute clientX/clientY stops changing there -- dragSensCursorX/Y
+// (the drag's own virtual cursor) only ever advances by REAL deltas
+// each frame, so it stalled too, even with the real mouse still being
+// pushed against the edge. `document.pointerLockElement === canvas`
+// (checked fresh every event, not cached) is the single source of
+// truth for whether a lock is CURRENTLY active -- while it is,
+// e.movementX/movementY (raw relative motion, reported by the OS,
+// never clamped by the screen edge) accumulate onto mouseX/mouseY
+// instead of e.clientX/clientY overwriting them outright. The instant
+// the lock ends (drag release, or the browser/user revoking it
+// unexpectedly -- Esc, alt-tab, etc. -- see the pointerlockchange
+// listener below), this branch is simply no longer taken and the very
+// next real pointermove event resyncs mouseX/mouseY back to an
+// absolute, on-screen position automatically -- no manual resync
+// needed. requestPointerLock()/exitPointerLock() themselves are called
+// only at Drag Rope's own arm/release points (see downInfo.dragging's
+// own comment and onPointerUp's Drag Rope release branch) -- this
+// listener only reacts to whatever lock state already exists, it never
+// initiates one.
+window.addEventListener('pointermove', e => {
+  if (document.pointerLockElement === canvas){
+    mouseX += e.movementX; mouseY += e.movementY;
+  } else {
+    mouseX = e.clientX; mouseY = e.clientY;
+  }
+});
 let holdTimer = null;
 let pendingClick = null; // {hit,timer}
 
@@ -9098,6 +9128,21 @@ function onPointerDown(e){
     const wouldAlsoGrow = cfg.ropeGrowthOnRopeHold && introPhase === 'done' && !startedInCircle && hit.dist <= vmin(cfg.ropeGrowthHoldDistance);
     if (cfg.dragRopeEnabled && dragHit.dist <= vmin(cfg.dragRopeHoldDistance) && (cfg.dragOverridesGrowOnRopeHold || !wouldAlsoGrow)){
       downInfo.dragging = true;
+      // Pointer Lock engage (2026-09-17) -- see mouseX/mouseY's own
+      // pointermove-listener comment for the full mechanism. Requested
+      // right here, at the exact instant a drag genuinely arms (still
+      // within this holdTimer callback's own transient-activation
+      // window from the original press) -- wrapped so a rejection
+      // (permission denied, unsupported browser, focus stolen, etc.)
+      // degrades silently to the pre-existing bounded-by-the-screen-
+      // edge behavior rather than throwing or blocking the drag itself.
+      // `.catch` is required -- requestPointerLock() returns a Promise
+      // that rejects (not throws synchronously) on failure in every
+      // browser that implements the Promise-returning form.
+      try {
+        const lockResult = canvas.requestPointerLock();
+        if (lockResult && lockResult.catch) lockResult.catch(() => {});
+      } catch (err) { /* older/non-Promise browsers -- ignore, same graceful degradation */ }
       // Real, reported bug (2026-09-13: "allow me to drag the rope by
       // the end of the endcap as well. right now it seems to default to
       // the last segment joint as the last draggable point"). Root
@@ -9415,6 +9460,13 @@ function onPointerUp(e){
   }
 
   if (info.dragging){
+    // Pointer Lock release (2026-09-17) -- unconditional, mirrors the
+    // engage call at arm-time exactly (see downInfo.dragging's own
+    // comment for the full mechanism). Safe to call even if a lock was
+    // never actually granted (rejected, unsupported, or already lost --
+    // see the pointerlockchange listener below) -- exitPointerLock() is
+    // a no-op when nothing is currently locked, per spec.
+    document.exitPointerLock();
     // Drag Rope release -- no punch fires (dragging fully replaces the
     // charge+punch outcome for this hold, per "override the Click on
     // Rope to Hold function"). update()'s own per-frame drag clamp
@@ -9585,8 +9637,20 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 // above) AND plays this entity's own SNAP sequence; nothing here needs
 // to know about that or suppress it.
 // ---------------------------------------------------------------------
+// Mirrors mouseX/mouseY's own Pointer Lock branching above (2026-09-17)
+// -- while locked, mfX/mfY must ALSO accumulate via movementX/Y rather
+// than freeze at e.clientX/Y (which stops changing at the screen edge,
+// same reason mouseX/mouseY needed this), or the drag-time rotation
+// target ("points along the axis from the RAW/TRUE cursor to the drag
+// point," see that gotcha) would stop updating the instant the OS
+// cursor hit the edge, even though the rope itself keeps stretching
+// via mouseX/mouseY's own unbounded accumulation.
 window.addEventListener('pointermove', e => {
-  mfX = e.clientX; mfY = e.clientY;
+  if (document.pointerLockElement === canvas){
+    mfX += e.movementX; mfY += e.movementY;
+  } else {
+    mfX = e.clientX; mfY = e.clientY;
+  }
   mfHasMouse = true;
 });
 canvas.addEventListener('pointerdown', e => {

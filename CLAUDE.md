@@ -3685,3 +3685,61 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   original spec's intent everywhere else, more surgical, but adds a 2nd
   parallel measurement path to reason about. Neither has been
   attempted or verified -- this entry documents the DIAGNOSIS only.
+- **Pointer Lock for Drag Rope (2026-09-17), per direct request: "when
+  my true cursor hits the edge of the browser, i can no longer further
+  drag the rope even though there is more space... I want to be able
+  to continue dragging without hitting a boundary threshold."** Real,
+  well-understood limitation of absolute cursor tracking: the OS
+  cursor physically cannot move past the browser window's edge, so its
+  `clientX/clientY` stops changing there -- `dragSensCursorX/Y` (the
+  drag's own virtual cursor) only ever advances by REAL per-frame
+  deltas, so it stalled too, even with the real mouse still being
+  pushed against the edge. Presented 2 fix directions to the user
+  (Pointer Lock, the standard/correct technical solution but hides the
+  OS cursor while dragging; or a lighter "keep advancing while pinned
+  at the edge" heuristic) -- **Pointer Lock was explicitly chosen.**
+  **Mechanism:** both of this file's own cursor-tracking `pointermove`
+  listeners (`mouseX/mouseY` for the rope's own drag math, `mfX/mfY`
+  for Cursor Animation's drag-time rotation target) now branch on
+  `document.pointerLockElement === canvas`, checked FRESH on every
+  single event, never cached: while locked, `e.movementX/movementY`
+  (raw OS-reported relative motion, never clamped by the screen edge)
+  ACCUMULATE onto the tracked position instead of `e.clientX/clientY`
+  overwriting it outright. `canvas.requestPointerLock()` is called
+  exactly once, at the precise instant Drag Rope genuinely arms
+  (`downInfo.dragging = true`, inside the holdTimer callback -- still
+  within its own transient-activation window from the original press);
+  `document.exitPointerLock()` is called unconditionally at the top of
+  `onPointerUp`'s own Drag Rope release branch. **Both calls are
+  wrapped to degrade silently on failure** (permission denied,
+  unsupported browser, focus stolen, `requestPointerLock()`'s own
+  Promise rejecting) -- falls back to the pre-existing, bounded-by-the-
+  screen-edge behavior rather than throwing or blocking the drag
+  itself; `exitPointerLock()` is a documented no-op when nothing is
+  currently locked, so it's always safe to call unconditionally on
+  release regardless of whether the lock was ever actually granted.
+  **No manual resync-on-unlock code needed** -- the instant the lock
+  ends (a clean release, or the browser/OS forcibly revoking it, e.g.
+  Esc, alt-tab), both listeners' own `document.pointerLockElement ===
+  canvas` check simply stops being true, and the VERY NEXT real
+  `pointermove` event naturally resets `mouseX/mfX`/`mouseY/mfY` back
+  to an absolute, on-screen position via the existing else-branch --
+  confirmed via a Node simulation of the exact accumulation logic:
+  10 simulated locked moves of +15px each correctly pushed a
+  screen-edge-pinned virtual cursor to 2069px (well past any realistic
+  screen width), and the very next unlocked event snapped it straight
+  back to the real absolute position with zero special-cased resync
+  logic. Scoped narrowly to Drag Rope specifically (only engaged/
+  released at that gesture's own arm/release points) -- no other
+  interaction in this file requests or depends on a lock, so nothing
+  else changes behavior. Syntax-checked; the core accumulation/resync
+  math verified via Node simulation as above. **Not live-browser-
+  verified** (this environment's recurring dev-server page-boot
+  stall) -- this is also the FIRST use of the Pointer Lock API
+  anywhere in this file, so unlike most fixes here, there's no prior
+  precedent in this codebase to lean on for confidence beyond the
+  spec's own documented behavior and the isolated logic simulation
+  above; worth a deliberate real-browser test of the actual UX (cursor
+  disappearing while dragging, the browser's own lock-acquired
+  indicator if any, and an Esc-mid-drag scenario) before trusting this
+  fully.
