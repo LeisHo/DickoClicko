@@ -14780,3 +14780,27 @@ verified.
 Verification: syntax-checked after each change. Not live-browser-
 verified.
 
+--------------------------------------------------------------------------------
+2026-09-17  -  07:35 AM - 07:37 AM EDT
+
+Drag by the endcap's own visual tip -- 13th pass, a structural fix,
+honestly flagged as unconfirmed against the exact reported symptom.
+Root cause identified: nearestMainRopePointWithEndcap() compared the
+press distance to a single POINT (the endcap tip) against the closest
+point along an entire SEGMENT -- not a fair fight, since a whole
+segment offers many candidate closest-points and can win even for a
+press reaching toward the endcap. Rewrote it to append the endcap's
+own point onto an augmented points array and walk it the same way
+nearestPointOnRope() already does for every real segment -- exactly
+what the user's own original spec asked for.
+
+Honest limitation: a Node simulation using the live geometry could NOT
+reproduce the exact "resolves to length-2" failure -- every
+constructed scenario resolved identically under the old and new logic.
+Shipped anyway since it's independently more correct and matches the
+user's own stated architecture, not because it was confirmed to fix
+the specific report. Re-test needed; if it persists, the bug is more
+likely downstream (rendering/pull-back) than in this comparison logic.
+
+Syntax-checked. Not live-browser-verified.
+

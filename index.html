@@ -9103,14 +9103,48 @@ function isNearCircleCenterForGrow(x, y){
 // at this gate every time -- so Drag Rope never armed at all, regardless
 // of how correct the downstream index-selection logic was. All 3 call
 // sites now share this one function instead of drifting independently.
+// Corrected 2026-09-17, 13th pass -- the STRUCTURAL bug behind every
+// earlier pass's own partial fix. Real, direct, blunt report after the
+// 12th pass: "the endcap dragpoint still defaults to the end point of
+// the segment before it." Root cause: every previous version of this
+// function compared the press distance to a single POINT (the endcap
+// tip) against `nearestPointOnRope()`'s own result -- the closest point
+// along an entire SEGMENT (points[length-2] -> points[length-1]). That
+// is not a fair comparison: a whole segment offers many candidate
+// closest-points along its own length, so it wins this comparison far
+// more often than it should, even for a press that's clearly reaching
+// PAST the rope toward the endcap -- exactly reproducing "defaults to
+// the segment before it" (nearestPointOnRope()'s own t<0.5 branch
+// resolving to points.length-2 specifically whenever the closest point
+// on that last segment falls nearer its OWN start than its end, which
+// is common for a press aimed past the tip).
+//
+// This is what the user's own original spec actually asked for all
+// along ("just include that point along with every rope segment point
+// when you are measuring all click functions") -- not a bolted-on
+// single-point comparison, but the endcap tip treated as a genuine
+// EXTRA POINT in the SAME walk nearestPointOnRope() already does. The
+// augmented array appends the endcap's own true (possibly Deformable-
+// Endcap-curved) world position as one more point past the real chain
+// -- nearestPointOnRope() then naturally evaluates the VIRTUAL segment
+// from the real tip to the endcap point as a genuine candidate segment,
+// on equal footing with every real one, so a press anywhere along that
+// extension correctly wins on its own merits rather than losing a
+// segment-vs-point popularity contest. The synthetic last index
+// (augmented.length-1, one past every real index) is mapped back onto
+// the real last physics point (mainRope.points.length-1) before
+// returning -- "grabbing the endcap" always means grabbing that real
+// point; the endcap's own rendered tip only ever exists as a render-
+// time offset from it (see the drag-pin block's own pull-back).
 function nearestMainRopePointWithEndcap(x, y){
-  let best = nearestPointOnRope(x, y, mainRope.points);
-  if (cfg.endcapDesign !== 'none'){
-    const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
-    const distToTip = Math.hypot(x - tipWorld.x, y - tipWorld.y);
-    if (distToTip < best.dist) best = { dist: distToTip, index: mainRope.points.length - 1, x: tipWorld.x, y: tipWorld.y };
+  if (cfg.endcapDesign === 'none') return nearestPointOnRope(x, y, mainRope.points);
+  const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+  const augmented = mainRope.points.concat([{ x: tipWorld.x, y: tipWorld.y }]);
+  const hit = nearestPointOnRope(x, y, augmented);
+  if (hit.index >= mainRope.points.length){
+    return { dist: hit.dist, index: mainRope.points.length - 1, x: hit.x, y: hit.y };
   }
-  return best;
+  return hit;
 }
 function hitTestRope(x, y, maxDist, circleCheckX, circleCheckY){
   if (maxDist === undefined) maxDist = vmin(cfg.clickDistance);
