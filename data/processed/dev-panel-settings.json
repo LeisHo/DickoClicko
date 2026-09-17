@@ -4,15 +4,15 @@
       "backgroundColor": "#252546",
       "circleSize": 18.5,
       "circleX": 50,
-      "circleY": 14,
+      "circleY": 22,
       "circleColor": "#111023",
       "circleBoundaryOffset": 1,
       "anchorWeight": 0.7,
       "endcapDesign": "form1-01",
       "endcapHeight": 1,
       "ropeThickness": 6.4,
-      "segmentLength": 3.35,
-      "ropeLength": 40.55000000000008,
+      "segmentLength": 2.95,
+      "ropeLength": 25.011053960903862,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -152,7 +152,7 @@
       "pieceFriction": 0,
       "wallEnabled": true,
       "wallFriction": 0.74,
-      "wallBounciness": 0.64,
+      "wallBounciness": 1,
       "introEnabled": true,
       "introWaitDuration": 1.5,
       "introRiseSpeed": 5.5,
@@ -247,11 +247,11 @@
       "endcapStretchRange": 50,
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
-      "punchPowerAbsolute": 1,
+      "punchPowerAbsolute": 19.2,
       "dragMouseSensitivity": 2,
       "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
-      "ceilingBounciness": 0.64,
+      "ceilingBounciness": 1,
       "pieceDecayTintColor": "#2a1810",
       "pieceDecayTintAmount": 0.5,
       "pieceDecayBrightness": 1,
@@ -436,7 +436,7 @@
       },
       {
         "key": "CIRCLE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "circleSize",
           "circleX",
@@ -447,7 +447,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "segmentLength",
@@ -553,7 +553,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [],
         "subgroups": [
           {
@@ -598,8 +598,9 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
+              "punchPowerAbsolute",
               "holdDistance",
               "clickHoldMaxDuration",
               "intensityCeiling"
@@ -608,9 +609,8 @@
           },
           {
             "key": "ROPE GROWTH",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
-              "punchPowerAbsolute",
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
