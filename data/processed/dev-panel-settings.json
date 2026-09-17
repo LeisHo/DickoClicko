@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 4.75,
-      "ropeLength": 70.85000000000053,
+      "ropeLength": 61.547368421053015,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -230,13 +230,13 @@
       "mouseFlickShowInteractionPoints": true,
       "clickLogPositionDataEnabled": true,
       "overstretchEnabled": true,
-      "overstretchTolerance": 38,
+      "overstretchTolerance": 165,
       "overstretchThinningEnabled": true,
-      "overstretchMaxThinDepth": 0.48,
+      "overstretchMaxThinDepth": 0.6,
       "overstretchThinningSharpness": 1.15,
-      "overstretchBounceStiffness": 41,
-      "overstretchBounceDamping": 52.3,
-      "overstretchBounceMinAmplitude": 1.7,
+      "overstretchBounceStiffness": 12,
+      "overstretchBounceDamping": 37,
+      "overstretchBounceMinAmplitude": 4,
       "dragPickupDuration": 130,
       "overstretchThinningSmoothness": 16,
       "overstretchBounceMaxAmplitude": 160,
@@ -248,7 +248,7 @@
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
       "punchPowerAbsolute": 1,
-      "dragMouseSensitivity": 0.4,
+      "dragMouseSensitivity": 2,
       "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
       "ceilingBounciness": 0.64,
@@ -277,9 +277,7 @@
     }
   },
   "order": {
-    "ungrouped": [
-      "textEditMode"
-    ],
+    "ungrouped": [],
     "groups": [
       {
         "key": "DEV PANEL",
@@ -448,7 +446,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "ropeDefaultLength",
           "segmentLength",
@@ -562,9 +560,6 @@
             "collapsed": false,
             "settings": [
               null,
-              "dragMouseSensitivity",
-              "dragOverstretchMinSensitivity",
-              "dragMinThinDepth",
               "clickIntensity",
               "clickDistance"
             ],
@@ -623,11 +618,14 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
               "mouseFlickShowInteractionPoints",
+              "dragMouseSensitivity",
+              "dragMinThinDepth",
+              "dragOverstretchMinSensitivity",
               "dragPickupDuration",
               "dragRopeHoldDistance",
               "mouseFlickDragSpeed",
@@ -636,7 +634,7 @@
             "subgroups": [
               {
                 "key": "New Group (8)",
-                "collapsed": true,
+                "collapsed": false,
                 "settings": [
                   "overstretchEnabled",
                   "overstretchThinningEnabled",
@@ -748,7 +746,7 @@
       },
       {
         "key": "CUT SPLATTER",
-        "collapsed": true,
+        "collapsed": false,
         "settings": [
           "cutSplatterEnabled",
           "cutSplatterColor",
@@ -813,8 +811,7 @@
         "tabBold": true,
         "buttonBold": true,
         "settingsBold": false,
-        "titleCapitalize": false,
-        "textEditMode": false
+        "titleCapitalize": false
       }
     },
     "mobile": {
@@ -887,6 +884,7 @@
     "group:New Group (8)": "Drag Overstretch",
     "group:New Group (9)": "DEFORMABLE ENDCAP",
     "group:ROPE": null,
-    "row:pieceEndEmergeSpeed": "Cut Piece Endcap Emerge Speed"
+    "row:pieceEndEmergeSpeed": "Cut Piece Endcap Emerge Speed",
+    "row:dragMouseSensitivity": null
   }
 }
