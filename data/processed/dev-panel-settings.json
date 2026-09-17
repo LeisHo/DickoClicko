@@ -11,8 +11,8 @@
       "endcapDesign": "form1-01",
       "endcapHeight": 1,
       "ropeThickness": 6.4,
-      "segmentLength": 3.35,
-      "ropeLength": 40.55000000000008,
+      "segmentLength": 2.95,
+      "ropeLength": 18.699999999999967,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -247,7 +247,7 @@
       "endcapStretchRange": 50,
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
-      "punchPowerAbsolute": 1,
+      "punchPowerAbsolute": 19.2,
       "dragMouseSensitivity": 2,
       "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
@@ -447,7 +447,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "settings": [
           "ropeDefaultLength",
           "segmentLength",
@@ -598,8 +598,9 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": false,
+            "collapsed": true,
             "settings": [
+              "punchPowerAbsolute",
               "holdDistance",
               "clickHoldMaxDuration",
               "intensityCeiling"
@@ -608,9 +609,8 @@
           },
           {
             "key": "ROPE GROWTH",
-            "collapsed": true,
+            "collapsed": false,
             "settings": [
-              "punchPowerAbsolute",
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
               "ropeGrowthRate"
