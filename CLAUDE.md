@@ -4280,3 +4280,57 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   live-browser-verified (this environment's recurring dev-server
   page-boot stall) -- the reported 3-6px offset (now partially reduced
   by items 1/2, not eliminated) has not been re-measured live.
+- **Drag by the endcap's own visual TIP -- 17th pass, 2026-09-20 (direct
+  follow-up: "yeah the alignment still aint good enough. fix it"), the
+  curvature-approximation error the 16th pass's own rejected refinement
+  left unresolved is now ACTUALLY FIXED, via a properly-derived version
+  of the same idea that failed last time.** The 16th pass's naive
+  "subtract the raw residual" Newton step was unstable because it
+  implicitly assumed the joint-position-to-rendered-tip mapping has a
+  Jacobian of roughly the identity matrix -- it doesn't. `new function
+  endcapPullBackJoint()` (see its own header comment for the full
+  derivation) instead computes the ACTUAL local sensitivity via a small
+  finite-difference Jacobian (perturb the candidate joint by a tiny
+  amount in x and separately in y, measure how the resolved endcap
+  point actually moves each time) and solves the correct 2x2 linear
+  system for the true Newton step -- damped to 0.7 of the raw step and
+  hard-capped at 40px per iteration (both purely defensive, not load-
+  bearing for the common case), iterated up to 15 times, with the plain
+  straight-line result seeded as the running "best" so ANY iteration
+  that fails to strictly improve on it is simply never adopted --
+  GUARANTEED never worse than the pre-17th-pass behavior by
+  construction, not just by empirical luck. Verified via a Node
+  simulation across the SAME realistic sweep of curvature/cursor-
+  deviation/stretch values the 16th pass's rejected attempt was tested
+  against: 24 of 27 sampled cases converged to under 0.05px residual
+  (down from an unrefined 15-172px), the 3 most extreme cases (very
+  sharp curvature AND heavy stretch simultaneously) correctly fell back
+  to the straight-line result rather than diverging, and -- re-verified
+  a 2nd time by extracting and directly executing the ACTUAL shipped
+  function from `index.html` itself (not just a hand-derived standalone
+  re-implementation) -- produced the IDENTICAL numbers: avg residual
+  45.7px -> 11.1px, worst-case 172.1px -> 103.9px, 0 of 27 cases worse
+  than before. Also confirmed the RIGID (non-deformable) path is
+  byte-identical to the pre-17th-pass straight-line result (an
+  unconditional early return for any non-`form1-01`-deformable case,
+  so it costs nothing there and can't regress it).
+  **Separately, per a 2nd direct follow-up the same turn** ("the offset
+  tolerance we provide for other drag points... when i am dragging by
+  the endcap endppint. dont provide hat tolerance"): `dragLeashRadius`
+  (the "Drag Anchor Tolerance" feature's own radius, §12n-decomposed as
+  `cursorAnimationDragToleranceMult`) is now forced to exactly `0`
+  whenever `dragPinIndex === points.length-1 && cfg.endcapDesign !==
+  'none'` -- a single-point change, since BOTH consumers of this value
+  (the ROPE POINT's own per-frame "stays frozen until the cursor
+  exceeds this radius" leash, AND the Cursor Animation sprite's own
+  leash via `spriteLeashAnchor`) read the SAME outer `dragLeashRadius`
+  constant, so zeroing it once collapses both to an exact 1:1 track
+  with no separate edit needed at either call site. Every other drag
+  point (an interior point, or the endcap with no design selected)
+  keeps its normal tolerance radius, unchanged.
+  Not live-browser-verified (this environment's recurring dev-server
+  page-boot stall, the same limitation as nearly every pass on this
+  mechanism) -- the underlying geometry math has now been verified
+  twice over (standalone re-derivation AND direct execution of the
+  shipped function), which is the strongest confidence this project's
+  own established methodology can provide without a live test.

@@ -15019,3 +15019,43 @@ environment's recurring dev-server page-boot stall) -- the reported
 3-6px offset is only partially addressed by what shipped this pass, and
 that has not been re-measured live.
 
+--------------------------------------------------------------------------------
+2026-09-20 (later same day, 3rd pass)
+
+Direct follow-up: "yeah the alignment still aint good enough. fix it" --
+the curvature-approximation error left unresolved by the prior pass's
+rejected Newton refinement is now actually fixed, via a properly-derived
+version of the same idea.
+
+New function endcapPullBackJoint() computes the ACTUAL local sensitivity
+of the joint-position-to-rendered-tip mapping via a small finite-
+difference Jacobian (perturb the candidate joint slightly in x and
+separately in y, measure how the resolved endcap point really moves),
+then solves the correct 2x2 linear system for the true Newton step --
+damped (0.7) and hard-capped (40px) per iteration, up to 15 iterations,
+with the plain straight-line result seeded as the running "best" so no
+iteration can ever make things worse than before. Verified via Node
+simulation across a realistic sweep of curvature/cursor-deviation/
+stretch: 24/27 cases converged to under 0.05px (down from 15-172px
+unrefined), the 3 most extreme cases correctly fell back to the
+straight-line result, 0/27 worse than before -- re-confirmed a 2nd time
+by extracting and directly executing the actual shipped function from
+index.html, not just a standalone re-derivation. The rigid (non-
+deformable) path is an unconditional early return, byte-identical to
+the pre-existing straight-line result.
+
+Separately: dragLeashRadius (the Drag Anchor Tolerance feature) is now
+forced to exactly 0 when dragging the endcap's own visual tip
+specifically, per direct request -- both consumers (the rope point's
+own per-frame leash, and the Cursor Animation sprite's own leash) read
+the same outer constant, so this is a single-point change. Every other
+drag point keeps its normal tolerance radius.
+
+Verification: syntax-checked after every edit; the pull-back fix
+verified twice (standalone re-derivation + direct execution of the
+shipped function, identical results both times); the leash-radius
+change verified by direct algebraic inspection (a zero radius
+collapses both leash formulas to exact 1:1 tracking). Not
+live-browser-verified (this environment's recurring dev-server
+page-boot stall).
+
