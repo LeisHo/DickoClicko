@@ -166,6 +166,50 @@
   .dp-indep-checkbox, .dp-indep-group-checkbox,
   .dp-visible-checkbox, .dp-visible-group-checkbox { flex:0 0 auto; accent-color:var(--dp-slider-color, #7d8cff); cursor:pointer; margin-left:auto; }
   .dp-group-header .dp-indep-group-checkbox, .dp-group-header .dp-visible-group-checkbox { margin-left:auto; margin-right:4px; }
+  /* Group Lock icon (2026-09-20, ported from TEMPLATE_DEV_PANEL.html,
+     itself ported from a "Clicko" project's own feature) -- a normal
+     in-flow flex child of .dp-group-header (not absolutely positioned
+     like the template's own version, since this header is already a
+     flex row -- see that rule above), appended last so it sits at the
+     header's own right edge after the independence/visibility
+     checkboxes. */
+  .dp-group-lock-icon { flex:0 0 auto; cursor:pointer; user-select:none; opacity:.6; font-size:11px; }
+  .dp-group-lock-icon:hover { opacity:1; }
+  .dp-group-lock-icon.locked { opacity:1; }
+  .dp-group-lock-icon.locked:hover { opacity:.5; }
+  /* Group Undock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
+     "undocks that one setting group and allows me to use it, visibly as
+     a different panel... resized and drag and moved same as the dev
+     panel." A plain flex child of .dp-group-header, same placement
+     convention as the lock icon above. */
+  .dp-group-undock-btn { flex:0 0 auto; cursor:pointer; user-select:none; opacity:.6; font-size:11px; }
+  .dp-group-undock-btn:hover { opacity:1; }
+  .dp-group.dp-group-undocked { opacity:.97; }
+  /* The floating panel a group's content lives in while undocked --
+     mirrors #devPanel's own visual chrome (background/border/font),
+     genuinely independent of it (own position/size, own resize/drag). */
+  .dp-undock-panel {
+    position:fixed; z-index:10000; display:flex; flex-direction:column;
+    background:var(--dp-bg, rgba(18,18,26,0.94)); color:var(--dp-text-color, #c9c9d8);
+    font-size:12px; line-height:1.4;
+    font-family:var(--dp-font-family, -apple-system, Segoe UI, Roboto, sans-serif);
+    border:1px solid #3a3a4a; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.5);
+    user-select:none;
+  }
+  .dp-undock-panel-header {
+    padding:6px 8px; background:#25253a; border-radius:8px 8px 0 0;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    cursor:grab; touch-action:none;
+  }
+  .dp-undock-panel-header.dragging { cursor:grabbing; }
+  .dp-undock-panel-header span { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dp-undock-panel-dock-btn {
+    background:#3a3a52; color:inherit; border:1px solid #4a4a68; border-radius:4px;
+    padding:2px 8px; font-size:10px; cursor:pointer; flex:0 0 auto;
+  }
+  .dp-undock-panel-dock-btn:hover { background:#4a4a68; }
+  .dp-undock-panel-body { flex:1 1 auto; overflow-y:auto; padding:4px; min-height:0; }
+  .dp-undock-panel-body .dp-group { margin:0; }
   .dp-num {
     flex:0 0 auto; width:52px; text-align:right; font-size:var(--dp-value-font-size, 11px);
     background:#0f0f18; color:var(--dp-value-text-color, #e8e8f0); border:1px solid #3a3a4a; border-radius:4px;
@@ -303,6 +347,13 @@
            native-color-picker stuck-gesture fix. -->
       <button type="button" class="dp-icon-btn" id="dpUndoBtn" title="Undo (Ctrl+Z) -- undoes any dev panel change back to the last Save">↶</button>
       <button type="button" class="dp-icon-btn" id="dpCollapseAllBtn" title="Collapse All Groups">⊟</button>
+      <!-- Header Sync (Save) button (2026-09-20, ported from
+           TEMPLATE_DEV_PANEL.html) -- reachable without scrolling back
+           down to the #dpSaveBtn row below the tabs. Calls the SAME
+           saveSettings() the bottom button already does; both buttons'
+           own flash feedback is driven from the same closure inside
+           that function now (see its own comment). -->
+      <button type="button" class="dp-icon-btn" id="dpHeaderSaveBtn" title="Save Settings">💾</button>
       <button type="button" class="dp-icon-btn" id="dpCollapseBtn" title="Collapse">–</button>
     </div>
   </div>
@@ -1947,6 +1998,237 @@ function buildGroupVisibilityCheckbox(groupEl){
 // Every other caller (buildDevPanel(), addDevGroup(), placeGroup()'s own
 // "recreate a group that only exists in saved order" fallback) omits
 // `opts` entirely and gets both checkboxes exactly as before.
+// Group Lock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html, itself
+// ported from a "Clicko" project's own feature: "add a lock icon that i
+// can select. If selected, the settings within that group cannot be
+// reordered or moved into another group"). Keyed by dataset.key directly
+// (this project's groups already use that as a stable, DOM-position-
+// independent identifier -- no separate getSectionKey() abstraction
+// needed, unlike the template). Deliberately scoped to only the ROWS
+// inside a locked group -- the locked group itself can still be
+// dragged/reordered/nested as a whole; only its own settings can't be
+// reordered within it or dragged out. Enforced in makeReorderable()
+// (gated on itemClass==='dp-row') and findDevDeleteProtectionReason().
+let lockedDevGroups = new Set();
+// Builds and appends one group's own lock-toggle icon as a plain child
+// of .dp-group-header (a normal flex child, not a positioned sibling of
+// the title like the template -- see that CSS rule's own comment).
+// Idempotent -- removes any existing icon first, so it's safe to call
+// again on a group that already has one.
+function addGroupLockIcon(section){
+  const header = section.querySelector(':scope > .dp-group-header');
+  if (!header) return;
+  const existing = header.querySelector(':scope > .dp-group-lock-icon');
+  if (existing) existing.remove();
+  const icon = document.createElement('span');
+  icon.className = 'dp-group-lock-icon';
+  const key = section.dataset.key;
+  const setState = locked => {
+    icon.classList.toggle('locked', locked);
+    icon.textContent = locked ? '🔒' : '🔓';
+    icon.title = locked ? 'Locked -- click to unlock' : 'Unlocked -- click to lock';
+  };
+  setState(lockedDevGroups.has(key));
+  icon.addEventListener('click', e => {
+    e.stopPropagation();
+    if (lockedDevGroups.has(key)){ lockedDevGroups.delete(key); setState(false); }
+    else { lockedDevGroups.add(key); setState(true); }
+  });
+  header.appendChild(icon);
+}
+// One-time backfill pass for any .dp-group whose header didn't go
+// through createGroupElement() (only the hand-built top-level "Dev
+// Panel" group, buildPanelStyleGroup() -- see this file's own gotcha on
+// why that one group is hand-built) -- every other group, including its
+// own nested MECHANICS/PANEL UI/TEXT subgroups, already gets its icon
+// from createGroupElement() itself. Called once at boot; idempotent via
+// addGroupLockIcon()'s own existing-icon removal, so calling it on a
+// group that already has an icon is a harmless no-op.
+function injectGroupLockIcons(){
+  document.querySelectorAll('#devPanel .dp-group').forEach(g => {
+    if (!g.querySelector(':scope > .dp-group-header > .dp-group-lock-icon')) addGroupLockIcon(g);
+  });
+}
+// Group Undock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html): "next
+// to the lock button per settings group, provide a 'undock' button that
+// undocks that one setting group and allows me to use it, visibly as a
+// differetn panel. But when i click the 'undock/dock' button again, it
+// will dock back in its previous position in the dev panel. I want the
+// undocked panel to be able to be resized and drag and moved same as
+// the dev panel." Session-only by design -- no position/size/undocked-
+// state persistence across reload/Save/Copy (see dockAllUndockedGroups()'s
+// own comment below); undocking is a live viewing convenience, not a
+// saved layout choice. sectionEl -> { panel, parent, nextSibling, btn }.
+const undockedGroups = new Map();
+function buildGroupUndockButton(sectionEl){
+  const btn = document.createElement('span');
+  btn.className = 'dp-group-undock-btn';
+  btn.textContent = '↗';
+  btn.title = 'Undock this group into its own floating panel';
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleGroupUndock(sectionEl, btn);
+  });
+  return btn;
+}
+// Creates the floating panel a group's content moves into while
+// undocked -- own drag-to-move header + 8-handle resize, reusing the
+// same .dp-resize/.dp-resize-<dir> CSS classes (and cursor styling) the
+// main #devPanel already uses, with dedicated (simpler) resize/drag JS
+// of its own -- position/size held as plain inline styles, independent
+// per undocked panel, never persisted.
+function createUndockPanel(sectionEl, titleText){
+  const rect = sectionEl.getBoundingClientRect();
+  const panel = document.createElement('div');
+  panel.className = 'dp-undock-panel';
+  panel.style.left = Math.round(rect.left) + 'px';
+  panel.style.top = Math.round(rect.top) + 'px';
+  panel.style.width = Math.max(240, Math.round(rect.width)) + 'px';
+  panel.style.height = Math.min(window.innerHeight - Math.round(rect.top) - 20, Math.max(160, Math.round(rect.height) + 60)) + 'px';
+
+  const header = document.createElement('div');
+  header.className = 'dp-undock-panel-header';
+  const titleSpan = document.createElement('span');
+  titleSpan.textContent = titleText;
+  const dockBtn = document.createElement('button');
+  dockBtn.type = 'button';
+  dockBtn.className = 'dp-undock-panel-dock-btn';
+  dockBtn.textContent = 'DOCK';
+  dockBtn.title = 'Dock this group back into the dev panel';
+  dockBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const entry = undockedGroups.get(sectionEl);
+    if (entry) toggleGroupUndock(sectionEl, entry.btn);
+  });
+  header.appendChild(titleSpan);
+  header.appendChild(dockBtn);
+  panel.appendChild(header);
+
+  const body = document.createElement('div');
+  body.className = 'dp-undock-panel-body';
+  panel.appendChild(body);
+
+  ['n','s','e','w','ne','nw','se','sw'].forEach(dir => {
+    const handle = document.createElement('div');
+    handle.className = 'dp-resize dp-resize-' + dir;
+    handle.dataset.dir = dir;
+    panel.appendChild(handle);
+  });
+  const MIN_W = 200, MIN_H = 120;
+  panel.querySelectorAll('.dp-resize').forEach(handle => {
+    const dir = handle.dataset.dir;
+    handle.addEventListener('pointerdown', e => {
+      tryCapture(handle, e.pointerId);
+      const sx = e.clientX, sy = e.clientY;
+      const startRect = panel.getBoundingClientRect();
+      function move(ev){
+        const dx = ev.clientX - sx, dy = ev.clientY - sy;
+        let { left, top, width, height } = startRect;
+        if (dir.includes('e')) width = Math.max(MIN_W, Math.min(viewportW() - left, startRect.width + dx));
+        if (dir.includes('s')) height = Math.max(MIN_H, Math.min(viewportH() - top, startRect.height + dy));
+        if (dir.includes('w')){ width = Math.max(MIN_W, startRect.width - dx); left = startRect.left + (startRect.width - width); }
+        if (dir.includes('n')){
+          const bottomEdge = startRect.top + startRect.height;
+          let newTop = startRect.top + dy;
+          newTop = Math.max(0, Math.min(newTop, bottomEdge - MIN_H));
+          top = newTop;
+          height = bottomEdge - newTop;
+        }
+        panel.style.width = width + 'px';
+        panel.style.height = height + 'px';
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+      }
+      function up(){ window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); }
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+  });
+
+  // Drag-to-move via the header, same pattern as #dpHeader's own drag
+  // handler (initPanelDrag()) but self-contained -- no mobile-edge-swipe
+  // clamping concern here, this is a transient, opt-in convenience panel.
+  header.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    tryCapture(header, e.pointerId);
+    const r = panel.getBoundingClientRect();
+    const startX = e.clientX, startY = e.clientY, startLeft = r.left, startTop = r.top;
+    header.classList.add('dragging');
+    function move(ev){
+      const maxLeft = Math.max(0, viewportW() - r.width);
+      const maxTop = Math.max(0, viewportH() - r.height);
+      panel.style.left = Math.max(0, Math.min(maxLeft, startLeft + (ev.clientX - startX))) + 'px';
+      panel.style.top = Math.max(0, Math.min(maxTop, startTop + (ev.clientY - startY))) + 'px';
+    }
+    function up(){
+      header.classList.remove('dragging');
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+
+  document.body.appendChild(panel);
+  body.appendChild(sectionEl);
+  return panel;
+}
+// Toggles ONE group between docked (living in its normal place inside
+// the main dev panel) and undocked (living in its own floating panel --
+// createUndockPanel() above). Docking back uses the saved parent +
+// nextSibling reference to restore the EXACT original position, same
+// real-DOM-node-preservation technique this file's own Undo/Delete
+// already use for byte-identical restoration (not a rebuild from
+// captured data, which could drift).
+function toggleGroupUndock(sectionEl, btn){
+  const entry = undockedGroups.get(sectionEl);
+  if (entry){
+    if (entry.nextSibling && entry.nextSibling.parentElement === entry.parent){
+      entry.parent.insertBefore(sectionEl, entry.nextSibling);
+    } else {
+      entry.parent.appendChild(sectionEl);
+    }
+    entry.panel.remove();
+    undockedGroups.delete(sectionEl);
+    btn.textContent = '↗';
+    btn.title = 'Undock this group into its own floating panel';
+    sectionEl.classList.remove('dp-group-undocked');
+  } else {
+    const parent = sectionEl.parentElement;
+    const nextSibling = sectionEl.nextSibling;
+    const titleText = sectionEl.dataset.key || 'Group';
+    const panel = createUndockPanel(sectionEl, titleText);
+    undockedGroups.set(sectionEl, { panel, parent, nextSibling, btn });
+    btn.textContent = '↙';
+    btn.title = 'Dock this group back into the dev panel';
+    sectionEl.classList.add('dp-group-undocked');
+  }
+}
+// Docks every currently-undocked group back into place -- called before
+// any operation that captures/reads the panel's structure from its
+// normal DOM location (Copy/Save/Named Setting States/Undo snapshot,
+// all of which route through captureFullDevPanelState()), since an
+// undocked group's .dp-group is no longer a descendant of #dpGroups at
+// all (it's inside a floating panel, appended to document.body) and
+// would otherwise be silently invisible to getPanelOrder()/
+// captureFullDevPanelState(). Keeps undocking a purely live/transient
+// state, never a saved one -- simpler and safer than teaching every
+// capture path to look inside floating panels too.
+function dockAllUndockedGroups(){
+  Array.from(undockedGroups.keys()).forEach(sectionEl => {
+    const entry = undockedGroups.get(sectionEl);
+    if (entry) toggleGroupUndock(sectionEl, entry.btn);
+  });
+}
+// One-time backfill pass, mirroring injectGroupLockIcons()'s own
+// reasoning -- covers the hand-built top-level "Dev Panel" group
+// (buildPanelStyleGroup(), which doesn't go through createGroupElement()).
+function injectGroupUndockButtons(){
+  document.querySelectorAll('#devPanel .dp-group').forEach(g => {
+    const header = g.querySelector(':scope > .dp-group-header');
+    if (header && !header.querySelector(':scope > .dp-group-undock-btn')) header.appendChild(buildGroupUndockButton(g));
+  });
+}
 function createGroupElement(name, opts){
   opts = opts || {};
   const g = document.createElement('div');
@@ -1983,7 +2265,7 @@ function createGroupElement(name, opts){
   const gb = document.createElement('div');
   gb.className = 'dp-group-body';
   h.addEventListener('click', e => {
-    if (e.target.closest('.dp-drag-handle') || e.target.closest('.dp-indep-group-checkbox') || e.target.closest('.dp-visible-group-checkbox')) return;
+    if (e.target.closest('.dp-drag-handle') || e.target.closest('.dp-indep-group-checkbox') || e.target.closest('.dp-visible-group-checkbox') || e.target.closest('.dp-group-lock-icon') || e.target.closest('.dp-group-undock-btn')) return;
     // Text Edit Mode takes over the WHOLE header click (not just the
     // title text) while it's on -- matches the template's own
     // toggleSection() behavior -- so collapse/expand is unreachable
@@ -1995,6 +2277,8 @@ function createGroupElement(name, opts){
     g.classList.toggle('collapsed');
   });
   g.appendChild(h); g.appendChild(gb);
+  addGroupLockIcon(g);
+  h.appendChild(buildGroupUndockButton(g));
   return g;
 }
 function buildDevPanel(){
@@ -2083,6 +2367,46 @@ function setupDevGroupSelection(){
     if (devGroupSelectionArmed) disarmDevGroupSelection();
   }, true);
 }
+// Walks UP from one selected element (a .dp-row or a whole selected
+// .dp-group) to every GROUP that contains it, deepest first -- never
+// includes the element itself, only real ancestor groups. Relies on the
+// fixed DOM shape every group already has: .dp-group > .dp-group-body >
+// (rows and/or nested .dp-group) -- so "el's parent is a .dp-group-body"
+// is exactly "el sits directly inside some group", and that body's own
+// parent is the .dp-group that owns it. A top-level item (direct child
+// of #dpGroups, no containing custom group) produces an empty chain,
+// since #dpGroups itself is never a .dp-group-body. Ported from
+// TEMPLATE_DEV_PANEL.html's own devSelectionAncestorGroupChain()
+// (2026-09-20), adapted to this project's .dp-group/.dp-group-body
+// class names (the template uses .dev-section/.dev-section-content).
+function devSelectionAncestorGroupChain(el){
+  const chain = [];
+  let node = el;
+  while (node.parentElement && node.parentElement.classList.contains('dp-group-body')){
+    const sec = node.parentElement.parentElement;
+    if (!sec || !sec.classList.contains('dp-group')) break;
+    chain.push(sec);
+    node = sec;
+  }
+  return chain;
+}
+// The DEEPEST group that contains every one of the given selected
+// elements, or null if they share no common containing group (all
+// top-level, or spanning two subtrees with nothing in common). Ported
+// from TEMPLATE_DEV_PANEL.html's own findDevSelectionCommonAncestorGroup()
+// (2026-09-20): "the added group should be within the same settings
+// group that the selected settings were in. If selected settings...are
+// within different setting groups, place the new group in the first
+// layer of nest groups that both settings are within."
+function findDevSelectionCommonAncestorGroup(elements){
+  if (!elements.length) return null;
+  const chains = elements.map(devSelectionAncestorGroupChain);
+  const [first, ...rest] = chains;
+  for (const candidate of first){
+    if (rest.every(chain => chain.includes(candidate))) return candidate;
+  }
+  return null;
+}
 function addDevGroup(){
   const container = document.getElementById('dpGroups');
   const existingNames = new Set(Array.from(container.querySelectorAll('.dp-group')).map(g => g.dataset.key));
@@ -2090,27 +2414,40 @@ function addDevGroup(){
   let n = 2;
   while (existingNames.has(name)){ name = 'New Group (' + n + ')'; n++; }
   const g = createGroupElement(name);
-  // Inserted at the TOP of the project-specific group list, not the
-  // bottom (2026-09-17, ported from TEMPLATE_DEV_PANEL.html) -- right
-  // after the built-in Dev Panel ('DEV PANEL')/Debug ('DEBUG') groups,
-  // which stay first regardless (workspace CLAUDE.md §12i/§12i-1's own
-  // mandatory ordering). Falls back through Debug -> Dev Panel ->
-  // position 0, not straight to position 0 the moment Debug isn't
-  // found at the top level -- a legally-reorganized panel (Debug
-  // dragged into a subgroup, or folded into a PREVIOUS "+ Add Group"
-  // group) would otherwise place a subsequent new group above Dev
-  // Panel too, same bug the template's own history already caught and
-  // fixed once.
-  const debugGroup = container.querySelector(':scope > .dp-group[data-key="DEBUG"]');
-  const devPanelGroup = container.querySelector(':scope > .dp-group[data-key="DEV PANEL"]');
-  const anchor = debugGroup || devPanelGroup;
-  if (anchor) container.insertBefore(g, anchor.nextSibling);
-  else container.insertBefore(g, container.firstChild);
+  const selected = Array.from(devPanelSelectedItems);
+  // Placement (2026-09-20, ported from TEMPLATE_DEV_PANEL.html): when
+  // there's a selection, the new group now nests inside the selection's
+  // own deepest common containing group instead of always landing at
+  // the top of the list. Only the no-selection (or no-common-ancestor,
+  // e.g. an all-top-level selection) case falls back to the original
+  // top-of-list placement below.
+  const commonAncestor = selected.length ? findDevSelectionCommonAncestorGroup(selected) : null;
+  if (commonAncestor){
+    const targetBody = commonAncestor.querySelector(':scope > .dp-group-body');
+    targetBody.insertBefore(g, targetBody.firstChild);
+  } else {
+    // Inserted at the TOP of the project-specific group list, not the
+    // bottom (2026-09-17, ported from TEMPLATE_DEV_PANEL.html) -- right
+    // after the built-in Dev Panel ('DEV PANEL')/Debug ('DEBUG') groups,
+    // which stay first regardless (workspace CLAUDE.md §12i/§12i-1's own
+    // mandatory ordering). Falls back through Debug -> Dev Panel ->
+    // position 0, not straight to position 0 the moment Debug isn't
+    // found at the top level -- a legally-reorganized panel (Debug
+    // dragged into a subgroup, or folded into a PREVIOUS "+ Add Group"
+    // group) would otherwise place a subsequent new group above Dev
+    // Panel too, same bug the template's own history already caught and
+    // fixed once.
+    const debugGroup = container.querySelector(':scope > .dp-group[data-key="DEBUG"]');
+    const devPanelGroup = container.querySelector(':scope > .dp-group[data-key="DEV PANEL"]');
+    const anchor = debugGroup || devPanelGroup;
+    if (anchor) container.insertBefore(g, anchor.nextSibling);
+    else container.insertBefore(g, container.firstChild);
+  }
   // Fold any current selection into the group just created (2026-09-17,
   // ported from TEMPLATE_DEV_PANEL.html).
   const gb = g.querySelector('.dp-group-body');
-  if (devPanelSelectedItems.size){
-    devPanelSelectedItems.forEach(el => gb.appendChild(el));
+  if (selected.length){
+    selected.forEach(el => gb.appendChild(el));
     clearDevSelection();
   }
   // No per-group row registration needed -- the single delegated row
@@ -2198,6 +2535,13 @@ function findDevDeleteProtectionReason(el){
   while (g){
     if (g.dataset.key === 'DEV PANEL' || g.dataset.key === 'DEBUG'){
       return 'mandatory standing scaffolding (workspace CLAUDE.md §12i/§12i-1)';
+    }
+    // Group Lock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
+    // a locked group's own contents can't be deleted either, same as
+    // they can't be reordered/dragged out (see lockedDevGroups' own
+    // comment and makeReorderable()'s matching gate).
+    if (lockedDevGroups.has(g.dataset.key)){
+      return 'locked ("' + g.dataset.key + '")';
     }
     g = g.parentElement ? g.parentElement.closest('.dp-group') : null;
   }
@@ -2511,6 +2855,15 @@ function makeReorderable(container, itemClass, handleClass, crossContainerFn){
     // contains(handle) above (event delegation reaches the whole
     // subtree) is enough to confirm this pointerdown is genuinely ours.
     if (!item || (!crossContainerFn && item.parentElement !== container)) return;
+    // Group Lock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
+    // refuses to even START a drag on a .dp-row whose own closest group
+    // is locked. Never gates a .dp-group itself -- a locked group can
+    // still be dragged/reordered/nested as a whole, only its own rows
+    // are frozen (see lockedDevGroups' own comment).
+    if (itemClass === 'dp-row'){
+      const ownGroup = item.closest('.dp-group');
+      if (ownGroup && lockedDevGroups.has(ownGroup.dataset.key)) return;
+    }
     e.preventDefault();
     // A ROW's own handle carries BOTH 'dp-row-handle' AND the shared
     // 'dp-drag-handle' class (buildRow()'s own handle.className), so
@@ -3174,18 +3527,33 @@ function buildPanelGeometryForSave(){
 // directly contains -- genuinely recursive, UNLIMITED depth (matching
 // groupDragTargets()'s own unlimited-depth nesting). `:scope`-scoped
 // throughout so a query only ever reaches DIRECT children at each
-// level; the recursion itself (subgroups.map(sub => captureGroup(sub)))
-// is what reaches deeper levels, one call per level, not a wider query.
-// `subgroups` is a new-ish field (old saved data simply won't have it
-// -- applyOrder()'s own `(saved.subgroups || [])` handles that as "no
-// subgroups", not an error).
+// level; the recursion itself (via captureGroup(sub)) is what reaches
+// deeper levels, one call per level, not a wider query.
+// `items` (2026-09-20, ported from TEMPLATE_DEV_PANEL.html's own
+// [JS-4] rework) -- a SINGLE ordered list interleaving rows and
+// subgroups in real DOM order, replacing the old separate settings/
+// subgroups arrays, which could only ever express "all rows, then all
+// subgroups" (or vice versa on restore), never a genuine interleaved
+// order (a nested group dragged to sit ABOVE some settings, or between
+// two of them). `settings`/`subgroups` are still populated alongside
+// `items` (derived from it, not a 2nd source of truth) purely so
+// anything reading the old shape directly sees a sane, consistent
+// value -- and so `placeGroup()`'s own fallback below can restore an
+// OLDER save (captured before this change, with no `items` field) the
+// same way it always did.
 function captureGroup(g){
   const body = g.querySelector(':scope > .dp-group-body');
+  const items = Array.from(body.querySelectorAll(':scope > .dp-row, :scope > .dp-group')).map(el =>
+    el.classList.contains('dp-row')
+      ? { type:'row', key: el.dataset.key }
+      : { type:'group', group: captureGroup(el) }
+  );
   return {
     key: g.dataset.key,
     collapsed: g.classList.contains('collapsed'),
-    settings: Array.from(body.querySelectorAll(':scope > .dp-row')).map(r => r.dataset.key),
-    subgroups: Array.from(body.querySelectorAll(':scope > .dp-group')).map(sub => captureGroup(sub)),
+    items,
+    settings: items.filter(it => it.type === 'row').map(it => it.key),
+    subgroups: items.filter(it => it.type === 'group').map(it => it.group),
   };
 }
 // A row can now live in #dpGroups' subtree (inside some group) OR in
@@ -3514,11 +3882,28 @@ function placeGroup(saved, parentContainer){
   parentContainer.appendChild(groupEl);
   groupEl.classList.toggle('collapsed', !!saved.collapsed);
   const body = groupEl.querySelector(':scope > .dp-group-body');
-  (saved.settings || []).forEach(k => {
-    const rowEl = findRowByKey(k);
-    if (rowEl) body.appendChild(rowEl);
-  });
-  (saved.subgroups || []).forEach(sub => placeGroup(sub, body));
+  // Interleaved order (saved.items, see captureGroup()'s own comment) --
+  // falls back to the OLD "all rows, then all subgroups" shape for a
+  // save made before this change (2026-09-20, ported from
+  // TEMPLATE_DEV_PANEL.html), so an existing saved settings file still
+  // loads correctly (just without any interleaving it never had to
+  // begin with) instead of erroring or silently dropping content.
+  if (saved.items){
+    saved.items.forEach(item => {
+      if (item.type === 'row'){
+        const rowEl = findRowByKey(item.key);
+        if (rowEl) body.appendChild(rowEl);
+      } else {
+        placeGroup(item.group, body);
+      }
+    });
+  } else {
+    (saved.settings || []).forEach(k => {
+      const rowEl = findRowByKey(k);
+      if (rowEl) body.appendChild(rowEl);
+    });
+    (saved.subgroups || []).forEach(sub => placeGroup(sub, body));
+  }
 }
 function applyOrder(order){
   if (!order) return;
@@ -3855,6 +4240,12 @@ async function readGitSettingsLog(){
 // 3 build it identically rather than 3 independently-drifting copies of
 // the same 6-field object literal.
 function captureFullDevPanelState(){
+  // Group Undock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
+  // an undocked group's .dp-group lives inside its own floating panel,
+  // appended to document.body, not as a descendant of #dpGroups at all
+  // -- invisible to getPanelOrder() otherwise. Docking everything back
+  // first keeps undocking purely live/transient, never a saved state.
+  dockAllUndockedGroups();
   return {
     valuesByDevice: buildValuesByDeviceForSave(),
     // Persisted alongside values -- see deviceIndependence's own
@@ -3869,16 +4260,35 @@ function captureFullDevPanelState(){
     // independence-gated settings) -- a renamed label should read the
     // same regardless of which tab is active.
     textOverrides: { ...devTextOverrides },
+    // Group Lock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
+    // not device-split either, same reasoning as textOverrides above (a
+    // lock is a property of the group itself, not per-tab).
+    lockedGroups: Array.from(lockedDevGroups),
   };
 }
 async function saveSettings(){
   const snapshot = captureFullDevPanelState();
   const btn = document.getElementById('dpSaveBtn');
+  // Header Sync button (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
+  // flashed alongside the bottom #dpSaveBtn from this SAME closure, not a
+  // separate save path, so both buttons always agree on the outcome.
+  const headerBtn = document.getElementById('dpHeaderSaveBtn');
   const flash = (text, holdMs) => {
-    if (!btn) return;
-    const orig = btn.textContent;
-    btn.textContent = text;
-    setTimeout(() => btn.textContent = orig, holdMs || 900);
+    if (btn){
+      const orig = btn.textContent;
+      btn.textContent = text;
+      setTimeout(() => btn.textContent = orig, holdMs || 900);
+    }
+    if (headerBtn){
+      if (headerBtn._syncFlashTimeout) clearTimeout(headerBtn._syncFlashTimeout);
+      const success = !/fail/i.test(text);
+      headerBtn.textContent = success ? '✅' : '❌';
+      headerBtn.title = text;
+      headerBtn._syncFlashTimeout = setTimeout(() => {
+        headerBtn.textContent = '💾';
+        headerBtn.title = 'Save Settings';
+      }, holdMs || 1800);
+    }
   };
 
   // Tier 1: Vercel/GitHub API -- works from any device (see the big comment
@@ -4022,6 +4432,14 @@ function applySnapshotToPanel(snap, updateLastLoaded){
     if (desktopStyle){
       PANEL_STYLE_SHARED_KEYS.forEach(k => { if (k in desktopStyle) panelStyle[k] = desktopStyle[k]; });
     }
+    // Group Lock (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
+    // absent on a save from before this feature existed, which correctly
+    // resolves to "nothing locked" (the same default lockedDevGroups
+    // already starts with). Re-running injectGroupLockIcons() below
+    // refreshes every already-built icon's checked/unchecked display to
+    // match the just-restored state.
+    lockedDevGroups = new Set(snap.lockedGroups || []);
+    if (DEV_MODE && document.getElementById('dpGroups')) injectGroupLockIcons();
   }
   // DEV_MODE-guarded -- the individual setting/group rows this walks
   // only exist once buildDevPanel() has actually run, same reasoning as
@@ -4332,6 +4750,7 @@ function initDevPanelChrome(){
   initDevPanelSearch();
   document.getElementById('dpCopyBtn').addEventListener('click', copySettings);
   document.getElementById('dpSaveBtn').addEventListener('click', saveSettings);
+  document.getElementById('dpHeaderSaveBtn').addEventListener('click', saveSettings);
   document.getElementById('dpResetBtn').addEventListener('click', resetSettings);
   document.getElementById('dpClickLogCopy').addEventListener('click', copyClickLog);
   document.getElementById('dpClickLogClear').addEventListener('click', () => {
@@ -13709,6 +14128,8 @@ if (DEV_MODE){
   buildDevPanel();
   buildPanelStyleGroup();
   applyDefaultDevPanelSubgroupOrder();
+  injectGroupLockIcons();
+  injectGroupUndockButtons();
   buildOverstretchSensitivityCurveWidget();
   // Row (setting) dragging, registered ONCE here -- delegation-based
   // (see makeReorderable()'s own comment), so this single call reaches

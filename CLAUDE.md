@@ -4068,3 +4068,64 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   where the verification actually reproduced a scenario matching the
   report's own description of the failure, rather than constructing
   synthetic presses that happened not to trigger it.
+- **5 dev-panel features ported from `.claude/TEMPLATE_DEV_PANEL.html`
+  (2026-09-20), per direct request to sync forward again.** Same
+  "needs real adaptation, not a literal copy-paste" reasoning as the
+  2026-09-17 sync (this file's own single shared `#dpGroups`/
+  `#dpUngrouped` tree, `dataset.key` as the stable identifier for both
+  groups and rows, vs. the template's own 3 separate per-tab trees and
+  `getSectionKey()` abstraction). Briefly, in port order:
+  1. **"+ Add Group" nests into the selection's own common-ancestor
+     group** (`devSelectionAncestorGroupChain()`/
+     `findDevSelectionCommonAncestorGroup()`) instead of always landing
+     at the top of the list -- falls back to the original top-of-list
+     placement (Debug -> Dev Panel -> position 0) when there's no
+     selection or no common ancestor.
+  2. **Header Sync (Save) button** (`#dpHeaderSaveBtn`) -- flashed
+     alongside the existing bottom `#dpSaveBtn` from the SAME
+     `saveSettings()` `flash` closure (generalized to touch both
+     buttons), not a separate save path.
+  3. **Group Lock** (`lockedDevGroups`, `addGroupLockIcon()`) -- a
+     padlock icon per group; locked, its own rows can't be reordered,
+     dragged into another group, or deleted (`makeReorderable()`'s
+     pointerdown gate, `findDevDeleteProtectionReason()`'s ancestor
+     walk) -- the locked group itself can still be moved as a whole,
+     only its CONTENTS are frozen. Persisted via
+     `captureFullDevPanelState()`/`applySnapshotToPanel()`, not
+     device-split (same as `textOverrides`).
+  4. **Interleaved row/subgroup ordering** -- `captureGroup()`/
+     `placeGroup()` now capture/restore a single ordered `items` list
+     (rows and subgroups in real DOM order) instead of separate
+     `settings`/`subgroups` arrays, so a dragged subgroup can sit above
+     or between individual settings, not just always after them. Falls
+     back to the old shape for a save made before this change (backward
+     compat, same convention as every other schema-widening field in
+     this file).
+  5. **Group Undock** (`buildGroupUndockButton()`/`createUndockPanel()`/
+     `toggleGroupUndock()`) -- pops a group's whole title+content into
+     its own floating, draggable, 8-handle-resizable panel (self-
+     contained resize/drag JS, reusing the main panel's `.dp-resize`
+     CSS classes for visual consistency but NOT its `initResizeHandles()`/
+     `initPanelDrag()` functions, to avoid touching the main panel's own
+     logic). Docks back to its EXACT original parent+nextSibling
+     position, same real-DOM-node-preservation technique Undo/Delete
+     already use. Session-only by design --
+     `dockAllUndockedGroups()` re-docks everything at the very top of
+     `captureFullDevPanelState()`, so an undocked group (living outside
+     `#dpGroups`, appended to `document.body`) is never silently
+     invisible to Save/Copy/Undo, and undocking itself is never a saved
+     state.
+  Both the lock icon and undock button are appended in
+  `createGroupElement()` for every new group, plus a one-time backfill
+  sweep (`injectGroupLockIcons()`/`injectGroupUndockButtons()`, mirroring
+  the boot-time pattern already established for
+  `applyDefaultDevPanelSubgroupOrder()`) for the ONE group that doesn't
+  go through that function -- the hand-built top-level "Dev Panel" group
+  (`buildPanelStyleGroup()`). Verified via Node syntax-check after every
+  edit plus manual tracing against this file's own established
+  conventions; live-browser verification was attempted (3 fresh
+  `preview_stop`+`preview_start` cycles, the documented fix for this
+  environment's dev-server stall) but hit the same already-documented
+  `net::ERR_CONNECTION_RESET` each time (confirmed via
+  `read_network_requests`) -- not live-browser-verified, same
+  limitation as most fixes in this project's recent history.

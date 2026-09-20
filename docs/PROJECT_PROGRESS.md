@@ -18,25 +18,29 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress — everything through the 2026-09-14 Dev Panel
-template port (19 new chrome fields, nested subgroups, per-setting
-visibility system, Mouse Log, Named Setting States, a Drag Rope
-cursor-anchor snap fix, a follow-up fix removing a floating
-`bodyFontSize` setting from the built-in "Dev Panel" group, and an
-endcap SVG reorganization syncing the Endcap Design dropdown to a new
-Form 1--01..20/End_Form10 asset set) is done and pushed. See
-CHANGELOG.txt's own 2026-09-14 entries for the full account — this
+Nothing in progress — most recently, a 2026-09-20 dev panel sync pulled
+5 features forward from `.claude/TEMPLATE_DEV_PANEL.html` (Add Group
+common-ancestor nesting, a header Sync button, Group Lock, interleaved
+row/subgroup ordering, Group Undock). See CHANGELOG.txt's own entries
+for the full account, including everything since the 2026-09-14 Dev
+Panel template port this paragraph used to name individually — this
 doc's own "Recently completed"/historical narrative below has drifted
 well past what §4c's "live document, not a log" convention calls for
 (it should hold only the CURRENT picture, with full history left to
-CHANGELOG.txt) and is worth a dedicated cleanup pass at some point,
-not attempted here since it's unrelated to this session's own task.
+CHANGELOG.txt) and is still worth a dedicated cleanup pass at some
+point, not attempted here since it's unrelated to this session's own
+task (same call a prior session already made about this same
+paragraph).
 
-A deformable/skinned Form 1-01 endcap (bends near the ground, stretches
-when dragged by the tip) was discussed and assessed as feasible
-(medium effort, rendering-layer only) but explicitly NOT authorized
-yet — `data/Rope/Form 1--01.svg` and the new `*-Curves.svg` outline
-assets are the intended source material for that future work.
+Several of this session's own commits (Deformable Endcap, and others)
+landed inside a CONCURRENT session's own commits rather than commits
+of this session's own -- no content lost (confirmed via `git show`
+each time), just noting it here since this doc otherwise implies a 1:1
+mapping between commits and sessions. This project has an unusually
+active concurrent-session pattern right now (multiple commits landing
+in the same drag/cursor-animation code this session is also touching)
+-- see CLAUDE.md's own repeated cross-session commit-attribution
+gotchas for the established handling.
 
 **New (2026-09-10): FLICK MOUSE, a 4th mouse-anchored FLICK overlay,
 adopted from the DotFlicko project.** Per explicit request ("adopt the
