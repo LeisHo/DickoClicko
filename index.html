@@ -5637,6 +5637,24 @@ function mouseFlickDragFrameIndex(dirKey, frameNumber){
 // the original this was ported from).
 let mfX = 0, mfY = 0, mfHasMouse = false;
 let mfEntityX = 0, mfEntityY = 0, mfEntityAngleDeg = 0;
+// One-shot flag (2026-09-20) -- real, reported bug: "for a drag
+// function, after the click hold has been released, the cursor frame
+// should not move. Right now, on release, the cursor frame/cursor
+// seems to displace with the endcap for a split second"; clarified
+// directly: "on release, the cursor frame and cursor is independent
+// from the rope/endcap." Set true the instant a Drag Rope hold
+// releases (onPointerUp); consumed and cleared on the very next
+// update() tick to SNAP mfEntityX/Y straight to the current cursor
+// (mfX/mfY) instead of letting the normal position lerp
+// (mfPosFactor) ease from wherever the sprite was drag-anchored
+// (the endcap or any other drag point) toward the cursor over
+// several frames -- that multi-frame ease is what visually read as
+// "displacing with the endcap," since the sprite's own last position
+// before release was always exactly the drag point. Same "must SNAP,
+// never lerp" rule this file already applies to every OTHER drag
+// transition (arm-time, pickup-realignment) -- this extends it to
+// the release transition too.
+let mfSnapToCursorOnRelease = false;
 // Cursor Target Mode (cfg.mouseFlickTargetMode) state -- 'random' mode
 // cycles between 'endcap'/'point'/'rope' every mouseFlickRandomInterval
 // seconds, re-rolling BOTH the sub-mode and (for when that roll lands
@@ -10229,6 +10247,14 @@ function onPointerUp(e){
     if (mfMode === 'charge' && mouseFlickFramesByDirection[mfDirectionKey] && mouseFlickFramesByDirection[mfDirectionKey].drag){
       mfMode = 'dragRelease';
     }
+    // Snap the sprite straight to the cursor on the very next update()
+    // tick instead of smoothly lerping from the drag anchor -- see
+    // mfSnapToCursorOnRelease's own declaration for the full account.
+    // Set unconditionally on every Drag Rope release (not just when
+    // mfMode becomes 'dragRelease' above), since the "eases from the
+    // drag point" artifact applies to the sprite's POSITION regardless
+    // of which hand-pose sequence plays afterward.
+    mfSnapToCursorOnRelease = true;
     // Rope Overstretch release bounce (2026-09-14) -- armed ONLY when the
     // point was actually past the rest limit (mainRope.overstretchPx > 0)
     // at the moment of release, per explicit spec ("a release right at
@@ -12183,6 +12209,16 @@ function update(rawDt){
         mfEntityX = mfDragTargetWorld.x;
         mfEntityY = mfDragTargetWorld.y;
       }
+    } else if (mfSnapToCursorOnRelease){
+      // See mfSnapToCursorOnRelease's own declaration -- one-shot,
+      // consumed and cleared here on the very first tick after a Drag
+      // Rope release, instead of falling into the normal smoothed lerp
+      // just below (which would otherwise ease from wherever the
+      // sprite was drag-anchored -- the endcap or any other drag
+      // point -- toward the cursor over several frames).
+      mfEntityX = mfX;
+      mfEntityY = mfY;
+      mfSnapToCursorOnRelease = false;
     } else {
       mfEntityX += (mfX - mfEntityX) * mfPosFactor;
       mfEntityY += (mfY - mfEntityY) * mfPosFactor;

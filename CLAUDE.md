@@ -4513,3 +4513,44 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   assuming a new bug** -- the mechanism itself is now understood and
   addressed, this is a tuning knob for it, not a claim of perfect
   elimination at every possible drag speed/curvature combination.
+- **Cursor Animation sprite visibly "displaces with the endcap for a
+  split second" on Drag Rope release, FIXED, 2026-09-20 (21st pass).**
+  Real, direct report: "for a drag function, after the click hold has
+  been released, the cursor frame should not move. Right now, on
+  release, the cursor frame/cursor seems to displace with the endcap
+  for a split second," clarified directly: "on release, the cursor
+  frame and cursor is independent from the rope/endcap." Root cause:
+  `mouseFlickDragAnchorWorld()` correctly returns `null` the instant
+  `downInfo.dragging` goes false at release (its own gate, unchanged),
+  so the sprite's position formula correctly falls out of the drag-
+  anchored branch -- but it then fell into the NORMAL smoothed lerp
+  toward the cursor (`mfEntityX += (mfX - mfEntityX) * mfPosFactor`),
+  which eases over SEVERAL frames from wherever the sprite's own last
+  position was -- and that last position was always exactly the drag
+  point (the endcap, or any other point) by construction, since the
+  sprite snaps exactly to it every frame while actively dragging. The
+  multi-frame ease from that shared starting point is what read as
+  "displacing with the endcap," especially since the endcap itself is
+  often ALSO still visibly settling (the Overstretch release bounce)
+  during that same brief window, compounding the illusion of coupling
+  that was never actually there frame-by-frame, just a coincidental
+  shared origin point. Fixed with a new one-shot flag,
+  `mfSnapToCursorOnRelease`, set unconditionally in `onPointerUp`'s
+  Drag Rope release branch (regardless of which hand-pose the release
+  triggers) and consumed on the very next `update()` tick to assign
+  `mfEntityX/Y = mfX/mfY` DIRECTLY, bypassing the smoothing lerp for
+  that one transition frame only -- every subsequent frame resumes
+  normal smoothed cursor-following as before. Same "must SNAP, never
+  lerp" convention this file already applies to every OTHER drag
+  transition (arm-time, pickup-realignment) -- this extends it to the
+  release transition, the one place it was still missing. Applies to
+  ANY Drag Rope release, not just the endcap specifically (the
+  underlying mechanism was never endcap-specific -- the endcap's own
+  release bounce just made it more visually obvious there) -- per the
+  report's own "for a drag function," not "for endcap drags."
+  Verified by direct code tracing (a simple, low-risk boolean-flag
+  control-flow change, not a numerical/geometric computation with
+  amplification risk like the rest of this saga -- a Node simulation
+  would add little here, per §0b's own proportionality guidance).
+  Syntax-checked. Not live-browser-verified (this environment's
+  recurring dev-server page-boot stall).

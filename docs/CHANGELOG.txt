@@ -15168,3 +15168,35 @@ state frame-to-frame jitter drops from ~7.7-9.2px average (max spikes
 confirmed for both a straight and a curved endcap. Not live-browser-
 verified (this environment's recurring dev-server page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-20 (later same day, 7th pass)
+
+Direct report: "for a drag function, after the click hold has been
+released, the cursor frame should not move. Right now, on release, the
+cursor frame/cursor seems to displace with the endcap for a split
+second," clarified: "on release, the cursor frame and cursor is
+independent from the rope/endcap."
+
+Root cause: mouseFlickDragAnchorWorld() correctly returns null the
+instant dragging ends, so the sprite's position formula correctly falls
+out of the drag-anchored branch -- but then fell into the NORMAL
+smoothed lerp toward the cursor, easing over several frames from
+wherever the sprite's last position was (always exactly the drag point,
+since the sprite snaps to it every frame while dragging). That
+multi-frame ease from the shared starting point is what read as
+"displacing with the endcap" -- compounded by the endcap itself often
+still visibly settling from its own release bounce during the same
+window.
+
+Fixed with a new one-shot flag, mfSnapToCursorOnRelease, set
+unconditionally on every Drag Rope release and consumed on the very
+next update() tick to snap the sprite straight to the cursor, bypassing
+the smoothing lerp for that one transition frame only. Applies to any
+Drag Rope release, not just the endcap -- the underlying mechanism was
+never endcap-specific.
+
+Verification: verified by direct code tracing (a simple boolean-flag
+control-flow change, not a numerical computation warranting a
+simulation). Syntax-checked. Not live-browser-verified (this
+environment's recurring dev-server page-boot stall).
+
