@@ -14829,3 +14829,85 @@ Verification: syntax-checked; verified via a concrete Node
 reproduction of the actual failure mechanism (not just abstract
 comparison logic). Not live-browser-verified.
 
+--------------------------------------------------------------------------------
+2026-09-20  -  02:23 - 02:37
+
+Dev panel synced with TEMPLATE_DEV_PANEL.html -- 5 features the
+template had gained since the last sync (2026-09-17) were ported in,
+adapted to this project's own single-shared-group-tree architecture
+(vs. the template's 3 separate per-tab trees):
+
+1. "+ Add Group" now nests the new group inside the selection's own
+   deepest common containing group (devSelectionAncestorGroupChain()/
+   findDevSelectionCommonAncestorGroup()), instead of always landing at
+   the top of the list -- falls back to the original top-of-list
+   placement when there's no selection or no common ancestor.
+2. A Sync (Save) button in the always-visible header (#dpHeaderSaveBtn),
+   flashed with a checkmark/X alongside the existing bottom #dpSaveBtn
+   from the SAME saveSettings() closure -- not a separate save path.
+3. Group Lock -- a padlock icon per group (addGroupLockIcon()); when
+   locked, the settings inside it can't be reordered, dragged into
+   another group, or deleted (enforced in makeReorderable() and
+   findDevDeleteProtectionReason()). Persisted via
+   captureFullDevPanelState()/applySnapshotToPanel() (not device-split,
+   same as textOverrides).
+4. Interleaved row/subgroup ordering -- captureGroup()/placeGroup() now
+   capture a single ordered `items` list (rows and subgroups in real
+   DOM order) instead of separate settings/subgroups arrays, so a
+   dragged subgroup can sit above or between individual settings
+   instead of always sorting after them. Falls back to the old shape
+   for a save made before this change.
+5. Group Undock -- an undock button per group (↗/↙) pops that group's
+   whole title+content into its own floating, draggable, 8-handle-
+   resizable panel (createUndockPanel()/toggleGroupUndock()), docking
+   back to its exact original parent+nextSibling position. Session-only
+   by design -- dockAllUndockedGroups() re-docks everything before
+   captureFullDevPanelState() runs, so an undocked group is never
+   silently invisible to Save/Copy/Undo and undocking is never itself
+   a saved state.
+
+Both the lock icon and undock button are appended in createGroupElement()
+for every new group, plus a one-time backfill sweep
+(injectGroupLockIcons()/injectGroupUndockButtons()) at boot for the one
+group that doesn't go through that function (the hand-built top-level
+"Dev Panel" group, buildPanelStyleGroup()).
+
+Verification: syntax-checked (Node `new Function()` extraction) after
+every edit; manually traced the interleaved-order round-trip and the
+lock/undock DOM wiring against the existing code's own conventions
+(dataset.key as the stable identifier, the same pattern
+addGroupLockIcon/buildGroupUndockButton both follow). Live-browser
+verification was attempted (preview_stop+start 3 times, per this
+project's own documented fix for the dev-server stall) but hit the
+same already-documented net::ERR_CONNECTION_RESET stall each time
+(confirmed via read_network_requests) -- not live-browser-verified,
+same limitation as most fixes in this project's recent history.
+
+--------------------------------------------------------------------------------
+2026-09-20
+
+Show Interaction Points overlay now draws 2 additional dots, per direct
+request:
+
+1. Endcap Endpoint (purple, #9c27b0) -- the artist-annotated endcap drag
+   point (endcapDragPointWorld(), same call signature already used by
+   nearestMainRopePointWithEndcap()/mouseFlickDragAnchorWorld()'s own
+   endcap branch), shown ALWAYS whenever an endcap is selected and the
+   overlay is on -- not gated on Cursor Animation being active or a
+   drag being in progress, unlike every other dot in this overlay.
+2. Selected Drag Point (white, #ffffff) -- only while a drag is
+   actually armed (downInfo.dragging), shows mouseFlickDragAnchorWorld()'s
+   own resolved point directly (the same point rotation/pickup-position
+   already anchor to) -- endcap-aware by construction, so this dot can
+   never disagree with what's genuinely being dragged.
+
+Both reuse existing, already-verified functions rather than re-deriving
+the geometry -- no new math, purely wiring 2 more draw calls into the
+existing overlay block.
+
+Verification: syntax-checked (Node `new Function()` extraction). Not
+live-browser-verified -- skipped attempting it given this project's own
+extensively-documented recurring dev-server page-boot stall and the low
+marginal value here (both dots reuse call signatures already live- or
+simulation-verified at their real call sites elsewhere in this file).
+

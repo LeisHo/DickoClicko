@@ -13603,6 +13603,41 @@ function render(){
             ctx.fill();
           }
         }
+        // Endcap Endpoint (2026-09-20, per direct request) -- the artist-
+        // annotated endcap drag point (Form 1-01's own Dot.svg, or the
+        // plain rigid-extension fallback for any other design), ALWAYS
+        // shown whenever an endcap is selected and this overlay is on --
+        // not gated on Cursor Animation or an active drag, unlike every
+        // other dot above. Same call signature as nearestMainRopePoint
+        // WithEndcap()/mouseFlickDragAnchorWorld()'s own endcap branch,
+        // so this dot always matches exactly where those functions think
+        // the endcap's own tip actually is (curved, if Deformable Endcap
+        // is active).
+        if (cfg.endcapDesign !== 'none' && mainRope.points.length >= 2){
+          const mfEndcapPt = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+          ctx.beginPath();
+          ctx.arc(mfEndcapPt.x, mfEndcapPt.y, vmin(0.6), 0, Math.PI * 2);
+          ctx.fillStyle = '#9c27b0';
+          ctx.fill();
+        }
+        // Selected Drag Point (2026-09-20, per direct request) -- while a
+        // drag is actually armed, shows the SAME resolved point every
+        // drag-time consumer (rotation target, pickup-phase sprite
+        // position) already anchors to -- mouseFlickDragAnchorWorld()
+        // itself, endcap-aware by construction (routes through
+        // endcapDragPointWorld() when dragIndex is the tip and an endcap
+        // is selected, per the 2026-09-17 11th-pass fix). Deliberately
+        // reuses that function rather than re-deriving the point, so
+        // this dot can never disagree with what's actually being dragged.
+        if (downInfo && downInfo.mode === 'rope' && downInfo.dragging){
+          const mfSelectedDragPt = mouseFlickDragAnchorWorld();
+          if (mfSelectedDragPt){
+            ctx.beginPath();
+            ctx.arc(mfSelectedDragPt.x, mfSelectedDragPt.y, vmin(0.6), 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+          }
+        }
       }
     }
 }
