@@ -4334,3 +4334,71 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   twice over (standalone re-derivation AND direct execution of the
   shipped function), which is the strongest confidence this project's
   own established methodology can provide without a live test.
+- **Deformable Endcap Stretch: a severe self-oscillation bug during a
+  sustained overstretch, FIXED 2026-09-20 (18th pass on the endcap-drag
+  saga).** Real, direct report: "the cursor frame and true dragging
+  point isnt moving with the over stretched endcap endpoint." Root
+  cause, confirmed via a multi-frame Node simulation of a sustained,
+  steadily-advancing drag (not a single-frame static check, which is
+  why 2 prior passes on this exact mechanism never caught it): the
+  Deformable Endcap stretch signal, `mainRope.endcapPullPx` (which
+  directly drives `endcapStretchMult`, which directly drives the
+  pull-back's own `extension` calculation), was measured from `ddist`
+  -- the joint's distance from the anchor AFTER the SAME frame's own
+  endcap pull-back had already subtracted the endcap's own extension.
+  This is a genuine circular dependency: more stretch -> a longer
+  extension -> the pull-back subtracts MORE -> a SMALLER measured
+  `ddist` -> which SUPPRESSES the very stretch signal driving it in
+  the first place. Once `extension` (which keeps growing with
+  `stretchMult`) exceeds the raw pull distance for a given frame, the
+  pull-back's own `pull = Math.min(extension, rdist)` clamp collapses
+  the joint ALL THE WAY back to `prevPt` in a single frame -- crashing
+  `endcapPullPx`/`stretchMult` back toward 0/1 -- which shrinks
+  `extension` again next frame, letting the joint reach back out and
+  restarting the cycle. **Simulated with a cursor advancing steadily
+  outward at a constant rate: `stretchMult` repeatedly snapped between
+  1.0 and its configured max (3.0) every few frames, and the joint's
+  own distance from the anchor swung by 100-175px between CONSECUTIVE
+  frames** -- a genuine limit-cycle oscillation, not a rendering
+  artifact or a rounding issue. This directly explains the report:
+  the RENDERED endcap (drawn fresh each frame with whatever chaotic
+  `stretchMult` that frame happened to land on) swung wildly, while
+  the Cursor Animation sprite (`spriteLeashAnchor`, inherently
+  smoothed by its own documented one-frame lag -- see that field's own
+  comment) tracked a comparatively damped/lagged version of the SAME
+  chaotic signal, reading as "not moving with" the wildly-swinging true
+  endpoint rather than simply "one frame behind" a stable one -- **a
+  1-frame lag on a CONTINUOUSLY-CHANGING (let alone oscillating) target
+  produces a persistent, visible gap; it only converges to invisible
+  on a target that's actually settled.**
+  **Fixed by capturing the RAW (pre-pull-back) target's distance from
+  the anchor (`rawDdist`) BEFORE `endcapPullBackJoint()` can modify
+  `dragTargetPos`, and using THAT for `endcapPullPx` instead of the
+  post-pull-back `ddist`** -- breaks the circularity entirely, since
+  the stretch signal no longer depends on its own downstream output.
+  Verified via the SAME multi-frame simulation, re-run against this
+  fix: `endcapPullPx` now rises smoothly and monotonically as the
+  cursor advances, `stretchMult` saturates cleanly at its configured
+  max and STAYS there (no oscillation), and -- because it's no longer
+  swinging chaotically frame to frame -- the sprite's own one-frame lag
+  converges to an EXACT match with the rendered tip the instant stretch
+  stabilizes (confirmed identical to the pixel in the simulation's own
+  output), rather than perpetually chasing a moving target. A smaller,
+  secondary residual was ALSO observed in the fixed simulation's own
+  CURVED-endcap case specifically (some frame-to-frame jitter in the
+  joint's own position persists even after the oscillation is fixed,
+  likely from the Newton refinement's own convergence behavior varying
+  slightly depending on the joint's starting position each frame) --
+  NOT chased further this pass, since it's a much smaller, secondary
+  effect and the reported bug (the severe oscillation/"stuck" sprite)
+  is the one this pass targeted and confirmed fixed; flagged here for
+  a future pass if it turns out to still be user-visible.
+  Not live-browser-verified (this environment's recurring dev-server
+  page-boot stall) -- but this is the first pass in this feature's long
+  history verified via a genuinely MULTI-FRAME simulation of a
+  sustained drag rather than a single-frame static snapshot, which is
+  specifically what caught this bug after 2 prior single-frame-verified
+  passes missed it entirely -- **any FUTURE change to this mechanism
+  should be verified the same multi-frame way, not just at one static
+  point, since this bug class (a feedback loop across frames) is
+  invisible to single-frame checks by construction.**

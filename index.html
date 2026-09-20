@@ -11368,6 +11368,40 @@ function update(rawDt){
       // -- a genuine circular dependency), same one-frame-lag convention
       // already used elsewhere in this file for equivalent cases; at 60fps
       // this is not visually distinguishable from same-frame.
+      // Raw (pre-pull-back) target distance from the anchor, captured
+      // BEFORE endcapPullBackJoint() below can modify dragTargetPos --
+      // 2026-09-20, real fix for a severe reported bug: "the cursor
+      // frame and true dragging point isnt moving with the over
+      // stretched endcap endpoint." Root cause, confirmed via a
+      // multi-frame Node simulation of a sustained drag: the stretch
+      // signal (endcapPullPx, below) used to be measured from `ddist`
+      // -- the distance AFTER the endcap pull-back had already
+      // subtracted the endcap's own (stretch-dependent) extension --
+      // creating a genuine circular dependency: more stretch -> longer
+      // extension -> more subtracted by the pull-back -> smaller
+      // measured ddist -> SUPPRESSES the stretch signal that was
+      // supposed to be driving it, and once extension grew enough to
+      // exceed the raw pull distance, the pull-back's own
+      // `pull = min(extension, rdist)` clamp collapsed the joint
+      // ALL THE WAY back to prevPt, crashing endcapPullPx and
+      // stretchMult back toward 0/1 in a single frame -- which let
+      // extension shrink again next frame, letting the joint reach
+      // back out, restarting the cycle. Simulated with a steadily
+      // advancing cursor: stretchMult repeatedly snapped between 1.0
+      // and its max (3.0) every few frames, and the joint's own
+      // distance from the anchor swung by 100-175px between CONSECUTIVE
+      // frames -- a genuine limit-cycle oscillation, not a rendering
+      // artifact. Capturing the RAW target's distance here (before any
+      // pull-back) breaks the circularity entirely: verified via the
+      // same simulation that endcapPullPx now rises smoothly and
+      // monotonically with a steadily advancing cursor, stretchMult
+      // saturates cleanly at its max and STAYS there instead of
+      // oscillating, and -- because it's no longer swinging wildly
+      // frame to frame -- the sprite's own inherent one-frame-lag (see
+      // spriteLeashAnchor's own comment) converges to an EXACT match
+      // with the rendered tip the instant stretch stabilizes, instead
+      // of chasing a chaotic target and reading as permanently "stuck."
+      const rawDdist = Math.hypot(dragTargetPos.x - anchor.x, dragTargetPos.y - anchor.y) || 1e-6;
       if (dragPinIndex === mainRope.points.length - 1){
         const prevPt = mainRope.points[dragPinIndex - 1];
         const rdist = Math.hypot(dragTargetPos.x - prevPt.x, dragTargetPos.y - prevPt.y);
@@ -11388,11 +11422,13 @@ function update(rawDt){
       const ddist = Math.hypot(dx, dy) || 1e-6;
       // Deformable Endcap stretch signal -- how far PAST maxDragDist the
       // user is actively trying to pull the TIP specifically, measured
-      // from the RAW pre-clamp target (before the hardLimit clamp just
-      // below), so it reflects genuine pull intent even while the point
-      // itself is hard-capped. Only meaningful when dragging the tip
-      // (index length-1) -- see this block's own header comment.
-      if (dragPinIndex === mainRope.points.length - 1) mainRope.endcapPullPx = Math.max(0, ddist - maxDragDist);
+      // from the RAW target (rawDdist, captured above -- BEFORE the
+      // endcap pull-back's own subtraction, see that capture's own
+      // comment for why this is load-bearing, not cosmetic), so it
+      // reflects genuine pull intent even while the point itself is
+      // hard-capped or pulled back. Only meaningful when dragging the
+      // tip (index length-1) -- see this block's own header comment.
+      if (dragPinIndex === mainRope.points.length - 1) mainRope.endcapPullPx = Math.max(0, rawDdist - maxDragDist);
       if (ddist > hardLimit){ dx *= hardLimit / ddist; dy *= hardLimit / ddist; }
       const leashTargetX = anchor.x + dx, leashTargetY = anchor.y + dy;
       // Corrected 2026-09-15 (7th pass) -- the 5th-pass catch-up ease

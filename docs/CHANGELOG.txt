@@ -15059,3 +15059,44 @@ collapses both leash formulas to exact 1:1 tracking). Not
 live-browser-verified (this environment's recurring dev-server
 page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-20 (later same day, 4th pass)
+
+Direct report: "the cursor frame and true dragging point isnt moving
+with the over stretched endcap endpoint." Root-caused via a multi-frame
+Node simulation (a steadily advancing drag over many frames, not a
+single static snapshot) to a genuine circular dependency: the Deformable
+Endcap stretch signal (endcapPullPx, which drives stretchMult, which
+drives the pull-back's own extension calculation) was measured from the
+joint's distance AFTER that same frame's pull-back had already
+subtracted the extension -- once extension grew large enough to exceed
+the raw pull distance, the pull-back collapsed the joint straight back
+to prevPt, crashing the stretch signal, letting extension shrink again,
+and restarting the cycle. Simulated: stretchMult repeatedly snapped
+between 1.0 and its max every few frames, with the joint's own position
+swinging 100-175px between consecutive frames -- a genuine limit-cycle
+oscillation. The Cursor Animation sprite's own inherent one-frame lag
+(previously invisible against a settled target) became a persistent,
+visible gap against this chaotic signal, reading as "not moving with"
+the endpoint.
+
+Fixed by capturing the raw (pre-pull-back) target's distance from the
+anchor before the pull-back can modify it, and using that for the
+stretch signal instead. Re-verified via the same simulation: the
+stretch signal now rises smoothly, saturates cleanly at its max, and
+the sprite converges to an exact match with the rendered tip once
+stretch stabilizes.
+
+A smaller secondary jitter was also observed in the curved-endcap case
+specifically (not the oscillation, a separate residual likely from the
+Newton refinement's own frame-to-frame convergence) -- not chased this
+pass, flagged for later if still visible.
+
+Verification: syntax-checked; the fix verified via the same multi-frame
+Node simulation that found the bug, re-run against the corrected
+formula. Not live-browser-verified (this environment's recurring
+dev-server page-boot stall) -- this is the first pass on this
+mechanism verified with a genuinely multi-frame simulation rather than
+a single static snapshot, which is specifically what caught a bug 2
+prior single-frame-verified passes missed.
+
