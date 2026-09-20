@@ -14964,3 +14964,58 @@ first pass on this specific mechanism where the diagnosis itself came
 from the user directly reading the new debug dots this project just
 shipped, which is exactly what they were built for.
 
+--------------------------------------------------------------------------------
+2026-09-20 (later same day, 2nd pass)
+
+Follow-up report: "the endcap drag point and the drag interaction point
+seem offset by a small amount (3-6 px). Furthermore, make sure that the
+alignment continues when the rope gets overstretched and the endcap
+stretches." Plus a separate request: "make sure that while im dragging,
+you are stilll measuring the angle between the drag point and the
+cursor frame basepoint to continue changing animation types during
+drag."
+
+3 real fixes shipped, 1 attempted fix rejected before shipping:
+
+1. heightMult/bendStrength parity -- every endcapDragPointWorld()
+   consumer was passing plain cfg.endcapHeight/cfg.endcapBendStrength,
+   while render()'s own drawEndcapDeformable() call used a locally
+   computed mainEndcapHeight (bootEndcapScale or detachScale-adjusted)
+   and mainEndcapBendStrength (0 during Rope Attraction). Factored both
+   into shared mainEndcapRenderHeightMult()/mainEndcapRenderBendStrength()
+   functions, used everywhere -- one source of truth now.
+2. The annotated drag point's own small lateral offset (lx) was being
+   dropped entirely by endcapDragPointWorld()'s deformable branch --
+   now applied via the same perpendicular-offset formula the renderer's
+   own place() function uses. Confirmed under 0.5px at realistic
+   thickness -- a real fix, but not the dominant source of the report.
+3. A curvature-aware Newton refinement for the pull-back's own
+   straight-line approximation (exact only for the rigid renderer, per
+   the 2026-09-15 proof) was implemented and verified via Node
+   simulation across a realistic sweep of curvature/cursor-deviation/
+   stretch -- and found to make the residual WORSE, often 2-3x, due to
+   endcapSpineSample()'s own curvature integration amplifying small
+   joint-position changes over the full extension length (a lever-arm
+   effect). A damped, iterated version was also tried and remained
+   unreliable even at conservative damping. REJECTED and REMOVED before
+   commit -- the straight-line pull-back's known approximation error
+   under curvature/stretch remains open, honestly documented rather
+   than shipped as "fixed" when it demonstrably wasn't safe to ship.
+
+Separately: the 2026-09-16 !mfDragActiveForAngle lock (which stopped
+the Cursor Animation direction-bucket from updating during a drag) is
+REVERSED -- direction now keeps updating during drag again, per
+explicit request. The angle SOURCE itself (measured from the frozen
+dragAngleRefX/Y anchor) is unchanged; only the lock preventing
+mfDirectionKey from being assigned that measurement is removed.
+
+Verification: syntax-checked after every edit; the 2 shipped
+endcapDragPointWorld parity fixes verified via a small Node smoke test
+against 4 representative states; the lateral-offset magnitude confirmed
+via direct calculation; the rejected refinement's instability confirmed
+via 2 separate Node simulations (a full-step sweep and a damped-
+iteration sweep) before removal. Not live-browser-verified (this
+environment's recurring dev-server page-boot stall) -- the reported
+3-6px offset is only partially addressed by what shipped this pass, and
+that has not been re-measured live.
+

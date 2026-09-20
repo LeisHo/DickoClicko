@@ -4174,3 +4174,109 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   rather than the sprite** -- this fix only touches the Cursor
   Animation sprite's leash target, not the endcap graphic's own
   rendering, which was not reported as wrong this pass.
+- **Drag by the endcap's own visual TIP -- 16th pass, 2026-09-20.**
+  Real, direct follow-up: "the endcap drag point and the drag
+  interaction point seem offset by a small amount (3-6 px). Furthermore,
+  make sure that the alignment continues when the rope gets overstretched
+  and the endcap stretches." 3 real fixes shipped, plus one attempted fix
+  REJECTED before shipping after simulation proved it unstable -- both
+  outcomes documented honestly below, not just the successes.
+  1. **heightMult/bendStrength parity, FIXED.** Every `endcapDragPointWorld()`
+     consumer (the interaction-point dots, the drag pull-back, the
+     sprite's leash anchor) was passing plain `cfg.endcapHeight`/
+     `cfg.endcapBendStrength` directly, while render()'s own
+     `drawEndcapDeformable()` call computed a DIFFERENT `mainEndcapHeight`
+     (`bootEndcapScale`, or `endcapHeight*detachScale`) and
+     `mainEndcapBendStrength` (forced to 0 during Rope Attraction)
+     locally -- invisible whenever those states were at their defaults,
+     a real source of drift whenever they weren't (a detach still
+     scaling up, the boot-time endcap grow-in, Rope Attraction active).
+     Fixed by factoring both into 2 shared functions,
+     `mainEndcapRenderHeightMult()`/`mainEndcapRenderBendStrength()`,
+     used by BOTH render()'s own call site and every
+     `endcapDragPointWorld()` consumer -- one source of truth, can't
+     silently diverge again. Verified via a small Node smoke test
+     against 4 representative states (defaults, boot grow-in mid-scale,
+     mid-detach-grow, Rope Attraction active) -- all 4 matched the
+     renderer's own exact formula.
+  2. **Annotated drag point's own lateral offset, FIXED (tiny, ~0.3-0.5px
+     at realistic rope thickness).** `endcapDragPointWorld()`'s
+     deformable branch only ever used the annotated drag point's
+     along-spine `t` component, dropping its small lateral `lx`
+     component entirely (documented as deliberate back on 2026-09-16,
+     "well under 1% of the shape's width... not a proportionate change")
+     -- now applied via the SAME perpendicular-offset formula
+     `drawEndcapDeformable()`'s own `place()` already uses
+     (`FORM1_01_DRAG_POINT_LX * normalScale * (sample.ty, -sample.tx)`),
+     so the dots/pull-back and the renderer agree on this component too,
+     not just the along-spine one. Confirmed via Node this contributes
+     under 0.5px at any realistic thickness -- NOT the dominant source
+     of the reported 3-6px, but a real, now-fixed inconsistency
+     regardless.
+  3. **Curvature-approximation error in the straight-line pull-back --
+     INVESTIGATED, a refinement was ATTEMPTED, and REJECTED before
+     shipping.** The pull-back subtracts `pull` along a STRAIGHT line
+     (prevPt -> raw cursor target) -- provably exact for the RIGID
+     renderer (2026-09-15's own proof), but Deformable Endcap's curved
+     spine walk (`endcapSpineSample()`) can bend the ACTUAL rendered/
+     computed tip away from that straight-line assumption by a real,
+     nonzero amount that scales with curvature AND with the extension
+     length -- i.e. gets WORSE the more the endcap stretches, matching
+     the 2nd half of the report exactly, and very plausibly the
+     DOMINANT contributor to the reported 3-6px (dwarfing item 2's
+     lateral-offset fix by an order of magnitude or more in the
+     simulated cases below). **A single Newton refinement step
+     (place the joint at the straight-line candidate, see where the
+     curved tip actually lands, nudge by the residual) was implemented
+     and verified via a Node simulation across a realistic sweep of
+     segment-curvature/cursor-deviation/stretch values -- and found to
+     make the error WORSE, often severely (2-3x worse in most curved
+     cases; one sampled case went from a ~150px unrefined residual to
+     ~520px refined).** A DAMPED, iterated version (0.5/0.3/0.15
+     damping, 6 iterations each) was also tried and remained unreliable
+     even at the most conservative damping (worst-case residual only
+     marginally improved, 172px -> 137px, while several individual
+     cases still diverged). Root cause of the instability:
+     `endcapSpineSample()`'s forward-Euler curvature integration
+     amplifies a small change in the joint's position (which changes
+     `dir`, the walk's own STARTING angle) over the entire extension
+     length -- a genuine lever-arm effect where a small pivot change
+     produces a large far-end swing, not a bug in the refinement's own
+     math or a tuning mistake. **REJECTED and REMOVED before commit**
+     -- shipping it would have made real dragging feel WORSE (visibly
+     overshooting/jittering under curvature) than the current small,
+     bounded 3-6px offset it was meant to fix. The straight-line
+     pull-back therefore remains a known, accepted geometric
+     approximation for the deformable/curved case specifically (exact
+     only for the rigid renderer) -- **if a future pass revisits this,
+     a proper BOUNDED 1-D search along the pull direction (adjusting
+     the scalar `pull` itself via bisection/secant, not a free 2-D
+     Newton step on the joint's position) is the more promising angle,
+     not a straightforward extension of either attempt made here.**
+  4. **Animation-type (direction-bucket) lock during drag, REVERSED.**
+     Real, direct follow-up: "make sure taht while im dragging, you are
+     stilll measuring the angle between the drag point and the cursor
+     frame basepoint to continue changing animation types during drag."
+     This is a direct reversal of the 2026-09-16 `!mfDragActiveForAngle`
+     exclusion (itself an explicit request at the time: "dont
+     transition to a different animation type" during a drag) -- the
+     angle SOURCE itself (`mfDirectionSourceAngle`, measured from
+     `mfAnchorPt` -- still the FROZEN `dragAngleRefX/Y` while dragging,
+     its own separate, still-untouched mechanism) is unchanged; only the
+     LOCK that stopped `mfDirectionKey` from ever being assigned that
+     measurement while dragging is removed. `mfDragActiveForAngle`
+     itself is left defined (still used for the angle-reference
+     override) even though this condition no longer reads it. **If a
+     future report says direction changes too aggressively OR not
+     enough while dragging, re-read this AND the 2026-09-16 entry it
+     reverses first** -- this is the 2nd time this exact behavior has
+     flipped, both times per explicit, opposite user instruction, not
+     an arbitrary preference either time.
+  Items 1/2/4 syntax-checked and Node-verified (parity smoke test,
+  lateral-offset magnitude check). Item 3's REJECTION is itself backed
+  by the same Node-simulation discipline this project has always used
+  to catch a bad fix before it ships -- the attempted code was written,
+  tested, found wanting, and removed, all before any commit. Not
+  live-browser-verified (this environment's recurring dev-server
+  page-boot stall) -- the reported 3-6px offset (now partially reduced
+  by items 1/2, not eliminated) has not been re-measured live.

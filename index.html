@@ -5889,7 +5889,7 @@ function mouseFlickDragAnchorWorld(){
   // remaining call site that never did, despite being exactly what the
   // user is looking at (the sprite itself) while dragging.
   if (downInfo.dragIndex === mainRope.points.length - 1 && cfg.endcapDesign !== 'none'){
-    return endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+    return endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, mainEndcapRenderHeightMult(), cfg.endcapDeformableEnabled, mainEndcapRenderBendStrength(), mainRope.endcapStretchMult || 1);
   }
   return { x: p.x, y: p.y };
 }
@@ -9557,7 +9557,7 @@ function isNearCircleCenterForGrow(x, y){
 // time offset from it (see the drag-pin block's own pull-back).
 function nearestMainRopePointWithEndcap(x, y){
   if (cfg.endcapDesign === 'none') return nearestPointOnRope(x, y, mainRope.points);
-  const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+  const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, mainEndcapRenderHeightMult(), cfg.endcapDeformableEnabled, mainEndcapRenderBendStrength(), mainRope.endcapStretchMult || 1);
   const augmented = mainRope.points.concat([{ x: tipWorld.x, y: tipWorld.y }]);
   const hit = nearestPointOnRope(x, y, augmented);
   if (hit.index >= mainRope.points.length){
@@ -11194,7 +11194,7 @@ function update(rawDt){
           // realignment agreeing with the pull-back below on where the
           // endcap's own (possibly CURVED, Deformable-Endcap) tip
           // actually renders.
-          const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+          const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, mainEndcapRenderHeightMult(), cfg.endcapDeformableEnabled, mainEndcapRenderBendStrength(), mainRope.endcapStretchMult || 1);
           realignX = tipWorld.x;
           realignY = tipWorld.y;
         }
@@ -11371,7 +11371,31 @@ function update(rawDt){
           // qualifier above uses, so the point you actually grab and the
           // point the pull-back aims for agree on where "the drag point"
           // is.
-          const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+          // A curvature-aware Newton/damped-iterative refinement was
+          // ATTEMPTED here (2026-09-20), to correct for Deformable
+          // Endcap's curved spine walk bending the actual rendered tip
+          // away from this straight-line pull-back's own assumption --
+          // and REJECTED before shipping, per a Node-level simulation
+          // across a realistic sweep of curvature/cursor-deviation/
+          // stretch values: a single full Newton step made the residual
+          // WORSE by 2-3x in most curved cases (up to 520px vs. an
+          // original ~150px in one sampled case), and even a heavily
+          // damped (0.15) 6-iteration version still diverged in the
+          // worst sampled case (137px, vs. 172px unrefined -- barely
+          // better, and unreliably so). Root cause of the instability:
+          // endcapSpineSample()'s forward-Euler curvature integration
+          // amplifies a small change in the joint's position (which
+          // changes `dir`, the walk's OWN starting angle) over the
+          // entire extension length -- a genuine lever-arm effect, not
+          // a bug in the refinement's own math. This straight-line
+          // pull-back therefore remains a known, accepted GEOMETRIC
+          // APPROXIMATION for the deformable/curved case specifically
+          // (still exact for the rigid renderer, per the original
+          // 2026-09-15 proof) -- if a future pass revisits this, a
+          // proper bounded 1-D search along the pull direction (not a
+          // free 2-D Newton step) is the more promising angle, not a
+          // straightforward extension of this attempt.
+          const tipWorld = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, mainEndcapRenderHeightMult(), cfg.endcapDeformableEnabled, mainEndcapRenderBendStrength(), mainRope.endcapStretchMult || 1);
           const extension = Math.hypot(tipWorld.x - prevPt.x, tipWorld.y - prevPt.y);
           const pull = Math.min(extension, rdist);
           dragTargetPos = { x: dragTargetPos.x - (rdx / rdist) * pull, y: dragTargetPos.y - (rdy / rdist) * pull };
@@ -11456,7 +11480,7 @@ function update(rawDt){
       // clamped) position, so the leash orbits the visual tip instead
       // of the joint -- matching what the pickup phase already did.
       const spriteLeashAnchor = (dragPinIndex === mainRope.points.length - 1 && cfg.endcapDesign !== 'none')
-        ? endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1)
+        ? endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, mainEndcapRenderHeightMult(), cfg.endcapDeformableEnabled, mainEndcapRenderBendStrength(), mainRope.endcapStretchMult || 1)
         : { x: dragPoint.x, y: dragPoint.y };
       {
         // Corrected 2026-09-17 -- uses the drag's own virtual cursor
@@ -12255,18 +12279,20 @@ function update(rawDt){
     // button/touch is actually down, and only locks once SNAP is
     // genuinely playing out its remaining frames after release.
     const mfSnapHeld = mfMode === 'snap' && (mfRightDown || mfTripleHeld);
-    // !mfDragActiveForAngle (2026-09-16), per direct request: "WHen i
-    // initiate a drag, during the drag animation sequeunce as well as
-    // the drag pickup duration, dont transition to a different
-    // animation type." mfDragActiveForAngle (already computed above,
-    // for the angle-reference override) is true for the ENTIRE drag
-    // lifecycle -- both the pickup-easing window and the active-
-    // dragging window -- and only becomes false once a real release has
-    // happened, at which point 'dragRelease' mode's own existing
-    // exclusion (just above) takes over. Reusing this exact flag rather
-    // than adding a new one keeps both drag-related locks agreeing on
-    // the identical definition of "currently dragging."
-    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'dragRelease' && (mfMode !== 'snap' || mfSnapHeld) && !mfDragActiveForAngle){
+    // Corrected 2026-09-20 -- REVERSES the 2026-09-16 !mfDragActiveForAngle
+    // exclusion that used to sit in this condition. Direct follow-up
+    // request: "make sure taht while im dragging, you are stilll
+    // measuring the angle between the drag point and the cursor frame
+    // basepoint to continue changing animation types during drag." The
+    // angle SOURCE itself is unchanged (mfDirectionSourceAngle, computed
+    // above from mfAnchorPt -- still the FROZEN dragAngleRefX/Y while
+    // dragging, its own separate mechanism with its own documented
+    // reason, untouched by this correction) -- only the LOCK that
+    // stopped mfDirectionKey from ever being ASSIGNED that measurement
+    // while dragging is removed. mfDragActiveForAngle itself is left
+    // defined above (still used for the angle-reference override) even
+    // though this condition no longer reads it.
+    if (mfTargetDirKey !== mfDirectionKey && mfMode !== 'click' && mfMode !== 'sciss' && mfMode !== 'dragRelease' && (mfMode !== 'snap' || mfSnapHeld)){
       mfDirectionKey = mfTargetDirKey;
       // 2026-09-12, per explicit follow-up: "whilst right click and hold
       // is holding, i would still like the animation type to change...
@@ -12913,6 +12939,16 @@ const FORM1_01_DRAG_POINT_RAW = { x: 69.09, y: 134.34 };
 const FORM1_01_DRAG_POINT_T = FORM1_01_SKIN
   ? (FORM1_01_DRAG_POINT_RAW.y - ENDCAP_ALIGNMENT.topY) / (ENDCAP_BOTTOM_Y['form1-01'] - ENDCAP_ALIGNMENT.topY)
   : 1; // FORM1_01_SKIN parse failed -- fall back to the old "full extension" behavior rather than a broken 0
+// The annotated drag point's own lateral offset (2026-09-20) -- same raw
+// units as every other point FORM1_01_SKIN tags (see its own tag()),
+// previously DROPPED entirely by endcapDragPointWorld()'s deformable
+// branch (only the along-spine `t` component was used, never `lx`) --
+// a real, if tiny (~0.3-0.5px at typical rope thickness), inconsistency
+// between the annotated point and where drawEndcapDeformable()'s own
+// place() function actually renders it. Applied below the same way
+// place() applies it: perpendicular to the spine's own tangent at that
+// point, scaled by normalScale (thicknessPx / ENDCAP_ALIGNMENT.width).
+const FORM1_01_DRAG_POINT_LX = FORM1_01_DRAG_POINT_RAW.x - ENDCAP_ALIGNMENT.topCenterX;
 // Endcap-tip pull-back's own extension distance, honoring the
 // annotated drag point above when the live endcap design IS form1-01
 // (the only shape with this annotation) -- every OTHER design falls
@@ -12959,10 +12995,41 @@ function endcapDragPointWorld(points, designKey, thicknessPx, heightMult, deform
     const origin = { x: tip.x - dir.x * ENDCAP_SEAM_OVERLAP_PX, y: tip.y - dir.y * ENDCAP_SEAM_OVERLAP_PX };
     const worldLength = FORM1_01_SKIN.hideRange * (thicknessPx / ENDCAP_ALIGNMENT.width) * heightMult;
     const sample = endcapSpineSample(points, origin, dir, FORM1_01_DRAG_POINT_T * worldLength * (stretchMult || 1), bendStrength);
-    return { x: sample.x, y: sample.y };
+    // Lateral offset (2026-09-20) -- see FORM1_01_DRAG_POINT_LX's own
+    // comment. Same formula drawEndcapDeformable()'s own place() uses:
+    // perpendicular to the spine's tangent (sample.tx/ty), scaled by
+    // normalScale.
+    const normalScale = thicknessPx / ENDCAP_ALIGNMENT.width;
+    return {
+      x: sample.x + FORM1_01_DRAG_POINT_LX * normalScale * sample.ty,
+      y: sample.y - FORM1_01_DRAG_POINT_LX * normalScale * sample.tx,
+    };
   }
   const ext = dragPointExtensionPx(designKey, thicknessPx, heightMult) * (stretchMult || 1);
   return { x: tip.x + dir.x * ext, y: tip.y + dir.y * ext };
+}
+// Shared with drawEndcapDeformable()'s own render() call site (2026-09-20)
+// -- the SAME heightMult/bendStrength the renderer actually uses, so
+// every consumer of endcapDragPointWorld() (the interaction-point dots,
+// the drag pull-back, the sprite's leash anchor) can never silently
+// diverge from what's actually drawn, even during a detach's own
+// scale-up, the boot-time endcap grow-in, or Rope Attraction. Real,
+// confirmed inconsistency before this: those consumers all passed plain
+// cfg.endcapHeight/cfg.endcapBendStrength directly, while render()'s own
+// drawEndcapDeformable() call computed a DIFFERENT mainEndcapHeight
+// (bootEndcapScale, or endcapHeight*detachScale) and mainEndcapBendStrength
+// (0 during Rope Attraction) locally -- invisible whenever those states
+// happened to be at their defaults (bootEndcapScale===null,
+// detachScale===1, not attracting), but a real, state-dependent source of
+// drift whenever they weren't.
+function mainEndcapRenderHeightMult(){
+  if (mainRope.bootEndcapScale !== null) return mainRope.bootEndcapScale;
+  const detachScale = mainRope.detachTipScaleProgress === undefined ? 1
+    : cfg.detachTipStartScale + (1 - cfg.detachTipStartScale) * mainRope.detachTipScaleProgress;
+  return cfg.endcapHeight * detachScale;
+}
+function mainEndcapRenderBendStrength(){
+  return ropeAttractionActive ? 0 : cfg.endcapBendStrength;
 }
 // Walks forward `s` world px from `origin` (already ENDCAP_SEAM_OVERLAP_PX
 // -shifted, see drawEndcapDeformable()) along a constant-curvature arc
@@ -13649,15 +13716,13 @@ function render(){
     // spawn -- per explicit follow-up, NOT unified with the boot-only
     // grow-in below, to avoid the two stacking into a confusing
     // double-scale effect on a detach.
-    const detachScale = mainRope.detachTipScaleProgress === undefined ? 1
-      : cfg.detachTipStartScale + (1 - cfg.detachTipStartScale) * mainRope.detachTipScaleProgress;
-    // Boot-only endcap grow-in (see update()'s own per-frame increment
-    // and the 'pausing'->'growing' spawn code's own comment) -- overrides
-    // detachScale entirely while active, rather than combining with it,
-    // since bootEndcapScale is never armed on a detach spawn in the first
-    // place (the two are mutually exclusive by construction, not just by
-    // convention).
-    const mainEndcapHeight = mainRope.bootEndcapScale !== null ? mainRope.bootEndcapScale : cfg.endcapHeight * detachScale;
+    // 2026-09-20: mainEndcapHeight is now mainEndcapRenderHeightMult()
+    // itself (defined near endcapDragPointWorld()) -- same formula as
+    // before (still reads mainRope.detachTipScaleProgress/bootEndcapScale,
+    // see that function's own comment), just factored into a shared
+    // function so endcapDragPointWorld()'s own callers can never diverge
+    // from what actually gets drawn here.
+    const mainEndcapHeight = mainEndcapRenderHeightMult();
     const mainGradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: mainRope.points[0] } : null;
     // Deformable Endcap (2026-09-14) -- opt-in alternative to the plain
     // rigid drawEndcap() call, scoped to mainRope only (never fallen
@@ -13694,7 +13759,7 @@ function render(){
         // this one render call, matching what the rigid renderer already
         // shows (a straight stamp, unaffected by this bug at all, per
         // the report's own "the rest of the rope is acting normally").
-        const mainEndcapBendStrength = ropeAttractionActive ? 0 : cfg.endcapBendStrength;
+        const mainEndcapBendStrength = mainEndcapRenderBendStrength();
         drawEndcapDeformable(mainRope.points, liveThickness, cfg.ropeColor, mainEndcapHeight, mainGradientInfo, undefined, mainEndcapBendStrength, mainRope.endcapStretchMult);
       } else {
         drawEndcap(mainRope.points, liveThickness, cfg.endcapDesign, cfg.ropeColor, mainEndcapHeight, mainTipFactor, mainGradientInfo);
@@ -14057,7 +14122,7 @@ function render(){
         // the endcap's own tip actually is (curved, if Deformable Endcap
         // is active).
         if (cfg.endcapDesign !== 'none' && mainRope.points.length >= 2){
-          const mfEndcapPt = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1);
+          const mfEndcapPt = endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, mainEndcapRenderHeightMult(), cfg.endcapDeformableEnabled, mainEndcapRenderBendStrength(), mainRope.endcapStretchMult || 1);
           ctx.beginPath();
           ctx.arc(mfEndcapPt.x, mfEndcapPt.y, vmin(0.6), 0, Math.PI * 2);
           ctx.fillStyle = '#9c27b0';
