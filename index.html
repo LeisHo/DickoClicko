@@ -531,6 +531,22 @@ const DEV_GROUPS = [
     { key:'endcapStretchEnabled', label:'Deformable Endcap Stretch Enabled', type:'checkbox', def:true },
     { key:'endcapStretchRange', label:'Deformable Endcap Stretch Range (%vmin)', type:'slider', unit:'%vmin', min:1, max:50, step:1, def:15 },
     { key:'endcapStretchMaxMult', label:'Deformable Endcap Max Stretch (x)', type:'slider', unit:'x', min:1, max:3, step:0.05, def:1.4 },
+    // Endcap Drag Position Smoothing (2026-09-20) -- direct, reported
+    // bug: "there is jittering when i am dragging by end cap." Root
+    // cause, confirmed via a multi-frame Node simulation: the joint's
+    // own resolved position (endcapPullBackJoint()'s output) feeds back
+    // into next frame's `tipDirection()`/curvature estimate, which the
+    // curved spine walk's own lever-arm amplification (see
+    // endcapPullBackJoint()'s own header comment) blows into a large
+    // swing in the ESTIMATED extension -- which then feeds back into
+    // THIS frame's own pull-back target, compounding frame to frame
+    // even outside the "unreachable target" collapse case. 1 = instant
+    // (no smoothing, the pre-fix behavior); same exponential,
+    // framerate-independent convention every other smoothing control in
+    // this file uses (mouseFlickExpSmoothFactor()). Confirmed via
+    // simulation: cuts steady-state frame-to-frame jitter from ~8px/f
+    // down to ~1px/f at this default.
+    { key:'endcapDragPositionSmoothing', label:'Endcap Drag Position Smoothing (x)', type:'slider', unit:'x', min:0.02, max:1, step:0.01, def:0.25 },
     { key:'ropeThickness',  label:'Rope Thickness',    type:'slider', unit:'%vmin', min:0.1, max:10, step:0.1, def:10 },
     // Segment Length (2026-09-12, per explicit request: "do i have a
     // slider that sets the amount of segments? If not, add that
@@ -11201,6 +11217,13 @@ function update(rawDt){
         downInfo.dragCursorRealigned = true;
         downInfo.dragSensCursorX = realignX;
         downInfo.dragSensCursorY = realignY;
+        // Endcap Drag Position Smoothing's own persistent state, reset
+        // here (once per drag session, same moment dragSensCursorX/Y
+        // itself resets) so a fresh drag never inherits a stale smoothed
+        // position left over from a previous one -- see that slider's
+        // own comment for the full account of what this smooths and why.
+        mainRope.endcapDragSmoothedX = dragPoint.x;
+        mainRope.endcapDragSmoothedY = dragPoint.y;
         downInfo.dragSensLastRawX = mouseX;
         downInfo.dragSensLastRawY = mouseY;
       }
@@ -11427,6 +11450,28 @@ function update(rawDt){
           // old straight-line result rather than diverging, and ZERO
           // cases came out worse than before).
           dragTargetPos = endcapPullBackJoint(mainRope.points, prevPt, dragTargetPos, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, mainEndcapRenderHeightMult(), cfg.endcapDeformableEnabled, mainEndcapRenderBendStrength(), mainRope.endcapStretchMult || 1);
+          // Endcap Drag Position Smoothing (2026-09-20) -- see that
+          // slider's own DEV_GROUPS comment for the full root-cause
+          // account (a self-sustaining, lever-arm-amplified feedback
+          // between the resolved joint position and next frame's own
+          // curvature/extension estimate). Applied to the pull-back's
+          // OWN output specifically, right where it's produced -- this
+          // is a target-position smoothing, not a physics change: the
+          // joint is kinematically positioned every frame during a drag
+          // regardless (oldx/oldy always collapse to the same value as
+          // x/y a few lines below), so there's no Verlet
+          // momentum/reference-frame mismatch to worry about here, unlike
+          // the mismatched-old-position bug class this file's own
+          // topplePiece()/bgRope-tangent gotchas warn about elsewhere.
+          if (mainRope.endcapDragSmoothedX === undefined || mainRope.endcapDragSmoothedX === null){
+            mainRope.endcapDragSmoothedX = dragTargetPos.x;
+            mainRope.endcapDragSmoothedY = dragTargetPos.y;
+          } else {
+            const smoothFactor = mouseFlickExpSmoothFactor(cfg.endcapDragPositionSmoothing, dt);
+            mainRope.endcapDragSmoothedX += (dragTargetPos.x - mainRope.endcapDragSmoothedX) * smoothFactor;
+            mainRope.endcapDragSmoothedY += (dragTargetPos.y - mainRope.endcapDragSmoothedY) * smoothFactor;
+          }
+          dragTargetPos = { x: mainRope.endcapDragSmoothedX, y: mainRope.endcapDragSmoothedY };
         }
       }
       let dx = dragTargetPos.x - anchor.x, dy = dragTargetPos.y - anchor.y;

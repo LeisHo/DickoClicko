@@ -4463,3 +4463,53 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   settings against the identical cursor trajectory (the direct test for
   "decoupled from sensitivity," not something a single-sensitivity
   simulation could have shown).
+- **Endcap-drag jitter, FIXED, 2026-09-20 (20th pass) -- the residual
+  effect flagged (but not chased) at the end of the 19th pass, and
+  directly reported the same day: "there is jittering when i am
+  dragging by end cap."** Root cause, confirmed via a targeted Node
+  simulation instrumenting `endcapPullBackJoint()`'s own internal
+  `extension` value frame by frame: it swings WILDLY (14px to 134px
+  between nearby sampled frames in one representative case), because
+  the resolved JOINT position from one frame feeds into
+  `tipDirection()`'s own direction estimate the NEXT frame, and the
+  curved spine walk's own lever-arm amplification (see
+  `endcapPullBackJoint()`'s own header comment for the general
+  mechanism -- the SAME amplification that made the naive 16th-pass
+  Newton attempt unstable) turns a small direction change into a large
+  swing in the estimated extension -- which then feeds back into THAT
+  frame's own pull-back target, compounding frame to frame. This is a
+  DIFFERENT, narrower mechanism than the 18th pass's full oscillation
+  (that was a `pull=min(extension,rdist)` COLLAPSE cycle, confirmed
+  fixed and NOT what's happening here -- this jitter persists even well
+  outside the `extension>=rdist` collapse regime, confirmed by
+  instrumenting both values together across the same simulated drag).
+  **Fixed with a new dev slider, "Endcap Drag Position Smoothing (x)"**
+  (`cfg.endcapDragPositionSmoothing`, def `0.25`, same 1=instant/
+  smaller=more-smoothing convention as every other smoothing control in
+  this file via the existing `mouseFlickExpSmoothFactor()` helper) --
+  applied to `endcapPullBackJoint()`'s own OUTPUT, right where it's
+  produced, via a new persistent `mainRope.endcapDragSmoothedX/Y` state
+  (reset once per drag session, at the SAME cursor-realignment moment
+  `downInfo.dragSensCursorX/Y` itself resets, so a fresh drag never
+  inherits a stale smoothed position from a previous one). **This is a
+  target-position smoothing, not a physics change** -- explicitly NOT
+  the same bug class as the mismatched-old/current-reference-frame
+  velocity artifacts this file's own `topplePiece()`/bgRope-tangent-
+  matching gotchas warn about elsewhere, since the dragged joint is
+  KINEMATICALLY positioned every frame during an active drag regardless
+  (`dragPoint.oldx = dragPoint.x` unconditionally, a few lines below --
+  its own "velocity" is always reset to zero by design while being
+  dragged), so smoothing the TARGET it's kinematically snapped to each
+  frame introduces no momentum mismatch to worry about. Verified via
+  the same multi-frame simulation methodology, using the ACTUAL shipped
+  `endcapPullBackJoint()`/`mouseFlickExpSmoothFactor()` functions (not
+  a standalone re-derivation): steady-state frame-to-frame jitter drops
+  from ~7.7-9.2px average (max spikes ~21.7px) down to ~1.6px average
+  (max ~4.0px) at the new default, confirmed for BOTH a straight and a
+  curved endcap. Not live-browser-verified (this environment's
+  recurring dev-server page-boot stall) -- **if a future report says
+  the endcap drag still feels jittery, lowering this slider further
+  (toward its own min of 0.02) is the first thing to try before
+  assuming a new bug** -- the mechanism itself is now understood and
+  addressed, this is a tuning knob for it, not a claim of perfect
+  elimination at every possible drag speed/curvature combination.

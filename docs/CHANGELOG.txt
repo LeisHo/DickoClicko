@@ -15136,3 +15136,35 @@ simulation methodology, extended to explicitly compare 2 sensitivity
 settings against an identical cursor trajectory. Not live-browser-
 verified (this environment's recurring dev-server page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-20 (later same day, 6th pass)
+
+Direct report: "there is jittering when i am dragging by end cap." Root
+cause, confirmed by instrumenting endcapPullBackJoint()'s own internal
+`extension` value frame by frame: it swings wildly (14px to 134px
+between nearby sampled frames) because the resolved joint position from
+one frame feeds into next frame's own direction estimate, and the
+curved spine walk's lever-arm amplification turns a small direction
+change into a large swing in the estimated extension -- feeding back
+into that frame's own pull-back target. A different, narrower mechanism
+than the prior pass's full oscillation (confirmed still fixed, and this
+jitter persists well outside that collapse regime).
+
+Fixed with a new slider, "Endcap Drag Position Smoothing (x)"
+(cfg.endcapDragPositionSmoothing, def 0.25, same convention as every
+other smoothing control via mouseFlickExpSmoothFactor()), applied to
+the pull-back's own output via a new persistent
+mainRope.endcapDragSmoothedX/Y state, reset once per drag session at
+the same moment dragSensCursorX/Y itself resets. A target-position
+smoothing, not a physics change -- the dragged joint is kinematically
+positioned every frame during an active drag regardless (its own
+"velocity" always reset to zero by design), so there's no momentum
+mismatch to worry about.
+
+Verification: syntax-checked; verified via the same multi-frame
+simulation methodology using the actual shipped functions -- steady-
+state frame-to-frame jitter drops from ~7.7-9.2px average (max spikes
+~21.7px) down to ~1.6px average (max ~4.0px) at the new default,
+confirmed for both a straight and a curved endcap. Not live-browser-
+verified (this environment's recurring dev-server page-boot stall).
+
