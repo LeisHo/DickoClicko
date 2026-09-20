@@ -4402,3 +4402,64 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   should be verified the same multi-frame way, not just at one static
   point, since this bug class (a feedback loop across frames) is
   invisible to single-frame checks by construction.**
+- **Deformable Endcap Stretch is now COMPLETELY DECOUPLED from Drag
+  Mouse Sensitivity, 2026-09-20 (19th pass) -- a real design correction,
+  not just a bug fix, per direct diagnosis: "the endcap overstretching
+  is fighting with the cursor sensityvity. So for endcap overstretching,
+  endcap height will be determined b the cursor interaction point. So
+  it wont overstretch in the same way as the rest of the rope."**
+  SUPERSEDES the 18th pass's own `rawDdist` fix -- that fix correctly
+  broke the pull-back's own CIRCULAR dependency (stretch depending on
+  its own downstream output), but left `endcapPullPx` measured from
+  `dragSensCursorX/Y` -- which Drag Mouse Sensitivity's own overstretch-
+  based reduction (`effectiveDragSensitivity`) deliberately SLOWS DOWN
+  once overstretched, as a resistance mechanic for the ROPE POINT
+  itself. Since the endcap's own stretch was ALSO derived from that
+  same slowed-down value, it was being throttled by a mechanic that was
+  never meant to apply to it -- reading as "fighting."
+  **Fix: `mainRope.endcapPullPx`/`endcapStretchMult` are now computed
+  directly from `mouseFlickInteractionPos(mouseX, mouseY, 'drag')`** --
+  the SAME stable interaction point the arm-time Drag Rope Hold
+  Distance gate already uses -- entirely independent of
+  `dragSensCursorX/Y`, the pull-back's own output, and `maxDragDist`.
+  The baseline shifted too: stretch now ramps in (over Endcap Stretch
+  Range) once the CURSOR ITSELF is pulling beyond the endcap's own
+  NATURAL (unstretched) extension -- not "beyond maxDragDist" (a
+  whole-rope, anchor-relative quantity that never had a coherent
+  relationship to the endcap's own geometry in the first place). This
+  computation was ALSO moved to run BEFORE the pull-back call (the 18th
+  pass's version ran after, still one frame behind) -- since it no
+  longer depends on the pull-back's own output at all, there's nothing
+  left to defer around, so moving it earlier ALSO eliminates
+  `spriteLeashAnchor`'s own documented one-frame lag as a side effect
+  (it reads `mainRope.endcapStretchMult` too, now genuinely this
+  frame's value). The OLD, later `endcapStretchMult` block (which used
+  to duplicate this computation a frame late, from the sensitivity-
+  affected source) was REMOVED, not left dead.
+  **Verified via a 3-way multi-frame Node simulation**: the SAME cursor
+  trajectory run at full sensitivity vs. heavily-reduced (0.2x)
+  sensitivity produced IDENTICAL `endcapPullPx`/`stretchMult` values at
+  every sampled frame in both runs -- direct, concrete proof of the
+  decoupling. The rendered tip and the sprite's own leash anchor were
+  EXACTLY equal every single frame in all 3 scenarios (zero lag, not
+  just "converges once stable"). **One smaller, separate residual
+  observed and left as-is**: once stretch is near its saturated max
+  while sensitivity is heavily reduced, the underlying JOINT's own
+  position (not the endcap's visual stretch, not the sprite) shows a
+  bounded jitter (roughly a 30-40px band in the simulated case) as the
+  pull-back's own `pull = min(extension, rdist)` clamp repeatedly hits
+  its "unreachable target" collapse branch (since the endcap is now
+  doing nearly all the reaching, leaving the joint little room to move,
+  and the Newton refinement's own sensitivity to starting position adds
+  some noise within that narrow band) -- a much smaller, bounded effect
+  than the wild 100-175px swings and full stretchMult 1.0<->3.0 flips
+  the 18th pass fixed, and NOT what was reported this pass (stretch
+  smoothness and sprite/render sync, both now solid) -- flagged for a
+  future pass only if it turns out to be independently user-visible.
+  Not live-browser-verified (this environment's recurring dev-server
+  page-boot stall) -- verified via the same multi-frame simulation
+  methodology the 18th pass established as necessary for this
+  mechanism, extended to explicitly compare 2 different sensitivity
+  settings against the identical cursor trajectory (the direct test for
+  "decoupled from sensitivity," not something a single-sensitivity
+  simulation could have shown).

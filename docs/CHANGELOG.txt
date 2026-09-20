@@ -15100,3 +15100,39 @@ mechanism verified with a genuinely multi-frame simulation rather than
 a single static snapshot, which is specifically what caught a bug 2
 prior single-frame-verified passes missed.
 
+--------------------------------------------------------------------------------
+2026-09-20 (later same day, 5th pass)
+
+Direct diagnosis: "the endcap overstretching is fighting with the
+cursor sensityvity. So for endcap overstretching, endcap height will be
+determined b the cursor interaction point. So it wont overstretch in
+the same way as the rest of the rope." A real design correction, not
+just a bug fix -- supersedes the prior pass's own rawDdist fix.
+
+mainRope.endcapPullPx/endcapStretchMult are now computed directly from
+mouseFlickInteractionPos(mouseX, mouseY, 'drag') -- the same interaction
+point the arm-time Drag Rope Hold Distance gate uses -- entirely
+independent of dragSensCursorX/Y (which Drag Mouse Sensitivity's own
+overstretch-based reduction deliberately slows down, a resistance
+mechanic meant only for the rope point itself, not the endcap). The
+baseline also shifted from "beyond maxDragDist" (a whole-rope quantity)
+to "beyond the endcap's own natural unstretched extension" -- the
+geometrically coherent trigger. Moved to run before the pull-back call,
+which also eliminates the sprite's own one-frame lag as a side effect
+(it reads the same now-fresh stretchMult). The old, later duplicate
+endcapStretchMult block was removed.
+
+Verified via a 3-way multi-frame simulation: the same cursor trajectory
+at full vs. 0.2x sensitivity produced IDENTICAL stretch values at every
+frame -- direct proof of the decoupling. Rendered tip and sprite anchor
+were exactly equal every frame in all 3 scenarios. A smaller, separate
+residual was observed (a bounded ~30-40px jitter in the joint's own
+position once stretch saturates near max under heavily-reduced
+sensitivity) -- not what was reported this pass, flagged for later if
+independently visible.
+
+Verification: syntax-checked; verified via the same multi-frame
+simulation methodology, extended to explicitly compare 2 sensitivity
+settings against an identical cursor trajectory. Not live-browser-
+verified (this environment's recurring dev-server page-boot stall).
+
