@@ -11434,6 +11434,30 @@ function update(rawDt){
       // hardLimit=300/radius=4: gap held at EXACTLY 4.0000px at every
       // sampled distance, both inside and far outside hardLimit -- never
       // 0, never unbounded.
+      // Sprite leash anchor -- corrected 2026-09-20, real reported bug:
+      // "the white [interaction] point actually shows the correct drag
+      // point, but still the cursor frame and the dragging is occurring
+      // in the rope segment point before that. So it is in fact
+      // sensing the correct point to use, it's just not using it."
+      // Root cause: the leash-radius clamp just below was always
+      // computed relative to the RAW physics joint (`dragPoint`) --
+      // correct for an ordinary interior drag point, where the joint IS
+      // essentially where the cursor already is. For the ENDCAP TIP
+      // specifically, `dragPoint` sits `extension` px BEHIND the
+      // endcap's own visual tip BY DESIGN (the pull-back above
+      // deliberately offsets it so the endcap's rendered length reaches
+      // the cursor) -- leashing the sprite to within `dragLeashRadius`
+      // of THAT point therefore visually pins it at the joint (the
+      // segment before the endcap), never at the tip, even though
+      // mouseFlickDragAnchorWorld() (the white interaction-point dot,
+      // and the PICKUP-phase target above) already resolves to the
+      // correct endcap point. Recomputes the SAME endcap-aware point
+      // here, using dragPoint's own just-updated (leash/hardLimit-
+      // clamped) position, so the leash orbits the visual tip instead
+      // of the joint -- matching what the pickup phase already did.
+      const spriteLeashAnchor = (dragPinIndex === mainRope.points.length - 1 && cfg.endcapDesign !== 'none')
+        ? endcapDragPointWorld(mainRope.points, cfg.endcapDesign, vmin(cfg.ropeThickness) * ropeThicknessMultiplier, cfg.endcapHeight, cfg.endcapDeformableEnabled, cfg.endcapBendStrength, mainRope.endcapStretchMult || 1)
+        : { x: dragPoint.x, y: dragPoint.y };
       {
         // Corrected 2026-09-17 -- uses the drag's own virtual cursor
         // (dragSensCursorX/Y) now, not raw mouseX/mouseY -- see the
@@ -11444,12 +11468,12 @@ function update(rawDt){
         // would make the sprite target reflect that arbitrary raw gap
         // instead of the translated, drag-point-relative one every
         // other consumer in this block (the Leash target above) uses.
-        const sdx = downInfo.dragSensCursorX - dragPoint.x, sdy = downInfo.dragSensCursorY - dragPoint.y;
+        const sdx = downInfo.dragSensCursorX - spriteLeashAnchor.x, sdy = downInfo.dragSensCursorY - spriteLeashAnchor.y;
         const sdist = Math.hypot(sdx, sdy);
         const clampedDist = Math.min(sdist, dragLeashRadius);
         mainRope.dragSpriteTarget = sdist <= 1e-6
-          ? { x: dragPoint.x, y: dragPoint.y }
-          : { x: dragPoint.x + (sdx / sdist) * clampedDist, y: dragPoint.y + (sdy / sdist) * clampedDist };
+          ? { x: spriteLeashAnchor.x, y: spriteLeashAnchor.y }
+          : { x: spriteLeashAnchor.x + (sdx / sdist) * clampedDist, y: spriteLeashAnchor.y + (sdy / sdist) * clampedDist };
       }
     }
     // How far past the REST limit (maxDragDist) the point ACTUALLY sits

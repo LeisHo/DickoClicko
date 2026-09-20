@@ -4129,3 +4129,48 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   `net::ERR_CONNECTION_RESET` each time (confirmed via
   `read_network_requests`) -- not live-browser-verified, same
   limitation as most fixes in this project's recent history.
+- **Drag by the endcap's own visual TIP -- 15th pass, 2026-09-20,
+  ROOT CAUSE FOUND AND FIXED via the new interaction-points dots
+  themselves.** Direct, precise report: "the white point actually
+  shows the correct drag point, but still the cursor frame and the
+  dragging is occurring in the rope segment point before that. So it
+  is in fact sensing the correct point to use, it's just not using
+  it." Root cause: `mainRope.dragSpriteTarget` (the Cursor Animation
+  sprite's post-pickup position target, `update()`'s own drag-pin
+  block) computed its leash-radius clamp relative to the RAW physics
+  joint (`dragPoint`) -- correct for an ordinary interior drag point,
+  where the joint IS essentially where the cursor already is. For the
+  ENDCAP TIP specifically, `dragPoint` sits `extension` px BEHIND the
+  endcap's own visual tip BY DESIGN (the pull-back earlier in the same
+  block deliberately offsets the joint so the endcap's rendered length
+  reaches the cursor) -- leashing the sprite to within
+  `dragLeashRadius` of THAT point therefore visually pinned it at the
+  joint (the segment before the endcap), never at the tip, even though
+  `mouseFlickDragAnchorWorld()` (the white interaction-point dot, and
+  the PICKUP-phase target a few lines below) already resolved to the
+  correct endcap point the whole time -- explaining the report exactly:
+  the right point was already being computed elsewhere in the same
+  function, it just wasn't the one this specific leash math was
+  anchored to. Fixed by recomputing the same endcap-aware point
+  (`endcapDragPointWorld()`, using `dragPoint`'s own just-updated
+  leash/hardLimit-clamped position) as a `spriteLeashAnchor`, used
+  instead of `dragPoint` for the leash-radius clamp -- only when
+  `dragPinIndex === points.length-1 && cfg.endcapDesign !== 'none'`;
+  every other case (an interior point, or no endcap selected) is
+  completely unchanged. The ROPE's own physics (`dragPoint.x/y`) is
+  untouched -- purely a render-target computation for the sprite.
+  Verified via a Node simulation of the exact before/after leash math
+  (a representative 64px joint-to-cursor gap): the OLD target sat
+  within 4px of the JOINT (62.5px from the endcap tip -- exactly the
+  reported "segment before" symptom), the NEW target sits within
+  exactly 4px (`dragLeashRadius`) of the ENDCAP TIP instead. Not
+  live-browser-verified (this environment's recurring dev-server
+  page-boot stall) -- but this is the first pass on this mechanism
+  where the diagnosis came directly from the user reading the debug
+  dots this project just shipped, which is exactly what they were
+  built for. **If this feature needs a 16th pass, check whether the
+  symptom is now specifically about the RENDERED ENDCAP GRAPHIC's own
+  position (drawEndcap()/drawEndcapDeformable()'s own draw call)
+  rather than the sprite** -- this fix only touches the Cursor
+  Animation sprite's leash target, not the endcap graphic's own
+  rendering, which was not reported as wrong this pass.
