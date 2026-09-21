@@ -100,7 +100,7 @@
       "clickIntensity": 5,
       "holdDistance": 7,
       "dragRopeEnabled": true,
-      "dragRopeHoldDistance": 9,
+      "dragRopeHoldDistance": 6,
       "dragOverridesGrowOnRopeHold": true,
       "dragMaxDistance": 150,
       "bendStiffness": 0.03,
@@ -208,7 +208,7 @@
       "mouseFlickTargetPoint": 0.5,
       "mouseFlickRandomInterval": 1.1,
       "snapRepeatDuration": 1.5,
-      "mouseFlickShowInteractionPoints": false,
+      "mouseFlickShowInteractionPoints": true,
       "clickLogPositionDataEnabled": false,
       "overstretchEnabled": true,
       "overstretchTolerance": 165,
@@ -268,7 +268,12 @@
       "collisionSplatterFlightDurationVariance": 0.15,
       "collisionSplatterFadeEnabled": false,
       "collisionSplatterFadeTime": 6,
-      "collisionSplatterOpacity": 0.85
+      "collisionSplatterOpacity": 0.85,
+      "loadingPageEnabled": true,
+      "loadingPageMinDuration": 1,
+      "loadingPageXOffset": 0,
+      "loadingPageYOffset": 0,
+      "loadingPageScale": 20
     },
     "mobile": {},
     "landscape": {}
@@ -324,6 +329,40 @@
   "order": {
     "ungrouped": [],
     "groups": [
+      {
+        "key": "LOADING PAGE",
+        "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "loadingPageEnabled"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageMinDuration"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageXOffset"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageYOffset"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageScale"
+          }
+        ],
+        "settings": [
+          "loadingPageEnabled",
+          "loadingPageMinDuration",
+          "loadingPageXOffset",
+          "loadingPageYOffset",
+          "loadingPageScale"
+        ],
+        "subgroups": []
+      },
       {
         "key": "COLLISION SPLATTER",
         "collapsed": true,
@@ -1454,7 +1493,7 @@
       },
       {
         "key": "DEBUG",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
@@ -2325,13 +2364,13 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "group",
             "group": {
               "key": "CLICK",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -2358,7 +2397,7 @@
             "type": "group",
             "group": {
               "key": "ROPE CUT",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -2491,7 +2530,7 @@
             "type": "group",
             "group": {
               "key": "New Group (7)",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2666,7 +2705,7 @@
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -2690,7 +2729,7 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -2811,7 +2850,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
