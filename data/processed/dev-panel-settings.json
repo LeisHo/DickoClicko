@@ -270,15 +270,16 @@
       "collisionSplatterFadeTime": 6,
       "collisionSplatterOpacity": 0.85,
       "loadingPageEnabled": true,
-      "loadingPageMinDuration": 4.9,
+      "loadingPageMinDuration": 3,
       "loadingPageXOffset": 0,
       "loadingPageYOffset": 0,
       "loadingPageScale": 24,
       "loadingPageMinFramesRequired": 309,
-      "loadingPageMaxFillProgress": 1.09,
+      "loadingPageMaxFillProgress": 0.95,
       "loadingPageRotation": 0,
       "loadingPageRotationSmoothing": 0.3,
-      "loadingPageShowFrameCounter": true
+      "loadingPageShowFrameCounter": true,
+      "loadingPageBoundarySmoothing": 0.15
     },
     "mobile": {},
     "landscape": {}
@@ -348,6 +349,14 @@
         "items": [
           {
             "type": "row",
+            "key": "loadingPageBoundarySmoothing"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageTriggerButton"
+          },
+          {
+            "type": "row",
             "key": "loadingPageRotationSmoothing"
           },
           {
@@ -388,6 +397,8 @@
           }
         ],
         "settings": [
+          "loadingPageBoundarySmoothing",
+          "loadingPageTriggerButton",
           "loadingPageRotationSmoothing",
           "loadingPageShowFrameCounter",
           "loadingPageEnabled",
