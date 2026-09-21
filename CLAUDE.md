@@ -4815,3 +4815,51 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   matching key in `order`/`textOverrides`/`independence`/`visibility`/
   `lockedGroups` in the same commit, verified group-by-group -- not
   attempted here.
+- **`SPLATTER_SHAPES` (2026-09-21) is a 32-entry table of embedded SVG
+  path data for Cut Splatter's own particles, replacing the old plain
+  filled-circle draw** -- per direct request: "instead of being a
+  circle, I want you to use 1 of these SVGs randomly" (source: `data/
+  Splatter/SMALL/`, 2 color-family SVGs, "aligned Top Down, with the
+  Top being the source of the splatter, and the bottom being the
+  direction of spray"). Extracted each file's own `<path d="...">`
+  (or, for 3 files using a plain `<circle>` instead -- `7163-12/14/16`
+  -- converted via the standard 2-arc circle-to-path formula) and
+  embedded the raw path strings directly in JS, each wrapped in its own
+  `Path2D` at load -- this project's OWN established convention for
+  SVG shape data (same as `ENDCAP_DESIGNS`), not a runtime image/fetch
+  load. `spawnCutSplatter()` assigns each particle exactly ONE random
+  shape at spawn, kept fixed for that particle's entire lifetime (never
+  re-randomized). `renderSplatterParticles()` rotates the shape every
+  frame so its own local spray axis (top=source, bottom=direction)
+  points along the particle's CURRENT `vx/vy` -- recomputed live, not
+  frozen at spawn, so a flying particle visibly follows its own
+  gravity-bent arc, and naturally freezes the instant it lands (since
+  `updateSplatterParticles()` already stops updating `vx/vy` once
+  landed -- no separate freeze bookkeeping needed for rotation either).
+  Rotation formula: `Math.atan2(vy,vx) - Math.PI/2` (the shape's local
+  +Y/spray axis sits at +90deg from +X before rotation, so this is the
+  delta needed to align it with the velocity's own angle) -- verified
+  via a Node simulation against all 4 cardinal directions. Scaled
+  UNIFORMLY so each shape's own raw SVG-unit HEIGHT maps onto that
+  particle's `size` field (so Splatter Particle Size means "droplet
+  length along its spray axis" now, not "circle diameter" -- a
+  deliberate, disclosed semantic shift, not a bug), then translated by
+  its own bounding-box half-extents so it stays centered at
+  `(p.x,p.y)` -- the SAME anchor point the old circle used, so spawn
+  position/physics are completely untouched by this rendering-only
+  change. `Path2D` is a browser-only API (mocked for the Node
+  verification, same limitation `ENDCAP_DESIGNS`' own `Path2D` calls
+  already have) -- not live-browser-verified (this environment's
+  recurring dev-server page-boot stall).
+- **`cutSplatterFlightDurationVariance` ("Splatter Flight Duration
+  Randomize", def `0`, a pure no-op at default) randomizes each
+  particle's own flight duration within +/- this fraction of Splatter
+  Flight Duration** -- 2026-09-21, per a direct mid-turn follow-up to
+  the SVG-shapes request above ("a Splatter Flight Duration Randomize
+  slider that allows me to randomize how long the splatter is in
+  motion"). Same `+/-fraction, clamped to a 0.1 floor` pattern
+  `cutSplatterSizeVariance` already established for size, applied to
+  `flight` instead -- captured once at spawn time in the SAME
+  `flight`/`fade` local-variable pattern already used for those 2
+  fields, so a later change to the slider mid-flight never
+  retroactively rescales an already-flying particle's own timeline.

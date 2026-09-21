@@ -1049,6 +1049,18 @@ const DEV_GROUPS = [
     // before landing (0 = a straight-line spray with no arc at all).
     { key:'cutSplatterGravity', label:'Splatter Gravity', type:'slider', unit:'x', min:0, max:10, step:0.1, def:2.5 },
     { key:'cutSplatterFlightDuration', label:'Splatter Flight Duration', type:'slider', unit:'s', min:0, max:2, step:0.05, def:0.4 },
+    // Randomizes each particle's OWN flight duration within +/- this
+    // fraction of Flight Duration (2026-09-21, per direct request: "a
+    // Splatter Flight Duration Randomize slider that allows me to
+    // randomize how long the splatter is in motion") -- same
+    // +/-fraction/clamp pattern as Splatter Size Variance above, applied
+    // to flight instead of size. def:0 is a pure no-op (every particle
+    // uses the exact same Flight Duration, byte-for-byte the prior
+    // behavior) -- captured once per particle at spawn time (spawnCutSplatter()'s
+    // own `flight` local), same "don't retroactively rescale an
+    // already-flying particle" reasoning its neighboring comment already
+    // documents for `fade`.
+    { key:'cutSplatterFlightDurationVariance', label:'Splatter Flight Duration Randomize', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0 },
     { key:'cutSplatterFadeTime', label:'Splatter Fade Time', type:'slider', unit:'s', min:0.5, max:30, step:0.5, def:6 },
     { key:'cutSplatterOpacity', label:'Splatter Max Opacity', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.85 },
   ]},
@@ -8421,6 +8433,65 @@ function cutRopeAt(hit, clickX, clickY){
    Cut Splatter (CUT SPLATTER dev group) -- see that group's own
    comment for the full design/gating rationale.
 --------------------------------------------------------------------- */
+// Splatter particle SHAPES (2026-09-21), per direct request: "instead
+// of being a circle, I want you to use 1 of these SVGs randomly" --
+// path data extracted directly from the 32 SVG files in
+// data/Splatter/SMALL/ (this project's own established
+// embed-the-raw-path-data convention, same as ENDCAP_DESIGNS above,
+// not a runtime image/fetch load -- no build step, and this file is
+// meant to stay openable directly from disk). Every source file's own
+// viewBox starts at "0 0" (confirmed before extracting), and per
+// explicit spec every shape is "aligned Top Down, with the Top being
+// the source of the splatter, and the bottom being the direction of
+// spray" -- i.e. each shape's own local Y axis (0 at top, h at bottom)
+// IS its spray-direction axis, meaningful to rotate against a
+// particle's live velocity (see renderSplatterParticles()'s own
+// rotation formula). `w`/`h` are the shape's own viewBox width/height
+// in raw SVG units (NOT pixels) -- renderSplatterParticles() scales
+// each shape uniformly so its own `h` maps onto that particle's
+// `size` field, so "Splatter Particle Size" reads as the droplet's
+// length along its spray axis, not a circle diameter, for every shape
+// consistently regardless of each shape's own very different raw
+// aspect ratio (2.13x2.47 up to 12.26x51.74 across this set). 3 of the
+// 32 source files (7163-12/14/16) contain a plain <circle> rather than
+// a <path> -- converted to an equivalent 2-arc SVG path string via the
+// standard circle-to-path formula before extraction, so every entry
+// here has the same {key,w,h,d} shape and Path2D construction, no
+// special-casing needed at render time.
+const SPLATTER_SHAPES = [
+  { key:'7159-02', w:9.53, h:16, d:'M7.77,7.24c-.94.26-1.55,3.23-1.8,3.46.61-.55-2.05.83-1.9.58-.52.9-.83,1.62-1.37,2.34-.24.32-.12.88-.76,1.04.02-.3.34-1.21.11-1.53-.05-.08-.45.05-.45-.06-.07-1.85.32-3.54.76-5.23.3-1.14.5-2.27.88-3.44.16-.48.54-.86.42-1.35.01.06.81-1.56.98-1.58.37-.04,1.13-.03,1.27.46.21.74.02,1.58.35,2.29.57-.03.61-.37.89-.79.13.42-.08,1,.34,1.26.6.26.51.32.21.73l-.09,1.62c.34.14.71-.32.83-.17,1.68,2.07-.53,3.83-.85,6.16-.34-1.3-.05-4.08.21-5.81ZM7.31,5.38c.05-.06.05-.16-.02-.21s-.16-.05-.21.02-.05.16.02.21.16.05.21-.02Z' },
+  { key:'7159-03', w:4.85, h:15.15, d:'M2.5,13.49c0,.31-.26.36-.45.13l-.03-4.34c0-.86-.16-1.65-.16-2.39,0-2.51-.4-3.93.12-5.72l.13-.36c.05-.15.41-.07.48.03.12.16-.15.35-.15.54l.03,2c.02,1.24-.05,2.34-.04,3.61l.04,4.56.04,1.96Z' },
+  { key:'7159-04', w:3.4, h:14.98, d:'M1.36,13.48c-.02.31-.28.34-.46.1l.28-4.33c.05-.85-.04-1.66.01-2.4.18-2.51-.12-3.95.53-5.7l.15-.35c.06-.14.41-.04.48.06.11.17-.18.33-.19.53l-.11,2c-.07,1.24-.22,2.33-.3,3.6l-.29,4.56-.1,1.95Z' },
+  { key:'7159-05', w:2.94, h:19.15, d:'M1.01,17.96c.06.89-.81.8-.27.08-.31-1.7-.56-3.29-.44-4.99.05-.65.42-1.13.5-1.71.37-2.44-.2-2.34-.02-3.94.05-.48-.08-.96.11-1.53.58-1.69.04-2.58.11-4.53l.76.46c.16.1-.27,4.65-.29,5.1-.04.99.26,1.93.05,2.85-.58,2.5.8,3.97-.5,8.19Z' },
+  { key:'7159-06', w:4.43, h:10.98, d:'M1.33,2.48c1.09-5.34,2.95,3.95.65,6.92C.85,7.2.85,4.83,1.33,2.48Z' },
+  { key:'7159-07', w:3.32, h:11.91, d:'M1.96,11.32c-.09.28-.39-.1-.43-.35-.33-2.09-.32-4.09-.27-6.22.02-1.02.84-.26.7-2.93-.09-.43.29-.21.41.11.42.96.02,1.93.09,2.88.16,2.16.23,4.26-.5,6.52Z' },
+  { key:'7159-08', w:9.19, h:9.32, d:'M4.58,7.8c.06,0-2.7-1.14-2.22-2.49-.39-.09-.23-1.56.07-2.04l.59-.92c.32-.49,1-.46,1.9-.91.24.48.75.32,1.03.49,1.34.84,2.12,2.59,1.43,3.87l-.74,1.36c-.23.12-.61.05-.76.44l-1.28.19Z' },
+  { key:'7159-09', w:2.94, h:15.83, d:'M1.42,1.23c1,.1.87,13.45-.26,12.96-.42-5-.65-8.07.26-12.96Z' },
+  { key:'7159-10', w:5.11, h:15.45, d:'M2.99,1.19c1,.1.87,13.45-.26,12.96-.42-5-.65-8.07.26-12.96Z' },
+  { key:'7159-11', w:4.98, h:8.68, d:'M2.57,5.02c-.37.49-.11,1.09-.67,1.38-.41-.35-.42-3.88.55-2.5,1.19,3.26.35-1.37,1.25-1.33.95.05.31,2.97-.09,3.57-.57-.23-.03-2.45-1.04-1.12Z' },
+  { key:'7159-12', w:9.45, h:42.89, d:'M5.12,11.69l.73-7.37c.62.32.97-1.17,1.54-.92,1.68.76,2.12,5.54,1.8,7.5-.26,1.59.49,2.96-.1,6.83-.14.94-.75,1.66-1.04,2.56-.83,2.65-.42,2.24-.54,3.51-.08.91-.27,1.74-.28,2.66-.02,1.59.09,3.12-.22,4.71-.11.54-.27.96-.2,1.51.3,2.55-.06,3.85.27,6.35-.13.63-.47.62-.62-.16-1.05.61.17,2.37-.67,3.26l-.06-2.74c-.02-1.08-.11-2.14-.14-3.26-.05-1.51.15-2.95.02-4.46-.21-2.32-.21-5.08.47-7.21.65-2.02.72-5.41.19-7.9l-.57-2.65v-1.58c0-.27.04-.51-.14-.6-.11-.06-.29-.02-.45-.05Z' },
+  { key:'7159-13', w:4.47, h:5.74, d:'M3.15,4.26c-.17.23-.77.56-.98.51-.73-.18-1-.98-1.43-1.47-.38-.43-.99-.82-.69-1.47.2-.42.71-.41,1.28-.47.51,1.31.81.96,1.95,1.61-.05.31.18.87-.13,1.28Z' },
+  { key:'7159-14', w:7.28, h:49.53, d:'M2.75,40.08c-.78,1.04-.17,1.49-.43,3.06-.07.39.35,2.22.18,3.12-.09.51-1.35-.04-1.14-.56.09-.22.72-.34.48-.86-.17-.36.3-.77.2-1.16s-.37-.54-.34-1.03c.02-.45.11-1.18-.06-1.69-.31-.94-2.36-2.45-.59-5.54.75-1.31-.18-2.73,1.23-4.7.56-.78.04-1.15-.32-1.81-.52-.97.01-3.78.44-4.99.17-.49.76-.94.67-1.51-.16-1.06-.4-2.17.44-3.11.43-.48-.23-1.14-.12-1.57.3-1.19-.32-3.93-.85-4.64-.21-.28.12-.76.01-1.07-.82-2.21-2.02-4.1-.98-5.93.35-.61,1.24-.54,1.92-.46l-.05-.79c-.01-.19.26-.54.51-.43.79.35.24,1.05.35,1.61l.49,2.59c.24,1.27-2.04,3.73-1.25,4.44,1.24-.42,1.15-.21,1.79.36.46.41.42,2.45.39,2.58.28-1.35-1.14,5.11-1,2.43-.4-.22-.37.26-.17.56,2.22,2.16.31,3.25.67,4.71,1.92,7.86-1.22,5.73-.62,8.18.3,1.24-.12,2.54-.3,3.79.04.37-.04.65-.3.35-.01-.67.03-1.09-.26-1.58-1.64,1.85.26,2.29-.4,4.66.86.8.41-2.54.78-2.94.35.44.43,4.06.06,4.44-.3-.16-.05-.63-.34-.88-.46-.41-.83.07-1.04.35Z' },
+  { key:'7159-15', w:8.17, h:31.28, d:'M3.76,24.49c-.18.52-1.14,2.82-1.27,2.52-.56-.79-.48-4.24.31-3.81.47.26.34,1.11.91.92.06-.02.2-2.72.2-3.04-.02-1.1-.43-2.08-.33-3.16-.06.64,1.11-2.09.52-3.6-.55-1.4.06-3.36-.46-5.36-.36-1.37.61-3.73-.41-5.36-.15-.23.31-.53.44-.46.67.35-.3.09,1.05,1.68.3.36-.01.95.77,1.28s.09,1.99-.22,2.71c-.62,1.46.5.96.46,3.66l-.03,1.78c-.02,1.2-.23,2.36-.03,3.56.76,4.69-.69,5.2-.44,7.99.22,2.52.57,1.8.66,3.85-.62-.08-.94-.57-.84-1.18.15-.94-.84-1.94-.8-4.15-.04-.46-.4-.35-.47.15Z' },
+  { key:'7159-16', w:12.26, h:51.74, d:'M7.06,6.47l2.83-3.42c.29.26.24.73.09,1.19-.43,1.35,1.36.1,2.12,1.17.33.46-1.16,1.66-1.53,1.48l-.88-.42c.52,1.08.2,1.63.74,2.1-.37.38-.75.78-.78,1.41-.05,1.03-.42,1.99-.47,3l-.18,4.05c-.14,3.11-.72,6.16-.36,9.21.72.38.98-.61,1.31-.53-.02,0,.88,1.27.74,1.55-.28.56-1.32.79-1.74.25-.23-.29.1-.85-.45-.98-.25,1.58-.12,3.14-.18,4.84l-.26,7.77c-.03.87-.25,1.81.12,2.45.25.44-.06.54-.09.93-.27,3.3.83,3.92.31,4.73s-.49,1.73.03,2.69c.06.29.52.1.38.45-1.75-.72.03-.22-1.37-1.6.25.25-.78-2.48-.73-2.72.07-.33.75-.47.74-.89l-.07-6.05.04-2.11.08-2.6c.06-1.89.04-3.67.1-5.51l.13-3.68c0-.2-.69-.43-.52-.58.81-.63.77-1.41.3-2.26-.26-.47-.36-.86-.99-.69-.37.1-.74.13-.68.64.04.41-.37,1.48-.84,1.25-.12-.06-.41-.31-.18-.42.28-.13.33-.2.36-.33.02-.09-.04-.33-.15-.28-.25.11-.35.32-.64.18.35-.5-.05-.81-.07-1.05-.05-.84.9-2.46.41-2.48-.61-.03-.44,1.15-1.29,1.16-.2,0-.42-.14-.76-.24-1.24-.37-.68-1.46-.77-2.9-.1-1.62.64-3.12,1.59-4.41.35-.48,2.18-.78,2.89-.32l.16-2.28-.05-1.4c0-.08,1.02-2.27.53-2.37ZM7.88,20.93c-.06-.21.26-2.09-.06-2.79-.4.27-.43.6-.9.71.02-.17-.2-.36-.41-.18-.48.41-.41.99-.28,1.45.18.65,1.76,1.2,1.65.8Z' },
+  { key:'7159-17', w:10.38, h:44.26, d:'M5.04,11.6l.71-7.37c.62.32.97-1.17,1.54-.92,1.69.75,2.13,5.53,1.81,7.49-.26,1.59.5,2.96-.09,6.84-.14.94-.75,1.66-1.03,2.56-.83,2.65-.42,2.24-.53,3.51-.08.91-.27,1.74-.28,2.66-.02,1.59.09,3.12-.21,4.71-.1.54-.26.96-.2,1.51.31,2.55-.05,3.85.28,6.35-.13.63-.47.62-.62-.16-1.05.62.17,2.37-.66,3.26l-.06-2.74c-.02-1.08-.11-2.14-.15-3.26-.05-1.51.15-2.95,0-4.46-.21-2.32-.22-5.08.46-7.22.64-2.02.71-5.41.18-7.9l-.57-2.65v-1.58c0-.27.04-.51-.14-.6-.11-.06-.29-.02-.45-.05Z' },
+  { key:'7159-18', w:2.64, h:4, d:'M1.7,3.15c-.67-.24-.79-.96-.31-1.57-.19-.49-.23-.78-.16-1.29.31-.09.53.11.61.38.23.76.32,1.5-.14,2.48Z' },
+  { key:'7159-19', w:3.23, h:4.77, d:'M1.79,2.9c.01.57-.49.81-.31.31-.26-.9-.56-2.9.09-3.01s.64,1.75.22,2.69Z' },
+  { key:'7163-02', w:2.64, h:4.04, d:'M1.24.07c.48-.05.6,3.81.22,3.92-.45-.3-.56-3.62-.22-3.92Z' },
+  { key:'7163-03', w:2.81, h:9.13, d:'M1.44.28c.07-.08.16-.03.18.06.33,1.58.44,3.12.39,4.73l-.05,1.6c0,.07-.13,2.49-.4,1.94-.12-.33-.13-.68-.16-1.05-.14-1.99-.17-3.93-.11-5.95.02-.47,0-.9.14-1.33Z' },
+  { key:'7163-04', w:4.26, h:9.79, d:'M1.5,4.36l.57-3.68c.03-.22.06-.43.16-.68.17.33.11.7.16,1.13.23,1.97.46,3.86.58,5.8,0,.1.16.24.14.33-.19.71-.43,1.35-.79,1.96-.21.35-.43-.58-.46-.7-.42-1.5-.37-2.48-.36-4.15Z' },
+  { key:'7163-05', w:3.06, h:6, d:'M.98,4.13c-.08-.72-.23-3.6.28-3.88.11-.06.28.05.34.2.43,1.27.52,3.52.21,4.89-.03.14-.13.37-.27.36-.37-.04-.47-1.28-.56-1.57Z' },
+  { key:'7163-06', w:2.13, h:2.47, d:'M.92,2.14c-.64-.83-.3-1.87.11-1.83.67.07.51,1.78.21,1.93-.11.05-.25,0-.32-.1Z' },
+  { key:'7163-08', w:2.74, h:5.11, d:'M1.44,4.86c-.54.87-.45-5,0-4.75.54.34.08,3.96,0,4.75Z' },
+  { key:'7163-09', w:4.77, h:16.51, d:'M1.46,3.43c-.19-.7-.04-2.18.83-2.18-.11.89-.08,1.67.02,2.49l.18,1.5c.43.39.69.33.66.95-.05.87-.05,1.66,0,2.49-.44,1.03-.59,2.04-.84,3.08-.21.89-.03,1.82.42,2.64.23.42.28.87.08,1.37-.35-.28-.63-.64-.76-1.1l-.55-1.93c-.13-.46-.13-.87-.06-1.35.06-.5.06-.99.27-1.47.32-.71.25-1.93.44-2.94.06-.29-.56-3.08-.69-3.56Z' },
+  { key:'7163-10', w:3.66, h:9.28, d:'M1.41,3.01l.49-1.28c.21-.55.04-.52.37-1.01.12.24.09.54.1.89l.07,3.46c.02,1.02.26,1.97.38,2.98,0,.06-.01.99-.23,1.09-.31.13-.97-1.22-1.08-1.85-.15-.85-.23-1.66-.32-2.49-.07-.61,0-1.2.23-1.78Z' },
+  { key:'7163-11', w:3.57, h:9.62, d:'M1.12,3.17l.56-1.25c.24-.54.07-.52.43-.99.11.25.06.54.05.89l-.12,3.46c-.04,1.02.15,1.98.22,3,0,.06-.07.99-.29,1.07-.32.12-.91-1.27-.98-1.9-.1-.85-.13-1.67-.19-2.5-.04-.61.07-1.2.33-1.77Z' },
+  { key:'7163-12', w:3.66, h:2.89, d:'M1.13,1.53 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z' },
+  { key:'7163-13', w:2.04, h:3.06, d:'M1.58,1.33c.05.39-.13.59-.39.71-.22.1-.35-.04-.51-.21s-.15-.47-.05-.68.3-.34.53-.31c.17.02.37.17.42.49Z' },
+  { key:'7163-14', w:1.36, h:2.64, d:'M0.18000000000000005,1.27 a0.5,0.5 0 1,0 1,0 a0.5,0.5 0 1,0 -1,0 Z' },
+  { key:'7163-15', w:1.7, h:2.64, d:'M1.55,1.82c-.46.04-.93-.09-1.22-.43-.13-.16-.1-.52.09-.58.51-.15,1.06.06,1.32.5.12.21.04.41-.19.5Z' },
+  { key:'7163-16', w:1.53, h:3.15, d:'M0.35,1.46 a0.5,0.5 0 1,0 1,0 a0.5,0.5 0 1,0 -1,0 Z' },
+].map(s => ({ ...s, path: new Path2D(s.d) }));
 // Spawns a burst of splatter particles at (x,y) -- called from every
 // real cut-separation site (performMainRopeSplit/performPieceSplit
 // below). Deliberately gated on DEV_MODE here, at the ONE shared spawn
@@ -8442,7 +8513,13 @@ function spawnCutSplatter(x, y){
     // same slider value.
     const vy = -Math.random() * vmin(cfg.cutSplatterVerticalSpread);
     const sizeMult = 1 + (Math.random() * 2 - 1) * cfg.cutSplatterSizeVariance;
-    const flight = cfg.cutSplatterFlightDuration;
+    // Flight Duration Randomize (2026-09-21) -- same +/-fraction/clamp
+    // pattern as sizeMult above, applied to this particle's own flight
+    // instead of its size. def:0 (the slider's own default) makes
+    // flightMult always exactly 1, a pure no-op preserving the prior
+    // fixed-duration behavior byte-for-byte.
+    const flightMult = Math.max(0.1, 1 + (Math.random() * 2 - 1) * cfg.cutSplatterFlightDurationVariance);
+    const flight = cfg.cutSplatterFlightDuration * flightMult;
     const fade = cfg.cutSplatterFadeTime;
     splatterParticles.push({
       x, y, vx, vy,
@@ -8451,6 +8528,9 @@ function spawnCutSplatter(x, y){
       fade, // this particle's OWN fade duration, captured at spawn time
             // -- so a later change to the slider mid-flight doesn't
             // retroactively rescale an already-fading particle's timeline.
+      // One shape, chosen once at spawn and kept for this particle's
+      // whole lifetime (never re-randomized frame to frame).
+      shape: SPLATTER_SHAPES[Math.floor(Math.random() * SPLATTER_SHAPES.length)],
     });
   }
   if (splatterParticles.length > MAX_SPLATTER_PARTICLES){
@@ -8481,15 +8561,42 @@ function updateSplatterParticles(dt){
 // circle/rope/pieces) so the splatter reads as painted ON the
 // background wall, with everything else correctly passing in front of
 // it -- per explicit request ("blood splatter on the background").
+//
+// Each particle draws its own SPLATTER_SHAPES entry (2026-09-21,
+// replacing the old plain-circle fill) rotated so the shape's own
+// local spray axis (top=source, bottom=spray direction, per that
+// table's own comment) points along the particle's CURRENT velocity
+// direction -- recomputed fresh from p.vx/p.vy every render call
+// rather than frozen at spawn time, so a flying particle's shape
+// visibly follows its own arcing trajectory as Splatter Gravity bends
+// it, and NATURALLY freezes the instant the particle lands (vx/vy stop
+// changing at that point too -- see updateSplatterParticles()'s own
+// "landed" branch -- so no separate freeze bookkeeping is needed here).
+// Rotation formula: atan2(vy,vx) is the velocity's own angle from +X;
+// the shape's local +Y (spray) axis sits at +90deg from +X before any
+// rotation, so the rotation needed to align it with the velocity is
+// that angle minus 90deg (Math.PI/2). Scaled uniformly so the shape's
+// own raw SVG-unit height (shape.h) maps onto this particle's `size`
+// field, then translated by its own bounding-box half-extents so it's
+// centered at (p.x,p.y) -- same anchor point the old circle used,
+// keeping every other part of the particle system (spawn position,
+// physics) completely unaffected by this rendering change.
 function renderSplatterParticles(){
   for (const p of splatterParticles){
     const opacity = Math.max(0, Math.min(1, p.life / p.fade)) * cfg.cutSplatterOpacity;
     if (opacity <= 0) continue;
+    const shape = p.shape;
+    if (!shape) continue; // defensive -- every particle spawned by spawnCutSplatter() always has one
+    ctx.save();
     ctx.globalAlpha = opacity;
     ctx.fillStyle = cfg.cutSplatterColor;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(Math.atan2(p.vy, p.vx) - Math.PI / 2);
+    const scale = p.size / shape.h;
+    ctx.scale(scale, scale);
+    ctx.translate(-shape.w / 2, -shape.h / 2);
+    ctx.fill(shape.path);
+    ctx.restore();
   }
   ctx.globalAlpha = 1;
 }

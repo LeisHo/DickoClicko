@@ -15342,3 +15342,53 @@ curve confirmed to evaluate to exactly 1 everywhere). Not
 live-browser-verified (this environment's recurring dev-server
 page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-21 (10th pass)
+
+2 requests, handled together (the 2nd arrived mid-turn as a direct
+follow-up).
+
+1. Cut Splatter particles now draw one of 32 hand-provided SVG shapes
+   (data/Splatter/SMALL/, 2 color families, "aligned Top Down, with the
+   Top being the source of the splatter, and the bottom being the
+   direction of spray") instead of a plain filled circle, per direct
+   request. Extracted each SVG's own <path> `d` attribute (or, for 3
+   files using a plain <circle> instead, converted it to an equivalent
+   2-arc path via the standard circle-to-path formula) and embedded all
+   32 as a new SPLATTER_SHAPES table (key/w/h/d, each wrapped in its
+   own Path2D) -- this project's own established "embed raw SVG path
+   data directly in JS" convention, same as ENDCAP_DESIGNS, not a
+   runtime image/fetch load. spawnCutSplatter() now assigns each
+   particle one random shape at spawn time, kept fixed for that
+   particle's whole lifetime. renderSplatterParticles() draws the
+   assigned shape rotated so its own local spray axis (top=source,
+   bottom=direction) points along the particle's CURRENT velocity
+   (recomputed every frame from vx/vy, so a flying particle's shape
+   visibly follows its own gravity-bent arc, and naturally freezes the
+   instant it lands since vx/vy stop changing then too -- no separate
+   freeze bookkeeping needed), scaled uniformly so each shape's own raw
+   SVG-unit height maps onto that particle's Splatter Particle Size,
+   and translated to stay centered at the particle's position -- the
+   same anchor point the old circle used, so spawn position/physics are
+   completely unaffected by this rendering change.
+
+2. Added a new "Splatter Flight Duration Randomize" slider
+   (cutSplatterFlightDurationVariance, def 0 -- a pure no-op at
+   default), per direct mid-turn follow-up. Same +/-fraction/clamp
+   pattern Splatter Size Variance already uses, applied to each
+   particle's own flight duration instead of its size, captured once at
+   spawn time.
+
+Verification: syntax-checked (full-file new Function() parse, passed);
+confirmed all 32 SPLATTER_SHAPES entries present via a targeted grep/
+count against the source SVG file count. The rotation formula and both
+new/existing variance formulas verified via a Node-level simulation
+(4 cardinal velocity directions checked against hand-derived expected
+rotation angles; flightMult confirmed exactly 1 at variance=0 for any
+random draw, and correctly spans 0.1-2 at variance=1; a particle's
+assigned shape confirmed to stay fixed across simulated frames, never
+re-randomized). Path2D itself is a browser-only API (same as
+ENDCAP_DESIGNS' own usage) and was mocked for the Node simulation, so
+the actual rendered visual result is not live-browser-verified (this
+environment's recurring dev-server page-boot stall).
+
