@@ -278,7 +278,7 @@
       "loadingPageMaxFillProgress": 0.85,
       "loadingPageRotation": 0,
       "loadingPageRotationSmoothing": 0.02,
-      "loadingPageShowFrameCounter": false
+      "loadingPageShowFrameCounter": true
     },
     "mobile": {},
     "landscape": {}
