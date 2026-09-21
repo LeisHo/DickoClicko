@@ -15830,3 +15830,54 @@ geometry is proven correct in isolation, but how the cursor-tangent
 effect feels under continuous real mouse movement, and whether the new
 load order measurably changes perceived load time, have not been
 directly observed.
+
+--------------------------------------------------------------------------------
+2026-09-21 (Loading Page -- 3 more follow-ups, incl. 2 real bugs)
+
+Investigated a Max Fill Progress clarification ("the moment the circle
+hits my set percentage, the loading page is finished") -- confirmed via
+Node simulation this was already exactly how it worked; no code change
+needed there. That same investigation surfaced a real, separate bug the
+user then reported directly: once required frames finished loading
+faster than Minimum Loading Time, the arc froze completely at its
+configured max fill for the whole remaining wait, since progress was
+purely frame-count-based with no time awareness. Fixed by adding a
+second, time-based progress signal and taking the minimum of the two --
+per the user's own restatement, "the filling of the circle is fully
+dependent on 2 things - 1. the minimum loading time i set, 2. Otherwise
+the actual loading time of loading the minimum frames if that time is
+beyond the minimum loading time." Progress now animates continuously
+through the entire loading window and reaches its max at exactly the
+real exit instant, never early.
+
+Second real bug: the loading arc's cursor-tangent tracking snapped
+instantly whenever the cursor re-emerged from inside the circle (where
+no tangent exists, so it falls back to a fixed angle) back out to a
+real tangent target. Fixed by moving the tangent-candidate computation
+from render() into update() (which has a real per-frame dt) and easing
+loadingPageArcEndAngle toward it via the same exponential-smoothing
+helper every other damping control in this file already uses, with a
+new Loading Page Rotation Smoothing slider (def 0.15, not a no-op --
+the complaint IS the instant-snap behavior). The angular ease wraps the
+delta into the shortest path before scaling, so it never spins the long
+way around across the +-180deg boundary.
+
+Also added: a Loading Page Show Frame Counter checkbox, drawing a plain
+settled/total text label below the arc when on.
+
+Verification: syntax-checked. Node simulation extracting the actual
+shipped drawLoadingPageArc(): confirmed the fill climbs smoothly and
+continuously with zero plateau when frames finish instantly (was
+frozen for the whole Minimum Loading Time wait before this fix), and
+correctly switches to frame-driven pacing once time-progress saturates
+in the reverse scenario (frames slower than the minimum). Node
+simulation extracting the actual shipped update() smoothing block:
+smoothing=1 reproduces the old instant-snap result exactly (backward
+compat); smoothing=0.15 only partially closes the angular gap per tick
+but fully converges within ~5s; the shortest-path wrap correctly
+resolves an adjacent-across-the-boundary angle pair to the true short
+gap, not the long way around. Not live-browser-verified (this
+environment's recurring dev-server page-boot stall) -- the math is
+proven correct in isolation but how it actually feels under continuous
+real mouse movement and real network timing has not been directly
+observed.

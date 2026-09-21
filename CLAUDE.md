@@ -5604,3 +5604,115 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     discrete sampled positions tested here), and whether the new load
     order measurably changes perceived load time, have not been
     directly observed.
+- **Loading Page -- 3 more direct follow-ups landed the SAME day** (2nd
+  round after the "5 follow-up requests" entry above), one of them a
+  real, reported, now-fixed bug:
+  1. **Max Fill Progress clarification -- INVESTIGATED, confirmed
+     already correct, no code change needed for the clarification
+     itself.** "the time it will take the circle to fill... .4, .5,
+     .7... will be tweaked to the same time it wouldve taken to reach
+     100%. So the moment the circle hits [its own max], the loading
+     page is finished." Verified via a Node simulation of the ACTUAL
+     shipped function across a settled-frame sweep at 2 different
+     `loadingPageMaxFillProgress` values: at every sampled settled
+     count, `sweep(0.5)/sweep(1.0) === exactly 0.5` -- proving the fill
+     RATE (as a function of real loading progress) is completely
+     unaffected by this control; only the displayed ENDPOINT differs.
+     This was already how it worked before this clarification arrived
+     -- see item 2 below for the REAL bug this same investigation
+     accidentally surfaced.
+  2. **Frozen-circle bug during the Minimum-Loading-Time wait, FIXED --
+     found live by the user, not by the investigation above.** Real,
+     reported bug: "max fill progress hits my set percentage. then it
+     just waits. So there is a period of time where the circle is
+     frozen at the percentage i had set," clarified immediately after:
+     "the filling of the circle is fully dependent on 2 things - 1.
+     the minimum loading time i set, 2. Otherwise the actual loading
+     time of loading the minimum frames if that time is beyond the
+     minimum loading time." Root cause: `progress` was PURELY
+     frame-count-based (`min(1, settled/requiredFrames)`) -- it reached
+     1 (and therefore its own frozen ceiling) the instant every
+     required frame settled, with NO awareness of Minimum Loading Time
+     at all, even though the page's own exit gate is an AND of both
+     conditions. Whenever frames finished loading faster than Minimum
+     Loading Time (very common -- frames often settle in well under a
+     second), the arc sat completely static at its max fill for the
+     entire remaining wait, exactly as reported. Fixed by computing a
+     SECOND progress signal, `timeProgress = min(1,
+     elapsedMs/(minDuration*1000))`, and taking
+     `progress = min(frameProgress, timeProgress)` -- this can only
+     ever advance as fast as whichever of the 2 real exit conditions is
+     CURRENTLY the slower one, so it animates continuously through the
+     entire loading window (frame-bound while frames are the
+     bottleneck, time-bound once they're not) and reaches 1 -- true
+     "done" -- at EXACTLY the same instant the real exit condition
+     fires, never early, matching the user's own 2-clause restatement
+     precisely. Verified via a Node simulation of the ACTUAL shipped
+     function across 2 scenarios: frames finishing instantly (settled
+     count already at its max from frame 0) shows the fill climbing
+     smoothly and continuously from ~0.8% to 50% (at maxFillProgress
+     0.5) over the full 2000ms Minimum Loading Time with NO plateau
+     anywhere in between, then correctly holding flat past that point
+     (no overshoot); frames loading slower than Minimum Loading Time
+     (linear over 3000ms against a 2000ms minimum) shows the fill
+     correctly tracking frame-settle progress once time-progress has
+     already saturated, matching the user's own 2nd clause exactly.
+     The exact instant boundary (t=1999ms vs. t=2000ms) confirmed the
+     fill reaches its configured max precisely at the Minimum Loading
+     Time deadline, not a moment before.
+  3. **Cursor Tangent instant-rotation bug, FIXED, via a new damping
+     slider.** Real, reported bug: "when the cursor goes within the
+     circle, the tangent cursor tracking doesnt work. When the cursor
+     exits the circle, the circle suddenly rotates instantaneously to
+     match that. I want that rotation to be smooth. Provided a damping
+     slider to control that exact usecase." The "doesn't work" inside
+     the circle is the EXISTING, deliberate `baseAngle` fallback (no
+     real tangent exists there -- unchanged, working as designed); the
+     actual bug was the transition BACK to a real tangent on exit,
+     which used to write `loadingPageArcEndAngle` straight through with
+     no easing at all -- an instant, potentially large jump if the
+     cursor re-emerged far from wherever `baseAngle` happened to point.
+     **Architecturally moved** the entire tangent-candidate-selection
+     and inside-circle-fallback computation OUT of `drawLoadingPageArc()`
+     (called from `render()`, whose variable rAF rate has no clean `dt`
+     to smooth against) and INTO a new block at the top of `update()`
+     (fixed timestep, `rawDt` available) -- `drawLoadingPageArc()` now
+     just READS the already-computed, already-smoothed
+     `loadingPageArcEndAngle`. The smoothing itself reuses the SAME
+     `mouseFlickExpSmoothFactor()` helper every other damping control
+     in this file already uses (1=instant, smaller=more smoothing), via
+     a new `loadingPageRotationSmoothing` slider (def `0.15` --
+     DELIBERATELY not a no-op `1`, since the reported complaint IS the
+     instant-snap behavior; shipping a no-op default would leave the
+     bug present for anyone who never finds this slider). **Shortest-
+     path angular easing, not a raw lerp**: the raw target-minus-current
+     delta is wrapped into `(-PI, PI]` BEFORE scaling by the smoothing
+     factor and adding it back -- lerping the raw angle values directly
+     would rotate the WRONG, long way around whenever the current and
+     target angles straddle the `+-PI` wrap boundary. Verified via a
+     Node simulation extracting the ACTUAL shipped `update()` block:
+     `smoothing=1` reproduces the old instant-snap result bit-for-bit
+     (backward-compat sanity check); `smoothing=0.15` only partially
+     closes the angular gap in one tick (0.2306 -> 0.1960 rad after a
+     single 1/60s tick) but fully converges (residual ~0.000000) after
+     300 repeated ticks (~5s); the inside-circle fallback still
+     resolves correctly, just eased into rather than snapped; the whole
+     block correctly no-ops once `appLoading` is false; the shortest-
+     path wrap formula correctly resolves a deliberately-adjacent-
+     across-the-boundary pair (current just under `+PI`, target just
+     over `-PI`) to a genuine `0.2` rad gap, not the long way around
+     (`~2*PI-0.2`).
+  - **A 4th, unrelated request landed the same pass**: `loadingPageShowFrameCounter`
+    checkbox (def `false`), drawing a plain `settled / total` text label
+    below the loading arc when on -- "provide a checbox. when turned
+    on, it shows a counter of how many frames have been loaded." Reads
+    `mouseFlickTotalFrameCount` (the real total), not `requiredFrames`
+    -- "how many frames have been loaded" is a literal asset-count
+    question, independent of wherever Min Frames Required happens to be
+    set.
+  - **Not live-browser-verified** (this environment's recurring
+    dev-server page-boot stall) -- the geometry/timing math is proven
+    correct in isolation via Node simulation of the actual shipped
+    code, but how the smoothed rotation and the no-longer-frozen fill
+    actually FEEL under continuous real mouse movement and real network
+    load timing have not been directly observed.

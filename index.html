@@ -543,6 +543,29 @@ const DEV_GROUPS = [
     // cursor-tangent calculation overrides it. def:0 is a no-op
     // (unrotated, matching the arc's original fixed 12-o'clock start).
     { key:'loadingPageRotation', label:'Loading Page Rotation (Deg)', type:'slider', unit:'deg', min:0, max:360, step:1, def:0 },
+    // Loading Page Rotation Smoothing (2026-09-21) -- per direct
+    // report: "when the cursor goes within the circle, the tangent
+    // cursor tracking doesnt work. When the cursor exits the circle,
+    // the circle suddenly rotates instantaneously to match that. I want
+    // that rotation to be smooth. Provided a damping slider to control
+    // that exact usecase." Same 1=instant/smaller=more-smoothing
+    // convention as every other smoothing control in this file (fed
+    // through the existing mouseFlickExpSmoothFactor() helper) -- see
+    // update()'s own Cursor Tangent smoothing block. def:0.15 (NOT a
+    // no-op 1) -- the reported complaint IS the instant-snap behavior,
+    // so shipping this "fixed but effectively off by default" would
+    // leave the bug in place for anyone who never finds this slider.
+    { key:'loadingPageRotationSmoothing', label:'Loading Page Rotation Smoothing (x)', type:'slider', unit:'x', min:0.02, max:1, step:0.01, def:0.15 },
+    // Loading Page Show Frame Counter (2026-09-21) -- per direct
+    // request: "provide a checbox. when turned on, it shows a counter
+    // of how many frames have been loaded." def:false, same
+    // debug-overlay-off-by-default convention as this project's other
+    // optional on-screen counters/overlays. See drawLoadingPageArc()'s
+    // own text-draw call for exactly what it shows (settled count vs.
+    // the real total frame count -- the literal "how many frames have
+    // been loaded" reading, not the possibly-smaller Min Frames
+    // Required threshold).
+    { key:'loadingPageShowFrameCounter', label:'Loading Page Show Frame Counter', type:'checkbox', def:false },
   ]},
   { title:'CIRCLE', controls:[
     { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:21.5 },
@@ -10763,6 +10786,57 @@ function update(rawDt){
         appLoading = false;
       }
     }
+    // Cursor Tangent smoothing (2026-09-21) -- per direct report: "when
+    // the cursor goes within the circle, the tangent cursor tracking
+    // doesnt work. When the cursor exits the circle, the circle
+    // suddenly rotates instantaneously to match that. I want that
+    // rotation to be smooth." The raw target-angle computation (tangent
+    // candidate selection, inside-circle fallback to baseAngle) used to
+    // live directly in drawLoadingPageArc() and wrote
+    // loadingPageArcEndAngle straight through with no easing -- moved
+    // here so it can be smoothed with a real per-frame rawDt via the
+    // same mouseFlickExpSmoothFactor() helper every other smoothing
+    // control in this file already uses (render()'s own variable rAF
+    // rate has no clean dt to smooth against; update()'s fixed
+    // timestep does). drawLoadingPageArc() now just READS the
+    // already-smoothed loadingPageArcEndAngle. Gated on appLoading --
+    // pointless to keep computing this once the page has finished
+    // loading and the arc is never drawn again.
+    if (appLoading){
+      const center = {
+        x: viewportW() / 2 + vw(cfg.loadingPageXOffset),
+        y: viewportH() / 2 + vh(cfg.loadingPageYOffset),
+      };
+      const radius = vmin(cfg.loadingPageScale);
+      const baseAngle = -Math.PI / 2 + (cfg.loadingPageRotation * Math.PI / 180);
+      const dx = mouseX - center.x, dy = mouseY - center.y;
+      const cursorDist = Math.hypot(dx, dy);
+      let targetAngle;
+      if (cursorDist >= radius && cursorDist > 0){
+        const theta = Math.atan2(dy, dx);
+        const alpha = Math.acos(radius / cursorDist);
+        const candA = theta + alpha, candB = theta - alpha;
+        const angDelta = (a, b) => {
+          let diff = (a - b) % (Math.PI * 2);
+          if (diff > Math.PI) diff -= Math.PI * 2;
+          if (diff < -Math.PI) diff += Math.PI * 2;
+          return Math.abs(diff);
+        };
+        targetAngle = angDelta(candA, loadingPageArcEndAngle) <= angDelta(candB, loadingPageArcEndAngle) ? candA : candB;
+      } else {
+        targetAngle = baseAngle;
+      }
+      // Shortest-path angular ease -- wrap the raw delta into (-PI, PI]
+      // BEFORE scaling by the smoothing factor and adding it back onto
+      // the current angle, rather than lerping the raw angle values
+      // directly (which would rotate the WRONG, long way around
+      // whenever target and current straddle the +-PI wrap boundary).
+      let angDiff = (targetAngle - loadingPageArcEndAngle) % (Math.PI * 2);
+      if (angDiff > Math.PI) angDiff -= Math.PI * 2;
+      if (angDiff < -Math.PI) angDiff += Math.PI * 2;
+      const smoothFactor = mouseFlickExpSmoothFactor(cfg.loadingPageRotationSmoothing, rawDt);
+      loadingPageArcEndAngle += angDiff * smoothFactor;
+    }
   }
   // Cut Splatter's/Collision Splatter's own per-frame tick -- self-
   // contained (reads/writes only their own array), so placed first and
@@ -13718,9 +13792,31 @@ function drawLoadingPageArc(){
   // being satisfied, rather than the arc looking permanently short of
   // "full" if Min Frames Required is set below the true total.
   const requiredFrames = Math.min(cfg.loadingPageMinFramesRequired, mouseFlickTotalFrameCount);
-  const progressRaw = requiredFrames > 0
-    ? mouseFlickSettledFrameCount / requiredFrames
+  const frameProgress = requiredFrames > 0
+    ? Math.min(1, mouseFlickSettledFrameCount / requiredFrames)
     : 1;
+  // Corrected 2026-09-21 -- real, reported bug: "max fill progress hits
+  // my set percentage. then it just waits. So there is a period of
+  // time where the circle is frozen at the percentage i had set."
+  // Root cause: progress used to be JUST frameProgress, which reaches
+  // 1 (and therefore its own frozen ceiling) the instant every
+  // required frame has settled -- but the page's own exit gate is an
+  // AND with Minimum Loading Time, so whenever frames finish loading
+  // faster than that minimum duration, the arc sat completely static
+  // at its max fill for the whole remaining wait. Fixed by ALSO
+  // tracking timeProgress (elapsed time toward Minimum Loading Time)
+  // and taking the MINIMUM of the two -- progress can only advance as
+  // fast as whichever condition is currently the slower one, so it
+  // keeps animating continuously through the ENTIRE loading window
+  // (frame-bound while frames are still the bottleneck, time-bound
+  // once they're not) and reaches 1 -- its own true "done" state --
+  // at EXACTLY the same instant the real exit condition fires, never
+  // early.
+  const timeElapsedMs = performance.now() - loadingBootTimestamp;
+  const timeProgress = cfg.loadingPageMinDuration > 0
+    ? Math.min(1, timeElapsedMs / (cfg.loadingPageMinDuration * 1000))
+    : 1;
+  const progressRaw = Math.min(frameProgress, timeProgress);
   const progress = Math.max(0, Math.min(1, progressRaw));
   // A minimum visible sweep at progress===0 so there's always a real,
   // cappable 2-point segment to draw rather than a degenerate single
@@ -13738,46 +13834,17 @@ function drawLoadingPageArc(){
     y: viewportH() / 2 + vh(cfg.loadingPageYOffset),
   };
   const radius = vmin(cfg.loadingPageScale);
-  // Loading Page Rotation (2026-09-21) -- 12 o'clock (canvas angle
-  // convention: 0 = 3 o'clock, increasing angle sweeps clockwise since Y
-  // grows downward) plus the user's own rotation offset. This is the
-  // FALLBACK end angle whenever a real cursor tangent doesn't exist (see
-  // below) -- with the slider at its def 0, this is plain 12 o'clock,
-  // matching the arc's original fixed start point exactly.
-  const baseAngle = -Math.PI / 2 + (cfg.loadingPageRotation * Math.PI / 180);
   // Cursor Tangent (2026-09-21, per direct request): "I want the tangent
   // of the circle end to point at the cursor... if you pause the loading
   // circle, then draw a straight line out of the end, that straight line
-  // should intersect the cursor point." For an external point (the
-  // cursor) and this circle, there are 2 tangent lines, touching the
-  // circle at angle (theta +/- alpha) from center -- theta = the angle
-  // from center to the cursor, alpha = acos(radius/d) where d = distance
-  // from center to cursor (a right triangle formed by the center, the
-  // tangent point, and the cursor, with the right angle AT the tangent
-  // point, per the standard radius-perpendicular-to-tangent property).
-  // Whichever of the 2 candidates is angularly CLOSER to the arc's own
-  // last-frame end angle is chosen, for continuity, so the tip doesn't
-  // flip to the opposite side of the circle on an ordinary cursor move --
-  // loadingPageArcEndAngle persists this choice across frames. If the
-  // cursor sits INSIDE the circle (d < radius), no real tangent exists --
-  // falls back to baseAngle (so Loading Page Rotation stays meaningful
-  // even then, rather than freezing on a stale value).
-  const dx = mouseX - center.x, dy = mouseY - center.y;
-  const cursorDist = Math.hypot(dx, dy);
-  if (cursorDist >= radius && cursorDist > 0){
-    const theta = Math.atan2(dy, dx);
-    const alpha = Math.acos(radius / cursorDist);
-    const candA = theta + alpha, candB = theta - alpha;
-    const angDelta = (a, b) => {
-      let diff = (a - b) % (Math.PI * 2);
-      if (diff > Math.PI) diff -= Math.PI * 2;
-      if (diff < -Math.PI) diff += Math.PI * 2;
-      return Math.abs(diff);
-    };
-    loadingPageArcEndAngle = angDelta(candA, loadingPageArcEndAngle) <= angDelta(candB, loadingPageArcEndAngle) ? candA : candB;
-  } else {
-    loadingPageArcEndAngle = baseAngle;
-  }
+  // should intersect the cursor point." Corrected the same day (real,
+  // reported bug: "when the cursor exits the circle, the circle suddenly
+  // rotates instantaneously... I want that rotation to be smooth") -- the
+  // actual tangent-candidate-selection/inside-circle-fallback math, and
+  // the Loading Page Rotation Smoothing damping, now live in update()'s
+  // own dedicated block (it needs a real per-frame dt, which render()'s
+  // variable rAF rate doesn't cleanly provide). This function just READS
+  // the already-computed, already-smoothed result.
   const endAngle = loadingPageArcEndAngle;
   // The arc grows BACKWARD from the cursor-tracked end -- both endpoints
   // move each frame (the end tracks the cursor's own tangent, the start
@@ -13817,6 +13884,22 @@ function drawLoadingPageArc(){
   drawEndcap(arcPoints, thickness, cfg.endcapDesign, color, cfg.endcapHeight, 1, gradientInfo);
   strokeRopeCurve(arcPoints, thickness, color);
   drawEndcap([...arcPoints].reverse(), thickness, cfg.endcapDesign, color, cfg.endcapHeight, 1, gradientInfo);
+  // Loading Page Show Frame Counter (2026-09-21) -- per direct request:
+  // "provide a checbox. when turned on, it shows a counter of how many
+  // frames have been loaded." Plain centered canvas text below the
+  // circle -- reads mouseFlickSettledFrameCount/mouseFlickTotalFrameCount
+  // directly (the real total, not requiredFrames -- "how many frames
+  // have been loaded" is a literal asset-count question, independent of
+  // wherever Min Frames Required happens to be set).
+  if (cfg.loadingPageShowFrameCounter){
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${Math.round(vmin(3))}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${mouseFlickSettledFrameCount} / ${mouseFlickTotalFrameCount}`, center.x, center.y + radius + vmin(3));
+    ctx.restore();
+  }
 }
 
 function render(){
