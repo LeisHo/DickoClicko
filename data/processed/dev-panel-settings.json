@@ -115,7 +115,7 @@
       "intensityCeiling": 50,
       "minRopeLength": 1.3,
       "clickDistance": 6.3,
-      "doubleClickDistance": 9.6,
+      "doubleClickDistance": 11.2,
       "doubleClickThreshold": 180,
       "ropeFallSpeed": 0.4,
       "cutSpeed": 0.6,
@@ -256,7 +256,18 @@
       "pieceDecayTintAmount": 0.5,
       "pieceDecayBrightness": 1,
       "overstretchThinningReleaseDuration": 400,
-      "endcapDragPositionSmoothing": 0.25
+      "endcapDragPositionSmoothing": 0.25,
+      "growDistance": 13,
+      "dragOverstretchMinSensitivityCurve": [
+        {
+          "x": 0,
+          "y": 1
+        },
+        {
+          "x": 1,
+          "y": 1
+        }
+      ]
     },
     "mobile": {},
     "landscape": {}
@@ -1327,7 +1338,7 @@
       },
       {
         "key": "DEBUG",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
@@ -2204,7 +2215,7 @@
             "type": "group",
             "group": {
               "key": "CLICK",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2231,11 +2242,15 @@
             "type": "group",
             "group": {
               "key": "ROPE CUT",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
                   "key": "doubleClickDistance"
+                },
+                {
+                  "type": "row",
+                  "key": "growDistance"
                 },
                 {
                   "type": "row",
@@ -2260,6 +2275,7 @@
               ],
               "settings": [
                 "doubleClickDistance",
+                "growDistance",
                 "doubleClickThreshold",
                 "cutSpeed",
                 "endcapAtCutEnd",
@@ -2391,10 +2407,6 @@
                 },
                 {
                   "type": "row",
-                  "key": "dragOverstretchMinSensitivity"
-                },
-                {
-                  "type": "row",
                   "key": "dragOverstretchMinSensitivityCurve"
                 },
                 {
@@ -2468,7 +2480,6 @@
                 "dragPickupDuration",
                 "mouseFlickDragSpeed",
                 "dragMouseSensitivity",
-                "dragOverstretchMinSensitivity",
                 "dragOverstretchMinSensitivityCurve"
               ],
               "subgroups": [
@@ -2539,7 +2550,7 @@
         "subgroups": [
           {
             "key": "CLICK",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
@@ -2563,11 +2574,15 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
                 "key": "doubleClickDistance"
+              },
+              {
+                "type": "row",
+                "key": "growDistance"
               },
               {
                 "type": "row",
@@ -2592,6 +2607,7 @@
             ],
             "settings": [
               "doubleClickDistance",
+              "growDistance",
               "doubleClickThreshold",
               "cutSpeed",
               "endcapAtCutEnd",
@@ -2711,10 +2727,6 @@
               },
               {
                 "type": "row",
-                "key": "dragOverstretchMinSensitivity"
-              },
-              {
-                "type": "row",
                 "key": "dragOverstretchMinSensitivityCurve"
               },
               {
@@ -2788,7 +2800,6 @@
               "dragPickupDuration",
               "mouseFlickDragSpeed",
               "dragMouseSensitivity",
-              "dragOverstretchMinSensitivity",
               "dragOverstretchMinSensitivityCurve"
             ],
             "subgroups": [
@@ -2984,52 +2995,12 @@
         "collapsed": true,
         "items": [
           {
-            "type": "row",
-            "key": "flickHoldMaxDuration"
-          },
-          {
-            "type": "row",
-            "key": "flickHoldMaxSpeed"
-          },
-          {
             "type": "group",
             "group": {
               "key": "FLICK ANIMATION",
               "collapsed": true,
-              "items": [
-                {
-                  "type": "row",
-                  "key": "flickEnabled"
-                },
-                {
-                  "type": "row",
-                  "key": "flickSource"
-                },
-                {
-                  "type": "row",
-                  "key": "flickX"
-                },
-                {
-                  "type": "row",
-                  "key": "flickY"
-                },
-                {
-                  "type": "row",
-                  "key": "flickScale"
-                },
-                {
-                  "type": "row",
-                  "key": "flickAnimSpeed"
-                }
-              ],
-              "settings": [
-                "flickEnabled",
-                "flickSource",
-                "flickX",
-                "flickY",
-                "flickScale",
-                "flickAnimSpeed"
-              ],
+              "items": [],
+              "settings": [],
               "subgroups": []
             }
           },
@@ -3038,35 +3009,8 @@
             "group": {
               "key": "FLICK ANIMATION 2",
               "collapsed": true,
-              "items": [
-                {
-                  "type": "row",
-                  "key": "flick2Enabled"
-                },
-                {
-                  "type": "row",
-                  "key": "flick2X"
-                },
-                {
-                  "type": "row",
-                  "key": "flick2Y"
-                },
-                {
-                  "type": "row",
-                  "key": "flick2Scale"
-                },
-                {
-                  "type": "row",
-                  "key": "flick2AnimSpeed"
-                }
-              ],
-              "settings": [
-                "flick2Enabled",
-                "flick2X",
-                "flick2Y",
-                "flick2Scale",
-                "flick2AnimSpeed"
-              ],
+              "items": [],
+              "settings": [],
               "subgroups": []
             }
           },
@@ -3075,159 +3019,33 @@
             "group": {
               "key": "FLICK ANIMATION 3",
               "collapsed": true,
-              "items": [
-                {
-                  "type": "row",
-                  "key": "flick3Enabled"
-                },
-                {
-                  "type": "row",
-                  "key": "flick3Source"
-                },
-                {
-                  "type": "row",
-                  "key": "flick3X"
-                },
-                {
-                  "type": "row",
-                  "key": "flick3Y"
-                },
-                {
-                  "type": "row",
-                  "key": "flick3Scale"
-                },
-                {
-                  "type": "row",
-                  "key": "flick3AnimSpeed"
-                }
-              ],
-              "settings": [
-                "flick3Enabled",
-                "flick3Source",
-                "flick3X",
-                "flick3Y",
-                "flick3Scale",
-                "flick3AnimSpeed"
-              ],
+              "items": [],
+              "settings": [],
               "subgroups": []
             }
           }
         ],
-        "settings": [
-          "flickHoldMaxDuration",
-          "flickHoldMaxSpeed"
-        ],
+        "settings": [],
         "subgroups": [
           {
             "key": "FLICK ANIMATION",
             "collapsed": true,
-            "items": [
-              {
-                "type": "row",
-                "key": "flickEnabled"
-              },
-              {
-                "type": "row",
-                "key": "flickSource"
-              },
-              {
-                "type": "row",
-                "key": "flickX"
-              },
-              {
-                "type": "row",
-                "key": "flickY"
-              },
-              {
-                "type": "row",
-                "key": "flickScale"
-              },
-              {
-                "type": "row",
-                "key": "flickAnimSpeed"
-              }
-            ],
-            "settings": [
-              "flickEnabled",
-              "flickSource",
-              "flickX",
-              "flickY",
-              "flickScale",
-              "flickAnimSpeed"
-            ],
+            "items": [],
+            "settings": [],
             "subgroups": []
           },
           {
             "key": "FLICK ANIMATION 2",
             "collapsed": true,
-            "items": [
-              {
-                "type": "row",
-                "key": "flick2Enabled"
-              },
-              {
-                "type": "row",
-                "key": "flick2X"
-              },
-              {
-                "type": "row",
-                "key": "flick2Y"
-              },
-              {
-                "type": "row",
-                "key": "flick2Scale"
-              },
-              {
-                "type": "row",
-                "key": "flick2AnimSpeed"
-              }
-            ],
-            "settings": [
-              "flick2Enabled",
-              "flick2X",
-              "flick2Y",
-              "flick2Scale",
-              "flick2AnimSpeed"
-            ],
+            "items": [],
+            "settings": [],
             "subgroups": []
           },
           {
             "key": "FLICK ANIMATION 3",
             "collapsed": true,
-            "items": [
-              {
-                "type": "row",
-                "key": "flick3Enabled"
-              },
-              {
-                "type": "row",
-                "key": "flick3Source"
-              },
-              {
-                "type": "row",
-                "key": "flick3X"
-              },
-              {
-                "type": "row",
-                "key": "flick3Y"
-              },
-              {
-                "type": "row",
-                "key": "flick3Scale"
-              },
-              {
-                "type": "row",
-                "key": "flick3AnimSpeed"
-              }
-            ],
-            "settings": [
-              "flick3Enabled",
-              "flick3Source",
-              "flick3X",
-              "flick3Y",
-              "flick3Scale",
-              "flick3AnimSpeed"
-            ],
+            "items": [],
+            "settings": [],
             "subgroups": []
           }
         ]
@@ -3388,10 +3206,10 @@
       }
     },
     "mobile": {
-      "left": 182,
-      "top": 452.3571472167969,
-      "width": 229,
-      "height": 332.63690185546875,
+      "left": 1.1875,
+      "top": 87.5999984741211,
+      "width": 409.8000183105469,
+      "height": 642.0375366210938,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
@@ -3399,7 +3217,6 @@
         "labelFontSize": 12,
         "opacity": 1,
         "titleColor": "#ffffff",
-        "bodyFontSize": 12,
         "bgColor": "#000000",
         "textColor": "#ffffff",
         "accentColor": "#005f8f",
@@ -3416,7 +3233,6 @@
         "tabLetterSpacing": 0,
         "groupLetterSpacing": 0.8,
         "settingsLetterSpacing": 0,
-        "textEditMode": false,
         "valueFontSize": 12,
         "buttonFontSize": 10,
         "titleLetterSpacing": 2.3,
