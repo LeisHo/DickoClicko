@@ -15536,3 +15536,57 @@ recurring dev-server page-boot stall) -- the actual real-world load-
 time improvement (and whether tickle/drag frames are still ready in
 time for a fast player gesture) has not been measured against a real
 network load.
+
+--------------------------------------------------------------------------------
+2026-09-21 (14th pass)
+
+Direct report: "I still see the Flcik Animatins settings groups. I
+think they are hard coded. remove them." Confirmed via grep this
+session's own earlier flick1/2/3 SOURCE-CODE removal (the 8th pass)
+really is complete -- the groups were never hardcoded, they were a
+STALE data artifact instead: `data/processed/dev-panel-settings.json`
+(the live, git-tracked, shared settings file every visitor's dev panel
+loads from) still carried a real `order.groups` entry for a top-level
+group (internal key "New Group", displayed as "FLICK ANIMATIONS" via
+`textOverrides`) whose own 3 nested sub-groups (FLICK ANIMATION/2/3)
+were confirmed genuinely empty (`items:[]`, `settings:[]` each) --
+`placeGroup()` was still recreating these as visible-but-empty shells
+on every load, exactly matching what the user reported, even though no
+DEV_GROUPS source code defines them anymore. This is the SAME bug
+class this project's own history has already hit twice before (a
+removed/renamed group leaving a stale saved-order entry).
+
+Before removing anything, checked whether a similarly-named group,
+"FLICK HOLD" (displayed as "CLICK HOLD-CHARGE", nested inside a
+DIFFERENT top-level group, "CLICK FUNCTIONS"), was part of the same
+stale artifact -- it was NOT: direct inspection showed it holds 4 real,
+live, currently-functioning rows (holdDistance, clickHoldMaxDuration,
+intensityCeiling, punchPowerAbsolute) under an old internal key name
+left over from an earlier rename, same "internal key predates a later
+display rename" pattern this project's own CURSOR ANIMATION group
+already has -- left completely untouched, along with its parent
+"CLICK FUNCTIONS" group and everything else in it.
+
+Fixed as a pure DATA change (no code touched): removed the "New Group"
+entry from order.groups (which, being entirely composed of the 3 empty
+sub-groups and nothing else, cleanly removed all 4 empty shells in one
+operation), its now-meaningless textOverrides entry, and 19 orphaned
+flick1/2/3-era VALUE keys (flickEnabled/flickSource/flickX/Y/Scale/
+AnimSpeed, flick2*, flick3*, flickHoldMaxSpeed/Duration) from
+valuesByDevice.desktop -- dead data no control reads anymore. Pulled
+the very latest version of the settings file from origin immediately
+before editing (4 more Save Settings auto-commits had landed since this
+session's own prior push) and re-verified the same structure held
+against that fresher copy before writing, per this project's own
+established concurrent-session-safety convention.
+
+Verification: the resulting JSON re-parsed successfully; confirmed via
+direct inspection that "CLICK FUNCTIONS" and "FLICK HOLD"/"CLICK
+HOLD-CHARGE" (with its 4 real rows, unchanged) both survived intact,
+the "New Group"/"FLICK ANIMATIONS" entry is gone, and a full-document
+scan for any remaining non-mouseFlick "flick" substring turned up only
+the 2 expected, intentional survivors (the kept FLICK HOLD group's own
+key, and an unrelated "CLICK-FLICK" display override on a completely
+different group). `git diff --stat` confirmed a clean, pure-deletion
+diff (80 lines removed, 0 added) -- no other content in the file was
+touched.

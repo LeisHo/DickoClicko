@@ -190,25 +190,6 @@
       "detachTipStartScale": 0.1,
       "detachTipGrowDuration": 0.8,
       "detachThicknessMultiplier": 1.02,
-      "flickEnabled": false,
-      "flickSource": "above",
-      "flickX": 28,
-      "flickY": 67,
-      "flickScale": 120,
-      "flickAnimSpeed": 4,
-      "flick2Enabled": false,
-      "flick2X": 19,
-      "flick2Y": 23,
-      "flick2Scale": 39.5,
-      "flick2AnimSpeed": 4.4,
-      "flick3Enabled": true,
-      "flick3Source": "side-thumb",
-      "flick3X": 79,
-      "flick3Y": 67,
-      "flick3Scale": 120,
-      "flick3AnimSpeed": 4,
-      "flickHoldMaxSpeed": 4,
-      "flickHoldMaxDuration": 2.9,
       "ropeAttractionIntensity": 0.06,
       "ropeAttractionSpeed": 23,
       "ropeAttractionMaxReach": 64,
@@ -3126,66 +3107,6 @@
         "subgroups": []
       },
       {
-        "key": "New Group",
-        "collapsed": true,
-        "items": [
-          {
-            "type": "group",
-            "group": {
-              "key": "FLICK ANIMATION",
-              "collapsed": false,
-              "items": [],
-              "settings": [],
-              "subgroups": []
-            }
-          },
-          {
-            "type": "group",
-            "group": {
-              "key": "FLICK ANIMATION 2",
-              "collapsed": false,
-              "items": [],
-              "settings": [],
-              "subgroups": []
-            }
-          },
-          {
-            "type": "group",
-            "group": {
-              "key": "FLICK ANIMATION 3",
-              "collapsed": false,
-              "items": [],
-              "settings": [],
-              "subgroups": []
-            }
-          }
-        ],
-        "settings": [],
-        "subgroups": [
-          {
-            "key": "FLICK ANIMATION",
-            "collapsed": false,
-            "items": [],
-            "settings": [],
-            "subgroups": []
-          },
-          {
-            "key": "FLICK ANIMATION 2",
-            "collapsed": false,
-            "items": [],
-            "settings": [],
-            "subgroups": []
-          },
-          {
-            "key": "FLICK ANIMATION 3",
-            "collapsed": false,
-            "items": [],
-            "settings": [],
-            "subgroups": []
-          }
-        ]
-      },
-      {
         "key": "FLOOR",
         "collapsed": true,
         "items": [
@@ -3417,7 +3338,6 @@
     "landscape": null
   },
   "textOverrides": {
-    "group:New Group": "FLICK ANIMATIONS",
     "group:New Group (2)": "Endcap",
     "group:New Group (3)": "EndArc",
     "group:New Group (4)": "CUT PIECE",
