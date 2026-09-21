@@ -115,7 +115,7 @@
       "intensityCeiling": 50,
       "minRopeLength": 1.3,
       "clickDistance": 6.3,
-      "doubleClickDistance": 9.6,
+      "doubleClickDistance": 13.2,
       "doubleClickThreshold": 180,
       "ropeFallSpeed": 0.4,
       "cutSpeed": 0.6,
@@ -1327,7 +1327,7 @@
       },
       {
         "key": "DEBUG",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
@@ -2231,7 +2231,7 @@
             "type": "group",
             "group": {
               "key": "ROPE CUT",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2563,7 +2563,7 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
@@ -3388,10 +3388,10 @@
       }
     },
     "mobile": {
-      "left": 182,
-      "top": 452.3571472167969,
-      "width": 229,
-      "height": 332.63690185546875,
+      "left": 82,
+      "top": 70.9749984741211,
+      "width": 494.6000061035156,
+      "height": 632.625,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
@@ -3399,7 +3399,6 @@
         "labelFontSize": 12,
         "opacity": 1,
         "titleColor": "#ffffff",
-        "bodyFontSize": 12,
         "bgColor": "#000000",
         "textColor": "#ffffff",
         "accentColor": "#005f8f",
@@ -3416,7 +3415,6 @@
         "tabLetterSpacing": 0,
         "groupLetterSpacing": 0.8,
         "settingsLetterSpacing": 0,
-        "textEditMode": false,
         "valueFontSize": 12,
         "buttonFontSize": 10,
         "titleLetterSpacing": 2.3,
