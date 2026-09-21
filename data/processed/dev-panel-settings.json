@@ -276,7 +276,9 @@
       "loadingPageScale": 20,
       "loadingPageMinFramesRequired": 309,
       "loadingPageMaxFillProgress": 0.85,
-      "loadingPageRotation": 0
+      "loadingPageRotation": 0,
+      "loadingPageRotationSmoothing": 0.93,
+      "loadingPageShowFrameCounter": false
     },
     "mobile": {},
     "landscape": {}
@@ -346,6 +348,14 @@
         "items": [
           {
             "type": "row",
+            "key": "loadingPageRotationSmoothing"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageShowFrameCounter"
+          },
+          {
+            "type": "row",
             "key": "loadingPageEnabled"
           },
           {
@@ -378,6 +388,8 @@
           }
         ],
         "settings": [
+          "loadingPageRotationSmoothing",
+          "loadingPageShowFrameCounter",
           "loadingPageEnabled",
           "loadingPageMinDuration",
           "loadingPageMinFramesRequired",
