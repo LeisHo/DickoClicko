@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 20.299999999999986,
+      "ropeLength": 25.011053960903833,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -208,8 +208,8 @@
       "mouseFlickTargetPoint": 0.5,
       "mouseFlickRandomInterval": 1.1,
       "snapRepeatDuration": 1.5,
-      "mouseFlickShowInteractionPoints": true,
-      "clickLogPositionDataEnabled": true,
+      "mouseFlickShowInteractionPoints": false,
+      "clickLogPositionDataEnabled": false,
       "overstretchEnabled": true,
       "overstretchTolerance": 165,
       "overstretchThinningEnabled": true,
@@ -3147,7 +3147,7 @@
       },
       {
         "key": "CUT SPLATTER",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
