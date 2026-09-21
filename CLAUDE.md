@@ -4863,3 +4863,142 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   `flight`/`fade` local-variable pattern already used for those 2
   fields, so a later change to the slider mid-flight never
   retroactively rescales an already-flying particle's own timeline.
+- **The splatter spawn/update/render trio was generalized into a
+  shared, profile-driven engine (2026-09-21) -- `spawnSplatterBurst()`/
+  `updateSplatterArray()`/`renderSplatterArray()`, each taking an
+  explicit particle array plus a `profile` object of cfg KEY NAMES
+  (`CUT_SPLATTER_PROFILE`/`COLLISION_SPLATTER_PROFILE`) -- so a 2nd,
+  fully independent particle system (Collision Splatter) could be added
+  without duplicating this ~150-line trio verbatim.** `spawnCutSplatter(x,y)`/
+  `spawnCollisionSplatter(x,y)` are now thin wrappers: each does its
+  OWN `enabled && DEV_MODE` gate (unchanged gating pattern, per-system)
+  then calls `spawnSplatterBurst(itsOwnArray, x, y, itsOwnProfile)`.
+  `update()`/`render()` call `updateSplatterArray()`/
+  `renderSplatterArray()` once per array (`splatterParticles`/
+  `collisionSplatterParticles`), both driven by the SAME 2 generic
+  functions. **A new profile field, `fadeEnabled`, added the same day**
+  (see the Splatter Fade On And Off entry below) -- any future profile
+  field follows this same pattern: add the cfg key NAME to both
+  `*_PROFILE` objects (never a shared/linked value between the 2
+  systems), read it via `cfg[profile.fieldName]` inside the 3 generic
+  functions, never hardcode a `cutSplatter*`/`collisionSplatter*` key
+  name directly inside them.
+- **`cutSplatterFadeEnabled`/`collisionSplatterFadeEnabled` ("Splatter
+  Fade On And Off", def `true` -- a pure no-op at default) turn a
+  particle's own landed fade-out off entirely, per-particle, captured
+  at spawn (2026-09-21, direct request: "a checkbox above the Fade Time
+  slider. This turns the fade on and off").** Flying-then-landing
+  TIMING is completely unaffected either way -- Fade Time still governs
+  exactly when a particle stops integrating and freezes in place; only
+  what happens AFTER that changes. With it off: `updateSplatterArray()`
+  never removes the particle via `life <= 0` (life keeps counting
+  further negative forever, harmless, nothing reads its sign once
+  fading is disabled) -- it persists until evicted by the
+  `MAX_SPLATTER_PARTICLES` cap, a permanent stain. `renderSplatterArray()`
+  pins its opacity factor at a flat `1` (times Max Opacity) instead of
+  computing the normal `life/fade` ramp, which would otherwise run away
+  toward 0 as `life` counts further negative. **If a future change adds
+  a NEW per-particle field that depends on `life`'s own sign/magnitude
+  staying meaningful after landing, it needs its own `fadeEnabled`-aware
+  branch too** -- `life` itself is not a reliable "time since landing"
+  measure once fading is turned off for that particle.
+- **`cutSplatterFullRopeCutEnabled` ("Splatter On Full Rope Cut", def
+  `true`) gates a NEWLY-ADDED `spawnCutSplatter()` call inside
+  `detachEntireRopeAndRestartIntro()` -- a real, pre-existing coverage
+  gap, not a behavior this checkbox narrows.** Before 2026-09-21, a full
+  rope detach (`cutRopeAt()`'s own "cut shorter than Min Rope Length"
+  fallback, or the double-click-in-circle full-cut gesture, both of
+  which reuse this same function) never spawned Cut Splatter at all,
+  even with the master switch on -- only an ordinary partial cut
+  (`performMainRopeSplit()`/`performPieceSplit()`) ever did. Spawned at
+  `fallingPoints[0]`, the detached piece's own former-anchor-now-cut-
+  edge point, matching `performMainRopeSplit()`'s own `lowerPoints[0]`
+  convention for a partial cut. def:`true` so turning the master switch
+  on now covers every cut type by default (no equivalent per-type
+  toggle exists for a partial cut), while this ONE type can still be
+  excluded specifically if unwanted.
+- **Horizontal/Vertical Spray Randomize (`cutSplatterHorizontalSprayVariance`/
+  `VerticalSprayVariance`, and their Collision Splatter equivalents,
+  all def `0` -- a pure no-op at default) layer a FURTHER, independent
+  +/-fraction variance on top of each axis's own EXISTING per-particle
+  randomization (2026-09-21, direct request).** `vx`/`vy` were already
+  fully randomized per particle before this (`(Math.random()*2-1) *
+  spread`) -- this doesn't replace that, it multiplies the result by an
+  additional `Math.max(0.1, 1 + (Math.random()*2-1)*variance)` factor,
+  same relationship Splatter Size Variance already has to Splatter
+  Particle Size. If a future report says these sliders "don't seem to
+  do much," that's expected at low values (they're layered on top of an
+  already-fully-random base, not replacing a fixed/deterministic one)
+  -- they matter most at the extremes (near-0 pulls a burst's own
+  effective reach down and up around its base value; near-1 can push
+  individual particles noticeably past the base Spray Distance's own
+  configured max).
+- **New COLLISION SPLATTER settings group (2026-09-21) -- the same
+  splatter effect as CUT SPLATTER, triggered the moment a freshly-cut,
+  still-falling piece first makes REAL PHYSICAL CONTACT with an
+  already-existing fallen piece, spawned from that piece's own endcap
+  ENDPOINT** -- per direct request: "*DC* Cut Piece Collision
+  Splatter... This is the same splatter effect but it is triggered the
+  moment 1 cutpiece is collided with by a new cut piece (freshly cut,
+  falling from the main rope). The splatter effect will come from the
+  Endcap Endpoint (same as the endcap dragpoint)... Provide the same
+  settings as the Cut Splatter Group." Full mirrored 14-control set
+  (all `collisionSplatter*` keys, its own `COLLISION_SPLATTER_PROFILE`)
+  -- deliberately WITHOUT a "Splatter On Full Rope Cut" equivalent,
+  since that's a Cut-Splatter-specific trigger concept with no
+  Collision Splatter analog.
+  - **Detection mechanism**: `resolveChainCollision()` (the shared
+    function behind every piece-vs-piece/mainRope-vs-piece collision
+    resolution in this file) now RETURNS whether it actually resolved
+    any point-pair overlap this call -- a purely additive change, every
+    pre-existing caller already ignores the return value and is
+    completely unaffected. `pieceCollision()`'s own piece-vs-piece
+    pairwise loop (NOT the mainRope-vs-piece loop a few lines above it
+    -- the request specifically describes a piece "falling from the
+    main rope," not the still-attached rope itself) captures this and
+    calls `checkCollisionSplatterTrigger(fallenPieces[a],
+    fallenPieces[b])` only on a frame where real contact was just
+    resolved -- so Collision Splatter's own definition of "touching" is
+    IDENTICAL to what the physics itself just acted on, never a
+    separate, possibly-divergent proximity check.
+  - **"The moment" is modeled as a ONE-TIME EVENT per piece, not a
+    per-pair matrix**: every piece gets an implicit, lazily-true
+    `collisionSplatterFired` flag. The FIRST time a not-yet-fired piece
+    is found touching ANY other piece (fired or not), ITS OWN splatter
+    fires from ITS OWN endcap endpoint and the flag is set so it can
+    never fire again for that piece. An already-fired piece can still
+    freely serve as "the existing piece being hit" for a DIFFERENT,
+    still-eligible piece's own first impact -- only the newly-firing
+    piece's own eligibility is gated, never its partner's. If both
+    pieces in a pair are simultaneously still-eligible (2 freshly-cut
+    pieces landing on each other before either has touched anything
+    else), BOTH fire independently, each from its own endpoint --
+    deliberately simple/symmetric rather than an arbitrary tie-break
+    for what should be a rare case. Verified via a Node simulation
+    extracting the actual shipped functions: fires for both pieces on
+    a fresh pair's first contact, fires exactly once more for a 3rd new
+    piece touching an already-fired one, fires zero times once both
+    pieces in a pair have already fired.
+  - **Spawn origin uses `endcapDragPointWorld()`**, the SAME shared,
+    fully-generalized (over an arbitrary points array, not mainRope-
+    specific) function every OTHER endcap-endpoint consumer in this
+    file already routes through (arm-time drag targeting, the per-frame
+    pull-back, the interaction-point debug dots) -- not a new endpoint-
+    finding mechanism. Called with each piece's own LIVE thickness
+    (`pieceThickness()`) and the global `cfg.endcapDesign`/`Height`/
+    `Deformable`/`BendStrength` exactly as `pieceCollision()` itself
+    already uses for that SAME piece's own tip collision circle a few
+    lines above -- no stretch multiplier (a piece is never being
+    Drag-Rope-dragged, unlike mainRope's own tip).
+  - **Not live-browser-verified** (this environment's recurring
+    dev-server page-boot stall) -- the collision-trigger mechanism in
+    particular has only been verified against the extracted logic in
+    isolation (mocked pieces/collision data), never against a real,
+    physically-falling pair of pieces in the actual running physics
+    loop. If a future report says this never fires, or fires from the
+    wrong point, re-verify against real gameplay before assuming the
+    detection logic itself (already unit-verified) is at fault --
+    check first whether `cfg.collisionSplatterEnabled` is actually
+    saved `true` in the live settings file, same "check the actual
+    saved value" precedent this file has already established
+    repeatedly for a shipped-but-seemingly-inert feature.

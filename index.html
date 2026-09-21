@@ -1026,13 +1026,39 @@ const DEV_GROUPS = [
     // still round-trips through Save/Copy/Reset normally either way;
     // this only gates whether it's ever actually DRAWN/triggered.
     { key:'cutSplatterEnabled', label:'Splatter On And Off', type:'checkbox', def:false },
+    // Splatter previously never fired at all for a FULL rope detach
+    // (cutRopeAt()'s own "cut shorter than minRopeLength ->
+    // detachEntireRopeAndRestartIntro()" path, and the double-click-in-
+    // circle full-cut gesture that reuses it) -- a real, pre-existing
+    // gap, not a behavior this checkbox is narrowing. Added 2026-09-21
+    // per direct request ("a checkbox that turns on and off the
+    // splatter effect for a full rope cut") -- def:true so turning the
+    // master switch above on now covers every cut type by default
+    // (matching the always-on-when-master-is-on behavior an ordinary
+    // partial cut already has, with no equivalent toggle of its own),
+    // while still letting this ONE cut type be excluded specifically.
+    // Gates the actual spawnCutSplatter() call inside
+    // detachEntireRopeAndRestartIntro() -- see that call site's own
+    // comment.
+    { key:'cutSplatterFullRopeCutEnabled', label:'Splatter On Full Rope Cut', type:'checkbox', def:true },
     { key:'cutSplatterColor', label:'Splatter Color', type:'color', def:'#8b0000' },
     // Max initial launch speed along each axis -- not a literal final
     // resting distance (gravity and flight duration both also affect
     // how far a particle actually travels before landing), but the
     // dominant, most direct control over how far the spray REACHES.
     { key:'cutSplatterHorizontalSpread', label:'Splatter Horizontal Spray Distance', type:'slider', unit:'%vmin/s', min:0, max:150, step:1, def:60 },
+    // Scales each particle's own horizontal launch speed within +/- this
+    // fraction of the base Spray Distance above (2026-09-21, per direct
+    // request) -- same +/-fraction/clamp pattern as every other
+    // "Randomize"/"Variance" slider in this group. def:0 is a pure
+    // no-op (every particle's own random draw stays exactly what it
+    // already was -- this doesn't replace the EXISTING per-particle
+    // randomization the base slider already has, it adds a further,
+    // independent layer of variety on top of it, same relationship
+    // Splatter Size Variance has to Splatter Particle Size).
+    { key:'cutSplatterHorizontalSprayVariance', label:'Splatter Horizontal Spray Randomize', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0 },
     { key:'cutSplatterVerticalSpread',   label:'Splatter Vertical Spray Distance',   type:'slider', unit:'%vmin/s', min:0, max:150, step:1, def:80 },
+    { key:'cutSplatterVerticalSprayVariance', label:'Splatter Vertical Spray Randomize', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0 },
     // Everything below is additional decomposition per the standing
     // "more precisely-named sliders over fewer, cleverer ones"
     // philosophy (workspace CLAUDE.md §12n), not explicitly asked for
@@ -1061,8 +1087,55 @@ const DEV_GROUPS = [
     // already-flying particle" reasoning its neighboring comment already
     // documents for `fade`.
     { key:'cutSplatterFlightDurationVariance', label:'Splatter Flight Duration Randomize', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0 },
+    // Turns the landed-particle fade-out off entirely (2026-09-21, per
+    // direct request: "a checkbox above the Fade Time slider. This
+    // turns the fade on and off") -- with it off, a particle still
+    // flies and lands exactly as before (Fade Time still governs the
+    // flight->landed TIMING, unchanged), it just never dims or gets
+    // removed afterward -- a permanent stain instead, until evicted by
+    // the MAX_SPLATTER_PARTICLES cap. def:true preserves the exact
+    // prior always-fades behavior byte-for-byte. See
+    // updateSplatterArray()/renderSplatterArray()'s own comments for
+    // the exact mechanism (captured per-particle at spawn, same
+    // "don't retroactively rescale an already-flying particle"
+    // convention as `fade`/`flight`).
+    { key:'cutSplatterFadeEnabled', label:'Splatter Fade On And Off', type:'checkbox', def:true },
     { key:'cutSplatterFadeTime', label:'Splatter Fade Time', type:'slider', unit:'s', min:0.5, max:30, step:0.5, def:6 },
     { key:'cutSplatterOpacity', label:'Splatter Max Opacity', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.85 },
+  ]},
+  { title:'COLLISION SPLATTER', controls:[
+    // Same particle effect/engine as CUT SPLATTER above (see
+    // spawnSplatterBurst()/updateSplatterArray()/renderSplatterArray()'s
+    // own comments for the shared mechanism), but a fully independent
+    // slider set and its own separate particle array/trigger -- per
+    // direct request ("*DC* Cut Piece Collision Splatter... Provide the
+    // same settings as the Cut Splatter Group"), 2026-09-21. Triggered
+    // the moment a freshly-cut, still-falling piece first makes real
+    // physical contact with an already-existing fallen piece (see
+    // checkCollisionSplatterTrigger()'s own comment for the exact
+    // "first contact only, once per new piece" detection and why it's
+    // NOT the same thing as this project's existing continuous
+    // pairwise repulsion) -- spawned from that NEW piece's own endcap
+    // ENDPOINT (endcapDragPointWorld(), "same as the endcap dragpoint"
+    // per the request's own wording), not a generic collision contact
+    // point. Same DEV_MODE + master-checkbox gating pattern as Cut
+    // Splatter -- see that group's own comment for why (a shared,
+    // git-tracked settings file every visitor's cfg loads from equally).
+    { key:'collisionSplatterEnabled', label:'Collision Splatter On/Off', type:'checkbox', def:false },
+    { key:'collisionSplatterColor', label:'Collision Splatter Color', type:'color', def:'#8b0000' },
+    { key:'collisionSplatterHorizontalSpread', label:'Collision Splatter Horizontal Spray Distance', type:'slider', unit:'%vmin/s', min:0, max:150, step:1, def:60 },
+    { key:'collisionSplatterHorizontalSprayVariance', label:'Collision Splatter Horizontal Spray Randomize', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0 },
+    { key:'collisionSplatterVerticalSpread', label:'Collision Splatter Vertical Spray Distance', type:'slider', unit:'%vmin/s', min:0, max:150, step:1, def:80 },
+    { key:'collisionSplatterVerticalSprayVariance', label:'Collision Splatter Vertical Spray Randomize', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0 },
+    { key:'collisionSplatterParticleCount', label:'Collision Splatter Particle Count', type:'slider', unit:'', min:1, max:60, step:1, def:16 },
+    { key:'collisionSplatterParticleSize', label:'Collision Splatter Particle Size', type:'slider', unit:'%vmin', min:0.2, max:5, step:0.1, def:1.1 },
+    { key:'collisionSplatterSizeVariance', label:'Collision Splatter Size Variance', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0.6 },
+    { key:'collisionSplatterGravity', label:'Collision Splatter Gravity', type:'slider', unit:'x', min:0, max:10, step:0.1, def:2.5 },
+    { key:'collisionSplatterFlightDuration', label:'Collision Splatter Flight Duration', type:'slider', unit:'s', min:0, max:2, step:0.05, def:0.4 },
+    { key:'collisionSplatterFlightDurationVariance', label:'Collision Splatter Flight Duration Randomize', type:'slider', unit:'x', min:0, max:1, step:0.05, def:0 },
+    { key:'collisionSplatterFadeEnabled', label:'Collision Splatter Fade On And Off', type:'checkbox', def:true },
+    { key:'collisionSplatterFadeTime', label:'Collision Splatter Fade Time', type:'slider', unit:'s', min:0.5, max:30, step:0.5, def:6 },
+    { key:'collisionSplatterOpacity', label:'Collision Splatter Max Opacity', type:'slider', unit:'x', min:0.1, max:1, step:0.05, def:0.85 },
   ]},
   { title:'END EMERGE', controls:[
     { key:'endEmergeEnabled', label:'End Emerge Enabled', type:'checkbox', def:true },
@@ -6078,6 +6151,12 @@ const OVERSTRETCH_BOUNCE_MAX_DURATION = 3;
 // not something the user asked for as a slider, just a fixed ceiling
 // matching this project's own established MAX_FALLEN_PIECES pattern.
 let splatterParticles = [];
+// Collision Splatter (COLLISION SPLATTER dev group, 2026-09-21) -- the
+// SAME particle shape/lifecycle as Cut Splatter above, just its own
+// separate array/config so the 2 systems never share state -- see
+// that group's own comment and spawnSplatterBurst()'s own comment for
+// why one generic engine drives both.
+let collisionSplatterParticles = [];
 
 // Background "peeking" rope: a second, permanently non-interactive chain
 // -- never cut, never grown, never clicked -- that exists purely to be
@@ -6903,11 +6982,19 @@ function pieceCollisionRadii(points, thick, tipCircle, cutCircle){
 // largest per-point radius, so an inflated endcap end is never
 // under-counted) skips the expensive point-by-point double loop for any
 // pair that clearly can't be touching yet.
+// Returns whether ANY point pair actually overlapped this call
+// (2026-09-21, purely additive -- every pre-existing caller ignores
+// the return value and is completely unaffected) -- Collision
+// Splatter's own checkCollisionSplatterTrigger() reuses THIS exact
+// definition of "touching" rather than a separate, possibly-divergent
+// proximity check, so splatter triggers exactly when real physics
+// contact is actually resolved, never independently of it.
 function resolveChainCollision(dataA, dataB, maxPush){
   const pad = dataA.maxRadius + dataB.maxRadius;
   const ba = dataA.box, bb = dataB.box;
   if (ba.maxX + pad < bb.minX || bb.maxX + pad < ba.minX ||
-      ba.maxY + pad < bb.minY || bb.maxY + pad < ba.minY) return;
+      ba.maxY + pad < bb.minY || bb.maxY + pad < ba.minY) return false;
+  let collided = false;
   const ptsA = dataA.points, ptsB = dataB.points;
   for (let i = 0; i < ptsA.length; i++){
     const p = ptsA[i];
@@ -6918,6 +7005,7 @@ function resolveChainCollision(dataA, dataB, maxPush){
       const dx = q.x - p.x, dy = q.y - p.y;
       const dist = Math.hypot(dx, dy);
       if (dist > 0.0001 && dist < minSep){
+        collided = true;
         // Capped at maxPush (see COLLISION_MAX_PUSH_PER_S's own comment)
         // so a large overlap -- coincident fresh-cut points, or anything
         // else -- resolves gradually over several frames instead of
@@ -6934,6 +7022,7 @@ function resolveChainCollision(dataA, dataB, maxPush){
       }
     }
   }
+  return collided;
 }
 
 // Gives a freshly-created piece the same kind of collision grace
@@ -7441,7 +7530,14 @@ function pieceCollision(dt){
       // identify specifically).
       if (pieceSpawnGraceActive(fallenPieces[a], pieceData[a].maxRadius) ||
           pieceSpawnGraceActive(fallenPieces[b], pieceData[b].maxRadius)) continue;
-      resolveChainCollision(pieceData[a], pieceData[b], maxPush);
+      const collided = resolveChainCollision(pieceData[a], pieceData[b], maxPush);
+      // Collision Splatter (2026-09-21) -- piece-vs-piece ONLY (never
+      // mainRope-vs-piece, a few lines above -- the request specifically
+      // describes "a new cut piece... falling from the main rope"
+      // colliding with an EXISTING piece, not the still-attached rope
+      // itself). See checkCollisionSplatterTrigger()'s own comment for
+      // the full "first contact only" design.
+      if (collided) checkCollisionSplatterTrigger(fallenPieces[a], fallenPieces[b]);
     }
   }
 }
@@ -7850,6 +7946,15 @@ function detachEntireRopeAndRestartIntro(){
     setPieceSpawnGrace(piece);
     fallenPieces.push(piece);
     if (fallenPieces.length > MAX_FALLEN_PIECES) fallenPieces.shift();
+    // Splatter On Full Rope Cut (2026-09-21) -- this path (a full
+    // rope detach, either from cutting shorter than Min Rope Length or
+    // the double-click-in-circle gesture) never spawned Cut Splatter
+    // at all before this, a real pre-existing gap -- see that
+    // checkbox's own DEV_GROUPS comment. Spawned at fallingPoints[0],
+    // the piece's own former-anchor-now-cut-edge point -- the exact
+    // separation point, matching performMainRopeSplit()'s own
+    // lowerPoints[0] convention for an ordinary partial cut.
+    if (cfg.cutSplatterFullRopeCutEnabled) spawnCutSplatter(fallingPoints[0].x, fallingPoints[0].y);
   }
   resetMainRope(vh(cfg.segmentLength));
   // Boot's own version of this restart also rebuilds bgRope from scratch
@@ -8445,9 +8550,9 @@ function cutRopeAt(hit, clickX, clickY){
 // the source of the splatter, and the bottom being the direction of
 // spray" -- i.e. each shape's own local Y axis (0 at top, h at bottom)
 // IS its spray-direction axis, meaningful to rotate against a
-// particle's live velocity (see renderSplatterParticles()'s own
+// particle's live velocity (see renderSplatterArray()'s own
 // rotation formula). `w`/`h` are the shape's own viewBox width/height
-// in raw SVG units (NOT pixels) -- renderSplatterParticles() scales
+// in raw SVG units (NOT pixels) -- renderSplatterArray() scales
 // each shape uniformly so its own `h` maps onto that particle's
 // `size` field, so "Splatter Particle Size" reads as the droplet's
 // length along its spray axis, not a circle diameter, for every shape
@@ -8492,64 +8597,112 @@ const SPLATTER_SHAPES = [
   { key:'7163-15', w:1.7, h:2.64, d:'M1.55,1.82c-.46.04-.93-.09-1.22-.43-.13-.16-.1-.52.09-.58.51-.15,1.06.06,1.32.5.12.21.04.41-.19.5Z' },
   { key:'7163-16', w:1.53, h:3.15, d:'M0.35,1.46 a0.5,0.5 0 1,0 1,0 a0.5,0.5 0 1,0 -1,0 Z' },
 ].map(s => ({ ...s, path: new Path2D(s.d) }));
-// Spawns a burst of splatter particles at (x,y) -- called from every
-// real cut-separation site (performMainRopeSplit/performPieceSplit
-// below). Deliberately gated on DEV_MODE here, at the ONE shared spawn
-// point, rather than at each individual call site -- a single place
-// to enforce "never actually fires for a real, non-dev visitor" no
-// matter how many future call sites end up calling this.
-function spawnCutSplatter(x, y){
-  if (!cfg.cutSplatterEnabled || !DEV_MODE) return;
-  const n = Math.round(cfg.cutSplatterParticleCount);
+// A "profile" bundles the cfg KEY NAMES (not the live values) for one
+// independently-configurable splatter particle system, so
+// spawnSplatterBurst()/updateSplatterArray()/renderSplatterArray()
+// below stay fully generic and shared between Cut Splatter and
+// Collision Splatter (2026-09-21, added for the latter -- 2 systems
+// with their own completely independent DEV_GROUPS slider sets, per
+// §12n, never sharing a value) instead of duplicating this ~60-line
+// spawn/update/render trio verbatim a 2nd time.
+const CUT_SPLATTER_PROFILE = {
+  color: 'cutSplatterColor', hSpread: 'cutSplatterHorizontalSpread',
+  hSprayVariance: 'cutSplatterHorizontalSprayVariance', vSpread: 'cutSplatterVerticalSpread',
+  vSprayVariance: 'cutSplatterVerticalSprayVariance', count: 'cutSplatterParticleCount',
+  size: 'cutSplatterParticleSize', sizeVariance: 'cutSplatterSizeVariance',
+  gravity: 'cutSplatterGravity', flight: 'cutSplatterFlightDuration',
+  flightVariance: 'cutSplatterFlightDurationVariance', fadeEnabled: 'cutSplatterFadeEnabled',
+  fade: 'cutSplatterFadeTime', opacity: 'cutSplatterOpacity',
+};
+const COLLISION_SPLATTER_PROFILE = {
+  color: 'collisionSplatterColor', hSpread: 'collisionSplatterHorizontalSpread',
+  hSprayVariance: 'collisionSplatterHorizontalSprayVariance', vSpread: 'collisionSplatterVerticalSpread',
+  vSprayVariance: 'collisionSplatterVerticalSprayVariance', count: 'collisionSplatterParticleCount',
+  size: 'collisionSplatterParticleSize', sizeVariance: 'collisionSplatterSizeVariance',
+  gravity: 'collisionSplatterGravity', flight: 'collisionSplatterFlightDuration',
+  flightVariance: 'collisionSplatterFlightDurationVariance', fadeEnabled: 'collisionSplatterFadeEnabled',
+  fade: 'collisionSplatterFadeTime', opacity: 'collisionSplatterOpacity',
+};
+// Spawns a burst of splatter particles at (x,y) into `arr`, configured
+// entirely from `profile`'s own cfg keys -- called from every real
+// trigger site (a cut-separation, or a piece-collision first-contact).
+// Callers (spawnCutSplatter()/spawnCollisionSplatter()) do their own
+// enabled+DEV_MODE gating BEFORE calling this, at the one shared point
+// per system -- a single place per system to enforce "never actually
+// fires for a real, non-dev visitor" no matter how many future call
+// sites end up triggering it.
+function spawnSplatterBurst(arr, x, y, profile){
+  const n = Math.round(cfg[profile.count]);
   for (let i = 0; i < n; i++){
     // Spray direction is fully random per-axis (not a fixed cone) --
     // a real splatter has no single preferred direction, it's however
     // the severed rope's own internal pressure happened to release.
-    const vx = (Math.random() * 2 - 1) * vmin(cfg.cutSplatterHorizontalSpread);
-    // Biased upward-or-level (never starts already falling) so Splatter
-    // Gravity has something real to arc back down against -- a purely
-    // symmetric random vy would let half the burst start already
-    // heading down, reading as a much weaker/asymmetric spray for the
-    // same slider value.
-    const vy = -Math.random() * vmin(cfg.cutSplatterVerticalSpread);
-    const sizeMult = 1 + (Math.random() * 2 - 1) * cfg.cutSplatterSizeVariance;
+    // Horizontal/Vertical Spray Randomize (2026-09-21) layer a FURTHER,
+    // independent +/-fraction variance on top of that existing
+    // per-particle randomization -- same relationship Size Variance has
+    // to Particle Size. def:0 on both makes hMult/vMult always exactly
+    // 1, a pure no-op preserving the prior behavior byte-for-byte.
+    const hMult = Math.max(0.1, 1 + (Math.random() * 2 - 1) * cfg[profile.hSprayVariance]);
+    const vx = (Math.random() * 2 - 1) * vmin(cfg[profile.hSpread]) * hMult;
+    // Biased upward-or-level (never starts already falling) so
+    // Splatter Gravity has something real to arc back down against --
+    // a purely symmetric random vy would let half the burst start
+    // already heading down, reading as a much weaker/asymmetric spray
+    // for the same slider value.
+    const vMult = Math.max(0.1, 1 + (Math.random() * 2 - 1) * cfg[profile.vSprayVariance]);
+    const vy = -Math.random() * vmin(cfg[profile.vSpread]) * vMult;
+    const sizeMult = 1 + (Math.random() * 2 - 1) * cfg[profile.sizeVariance];
     // Flight Duration Randomize (2026-09-21) -- same +/-fraction/clamp
     // pattern as sizeMult above, applied to this particle's own flight
     // instead of its size. def:0 (the slider's own default) makes
     // flightMult always exactly 1, a pure no-op preserving the prior
     // fixed-duration behavior byte-for-byte.
-    const flightMult = Math.max(0.1, 1 + (Math.random() * 2 - 1) * cfg.cutSplatterFlightDurationVariance);
-    const flight = cfg.cutSplatterFlightDuration * flightMult;
-    const fade = cfg.cutSplatterFadeTime;
-    splatterParticles.push({
+    const flightMult = Math.max(0.1, 1 + (Math.random() * 2 - 1) * cfg[profile.flightVariance]);
+    const flight = cfg[profile.flight] * flightMult;
+    const fade = cfg[profile.fade];
+    arr.push({
       x, y, vx, vy,
-      size: vmin(cfg.cutSplatterParticleSize) * Math.max(0.1, sizeMult),
+      size: vmin(cfg[profile.size]) * Math.max(0.1, sizeMult),
       life: flight + fade,
       fade, // this particle's OWN fade duration, captured at spawn time
             // -- so a later change to the slider mid-flight doesn't
             // retroactively rescale an already-fading particle's timeline.
+      // Splatter Fade On And Off (2026-09-21) -- captured per-particle
+      // at spawn, same "don't retroactively rescale" convention as
+      // `fade`/`flight` above. See updateSplatterArray()'s own comment
+      // for exactly what turning it off changes (and doesn't).
+      fadeEnabled: !!cfg[profile.fadeEnabled],
       // One shape, chosen once at spawn and kept for this particle's
       // whole lifetime (never re-randomized frame to frame).
       shape: SPLATTER_SHAPES[Math.floor(Math.random() * SPLATTER_SHAPES.length)],
     });
   }
-  if (splatterParticles.length > MAX_SPLATTER_PARTICLES){
-    splatterParticles.splice(0, splatterParticles.length - MAX_SPLATTER_PARTICLES);
+  if (arr.length > MAX_SPLATTER_PARTICLES){
+    arr.splice(0, arr.length - MAX_SPLATTER_PARTICLES);
   }
 }
-// Advances every splatter particle by one tick -- called from update().
-// "Flying" (life > this particle's own fade) integrates position under
-// Splatter Gravity, same vh(90)-based-unit convention cfg.gravityStrength
-// itself uses (see integrateChain()'s own gravityAccel) so the 2 "x"
-// sliders read on a comparable scale. "Landed" (life <= fade) freezes
-// position entirely -- it's a stain now, not a moving droplet.
-function updateSplatterParticles(dt){
-  if (splatterParticles.length === 0) return;
-  const gravityAccel = vh(90) * cfg.cutSplatterGravity;
-  for (let i = splatterParticles.length - 1; i >= 0; i--){
-    const p = splatterParticles[i];
+// Advances every particle in `arr` by one tick -- called from update(),
+// once per array. "Flying" (life > this particle's own fade) integrates
+// position under this profile's own Gravity, same vh(90)-based-unit
+// convention cfg.gravityStrength itself uses (see integrateChain()'s
+// own gravityAccel) so the "x" sliders read on a comparable scale.
+// "Landed" (life <= fade) freezes position entirely -- it's a stain
+// now, not a moving droplet, regardless of fadeEnabled.
+//
+// Fade On And Off (2026-09-21): when a particle's OWN fadeEnabled is
+// false, it is simply never removed via life expiry -- `life` still
+// counts down forever (harmless; nothing reads its sign once fading is
+// disabled) so the flying->landed TIMING transition above is completely
+// unaffected either way. Only the REMOVAL/opacity-ramp -- what happens
+// AFTER landing -- changes; see renderSplatterArray()'s own comment for
+// the matching opacity-side half of this.
+function updateSplatterArray(arr, dt, profile){
+  if (arr.length === 0) return;
+  const gravityAccel = vh(90) * cfg[profile.gravity];
+  for (let i = arr.length - 1; i >= 0; i--){
+    const p = arr[i];
     p.life -= dt;
-    if (p.life <= 0){ splatterParticles.splice(i, 1); continue; }
+    if (p.fadeEnabled && p.life <= 0){ arr.splice(i, 1); continue; }
     if (p.life > p.fade){
       p.vy += gravityAccel * dt;
       p.x += p.vx * dt;
@@ -8568,9 +8721,9 @@ function updateSplatterParticles(dt){
 // table's own comment) points along the particle's CURRENT velocity
 // direction -- recomputed fresh from p.vx/p.vy every render call
 // rather than frozen at spawn time, so a flying particle's shape
-// visibly follows its own arcing trajectory as Splatter Gravity bends
-// it, and NATURALLY freezes the instant the particle lands (vx/vy stop
-// changing at that point too -- see updateSplatterParticles()'s own
+// visibly follows its own arcing trajectory as Gravity bends it, and
+// NATURALLY freezes the instant the particle lands (vx/vy stop
+// changing at that point too -- see updateSplatterArray()'s own
 // "landed" branch -- so no separate freeze bookkeeping is needed here).
 // Rotation formula: atan2(vy,vx) is the velocity's own angle from +X;
 // the shape's local +Y (spray) axis sits at +90deg from +X before any
@@ -8581,15 +8734,24 @@ function updateSplatterParticles(dt){
 // centered at (p.x,p.y) -- same anchor point the old circle used,
 // keeping every other part of the particle system (spawn position,
 // physics) completely unaffected by this rendering change.
-function renderSplatterParticles(){
-  for (const p of splatterParticles){
-    const opacity = Math.max(0, Math.min(1, p.life / p.fade)) * cfg.cutSplatterOpacity;
+//
+// Fade On And Off (2026-09-21): a fadeEnabled particle's opacity still
+// ramps down exactly as before once landed (life/fade, clamped 0-1); a
+// !fadeEnabled particle's opacity factor is pinned at a flat 1 instead
+// of computing that same ramp (which would otherwise run away toward
+// 0 as `life` keeps counting further negative forever) -- so it stays
+// at full Max Opacity permanently once landed, a real stain rather
+// than a fade that never quite finishes.
+function renderSplatterArray(arr, profile){
+  for (const p of arr){
+    const fadeFactor = p.fadeEnabled ? Math.max(0, Math.min(1, p.life / p.fade)) : 1;
+    const opacity = fadeFactor * cfg[profile.opacity];
     if (opacity <= 0) continue;
     const shape = p.shape;
-    if (!shape) continue; // defensive -- every particle spawned by spawnCutSplatter() always has one
+    if (!shape) continue; // defensive -- every particle spawned by spawnSplatterBurst() always has one
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.fillStyle = cfg.cutSplatterColor;
+    ctx.fillStyle = cfg[profile.color];
     ctx.translate(p.x, p.y);
     ctx.rotate(Math.atan2(p.vy, p.vx) - Math.PI / 2);
     const scale = p.size / shape.h;
@@ -8599,6 +8761,68 @@ function renderSplatterParticles(){
     ctx.restore();
   }
   ctx.globalAlpha = 1;
+}
+// Cut Splatter's own thin wrapper -- called from every real
+// cut-separation site (performMainRopeSplit/performPieceSplit/
+// detachEntireRopeAndRestartIntro).
+function spawnCutSplatter(x, y){
+  if (!cfg.cutSplatterEnabled || !DEV_MODE) return;
+  spawnSplatterBurst(splatterParticles, x, y, CUT_SPLATTER_PROFILE);
+}
+// Collision Splatter's own thin wrapper -- called only from
+// checkCollisionSplatterTrigger() below.
+function spawnCollisionSplatter(x, y){
+  if (!cfg.collisionSplatterEnabled || !DEV_MODE) return;
+  spawnSplatterBurst(collisionSplatterParticles, x, y, COLLISION_SPLATTER_PROFILE);
+}
+// Called from pieceCollision()'s own piece-vs-piece pairwise loop,
+// ONLY on a frame where resolveChainCollision() itself just reported
+// real point-pair overlap between pieceA and pieceB (2026-09-21) --
+// see that function's own comment for why splatter triggering reuses
+// its exact definition of "touching" rather than a second, possibly-
+// divergent proximity check.
+//
+// "The moment 1 cutpiece is collided with by a new cut piece" is
+// modeled as a ONE-TIME EVENT per piece, not a per-pair matrix: every
+// piece gets an (implicit, lazily-true) `collisionSplatterFired` flag,
+// and the FIRST time a not-yet-fired piece is found touching ANY other
+// piece (fired or not), its own splatter bursts from ITS OWN endcap
+// endpoint and the flag is set so it can never fire again -- matching
+// the request's own singular "the moment," not "every new pair of
+// pieces that ever touch." An already-fired piece can still freely
+// serve as the "existing piece being hit" for a DIFFERENT, still-
+// eligible piece's own first impact -- only the NEWLY-firing piece's
+// own eligibility is gated, never its partner's. If BOTH pieces in a
+// pair are simultaneously still-eligible (2 freshly-cut pieces landing
+// on each other before either has touched anything else), both fire
+// independently, each from its own endpoint -- a deliberately simple,
+// symmetric rule rather than an arbitrary tie-break for a rare case.
+//
+// Spawn origin: "the Endcap Endpoint (same as the endcap dragpoint)"
+// per the request's own wording -- endcapDragPointWorld() is already
+// the single shared source of truth every OTHER endcap-endpoint
+// consumer in this file routes through (arm-time drag targeting, the
+// per-frame pull-back, the interaction-point dots -- see that
+// function's own header comment), fully generalized over an arbitrary
+// points array, not mainRope-specific -- so this is a straightforward
+// reuse, not a new endpoint-finding mechanism. Uses each piece's own
+// LIVE thickness (pieceThickness()) and cfg.endcapDesign/Height/
+// Deformable/BendStrength exactly as pieceCollision() itself already
+// does for that SAME piece's own tip collision circle a few lines
+// above -- no stretch (a piece is never being Drag-Rope-dragged).
+function checkCollisionSplatterTrigger(pieceA, pieceB){
+  if (!cfg.collisionSplatterEnabled || !DEV_MODE) return;
+  const candidates = [];
+  if (!pieceA.collisionSplatterFired) candidates.push(pieceA);
+  if (!pieceB.collisionSplatterFired) candidates.push(pieceB);
+  for (const piece of candidates){
+    piece.collisionSplatterFired = true;
+    const pt = endcapDragPointWorld(
+      piece.points, cfg.endcapDesign, pieceThickness(piece), cfg.endcapHeight,
+      cfg.endcapDeformableEnabled, cfg.endcapBendStrength, 1
+    );
+    spawnCollisionSplatter(pt.x, pt.y);
+  }
 }
 
 // Actually separates mainRope at idx into the remaining (anchor-side) rope
@@ -10208,11 +10432,13 @@ window.addEventListener('pointercancel', () => {
 function floorY(){ return viewportH() - vh(cfg.floorHeight); }
 
 function update(rawDt){
-  // Cut Splatter's own per-frame tick -- self-contained (reads/writes
-  // only splatterParticles), so placed first and unconditionally; the
-  // array is simply always empty when the feature's never been
-  // triggered (DEV_MODE-gated at spawn time, see spawnCutSplatter()).
-  updateSplatterParticles(rawDt);
+  // Cut Splatter's/Collision Splatter's own per-frame tick -- self-
+  // contained (reads/writes only their own array), so placed first and
+  // unconditionally; each array is simply always empty when that
+  // feature's never been triggered (DEV_MODE-gated at spawn time, see
+  // spawnCutSplatter()/spawnCollisionSplatter()).
+  updateSplatterArray(splatterParticles, rawDt, CUT_SPLATTER_PROFILE);
+  updateSplatterArray(collisionSplatterParticles, rawDt, COLLISION_SPLATTER_PROFILE);
   // Shared by Cursor Animation's own SNAP-freeze frame-loading guard
   // (see its own call site's comment) -- true only while an image is
   // genuinely still in flight (a permanently-failed load settles into
@@ -13154,7 +13380,8 @@ function render(){
   // (floor/circle/rope/pieces) -- per explicit request ("blood splatter
   // on the background"), so it reads as painted on the wall behind
   // everything rather than floating in front of it.
-  renderSplatterParticles();
+  renderSplatterArray(splatterParticles, CUT_SPLATTER_PROFILE);
+  renderSplatterArray(collisionSplatterParticles, COLLISION_SPLATTER_PROFILE);
 
   if (cfg.floorEnabled){
     const fY = floorY();

@@ -15392,3 +15392,68 @@ ENDCAP_DESIGNS' own usage) and was mocked for the Node simulation, so
 the actual rendered visual result is not live-browser-verified (this
 environment's recurring dev-server page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-21 (11th pass)
+
+4 requests, handled together.
+
+1. Added a "Splatter Fade On And Off" checkbox above the Fade Time
+   slider -- with it off, a particle still flies and lands exactly as
+   before, it just never dims or gets removed afterward (a permanent
+   stain until evicted by the particle cap). Added a "Splatter On Full
+   Rope Cut" checkbox and wired an actual spawnCutSplatter() call into
+   detachEntireRopeAndRestartIntro() -- a real, pre-existing gap: a
+   full rope detach (cutting shorter than Min Rope Length, or the
+   double-click-in-circle gesture) never spawned any splatter at all
+   before this.
+
+2. Added "Splatter Horizontal Spray Randomize" and "Splatter Vertical
+   Spray Randomize" sliders, layering a further +/-fraction variance on
+   top of each axis's own existing per-particle randomization -- same
+   pattern as Splatter Size Variance/Flight Duration Randomize.
+
+3. Generalized the spawn/update/render trio into a shared, profile-
+   driven engine (spawnSplatterBurst()/updateSplatterArray()/
+   renderSplatterArray(), keyed by a small object of cfg key NAMES per
+   independently-configurable particle system) so a 2nd, fully separate
+   splatter system could be added without duplicating this logic.
+
+4. Added a new COLLISION SPLATTER settings group -- the same particle
+   effect, triggered the moment a freshly-cut, still-falling piece
+   first makes real physical contact with an already-existing fallen
+   piece, spawned from that new piece's own endcap endpoint
+   (endcapDragPointWorld(), the same shared function every other
+   endcap-endpoint consumer in this file already routes through).
+   resolveChainCollision() now returns whether it actually resolved any
+   point-pair overlap this call (a purely additive change -- every
+   pre-existing caller ignores the return value) -- Collision Splatter
+   reuses this exact "touching" definition rather than a second,
+   possibly-divergent proximity check. Modeled as a one-time event per
+   piece (an implicit collisionSplatterFired flag): the first time a
+   not-yet-fired piece is found touching ANY other piece, its own
+   splatter fires and the flag is set so it never fires again; an
+   already-fired piece can still serve as the "existing piece being
+   hit" for a different, still-eligible piece's own first impact.
+
+Verification: syntax-checked after every edit; confirmed all 28 cfg
+keys referenced by the 2 new profile objects exist in DEV_GROUPS (no
+typos) via a targeted extraction/cross-check; confirmed zero stale
+references to the old single-array updateSplatterParticles()/
+renderSplatterParticles() functions remain anywhere. The collision-
+trigger logic verified via a dedicated Node simulation extracting the
+ACTUAL shipped functions: resolveChainCollision() correctly returns
+false for non-overlapping circles and true for overlapping ones;
+checkCollisionSplatterTrigger() correctly fires for both pieces on a
+fresh pair's first contact, fires exactly once more for a 3rd new
+piece touching an already-fired one, and fires zero times once both
+pieces in a pair have already fired. The fade on/off mechanism verified
+similarly: a fadeEnabled:false particle survives a deeply negative
+`life` (never removed) and renders at a flat, un-ramped opacity; a
+fadeEnabled:true particle is removed the instant `life` crosses 0,
+unchanged from the prior behavior. The burst-spawn formulas (spray/
+size/flight variance) verified to produce an exact no-op at variance=0
+and the correct 0-120% range at variance=1. Not live-browser-verified
+(this environment's recurring dev-server page-boot stall) -- the
+piece-collision trigger in particular has never been exercised against
+a real, physically-falling pair of pieces, only the extracted logic in
+isolation.
