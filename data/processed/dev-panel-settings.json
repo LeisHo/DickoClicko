@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 55.48193943763566,
+      "ropeLength": 39.815969718817676,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -100,7 +100,7 @@
       "clickIntensity": 5,
       "holdDistance": 7,
       "dragRopeEnabled": true,
-      "dragRopeHoldDistance": 6.5,
+      "dragRopeHoldDistance": 9,
       "dragOverridesGrowOnRopeHold": true,
       "dragMaxDistance": 150,
       "bendStiffness": 0.03,
@@ -2371,6 +2371,22 @@
                 },
                 {
                   "type": "row",
+                  "key": "dragRopeHoldDistance"
+                },
+                {
+                  "type": "row",
+                  "key": "dragMaxDistance"
+                },
+                {
+                  "type": "row",
+                  "key": "dragPickupDuration"
+                },
+                {
+                  "type": "row",
+                  "key": "mouseFlickDragSpeed"
+                },
+                {
+                  "type": "row",
                   "key": "dragMouseSensitivity"
                 },
                 {
@@ -2380,22 +2396,6 @@
                 {
                   "type": "row",
                   "key": "dragOverstretchMinSensitivityCurve"
-                },
-                {
-                  "type": "row",
-                  "key": "dragPickupDuration"
-                },
-                {
-                  "type": "row",
-                  "key": "dragRopeHoldDistance"
-                },
-                {
-                  "type": "row",
-                  "key": "mouseFlickDragSpeed"
-                },
-                {
-                  "type": "row",
-                  "key": "dragMaxDistance"
                 },
                 {
                   "type": "group",
@@ -2463,13 +2463,13 @@
               "settings": [
                 "dragRopeEnabled",
                 "dragOverridesGrowOnRopeHold",
+                "dragRopeHoldDistance",
+                "dragMaxDistance",
+                "dragPickupDuration",
+                "mouseFlickDragSpeed",
                 "dragMouseSensitivity",
                 "dragOverstretchMinSensitivity",
-                "dragOverstretchMinSensitivityCurve",
-                "dragPickupDuration",
-                "dragRopeHoldDistance",
-                "mouseFlickDragSpeed",
-                "dragMaxDistance"
+                "dragOverstretchMinSensitivityCurve"
               ],
               "subgroups": [
                 {
@@ -2691,6 +2691,22 @@
               },
               {
                 "type": "row",
+                "key": "dragRopeHoldDistance"
+              },
+              {
+                "type": "row",
+                "key": "dragMaxDistance"
+              },
+              {
+                "type": "row",
+                "key": "dragPickupDuration"
+              },
+              {
+                "type": "row",
+                "key": "mouseFlickDragSpeed"
+              },
+              {
+                "type": "row",
                 "key": "dragMouseSensitivity"
               },
               {
@@ -2700,22 +2716,6 @@
               {
                 "type": "row",
                 "key": "dragOverstretchMinSensitivityCurve"
-              },
-              {
-                "type": "row",
-                "key": "dragPickupDuration"
-              },
-              {
-                "type": "row",
-                "key": "dragRopeHoldDistance"
-              },
-              {
-                "type": "row",
-                "key": "mouseFlickDragSpeed"
-              },
-              {
-                "type": "row",
-                "key": "dragMaxDistance"
               },
               {
                 "type": "group",
@@ -2783,13 +2783,13 @@
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
+              "dragRopeHoldDistance",
+              "dragMaxDistance",
+              "dragPickupDuration",
+              "mouseFlickDragSpeed",
               "dragMouseSensitivity",
               "dragOverstretchMinSensitivity",
-              "dragOverstretchMinSensitivityCurve",
-              "dragPickupDuration",
-              "dragRopeHoldDistance",
-              "mouseFlickDragSpeed",
-              "dragMaxDistance"
+              "dragOverstretchMinSensitivityCurve"
             ],
             "subgroups": [
               {
