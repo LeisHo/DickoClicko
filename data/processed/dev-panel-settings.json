@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 25.011053960903862,
+      "ropeLength": 25.060282809818457,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -255,7 +255,8 @@
       "pieceDecayTintColor": "#2a1810",
       "pieceDecayTintAmount": 0.5,
       "pieceDecayBrightness": 1,
-      "overstretchThinningReleaseDuration": 400
+      "overstretchThinningReleaseDuration": 400,
+      "endcapDragPositionSmoothing": 0.25
     },
     "mobile": {},
     "landscape": {}
@@ -283,11 +284,541 @@
       {
         "key": "DEV PANEL",
         "collapsed": true,
+        "items": [
+          {
+            "type": "group",
+            "group": {
+              "key": "MECHANICS",
+              "collapsed": false,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "scrollStrength"
+                }
+              ],
+              "settings": [
+                "scrollStrength"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "PANEL UI",
+              "collapsed": false,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "bgColor"
+                },
+                {
+                  "type": "row",
+                  "key": "accentColor"
+                },
+                {
+                  "type": "row",
+                  "key": "sliderColor"
+                },
+                {
+                  "type": "row",
+                  "key": "opacity"
+                }
+              ],
+              "settings": [
+                "bgColor",
+                "accentColor",
+                "sliderColor",
+                "opacity"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "TEXT",
+              "collapsed": false,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "fontFamily"
+                },
+                {
+                  "type": "group",
+                  "group": {
+                    "key": "Dev Panel Title",
+                    "collapsed": false,
+                    "items": [
+                      {
+                        "type": "row",
+                        "key": "titleBold"
+                      },
+                      {
+                        "type": "row",
+                        "key": "titleCapitalize"
+                      },
+                      {
+                        "type": "row",
+                        "key": "titleFontSize"
+                      },
+                      {
+                        "type": "row",
+                        "key": "titleLetterSpacing"
+                      },
+                      {
+                        "type": "row",
+                        "key": "titleLineHeight"
+                      },
+                      {
+                        "type": "row",
+                        "key": "buttonTextBorder"
+                      },
+                      {
+                        "type": "row",
+                        "key": "titleColor"
+                      }
+                    ],
+                    "settings": [
+                      "titleBold",
+                      "titleCapitalize",
+                      "titleFontSize",
+                      "titleLetterSpacing",
+                      "titleLineHeight",
+                      "buttonTextBorder",
+                      "titleColor"
+                    ],
+                    "subgroups": []
+                  }
+                },
+                {
+                  "type": "group",
+                  "group": {
+                    "key": "Group Title",
+                    "collapsed": false,
+                    "items": [
+                      {
+                        "type": "row",
+                        "key": "groupBold"
+                      },
+                      {
+                        "type": "row",
+                        "key": "capsGroupNames"
+                      },
+                      {
+                        "type": "row",
+                        "key": "groupFontSize"
+                      },
+                      {
+                        "type": "row",
+                        "key": "groupLetterSpacing"
+                      },
+                      {
+                        "type": "row",
+                        "key": "groupLineHeight"
+                      },
+                      {
+                        "type": "row",
+                        "key": "groupTextColor"
+                      },
+                      {
+                        "type": "row",
+                        "key": "groupLabelBgColor"
+                      }
+                    ],
+                    "settings": [
+                      "groupBold",
+                      "capsGroupNames",
+                      "groupFontSize",
+                      "groupLetterSpacing",
+                      "groupLineHeight",
+                      "groupTextColor",
+                      "groupLabelBgColor"
+                    ],
+                    "subgroups": []
+                  }
+                },
+                {
+                  "type": "group",
+                  "group": {
+                    "key": "Setting Title",
+                    "collapsed": false,
+                    "items": [
+                      {
+                        "type": "row",
+                        "key": "capsSettingsText"
+                      },
+                      {
+                        "type": "row",
+                        "key": "settingsBold"
+                      },
+                      {
+                        "type": "row",
+                        "key": "labelFontSize"
+                      },
+                      {
+                        "type": "row",
+                        "key": "valueFontSize"
+                      },
+                      {
+                        "type": "row",
+                        "key": "settingsLineHeight"
+                      },
+                      {
+                        "type": "row",
+                        "key": "settingsLetterSpacing"
+                      },
+                      {
+                        "type": "row",
+                        "key": "textColor"
+                      },
+                      {
+                        "type": "row",
+                        "key": "settingNumberColor"
+                      }
+                    ],
+                    "settings": [
+                      "capsSettingsText",
+                      "settingsBold",
+                      "labelFontSize",
+                      "valueFontSize",
+                      "settingsLineHeight",
+                      "settingsLetterSpacing",
+                      "textColor",
+                      "settingNumberColor"
+                    ],
+                    "subgroups": []
+                  }
+                },
+                {
+                  "type": "group",
+                  "group": {
+                    "key": "TABS",
+                    "collapsed": false,
+                    "items": [
+                      {
+                        "type": "row",
+                        "key": "tabBold"
+                      },
+                      {
+                        "type": "row",
+                        "key": "capsTabText"
+                      },
+                      {
+                        "type": "row",
+                        "key": "tabFontSize"
+                      },
+                      {
+                        "type": "row",
+                        "key": "tabLetterSpacing"
+                      },
+                      {
+                        "type": "row",
+                        "key": "tabLineHeight"
+                      },
+                      {
+                        "type": "row",
+                        "key": "tabTextColor"
+                      }
+                    ],
+                    "settings": [
+                      "tabBold",
+                      "capsTabText",
+                      "tabFontSize",
+                      "tabLetterSpacing",
+                      "tabLineHeight",
+                      "tabTextColor"
+                    ],
+                    "subgroups": []
+                  }
+                },
+                {
+                  "type": "group",
+                  "group": {
+                    "key": "BUTTONS",
+                    "collapsed": false,
+                    "items": [
+                      {
+                        "type": "row",
+                        "key": "buttonBold"
+                      },
+                      {
+                        "type": "row",
+                        "key": "capsButtonText"
+                      },
+                      {
+                        "type": "row",
+                        "key": "buttonFontSize"
+                      },
+                      {
+                        "type": "row",
+                        "key": "buttonLetterSpacing"
+                      },
+                      {
+                        "type": "row",
+                        "key": "buttonLineHeight"
+                      },
+                      {
+                        "type": "row",
+                        "key": "buttonTextColor"
+                      },
+                      {
+                        "type": "row",
+                        "key": "buttonHeight"
+                      }
+                    ],
+                    "settings": [
+                      "buttonBold",
+                      "capsButtonText",
+                      "buttonFontSize",
+                      "buttonLetterSpacing",
+                      "buttonLineHeight",
+                      "buttonTextColor",
+                      "buttonHeight"
+                    ],
+                    "subgroups": []
+                  }
+                }
+              ],
+              "settings": [
+                "fontFamily"
+              ],
+              "subgroups": [
+                {
+                  "key": "Dev Panel Title",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "titleBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleCapitalize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonTextBorder"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleColor"
+                    }
+                  ],
+                  "settings": [
+                    "titleBold",
+                    "titleCapitalize",
+                    "titleFontSize",
+                    "titleLetterSpacing",
+                    "titleLineHeight",
+                    "buttonTextBorder",
+                    "titleColor"
+                  ],
+                  "subgroups": []
+                },
+                {
+                  "key": "Group Title",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "groupBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "capsGroupNames"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupTextColor"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupLabelBgColor"
+                    }
+                  ],
+                  "settings": [
+                    "groupBold",
+                    "capsGroupNames",
+                    "groupFontSize",
+                    "groupLetterSpacing",
+                    "groupLineHeight",
+                    "groupTextColor",
+                    "groupLabelBgColor"
+                  ],
+                  "subgroups": []
+                },
+                {
+                  "key": "Setting Title",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "capsSettingsText"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingsBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "labelFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "valueFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingsLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingsLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "textColor"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingNumberColor"
+                    }
+                  ],
+                  "settings": [
+                    "capsSettingsText",
+                    "settingsBold",
+                    "labelFontSize",
+                    "valueFontSize",
+                    "settingsLineHeight",
+                    "settingsLetterSpacing",
+                    "textColor",
+                    "settingNumberColor"
+                  ],
+                  "subgroups": []
+                },
+                {
+                  "key": "TABS",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "tabBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "capsTabText"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabTextColor"
+                    }
+                  ],
+                  "settings": [
+                    "tabBold",
+                    "capsTabText",
+                    "tabFontSize",
+                    "tabLetterSpacing",
+                    "tabLineHeight",
+                    "tabTextColor"
+                  ],
+                  "subgroups": []
+                },
+                {
+                  "key": "BUTTONS",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "buttonBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "capsButtonText"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonTextColor"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonHeight"
+                    }
+                  ],
+                  "settings": [
+                    "buttonBold",
+                    "capsButtonText",
+                    "buttonFontSize",
+                    "buttonLetterSpacing",
+                    "buttonLineHeight",
+                    "buttonTextColor",
+                    "buttonHeight"
+                  ],
+                  "subgroups": []
+                }
+              ]
+            }
+          }
+        ],
         "settings": [],
         "subgroups": [
           {
             "key": "MECHANICS",
             "collapsed": false,
+            "items": [
+              {
+                "type": "row",
+                "key": "scrollStrength"
+              }
+            ],
             "settings": [
               "scrollStrength"
             ],
@@ -296,6 +827,24 @@
           {
             "key": "PANEL UI",
             "collapsed": false,
+            "items": [
+              {
+                "type": "row",
+                "key": "bgColor"
+              },
+              {
+                "type": "row",
+                "key": "accentColor"
+              },
+              {
+                "type": "row",
+                "key": "sliderColor"
+              },
+              {
+                "type": "row",
+                "key": "opacity"
+              }
+            ],
             "settings": [
               "bgColor",
               "accentColor",
@@ -307,6 +856,247 @@
           {
             "key": "TEXT",
             "collapsed": false,
+            "items": [
+              {
+                "type": "row",
+                "key": "fontFamily"
+              },
+              {
+                "type": "group",
+                "group": {
+                  "key": "Dev Panel Title",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "titleBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleCapitalize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonTextBorder"
+                    },
+                    {
+                      "type": "row",
+                      "key": "titleColor"
+                    }
+                  ],
+                  "settings": [
+                    "titleBold",
+                    "titleCapitalize",
+                    "titleFontSize",
+                    "titleLetterSpacing",
+                    "titleLineHeight",
+                    "buttonTextBorder",
+                    "titleColor"
+                  ],
+                  "subgroups": []
+                }
+              },
+              {
+                "type": "group",
+                "group": {
+                  "key": "Group Title",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "groupBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "capsGroupNames"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupTextColor"
+                    },
+                    {
+                      "type": "row",
+                      "key": "groupLabelBgColor"
+                    }
+                  ],
+                  "settings": [
+                    "groupBold",
+                    "capsGroupNames",
+                    "groupFontSize",
+                    "groupLetterSpacing",
+                    "groupLineHeight",
+                    "groupTextColor",
+                    "groupLabelBgColor"
+                  ],
+                  "subgroups": []
+                }
+              },
+              {
+                "type": "group",
+                "group": {
+                  "key": "Setting Title",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "capsSettingsText"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingsBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "labelFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "valueFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingsLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingsLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "textColor"
+                    },
+                    {
+                      "type": "row",
+                      "key": "settingNumberColor"
+                    }
+                  ],
+                  "settings": [
+                    "capsSettingsText",
+                    "settingsBold",
+                    "labelFontSize",
+                    "valueFontSize",
+                    "settingsLineHeight",
+                    "settingsLetterSpacing",
+                    "textColor",
+                    "settingNumberColor"
+                  ],
+                  "subgroups": []
+                }
+              },
+              {
+                "type": "group",
+                "group": {
+                  "key": "TABS",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "tabBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "capsTabText"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "tabTextColor"
+                    }
+                  ],
+                  "settings": [
+                    "tabBold",
+                    "capsTabText",
+                    "tabFontSize",
+                    "tabLetterSpacing",
+                    "tabLineHeight",
+                    "tabTextColor"
+                  ],
+                  "subgroups": []
+                }
+              },
+              {
+                "type": "group",
+                "group": {
+                  "key": "BUTTONS",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "buttonBold"
+                    },
+                    {
+                      "type": "row",
+                      "key": "capsButtonText"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonFontSize"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonLetterSpacing"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonLineHeight"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonTextColor"
+                    },
+                    {
+                      "type": "row",
+                      "key": "buttonHeight"
+                    }
+                  ],
+                  "settings": [
+                    "buttonBold",
+                    "capsButtonText",
+                    "buttonFontSize",
+                    "buttonLetterSpacing",
+                    "buttonLineHeight",
+                    "buttonTextColor",
+                    "buttonHeight"
+                  ],
+                  "subgroups": []
+                }
+              }
+            ],
             "settings": [
               "fontFamily"
             ],
@@ -314,6 +1104,36 @@
               {
                 "key": "Dev Panel Title",
                 "collapsed": false,
+                "items": [
+                  {
+                    "type": "row",
+                    "key": "titleBold"
+                  },
+                  {
+                    "type": "row",
+                    "key": "titleCapitalize"
+                  },
+                  {
+                    "type": "row",
+                    "key": "titleFontSize"
+                  },
+                  {
+                    "type": "row",
+                    "key": "titleLetterSpacing"
+                  },
+                  {
+                    "type": "row",
+                    "key": "titleLineHeight"
+                  },
+                  {
+                    "type": "row",
+                    "key": "buttonTextBorder"
+                  },
+                  {
+                    "type": "row",
+                    "key": "titleColor"
+                  }
+                ],
                 "settings": [
                   "titleBold",
                   "titleCapitalize",
@@ -328,6 +1148,36 @@
               {
                 "key": "Group Title",
                 "collapsed": false,
+                "items": [
+                  {
+                    "type": "row",
+                    "key": "groupBold"
+                  },
+                  {
+                    "type": "row",
+                    "key": "capsGroupNames"
+                  },
+                  {
+                    "type": "row",
+                    "key": "groupFontSize"
+                  },
+                  {
+                    "type": "row",
+                    "key": "groupLetterSpacing"
+                  },
+                  {
+                    "type": "row",
+                    "key": "groupLineHeight"
+                  },
+                  {
+                    "type": "row",
+                    "key": "groupTextColor"
+                  },
+                  {
+                    "type": "row",
+                    "key": "groupLabelBgColor"
+                  }
+                ],
                 "settings": [
                   "groupBold",
                   "capsGroupNames",
@@ -342,6 +1192,40 @@
               {
                 "key": "Setting Title",
                 "collapsed": false,
+                "items": [
+                  {
+                    "type": "row",
+                    "key": "capsSettingsText"
+                  },
+                  {
+                    "type": "row",
+                    "key": "settingsBold"
+                  },
+                  {
+                    "type": "row",
+                    "key": "labelFontSize"
+                  },
+                  {
+                    "type": "row",
+                    "key": "valueFontSize"
+                  },
+                  {
+                    "type": "row",
+                    "key": "settingsLineHeight"
+                  },
+                  {
+                    "type": "row",
+                    "key": "settingsLetterSpacing"
+                  },
+                  {
+                    "type": "row",
+                    "key": "textColor"
+                  },
+                  {
+                    "type": "row",
+                    "key": "settingNumberColor"
+                  }
+                ],
                 "settings": [
                   "capsSettingsText",
                   "settingsBold",
@@ -357,6 +1241,32 @@
               {
                 "key": "TABS",
                 "collapsed": false,
+                "items": [
+                  {
+                    "type": "row",
+                    "key": "tabBold"
+                  },
+                  {
+                    "type": "row",
+                    "key": "capsTabText"
+                  },
+                  {
+                    "type": "row",
+                    "key": "tabFontSize"
+                  },
+                  {
+                    "type": "row",
+                    "key": "tabLetterSpacing"
+                  },
+                  {
+                    "type": "row",
+                    "key": "tabLineHeight"
+                  },
+                  {
+                    "type": "row",
+                    "key": "tabTextColor"
+                  }
+                ],
                 "settings": [
                   "tabBold",
                   "capsTabText",
@@ -370,6 +1280,36 @@
               {
                 "key": "BUTTONS",
                 "collapsed": false,
+                "items": [
+                  {
+                    "type": "row",
+                    "key": "buttonBold"
+                  },
+                  {
+                    "type": "row",
+                    "key": "capsButtonText"
+                  },
+                  {
+                    "type": "row",
+                    "key": "buttonFontSize"
+                  },
+                  {
+                    "type": "row",
+                    "key": "buttonLetterSpacing"
+                  },
+                  {
+                    "type": "row",
+                    "key": "buttonLineHeight"
+                  },
+                  {
+                    "type": "row",
+                    "key": "buttonTextColor"
+                  },
+                  {
+                    "type": "row",
+                    "key": "buttonHeight"
+                  }
+                ],
                 "settings": [
                   "buttonBold",
                   "capsButtonText",
@@ -387,8 +1327,19 @@
       },
       {
         "key": "DEBUG",
-        "collapsed": true,
+        "collapsed": false,
+        "items": [
+          {
+            "type": "row",
+            "key": "mouseFlickShowInteractionPoints"
+          },
+          {
+            "type": "row",
+            "key": "clickLogPositionDataEnabled"
+          }
+        ],
         "settings": [
+          "mouseFlickShowInteractionPoints",
           "clickLogPositionDataEnabled"
         ],
         "subgroups": []
@@ -396,6 +1347,24 @@
       {
         "key": "WALLS",
         "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "ceilingBounciness"
+          },
+          {
+            "type": "row",
+            "key": "wallBounciness"
+          },
+          {
+            "type": "row",
+            "key": "wallEnabled"
+          },
+          {
+            "type": "row",
+            "key": "wallFriction"
+          }
+        ],
         "settings": [
           "ceilingBounciness",
           "wallBounciness",
@@ -407,6 +1376,12 @@
       {
         "key": "UI",
         "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "backgroundColor"
+          }
+        ],
         "settings": [
           "backgroundColor"
         ],
@@ -415,9 +1390,71 @@
       {
         "key": "CURSOR ANIMATION",
         "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "mouseFlickEnabledLiveMode"
+          },
+          {
+            "type": "row",
+            "key": "cursorAnimationDragToleranceMult"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickTickleSpeed"
+          },
+          {
+            "type": "row",
+            "key": "snapRepeatDuration"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickTargetMode"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickTargetPoint"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickRandomInterval"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickEnabled"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickScale"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickAnimSpeed"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickPositionSmoothing"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickRotationSmoothing"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickAngleOffset"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickHoldMaxSpeed"
+          },
+          {
+            "type": "row",
+            "key": "mouseFlickHoldMaxDuration"
+          }
+        ],
         "settings": [
-          "cursorAnimationDragToleranceMult",
           "mouseFlickEnabledLiveMode",
+          "cursorAnimationDragToleranceMult",
           "mouseFlickTickleSpeed",
           "snapRepeatDuration",
           "mouseFlickTargetMode",
@@ -436,7 +1473,25 @@
       },
       {
         "key": "CIRCLE",
-        "collapsed": false,
+        "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "circleSize"
+          },
+          {
+            "type": "row",
+            "key": "circleX"
+          },
+          {
+            "type": "row",
+            "key": "circleY"
+          },
+          {
+            "type": "row",
+            "key": "circleColor"
+          }
+        ],
         "settings": [
           "circleSize",
           "circleX",
@@ -447,8 +1502,378 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
+        "items": [
+          {
+            "type": "row",
+            "key": "endcapDragPositionSmoothing"
+          },
+          {
+            "type": "row",
+            "key": "ropeDefaultLength"
+          },
+          {
+            "type": "row",
+            "key": "segmentLength"
+          },
+          {
+            "type": "row",
+            "key": "ropeLength"
+          },
+          {
+            "type": "row",
+            "key": "minRopeLength"
+          },
+          {
+            "type": "row",
+            "key": "ropeThickness"
+          },
+          {
+            "type": "row",
+            "key": "ropeGradientEnabled"
+          },
+          {
+            "type": "row",
+            "key": "ropeGradientColors"
+          },
+          {
+            "type": "row",
+            "key": "ropeColor"
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "ANCHOR PHYSICS",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "circleBoundaryOffset"
+                },
+                {
+                  "type": "row",
+                  "key": "anchorWeight"
+                }
+              ],
+              "settings": [
+                "circleBoundaryOffset",
+                "anchorWeight"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "ROPE ANIMATION",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "ropeAnimSpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "gravityStrength"
+                },
+                {
+                  "type": "row",
+                  "key": "damping"
+                },
+                {
+                  "type": "row",
+                  "key": "constraintIterations"
+                },
+                {
+                  "type": "row",
+                  "key": "bendStiffness"
+                }
+              ],
+              "settings": [
+                "ropeAnimSpeed",
+                "gravityStrength",
+                "damping",
+                "constraintIterations",
+                "bendStiffness"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "New Group (3)",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "ropeEndCurveArc"
+                },
+                {
+                  "type": "row",
+                  "key": "ropeTopCurveArc"
+                },
+                {
+                  "type": "row",
+                  "key": "arcGradientEnabled"
+                },
+                {
+                  "type": "row",
+                  "key": "arcGradientColors"
+                },
+                {
+                  "type": "row",
+                  "key": "arcSeamOverlapPx"
+                }
+              ],
+              "settings": [
+                "ropeEndCurveArc",
+                "ropeTopCurveArc",
+                "arcGradientEnabled",
+                "arcGradientColors",
+                "arcSeamOverlapPx"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "New Group (2)",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "endcapGradientEnabled"
+                },
+                {
+                  "type": "row",
+                  "key": "endcapDesign"
+                },
+                {
+                  "type": "row",
+                  "key": "endcapHeight"
+                },
+                {
+                  "type": "row",
+                  "key": "endcapGradientColors"
+                },
+                {
+                  "type": "group",
+                  "group": {
+                    "key": "New Group (9)",
+                    "collapsed": true,
+                    "items": [
+                      {
+                        "type": "row",
+                        "key": "endcapDeformableEnabled"
+                      },
+                      {
+                        "type": "row",
+                        "key": "endcapStretchEnabled"
+                      },
+                      {
+                        "type": "row",
+                        "key": "endcapBendStrength"
+                      },
+                      {
+                        "type": "row",
+                        "key": "endcapStretchMaxMult"
+                      },
+                      {
+                        "type": "row",
+                        "key": "endcapStretchRange"
+                      }
+                    ],
+                    "settings": [
+                      "endcapDeformableEnabled",
+                      "endcapStretchEnabled",
+                      "endcapBendStrength",
+                      "endcapStretchMaxMult",
+                      "endcapStretchRange"
+                    ],
+                    "subgroups": []
+                  }
+                }
+              ],
+              "settings": [
+                "endcapGradientEnabled",
+                "endcapDesign",
+                "endcapHeight",
+                "endcapGradientColors"
+              ],
+              "subgroups": [
+                {
+                  "key": "New Group (9)",
+                  "collapsed": true,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "endcapDeformableEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapStretchEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapBendStrength"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapStretchMaxMult"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapStretchRange"
+                    }
+                  ],
+                  "settings": [
+                    "endcapDeformableEnabled",
+                    "endcapStretchEnabled",
+                    "endcapBendStrength",
+                    "endcapStretchMaxMult",
+                    "endcapStretchRange"
+                  ],
+                  "subgroups": []
+                }
+              ]
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "New Group (10)",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "pieceDecayTintColor"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceDecayTintAmount"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceDecayBrightness"
+                },
+                {
+                  "type": "row",
+                  "key": "ropeFallSpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceDecayDelay"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceDecaySpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceMinThickness"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceGradientEnabled"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceGradientColors"
+                }
+              ],
+              "settings": [
+                "pieceDecayTintColor",
+                "pieceDecayTintAmount",
+                "pieceDecayBrightness",
+                "ropeFallSpeed",
+                "pieceDecayDelay",
+                "pieceDecaySpeed",
+                "pieceMinThickness",
+                "pieceGradientEnabled",
+                "pieceGradientColors"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "New Group (5)",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "bgRopeGradientEnabled"
+                },
+                {
+                  "type": "row",
+                  "key": "bgRopeGradientColors"
+                }
+              ],
+              "settings": [
+                "bgRopeGradientEnabled",
+                "bgRopeGradientColors"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "END EMERGE",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "endEmergeEnabled"
+                },
+                {
+                  "type": "row",
+                  "key": "endEmergeSpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "pieceEndEmergeSpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "endEmergeDelay"
+                },
+                {
+                  "type": "row",
+                  "key": "endcapStartingScaleWidth"
+                },
+                {
+                  "type": "row",
+                  "key": "endcapStartingScale"
+                },
+                {
+                  "type": "row",
+                  "key": "endEmergeEasingStrength"
+                },
+                {
+                  "type": "row",
+                  "key": "endEmergeTweening"
+                }
+              ],
+              "settings": [
+                "endEmergeEnabled",
+                "endEmergeSpeed",
+                "pieceEndEmergeSpeed",
+                "endEmergeDelay",
+                "endcapStartingScaleWidth",
+                "endcapStartingScale",
+                "endEmergeEasingStrength",
+                "endEmergeTweening"
+              ],
+              "subgroups": []
+            }
+          }
+        ],
         "settings": [
+          "endcapDragPositionSmoothing",
           "ropeDefaultLength",
           "segmentLength",
           "ropeLength",
@@ -462,6 +1887,16 @@
           {
             "key": "ANCHOR PHYSICS",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "circleBoundaryOffset"
+              },
+              {
+                "type": "row",
+                "key": "anchorWeight"
+              }
+            ],
             "settings": [
               "circleBoundaryOffset",
               "anchorWeight"
@@ -471,6 +1906,28 @@
           {
             "key": "ROPE ANIMATION",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "ropeAnimSpeed"
+              },
+              {
+                "type": "row",
+                "key": "gravityStrength"
+              },
+              {
+                "type": "row",
+                "key": "damping"
+              },
+              {
+                "type": "row",
+                "key": "constraintIterations"
+              },
+              {
+                "type": "row",
+                "key": "bendStiffness"
+              }
+            ],
             "settings": [
               "ropeAnimSpeed",
               "gravityStrength",
@@ -483,6 +1940,28 @@
           {
             "key": "New Group (3)",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "ropeEndCurveArc"
+              },
+              {
+                "type": "row",
+                "key": "ropeTopCurveArc"
+              },
+              {
+                "type": "row",
+                "key": "arcGradientEnabled"
+              },
+              {
+                "type": "row",
+                "key": "arcGradientColors"
+              },
+              {
+                "type": "row",
+                "key": "arcSeamOverlapPx"
+              }
+            ],
             "settings": [
               "ropeEndCurveArc",
               "ropeTopCurveArc",
@@ -495,6 +1974,61 @@
           {
             "key": "New Group (2)",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "endcapGradientEnabled"
+              },
+              {
+                "type": "row",
+                "key": "endcapDesign"
+              },
+              {
+                "type": "row",
+                "key": "endcapHeight"
+              },
+              {
+                "type": "row",
+                "key": "endcapGradientColors"
+              },
+              {
+                "type": "group",
+                "group": {
+                  "key": "New Group (9)",
+                  "collapsed": true,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "endcapDeformableEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapStretchEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapBendStrength"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapStretchMaxMult"
+                    },
+                    {
+                      "type": "row",
+                      "key": "endcapStretchRange"
+                    }
+                  ],
+                  "settings": [
+                    "endcapDeformableEnabled",
+                    "endcapStretchEnabled",
+                    "endcapBendStrength",
+                    "endcapStretchMaxMult",
+                    "endcapStretchRange"
+                  ],
+                  "subgroups": []
+                }
+              }
+            ],
             "settings": [
               "endcapGradientEnabled",
               "endcapDesign",
@@ -505,6 +2039,28 @@
               {
                 "key": "New Group (9)",
                 "collapsed": true,
+                "items": [
+                  {
+                    "type": "row",
+                    "key": "endcapDeformableEnabled"
+                  },
+                  {
+                    "type": "row",
+                    "key": "endcapStretchEnabled"
+                  },
+                  {
+                    "type": "row",
+                    "key": "endcapBendStrength"
+                  },
+                  {
+                    "type": "row",
+                    "key": "endcapStretchMaxMult"
+                  },
+                  {
+                    "type": "row",
+                    "key": "endcapStretchRange"
+                  }
+                ],
                 "settings": [
                   "endcapDeformableEnabled",
                   "endcapStretchEnabled",
@@ -517,9 +2073,54 @@
             ]
           },
           {
-            "key": "New Group (4)",
+            "key": "New Group (10)",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "pieceDecayTintColor"
+              },
+              {
+                "type": "row",
+                "key": "pieceDecayTintAmount"
+              },
+              {
+                "type": "row",
+                "key": "pieceDecayBrightness"
+              },
+              {
+                "type": "row",
+                "key": "ropeFallSpeed"
+              },
+              {
+                "type": "row",
+                "key": "pieceDecayDelay"
+              },
+              {
+                "type": "row",
+                "key": "pieceDecaySpeed"
+              },
+              {
+                "type": "row",
+                "key": "pieceMinThickness"
+              },
+              {
+                "type": "row",
+                "key": "pieceGradientEnabled"
+              },
+              {
+                "type": "row",
+                "key": "pieceGradientColors"
+              }
+            ],
             "settings": [
+              "pieceDecayTintColor",
+              "pieceDecayTintAmount",
+              "pieceDecayBrightness",
+              "ropeFallSpeed",
+              "pieceDecayDelay",
+              "pieceDecaySpeed",
+              "pieceMinThickness",
               "pieceGradientEnabled",
               "pieceGradientColors"
             ],
@@ -528,6 +2129,16 @@
           {
             "key": "New Group (5)",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "bgRopeGradientEnabled"
+              },
+              {
+                "type": "row",
+                "key": "bgRopeGradientColors"
+              }
+            ],
             "settings": [
               "bgRopeGradientEnabled",
               "bgRopeGradientColors"
@@ -537,6 +2148,40 @@
           {
             "key": "END EMERGE",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "endEmergeEnabled"
+              },
+              {
+                "type": "row",
+                "key": "endEmergeSpeed"
+              },
+              {
+                "type": "row",
+                "key": "pieceEndEmergeSpeed"
+              },
+              {
+                "type": "row",
+                "key": "endEmergeDelay"
+              },
+              {
+                "type": "row",
+                "key": "endcapStartingScaleWidth"
+              },
+              {
+                "type": "row",
+                "key": "endcapStartingScale"
+              },
+              {
+                "type": "row",
+                "key": "endEmergeEasingStrength"
+              },
+              {
+                "type": "row",
+                "key": "endEmergeTweening"
+              }
+            ],
             "settings": [
               "endEmergeEnabled",
               "endEmergeSpeed",
@@ -553,12 +2198,362 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": true,
+        "collapsed": false,
+        "items": [
+          {
+            "type": "group",
+            "group": {
+              "key": "CLICK",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "overstretchThinningReleaseDuration"
+                },
+                {
+                  "type": "row",
+                  "key": "clickIntensity"
+                },
+                {
+                  "type": "row",
+                  "key": "clickDistance"
+                }
+              ],
+              "settings": [
+                "overstretchThinningReleaseDuration",
+                "clickIntensity",
+                "clickDistance"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "ROPE CUT",
+              "collapsed": false,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "doubleClickDistance"
+                },
+                {
+                  "type": "row",
+                  "key": "doubleClickThreshold"
+                },
+                {
+                  "type": "row",
+                  "key": "cutSpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "endcapAtCutEnd"
+                },
+                {
+                  "type": "row",
+                  "key": "cutSweepColor"
+                },
+                {
+                  "type": "row",
+                  "key": "cutSweepThickness"
+                }
+              ],
+              "settings": [
+                "doubleClickDistance",
+                "doubleClickThreshold",
+                "cutSpeed",
+                "endcapAtCutEnd",
+                "cutSweepColor",
+                "cutSweepThickness"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "RIGHT CLICK",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "ropeAttractionIntensity"
+                },
+                {
+                  "type": "row",
+                  "key": "ropeAttractionSpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "ropeAttractionMaxReach"
+                }
+              ],
+              "settings": [
+                "ropeAttractionIntensity",
+                "ropeAttractionSpeed",
+                "ropeAttractionMaxReach"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "FLICK HOLD",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "punchPowerAbsolute"
+                },
+                {
+                  "type": "row",
+                  "key": "holdDistance"
+                },
+                {
+                  "type": "row",
+                  "key": "clickHoldMaxDuration"
+                },
+                {
+                  "type": "row",
+                  "key": "intensityCeiling"
+                }
+              ],
+              "settings": [
+                "punchPowerAbsolute",
+                "holdDistance",
+                "clickHoldMaxDuration",
+                "intensityCeiling"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "ROPE GROWTH",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "ropeGrowthHoldDistance"
+                },
+                {
+                  "type": "row",
+                  "key": "ropeGrowthOnRopeHold"
+                },
+                {
+                  "type": "row",
+                  "key": "ropeGrowthRate"
+                }
+              ],
+              "settings": [
+                "ropeGrowthHoldDistance",
+                "ropeGrowthOnRopeHold",
+                "ropeGrowthRate"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "New Group (7)",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "dragRopeEnabled"
+                },
+                {
+                  "type": "row",
+                  "key": "dragOverridesGrowOnRopeHold"
+                },
+                {
+                  "type": "row",
+                  "key": "dragMouseSensitivity"
+                },
+                {
+                  "type": "row",
+                  "key": "dragOverstretchMinSensitivity"
+                },
+                {
+                  "type": "row",
+                  "key": "dragOverstretchMinSensitivityCurve"
+                },
+                {
+                  "type": "row",
+                  "key": "dragPickupDuration"
+                },
+                {
+                  "type": "row",
+                  "key": "dragRopeHoldDistance"
+                },
+                {
+                  "type": "row",
+                  "key": "mouseFlickDragSpeed"
+                },
+                {
+                  "type": "row",
+                  "key": "dragMaxDistance"
+                },
+                {
+                  "type": "group",
+                  "group": {
+                    "key": "New Group (8)",
+                    "collapsed": false,
+                    "items": [
+                      {
+                        "type": "row",
+                        "key": "overstretchEnabled"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchThinningEnabled"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchThinningSmoothness"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchTolerance"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchMaxThinDepth"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchThinningSharpness"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchBounceMaxAmplitude"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchBounceMinAmplitude"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchBounceStiffness"
+                      },
+                      {
+                        "type": "row",
+                        "key": "overstretchBounceDamping"
+                      }
+                    ],
+                    "settings": [
+                      "overstretchEnabled",
+                      "overstretchThinningEnabled",
+                      "overstretchThinningSmoothness",
+                      "overstretchTolerance",
+                      "overstretchMaxThinDepth",
+                      "overstretchThinningSharpness",
+                      "overstretchBounceMaxAmplitude",
+                      "overstretchBounceMinAmplitude",
+                      "overstretchBounceStiffness",
+                      "overstretchBounceDamping"
+                    ],
+                    "subgroups": []
+                  }
+                }
+              ],
+              "settings": [
+                "dragRopeEnabled",
+                "dragOverridesGrowOnRopeHold",
+                "dragMouseSensitivity",
+                "dragOverstretchMinSensitivity",
+                "dragOverstretchMinSensitivityCurve",
+                "dragPickupDuration",
+                "dragRopeHoldDistance",
+                "mouseFlickDragSpeed",
+                "dragMaxDistance"
+              ],
+              "subgroups": [
+                {
+                  "key": "New Group (8)",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "overstretchEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchThinningEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchThinningSmoothness"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchTolerance"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchMaxThinDepth"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchThinningSharpness"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceMaxAmplitude"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceMinAmplitude"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceStiffness"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceDamping"
+                    }
+                  ],
+                  "settings": [
+                    "overstretchEnabled",
+                    "overstretchThinningEnabled",
+                    "overstretchThinningSmoothness",
+                    "overstretchTolerance",
+                    "overstretchMaxThinDepth",
+                    "overstretchThinningSharpness",
+                    "overstretchBounceMaxAmplitude",
+                    "overstretchBounceMinAmplitude",
+                    "overstretchBounceStiffness",
+                    "overstretchBounceDamping"
+                  ],
+                  "subgroups": []
+                }
+              ]
+            }
+          }
+        ],
         "settings": [],
         "subgroups": [
           {
             "key": "CLICK",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "overstretchThinningReleaseDuration"
+              },
+              {
+                "type": "row",
+                "key": "clickIntensity"
+              },
+              {
+                "type": "row",
+                "key": "clickDistance"
+              }
+            ],
             "settings": [
               "overstretchThinningReleaseDuration",
               "clickIntensity",
@@ -568,27 +2563,60 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": true,
+            "collapsed": false,
+            "items": [
+              {
+                "type": "row",
+                "key": "doubleClickDistance"
+              },
+              {
+                "type": "row",
+                "key": "doubleClickThreshold"
+              },
+              {
+                "type": "row",
+                "key": "cutSpeed"
+              },
+              {
+                "type": "row",
+                "key": "endcapAtCutEnd"
+              },
+              {
+                "type": "row",
+                "key": "cutSweepColor"
+              },
+              {
+                "type": "row",
+                "key": "cutSweepThickness"
+              }
+            ],
             "settings": [
-              "pieceDecayTintColor",
-              "pieceDecayTintAmount",
-              "pieceDecayBrightness",
               "doubleClickDistance",
               "doubleClickThreshold",
-              "ropeFallSpeed",
               "cutSpeed",
               "endcapAtCutEnd",
               "cutSweepColor",
-              "cutSweepThickness",
-              "pieceDecayDelay",
-              "pieceDecaySpeed",
-              "pieceMinThickness"
+              "cutSweepThickness"
             ],
             "subgroups": []
           },
           {
             "key": "RIGHT CLICK",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "ropeAttractionIntensity"
+              },
+              {
+                "type": "row",
+                "key": "ropeAttractionSpeed"
+              },
+              {
+                "type": "row",
+                "key": "ropeAttractionMaxReach"
+              }
+            ],
             "settings": [
               "ropeAttractionIntensity",
               "ropeAttractionSpeed",
@@ -599,6 +2627,24 @@
           {
             "key": "FLICK HOLD",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "punchPowerAbsolute"
+              },
+              {
+                "type": "row",
+                "key": "holdDistance"
+              },
+              {
+                "type": "row",
+                "key": "clickHoldMaxDuration"
+              },
+              {
+                "type": "row",
+                "key": "intensityCeiling"
+              }
+            ],
             "settings": [
               "punchPowerAbsolute",
               "holdDistance",
@@ -609,7 +2655,21 @@
           },
           {
             "key": "ROPE GROWTH",
-            "collapsed": false,
+            "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "ropeGrowthHoldDistance"
+              },
+              {
+                "type": "row",
+                "key": "ropeGrowthOnRopeHold"
+              },
+              {
+                "type": "row",
+                "key": "ropeGrowthRate"
+              }
+            ],
             "settings": [
               "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
@@ -619,11 +2679,110 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": false,
+            "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "dragRopeEnabled"
+              },
+              {
+                "type": "row",
+                "key": "dragOverridesGrowOnRopeHold"
+              },
+              {
+                "type": "row",
+                "key": "dragMouseSensitivity"
+              },
+              {
+                "type": "row",
+                "key": "dragOverstretchMinSensitivity"
+              },
+              {
+                "type": "row",
+                "key": "dragOverstretchMinSensitivityCurve"
+              },
+              {
+                "type": "row",
+                "key": "dragPickupDuration"
+              },
+              {
+                "type": "row",
+                "key": "dragRopeHoldDistance"
+              },
+              {
+                "type": "row",
+                "key": "mouseFlickDragSpeed"
+              },
+              {
+                "type": "row",
+                "key": "dragMaxDistance"
+              },
+              {
+                "type": "group",
+                "group": {
+                  "key": "New Group (8)",
+                  "collapsed": false,
+                  "items": [
+                    {
+                      "type": "row",
+                      "key": "overstretchEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchThinningEnabled"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchThinningSmoothness"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchTolerance"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchMaxThinDepth"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchThinningSharpness"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceMaxAmplitude"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceMinAmplitude"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceStiffness"
+                    },
+                    {
+                      "type": "row",
+                      "key": "overstretchBounceDamping"
+                    }
+                  ],
+                  "settings": [
+                    "overstretchEnabled",
+                    "overstretchThinningEnabled",
+                    "overstretchThinningSmoothness",
+                    "overstretchTolerance",
+                    "overstretchMaxThinDepth",
+                    "overstretchThinningSharpness",
+                    "overstretchBounceMaxAmplitude",
+                    "overstretchBounceMinAmplitude",
+                    "overstretchBounceStiffness",
+                    "overstretchBounceDamping"
+                  ],
+                  "subgroups": []
+                }
+              }
+            ],
             "settings": [
               "dragRopeEnabled",
               "dragOverridesGrowOnRopeHold",
-              "mouseFlickShowInteractionPoints",
               "dragMouseSensitivity",
               "dragOverstretchMinSensitivity",
               "dragOverstretchMinSensitivityCurve",
@@ -636,6 +2795,48 @@
               {
                 "key": "New Group (8)",
                 "collapsed": false,
+                "items": [
+                  {
+                    "type": "row",
+                    "key": "overstretchEnabled"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchThinningEnabled"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchThinningSmoothness"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchTolerance"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchMaxThinDepth"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchThinningSharpness"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchBounceMaxAmplitude"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchBounceMinAmplitude"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchBounceStiffness"
+                  },
+                  {
+                    "type": "row",
+                    "key": "overstretchBounceDamping"
+                  }
+                ],
                 "settings": [
                   "overstretchEnabled",
                   "overstretchThinningEnabled",
@@ -657,6 +2858,100 @@
       {
         "key": "STARTUP ANIMATION",
         "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "bgRopeEndcapPauseHeight"
+          },
+          {
+            "type": "row",
+            "key": "mainEndcapGrowSpeed"
+          },
+          {
+            "type": "row",
+            "key": "bgRopeStartEndcapEnabled"
+          },
+          {
+            "type": "row",
+            "key": "bgRopeEndcapHeight"
+          },
+          {
+            "type": "row",
+            "key": "bgRopeEndcapGradientEnabled"
+          },
+          {
+            "type": "row",
+            "key": "bgRopeEndcapGradientColors"
+          },
+          {
+            "type": "row",
+            "key": "startupRiseGravity"
+          },
+          {
+            "type": "row",
+            "key": "detachWaitDuration"
+          },
+          {
+            "type": "row",
+            "key": "introRiseClearOffsetEnabled"
+          },
+          {
+            "type": "row",
+            "key": "bgRopeClipEnabled"
+          },
+          {
+            "type": "row",
+            "key": "debugShowRiseClearOffset"
+          },
+          {
+            "type": "row",
+            "key": "introExtendSpeed"
+          },
+          {
+            "type": "row",
+            "key": "introExtendSpeedTweenEnabled"
+          },
+          {
+            "type": "row",
+            "key": "introExtendStartSpeed"
+          },
+          {
+            "type": "row",
+            "key": "introEnabled"
+          },
+          {
+            "type": "row",
+            "key": "introWaitDuration"
+          },
+          {
+            "type": "row",
+            "key": "introRiseSpeed"
+          },
+          {
+            "type": "row",
+            "key": "introRiseClearOffset"
+          },
+          {
+            "type": "row",
+            "key": "introPauseDuration"
+          },
+          {
+            "type": "row",
+            "key": "detachPauseDuration"
+          },
+          {
+            "type": "row",
+            "key": "detachTipStartScale"
+          },
+          {
+            "type": "row",
+            "key": "detachTipGrowDuration"
+          },
+          {
+            "type": "row",
+            "key": "detachThicknessMultiplier"
+          }
+        ],
         "settings": [
           "bgRopeEndcapPauseHeight",
           "mainEndcapGrowSpeed",
@@ -687,6 +2982,137 @@
       {
         "key": "New Group",
         "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "flickHoldMaxDuration"
+          },
+          {
+            "type": "row",
+            "key": "flickHoldMaxSpeed"
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "FLICK ANIMATION",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "flickEnabled"
+                },
+                {
+                  "type": "row",
+                  "key": "flickSource"
+                },
+                {
+                  "type": "row",
+                  "key": "flickX"
+                },
+                {
+                  "type": "row",
+                  "key": "flickY"
+                },
+                {
+                  "type": "row",
+                  "key": "flickScale"
+                },
+                {
+                  "type": "row",
+                  "key": "flickAnimSpeed"
+                }
+              ],
+              "settings": [
+                "flickEnabled",
+                "flickSource",
+                "flickX",
+                "flickY",
+                "flickScale",
+                "flickAnimSpeed"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "FLICK ANIMATION 2",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "flick2Enabled"
+                },
+                {
+                  "type": "row",
+                  "key": "flick2X"
+                },
+                {
+                  "type": "row",
+                  "key": "flick2Y"
+                },
+                {
+                  "type": "row",
+                  "key": "flick2Scale"
+                },
+                {
+                  "type": "row",
+                  "key": "flick2AnimSpeed"
+                }
+              ],
+              "settings": [
+                "flick2Enabled",
+                "flick2X",
+                "flick2Y",
+                "flick2Scale",
+                "flick2AnimSpeed"
+              ],
+              "subgroups": []
+            }
+          },
+          {
+            "type": "group",
+            "group": {
+              "key": "FLICK ANIMATION 3",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "row",
+                  "key": "flick3Enabled"
+                },
+                {
+                  "type": "row",
+                  "key": "flick3Source"
+                },
+                {
+                  "type": "row",
+                  "key": "flick3X"
+                },
+                {
+                  "type": "row",
+                  "key": "flick3Y"
+                },
+                {
+                  "type": "row",
+                  "key": "flick3Scale"
+                },
+                {
+                  "type": "row",
+                  "key": "flick3AnimSpeed"
+                }
+              ],
+              "settings": [
+                "flick3Enabled",
+                "flick3Source",
+                "flick3X",
+                "flick3Y",
+                "flick3Scale",
+                "flick3AnimSpeed"
+              ],
+              "subgroups": []
+            }
+          }
+        ],
         "settings": [
           "flickHoldMaxDuration",
           "flickHoldMaxSpeed"
@@ -695,6 +3121,32 @@
           {
             "key": "FLICK ANIMATION",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "flickEnabled"
+              },
+              {
+                "type": "row",
+                "key": "flickSource"
+              },
+              {
+                "type": "row",
+                "key": "flickX"
+              },
+              {
+                "type": "row",
+                "key": "flickY"
+              },
+              {
+                "type": "row",
+                "key": "flickScale"
+              },
+              {
+                "type": "row",
+                "key": "flickAnimSpeed"
+              }
+            ],
             "settings": [
               "flickEnabled",
               "flickSource",
@@ -708,6 +3160,28 @@
           {
             "key": "FLICK ANIMATION 2",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "flick2Enabled"
+              },
+              {
+                "type": "row",
+                "key": "flick2X"
+              },
+              {
+                "type": "row",
+                "key": "flick2Y"
+              },
+              {
+                "type": "row",
+                "key": "flick2Scale"
+              },
+              {
+                "type": "row",
+                "key": "flick2AnimSpeed"
+              }
+            ],
             "settings": [
               "flick2Enabled",
               "flick2X",
@@ -720,6 +3194,32 @@
           {
             "key": "FLICK ANIMATION 3",
             "collapsed": true,
+            "items": [
+              {
+                "type": "row",
+                "key": "flick3Enabled"
+              },
+              {
+                "type": "row",
+                "key": "flick3Source"
+              },
+              {
+                "type": "row",
+                "key": "flick3X"
+              },
+              {
+                "type": "row",
+                "key": "flick3Y"
+              },
+              {
+                "type": "row",
+                "key": "flick3Scale"
+              },
+              {
+                "type": "row",
+                "key": "flick3AnimSpeed"
+              }
+            ],
             "settings": [
               "flick3Enabled",
               "flick3Source",
@@ -735,6 +3235,32 @@
       {
         "key": "FLOOR",
         "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "floorFriction"
+          },
+          {
+            "type": "row",
+            "key": "pieceFriction"
+          },
+          {
+            "type": "row",
+            "key": "floorEnabled"
+          },
+          {
+            "type": "row",
+            "key": "floorColor"
+          },
+          {
+            "type": "row",
+            "key": "floorThickness"
+          },
+          {
+            "type": "row",
+            "key": "floorHeight"
+          }
+        ],
         "settings": [
           "floorFriction",
           "pieceFriction",
@@ -748,6 +3274,52 @@
       {
         "key": "CUT SPLATTER",
         "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "cutSplatterEnabled"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterColor"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterHorizontalSpread"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterVerticalSpread"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterParticleCount"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterParticleSize"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterSizeVariance"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterGravity"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterFlightDuration"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterFadeTime"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterOpacity"
+          }
+        ],
         "settings": [
           "cutSplatterEnabled",
           "cutSplatterColor",
@@ -767,10 +3339,10 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 1521.28125,
+      "left": 42.91250228881836,
       "top": 19.875,
       "width": 374.6875,
-      "height": 642.03125,
+      "height": 642.0250244140625,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
@@ -886,6 +3458,8 @@
     "group:New Group (9)": "DEFORMABLE ENDCAP",
     "group:ROPE": null,
     "row:pieceEndEmergeSpeed": "Cut Piece Endcap Emerge Speed",
-    "row:dragMouseSensitivity": null
-  }
+    "row:dragMouseSensitivity": null,
+    "group:New Group (10)": "CUT PIECE"
+  },
+  "lockedGroups": []
 }
