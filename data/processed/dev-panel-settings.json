@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 39.815969718817676,
+      "ropeLength": 32.09999999999998,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -125,15 +125,15 @@
       "pieceDecayDelay": 10,
       "pieceDecaySpeed": 0.5,
       "pieceMinThickness": 1.2,
-      "cutSplatterEnabled": false,
+      "cutSplatterEnabled": true,
       "cutSplatterColor": "#ffffff",
-      "cutSplatterHorizontalSpread": 46,
-      "cutSplatterVerticalSpread": 88,
-      "cutSplatterParticleCount": 130,
-      "cutSplatterParticleSize": 0.5,
-      "cutSplatterSizeVariance": 0.15,
+      "cutSplatterHorizontalSpread": 95,
+      "cutSplatterVerticalSpread": 71,
+      "cutSplatterParticleCount": 200,
+      "cutSplatterParticleSize": 1.5,
+      "cutSplatterSizeVariance": 0.25,
       "cutSplatterGravity": 7.2,
-      "cutSplatterFlightDuration": 0.45,
+      "cutSplatterFlightDuration": 0.25,
       "cutSplatterFadeTime": 30,
       "cutSplatterOpacity": 1,
       "endEmergeEnabled": true,
@@ -267,7 +267,8 @@
           "x": 1,
           "y": 1
         }
-      ]
+      ],
+      "cutSplatterFlightDurationVariance": 0.65
     },
     "mobile": {},
     "landscape": {}
@@ -2209,7 +2210,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "group",
@@ -3091,7 +3092,7 @@
       },
       {
         "key": "CUT SPLATTER",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
@@ -3131,6 +3132,10 @@
           },
           {
             "type": "row",
+            "key": "cutSplatterFlightDurationVariance"
+          },
+          {
+            "type": "row",
             "key": "cutSplatterFadeTime"
           },
           {
@@ -3148,6 +3153,7 @@
           "cutSplatterSizeVariance",
           "cutSplatterGravity",
           "cutSplatterFlightDuration",
+          "cutSplatterFlightDurationVariance",
           "cutSplatterFadeTime",
           "cutSplatterOpacity"
         ],
