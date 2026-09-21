@@ -5018,3 +5018,65 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     saved `true` in the live settings file, same "check the actual
     saved value" precedent this file has already established
     repeatedly for a shipped-but-seemingly-inert feature.
+- **Cursor Animation's `tickle`/`drag` frame sets (48 frames x 8
+  directions each, ~765 images) are now DEFERRED, no longer loaded
+  eagerly alongside the core base/sciss/snap/charge set (~774 images)
+  -- 2026-09-21, real follow-up to the same-day flick1/2/3 removal.**
+  Direct report: "My cursor animation frame is still taking time to
+  load" -- confirmed the flick1/2/3 removal was already 100% complete
+  (zero remaining references anywhere), and found the REAL remaining
+  cost had never actually been measured: tickle/drag were ALSO loaded
+  eagerly and unconditionally the whole time, nearly doubling the real
+  total to ~1,539 images (this project's own prior investigation had
+  only ever quantified the 608-image base/sciss/snap/charge figure,
+  missing tickle/drag entirely). User explicitly confirmed the fix
+  before it was implemented (this system was previously flagged as
+  something to change carefully, having been told not to touch it in
+  an adjacent earlier request).
+  - **Mechanism**: `Image()` objects for tickle/drag are still created
+    immediately in the same `MOUSE_FLICK_DIRECTIONS.forEach()` loop as
+    before (so `mouseFlickFramesByDirection`'s own shape -- what every
+    consumer reads -- is completely unchanged, nothing downstream needs
+    to know these are deferred), but their `.src` assignment is queued
+    into `mouseFlickDeferredLoaders` instead of set immediately. Each
+    CORE image's own `load`/`error` listener decrements
+    `mouseFlickCorePendingCount`; the instant it reaches 0 (every core
+    image across all 8 directions has settled, one way or another),
+    `mouseFlickStartDeferredLoads()` fires every queued `.src`
+    assignment and drains the queue. Guarded by
+    `mouseFlickDeferredStarted` against a theoretical double-fire.
+  - **Confirmed safe BEFORE implementing, not after**: a not-yet-
+    started deferred `Image` has `.complete === true` (vacuously, per
+    spec, for an image with no `src` ever set) but `.naturalWidth ===
+    0` -- and BOTH `mouseFlickDragPointWorld()` and the actual
+    `render()` draw call already guard on `naturalWidth > 0`, not just
+    `.complete`, so a deferred-but-not-yet-started frame is treated
+    EXACTLY like a still-downloading one by code that already existed
+    for that case -- not a new failure mode this change introduces. If
+    a FUTURE consumer of a tickle/drag frame is ever added, it must use
+    this same `img.complete && img.naturalWidth > 0` pattern (not
+    `.complete` alone), or it will incorrectly treat a not-yet-started
+    deferred frame as "ready."
+  - **Verified via a Node simulation extracting the ACTUAL shipped
+    loader code** (not a hand-reconstructed approximation) against the
+    real `MOUSE_FLICK_DIRECTIONS` table pulled directly from the file:
+    774 core vs 765 deferred images created (matching the real
+    direction/variant/count data); deferred images carry no `.src`
+    until every core image settles; the pending counter reaches exactly
+    1 with one core image still unsettled and 0 only once the very last
+    one settles (tested via BOTH the `'load'` and `'error'` paths,
+    confirming both count as "settled," matching `isFrameBlocking()`'s
+    own established "a permanently-failed load should not block
+    forever" convention); the deferred queue is fully drained
+    afterward; calling the start function again is a safe no-op.
+  - **Not live-browser-verified** (this environment's recurring
+    dev-server page-boot stall) -- the actual real-world load-time
+    improvement, and whether tickle/drag frames are genuinely ready in
+    time for a very fast player gesture (hold-to-grow or Drag Rope
+    within the first fraction of a second of page load), has not been
+    measured against a real network load. If a future report says
+    tickle/drag "don't show up" or "show the wrong pose" right at the
+    very start of a session, check whether it's this deferred-loading
+    window specifically (expected to resolve itself within a moment,
+    same as any other still-loading frame today) before assuming a
+    genuine bug.

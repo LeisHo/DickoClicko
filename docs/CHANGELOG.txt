@@ -15500,3 +15500,39 @@ Item 2 is a read-only investigation, verified via direct grep/code
 inspection of the real preload loop -- no code changed, nothing to
 verify beyond confirming the counted image totals against the loop's
 own explicit variant/count table.
+
+--------------------------------------------------------------------------------
+2026-09-21 (13th pass)
+
+Implemented the deferred-preload fix item 2 above proposed, per the
+user's explicit go-ahead. Cursor Animation's tickle/drag frame sets (48
+frames x 8 directions each, ~765 images) no longer load eagerly
+alongside the core base/sciss/snap/charge set (~774 images) -- their
+Image objects are still created immediately (so every downstream
+consumer's own data shape is unchanged), but their `.src` assignment is
+now queued and only actually kicked off once every core image across
+all 8 directions has settled (loaded or failed). Confirmed safe before
+implementing: both mouseFlickDragPointWorld() and the actual render()
+draw call already guard on `img.naturalWidth > 0`, not just
+`img.complete` (which reads true vacuously for an Image with no src
+ever set) -- so a not-yet-started deferred frame is already handled
+exactly like a still-downloading one by pre-existing code, not a new
+failure mode this change introduces.
+
+Verification: syntax-checked. Verified via a Node simulation extracting
+the ACTUAL shipped loader code (mouseFlickFrameUrl(), the full
+MOUSE_FLICK_DIRECTIONS.forEach() loader block, and
+mouseFlickStartDeferredLoads()) against the real MOUSE_FLICK_DIRECTIONS
+table pulled directly from the file -- confirmed 774 core images vs 765
+deferred images created (matching the loop's own real direction/
+variant/count data), deferred images carry no `.src` until every core
+image settles, the pending counter correctly reaches exactly 1 (not 0)
+with one core image still unsettled, deferred loading correctly starts
+only once that last one settles (tested via the 'error' path, not just
+'load', confirming both are treated as settling), the deferred-loaders
+queue is fully drained afterward, and calling the start function again
+is a safe no-op. Not live-browser-verified (this environment's
+recurring dev-server page-boot stall) -- the actual real-world load-
+time improvement (and whether tickle/drag frames are still ready in
+time for a fast player gesture) has not been measured against a real
+network load.

@@ -5182,13 +5182,40 @@ function mouseFlickFrameUrl(variant, n){
 // Eagerly preloaded at load (same convention as every other FLICK
 // animation in this file), not lazily per-direction like DotFlicko's own
 // version -- 8 directions x 4 variants x (20+8+24+24 frames) = 608
-// images total. base/sciss/snap each get a forward+reverse-excluding-
-// duplicate-peak "click" sequence except sciss/snap, which per explicit
-// request play forward-only (no "then reverse" language for those 2
-// modes, unlike click); charge gets only a forward array (its own
-// loop-tail playback is computed live from mfHoldCyclePos, not baked
-// into a fixed sequence).
+// images total for base/sciss/snap/charge. base/sciss/snap each get a
+// forward+reverse-excluding-duplicate-peak "click" sequence except
+// sciss/snap, which per explicit request play forward-only (no "then
+// reverse" language for those 2 modes, unlike click); charge gets only
+// a forward array (its own loop-tail playback is computed live from
+// mfHoldCyclePos, not baked into a fixed sequence).
+//
+// tickle/drag (48 frames x 8 directions each, ~768 MORE images) are
+// DEFERRED (2026-09-21, per direct report: "My cursor animation frame
+// is still taking time to load" -- investigated and confirmed these 2
+// rarer variant sets, used only during hold-to-grow/Drag Rope, were
+// ALSO being loaded eagerly and unconditionally alongside the 608-image
+// core set, nearly doubling the real total to ~1,376 without the user
+// realizing it, since this project's own prior investigation had only
+// ever quantified the 608-image core figure). `new Image()` objects for
+// tickle/drag are still created immediately here (so
+// mouseFlickFramesByDirection's own shape -- what every consumer reads
+// -- is unchanged, nothing downstream needs to know these are deferred)
+// but their `.src` is NOT set yet -- queued into
+// mouseFlickDeferredLoaders instead, actually kicked off only once
+// mouseFlickStartDeferredLoads() fires (see that function's own
+// comment, a few lines below this block, for exactly when). This is
+// SAFE against a user triggering tickle/drag before their real frames
+// have finished loading: mouseFlickDragPointWorld() and the actual
+// render() draw call BOTH already guard on `img.naturalWidth > 0`, not
+// just `img.complete` -- and `.complete` reads `true` vacuously for an
+// Image with no `.src` ever set, but `naturalWidth` correctly reads `0`
+// -- so a not-yet-started deferred frame is already treated exactly
+// like a still-downloading one (gracefully skipped), a pre-existing
+// robustness pattern this change relies on rather than introduces.
 const mouseFlickFramesByDirection = {};
+const mouseFlickDeferredLoaders = [];
+let mouseFlickCorePendingCount = 0;
+let mouseFlickDeferredStarted = false;
 MOUSE_FLICK_DIRECTIONS.forEach(dir => {
   // variant.nums (explicit frame-number array) takes priority over
   // variant.count (implied contiguous 1..count) when both could apply --
@@ -5200,7 +5227,31 @@ MOUSE_FLICK_DIRECTIONS.forEach(dir => {
     const numbers = variant.nums || Array.from({ length: variant.count }, (_, i) => i + 1);
     return numbers.map(n => {
       const img = new Image();
+      // Tracked so mouseFlickStartDeferredLoads() knows the moment
+      // every core image has SETTLED (loaded OR failed) -- 'error' is
+      // treated the same as 'load' here (a permanently-failed core
+      // image should still release the deferred queue, not block it
+      // forever), same convention isFrameBlocking()'s own comment
+      // already documents for the SNAP-freeze case.
+      mouseFlickCorePendingCount++;
+      const settle = () => {
+        mouseFlickCorePendingCount--;
+        if (mouseFlickCorePendingCount === 0) mouseFlickStartDeferredLoads();
+      };
+      img.addEventListener('load', settle);
+      img.addEventListener('error', settle);
       img.src = mouseFlickFrameUrl(variant, n);
+      return img;
+    });
+  };
+  // Same Image-object shape as load() above, but queues the actual
+  // `.src` assignment instead of setting it immediately -- see this
+  // whole block's own header comment for why.
+  const loadDeferred = (variant) => {
+    const numbers = variant.nums || Array.from({ length: variant.count }, (_, i) => i + 1);
+    return numbers.map(n => {
+      const img = new Image();
+      mouseFlickDeferredLoaders.push(() => { img.src = mouseFlickFrameUrl(variant, n); });
       return img;
     });
   };
@@ -5215,15 +5266,28 @@ MOUSE_FLICK_DIRECTIONS.forEach(dir => {
     // dir.tickle/truthiness rather than assumed present, so a FUTURE
     // direction added without tickle art (or one whose art is pulled)
     // degrades to the normal charge display instead of throwing.
-    tickle: dir.tickle ? load(dir.tickle) : undefined,
+    tickle: dir.tickle ? loadDeferred(dir.tickle) : undefined,
     // Drag Rope hand animation (2026-09-11) -- gated on dir.drag the same
     // way tickle is above; the 'front' direction has none as of this
     // writing (see its own comment in MOUSE_FLICK_DIRECTIONS), so a drag
     // on that direction just shows the ordinary charge display instead of
     // throwing.
-    drag: dir.drag ? load(dir.drag) : undefined,
+    drag: dir.drag ? loadDeferred(dir.drag) : undefined,
   };
 });
+// Fires exactly once, the instant every core (base/sciss/snap/charge)
+// image across all 8 directions has settled (loaded or failed) --
+// see mouseFlickCorePendingCount's own increment/decrement above.
+// mouseFlickDeferredStarted guards against a theoretical double-fire
+// (not expected given the counter's own "drops to exactly 0 once"
+// arithmetic, but cheap insurance against ever re-kicking off tickle/
+// drag's own `.src` assignment a 2nd time).
+function mouseFlickStartDeferredLoads(){
+  if (mouseFlickDeferredStarted) return;
+  mouseFlickDeferredStarted = true;
+  mouseFlickDeferredLoaders.forEach(fn => fn());
+  mouseFlickDeferredLoaders.length = 0;
+}
 
 // Tickle sequence (2026-09-11): per explicit spec -- "1. begin from
 // frame 1 to frame 48. 2. reverse sequence from frame 48 to frame 13.
