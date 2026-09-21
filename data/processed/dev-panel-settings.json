@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 25.060282809818457,
+      "ropeLength": 27.13193943763516,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -98,7 +98,7 @@
       ],
       "arcSeamOverlapPx": 2.8,
       "clickIntensity": 5,
-      "holdDistance": 11,
+      "holdDistance": 7,
       "dragRopeEnabled": true,
       "dragRopeHoldDistance": 6.5,
       "dragOverridesGrowOnRopeHold": true,
@@ -112,10 +112,10 @@
       "ropeGrowthOnRopeHold": true,
       "ropeGrowthHoldDistance": 16,
       "clickHoldMaxDuration": 2000,
-      "intensityCeiling": 35,
+      "intensityCeiling": 50,
       "minRopeLength": 1.3,
       "clickDistance": 6.3,
-      "doubleClickDistance": 8,
+      "doubleClickDistance": 9.6,
       "doubleClickThreshold": 180,
       "ropeFallSpeed": 0.4,
       "cutSpeed": 0.6,
@@ -247,7 +247,7 @@
       "endcapStretchRange": 50,
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
-      "punchPowerAbsolute": 19.2,
+      "punchPowerAbsolute": 40,
       "dragMouseSensitivity": 2,
       "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
@@ -2231,7 +2231,7 @@
             "type": "group",
             "group": {
               "key": "ROPE CUT",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -2300,7 +2300,7 @@
             "type": "group",
             "group": {
               "key": "FLICK HOLD",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2563,7 +2563,7 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -2626,7 +2626,7 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
