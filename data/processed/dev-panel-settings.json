@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 25.011053960903833,
+      "ropeLength": 20.299999999999986,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -133,7 +133,7 @@
       "cutSplatterParticleSize": 1.1,
       "cutSplatterSizeVariance": 0.15,
       "cutSplatterGravity": 4.9,
-      "cutSplatterFlightDuration": 0.25,
+      "cutSplatterFlightDuration": 0.2,
       "cutSplatterFadeTime": 30,
       "cutSplatterOpacity": 1,
       "endEmergeEnabled": true,
@@ -268,7 +268,7 @@
           "y": 1
         }
       ],
-      "cutSplatterFlightDurationVariance": 0.35,
+      "cutSplatterFlightDurationVariance": 0.2,
       "cutSplatterFullRopeCutEnabled": true,
       "cutSplatterHorizontalSprayVariance": 0.3,
       "cutSplatterVerticalSprayVariance": 0.2,
@@ -345,7 +345,7 @@
     "groups": [
       {
         "key": "COLLISION SPLATTER",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
