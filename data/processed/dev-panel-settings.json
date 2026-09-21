@@ -277,7 +277,7 @@
       "loadingPageMinFramesRequired": 309,
       "loadingPageMaxFillProgress": 0.85,
       "loadingPageRotation": 0,
-      "loadingPageRotationSmoothing": 0.93,
+      "loadingPageRotationSmoothing": 0.02,
       "loadingPageShowFrameCounter": false
     },
     "mobile": {},
