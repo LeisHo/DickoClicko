@@ -306,7 +306,38 @@
       "wallBounciness": false,
       "wallEnabled": false,
       "wallFriction": false,
-      "backgroundColor": false
+      "backgroundColor": false,
+      "collisionSplatterEnabled": false,
+      "collisionSplatterColor": false,
+      "collisionSplatterHorizontalSpread": false,
+      "collisionSplatterHorizontalSprayVariance": false,
+      "collisionSplatterVerticalSpread": false,
+      "collisionSplatterVerticalSprayVariance": false,
+      "collisionSplatterParticleCount": false,
+      "collisionSplatterParticleSize": false,
+      "collisionSplatterSizeVariance": false,
+      "collisionSplatterGravity": false,
+      "collisionSplatterFlightDuration": false,
+      "collisionSplatterFlightDurationVariance": false,
+      "collisionSplatterFadeEnabled": false,
+      "collisionSplatterFadeTime": false,
+      "collisionSplatterOpacity": false,
+      "cutSplatterFullRopeCutEnabled": false,
+      "cutSplatterHorizontalSprayVariance": false,
+      "cutSplatterVerticalSprayVariance": false,
+      "cutSplatterFadeEnabled": false,
+      "cutSplatterEnabled": false,
+      "cutSplatterColor": false,
+      "cutSplatterHorizontalSpread": false,
+      "cutSplatterVerticalSpread": false,
+      "cutSplatterParticleCount": false,
+      "cutSplatterParticleSize": false,
+      "cutSplatterSizeVariance": false,
+      "cutSplatterGravity": false,
+      "cutSplatterFlightDuration": false,
+      "cutSplatterFlightDurationVariance": false,
+      "cutSplatterFadeTime": false,
+      "cutSplatterOpacity": false
     }
   },
   "order": {
@@ -314,7 +345,7 @@
     "groups": [
       {
         "key": "COLLISION SPLATTER",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
