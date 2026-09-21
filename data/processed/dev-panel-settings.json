@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 32.09999999999998,
+      "ropeLength": 25.011053960903833,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -268,7 +268,26 @@
           "y": 1
         }
       ],
-      "cutSplatterFlightDurationVariance": 0.65
+      "cutSplatterFlightDurationVariance": 0.65,
+      "cutSplatterFullRopeCutEnabled": true,
+      "cutSplatterHorizontalSprayVariance": 0,
+      "cutSplatterVerticalSprayVariance": 0,
+      "cutSplatterFadeEnabled": true,
+      "collisionSplatterEnabled": true,
+      "collisionSplatterColor": "#8b0000",
+      "collisionSplatterHorizontalSpread": 60,
+      "collisionSplatterHorizontalSprayVariance": 0,
+      "collisionSplatterVerticalSpread": 80,
+      "collisionSplatterVerticalSprayVariance": 0,
+      "collisionSplatterParticleCount": 150,
+      "collisionSplatterParticleSize": 1.1,
+      "collisionSplatterSizeVariance": 0.6,
+      "collisionSplatterGravity": 1.1,
+      "collisionSplatterFlightDuration": 0.4,
+      "collisionSplatterFlightDurationVariance": 0.25,
+      "collisionSplatterFadeEnabled": false,
+      "collisionSplatterFadeTime": 6,
+      "collisionSplatterOpacity": 0.85
     },
     "mobile": {},
     "landscape": {}
@@ -293,6 +312,90 @@
   "order": {
     "ungrouped": [],
     "groups": [
+      {
+        "key": "COLLISION SPLATTER",
+        "collapsed": false,
+        "items": [
+          {
+            "type": "row",
+            "key": "collisionSplatterEnabled"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterColor"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterHorizontalSpread"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterHorizontalSprayVariance"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterVerticalSpread"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterVerticalSprayVariance"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterParticleCount"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterParticleSize"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterSizeVariance"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterGravity"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterFlightDuration"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterFlightDurationVariance"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterFadeEnabled"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterFadeTime"
+          },
+          {
+            "type": "row",
+            "key": "collisionSplatterOpacity"
+          }
+        ],
+        "settings": [
+          "collisionSplatterEnabled",
+          "collisionSplatterColor",
+          "collisionSplatterHorizontalSpread",
+          "collisionSplatterHorizontalSprayVariance",
+          "collisionSplatterVerticalSpread",
+          "collisionSplatterVerticalSprayVariance",
+          "collisionSplatterParticleCount",
+          "collisionSplatterParticleSize",
+          "collisionSplatterSizeVariance",
+          "collisionSplatterGravity",
+          "collisionSplatterFlightDuration",
+          "collisionSplatterFlightDurationVariance",
+          "collisionSplatterFadeEnabled",
+          "collisionSplatterFadeTime",
+          "collisionSplatterOpacity"
+        ],
+        "subgroups": []
+      },
       {
         "key": "DEV PANEL",
         "collapsed": true,
@@ -2999,7 +3102,7 @@
             "type": "group",
             "group": {
               "key": "FLICK ANIMATION",
-              "collapsed": true,
+              "collapsed": false,
               "items": [],
               "settings": [],
               "subgroups": []
@@ -3009,7 +3112,7 @@
             "type": "group",
             "group": {
               "key": "FLICK ANIMATION 2",
-              "collapsed": true,
+              "collapsed": false,
               "items": [],
               "settings": [],
               "subgroups": []
@@ -3019,7 +3122,7 @@
             "type": "group",
             "group": {
               "key": "FLICK ANIMATION 3",
-              "collapsed": true,
+              "collapsed": false,
               "items": [],
               "settings": [],
               "subgroups": []
@@ -3030,21 +3133,21 @@
         "subgroups": [
           {
             "key": "FLICK ANIMATION",
-            "collapsed": true,
+            "collapsed": false,
             "items": [],
             "settings": [],
             "subgroups": []
           },
           {
             "key": "FLICK ANIMATION 2",
-            "collapsed": true,
+            "collapsed": false,
             "items": [],
             "settings": [],
             "subgroups": []
           },
           {
             "key": "FLICK ANIMATION 3",
-            "collapsed": true,
+            "collapsed": false,
             "items": [],
             "settings": [],
             "subgroups": []
@@ -3096,6 +3199,22 @@
         "items": [
           {
             "type": "row",
+            "key": "cutSplatterFullRopeCutEnabled"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterHorizontalSprayVariance"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterVerticalSprayVariance"
+          },
+          {
+            "type": "row",
+            "key": "cutSplatterFadeEnabled"
+          },
+          {
+            "type": "row",
             "key": "cutSplatterEnabled"
           },
           {
@@ -3144,6 +3263,10 @@
           }
         ],
         "settings": [
+          "cutSplatterFullRopeCutEnabled",
+          "cutSplatterHorizontalSprayVariance",
+          "cutSplatterVerticalSprayVariance",
+          "cutSplatterFadeEnabled",
           "cutSplatterEnabled",
           "cutSplatterColor",
           "cutSplatterHorizontalSpread",
