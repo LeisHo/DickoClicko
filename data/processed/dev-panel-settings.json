@@ -326,7 +326,15 @@
       "cutSplatterFlightDuration": false,
       "cutSplatterFlightDurationVariance": false,
       "cutSplatterFadeTime": false,
-      "cutSplatterOpacity": false
+      "cutSplatterOpacity": false,
+      "loadingPageEnabled": false,
+      "loadingPageMinDuration": false,
+      "loadingPageMinFramesRequired": false,
+      "loadingPageMaxFillProgress": false,
+      "loadingPageScale": false,
+      "loadingPageXOffset": false,
+      "loadingPageYOffset": false,
+      "loadingPageRotation": false
     }
   },
   "order": {
