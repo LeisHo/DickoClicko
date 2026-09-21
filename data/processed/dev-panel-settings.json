@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 27.13193943763516,
+      "ropeLength": 55.48193943763566,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -109,8 +109,8 @@
       "damping": 0.98,
       "constraintIterations": 4,
       "ropeGrowthRate": 9,
-      "ropeGrowthOnRopeHold": true,
-      "ropeGrowthHoldDistance": 16,
+      "ropeGrowthOnRopeHold": false,
+      "ropeGrowthHoldDistance": 25,
       "clickHoldMaxDuration": 3000,
       "intensityCeiling": 50,
       "minRopeLength": 1.3,
@@ -2300,12 +2300,8 @@
             "type": "group",
             "group": {
               "key": "FLICK HOLD",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
-                {
-                  "type": "row",
-                  "key": "punchPowerAbsolute"
-                },
                 {
                   "type": "row",
                   "key": "holdDistance"
@@ -2317,13 +2313,17 @@
                 {
                   "type": "row",
                   "key": "intensityCeiling"
+                },
+                {
+                  "type": "row",
+                  "key": "punchPowerAbsolute"
                 }
               ],
               "settings": [
-                "punchPowerAbsolute",
                 "holdDistance",
                 "clickHoldMaxDuration",
-                "intensityCeiling"
+                "intensityCeiling",
+                "punchPowerAbsolute"
               ],
               "subgroups": []
             }
@@ -2336,11 +2336,11 @@
               "items": [
                 {
                   "type": "row",
-                  "key": "ropeGrowthHoldDistance"
+                  "key": "ropeGrowthOnRopeHold"
                 },
                 {
                   "type": "row",
-                  "key": "ropeGrowthOnRopeHold"
+                  "key": "ropeGrowthHoldDistance"
                 },
                 {
                   "type": "row",
@@ -2348,8 +2348,8 @@
                 }
               ],
               "settings": [
-                "ropeGrowthHoldDistance",
                 "ropeGrowthOnRopeHold",
+                "ropeGrowthHoldDistance",
                 "ropeGrowthRate"
               ],
               "subgroups": []
@@ -2359,7 +2359,7 @@
             "type": "group",
             "group": {
               "key": "New Group (7)",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2626,12 +2626,8 @@
           },
           {
             "key": "FLICK HOLD",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
-              {
-                "type": "row",
-                "key": "punchPowerAbsolute"
-              },
               {
                 "type": "row",
                 "key": "holdDistance"
@@ -2643,13 +2639,17 @@
               {
                 "type": "row",
                 "key": "intensityCeiling"
+              },
+              {
+                "type": "row",
+                "key": "punchPowerAbsolute"
               }
             ],
             "settings": [
-              "punchPowerAbsolute",
               "holdDistance",
               "clickHoldMaxDuration",
-              "intensityCeiling"
+              "intensityCeiling",
+              "punchPowerAbsolute"
             ],
             "subgroups": []
           },
@@ -2659,11 +2659,11 @@
             "items": [
               {
                 "type": "row",
-                "key": "ropeGrowthHoldDistance"
+                "key": "ropeGrowthOnRopeHold"
               },
               {
                 "type": "row",
-                "key": "ropeGrowthOnRopeHold"
+                "key": "ropeGrowthHoldDistance"
               },
               {
                 "type": "row",
@@ -2671,15 +2671,15 @@
               }
             ],
             "settings": [
-              "ropeGrowthHoldDistance",
               "ropeGrowthOnRopeHold",
+              "ropeGrowthHoldDistance",
               "ropeGrowthRate"
             ],
             "subgroups": []
           },
           {
             "key": "New Group (7)",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
@@ -3459,7 +3459,8 @@
     "group:ROPE": null,
     "row:pieceEndEmergeSpeed": "Cut Piece Endcap Emerge Speed",
     "row:dragMouseSensitivity": null,
-    "group:New Group (10)": "CUT PIECE"
+    "group:New Group (10)": "CUT PIECE",
+    "row:punchPowerAbsolute": "Intensity Cap"
   },
   "lockedGroups": []
 }
