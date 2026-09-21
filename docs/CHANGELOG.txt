@@ -15752,3 +15752,81 @@ dev-server page-boot stall) -- the actual on-screen appearance (arc
 orientation, endcap orientation against a synthetic non-physics points
 array, the cursor's idle pose actually showing, the transition into
 normal gameplay) has not been directly observed.
+
+--------------------------------------------------------------------------------
+2026-09-21 (Loading Page -- 5 follow-ups)
+
+5 direct, separate follow-up requests on the Loading Page feature,
+landed together the same day as its initial build:
+
+1. Loading Page Min Frames Required slider (frames, def 1539 -- the
+   current live total, a no-op default). update()'s exit gate now
+   compares against min(this value, the real total) instead of the raw
+   total, so a value left above the true count still means "require
+   everything" rather than an unreachable threshold.
+
+2. Cursor Animation's own frame-loading order was rebuilt around an
+   explicit spec: for each animation type IN THIS ORDER -- base
+   (waiting), Charge, Drag, Sciss, Tickle, Snap -- load frame 1 across
+   all 8 directions, then frame 2 across all 8, and so on until that
+   type is complete, before moving to the next type. Supersedes the
+   prior "core before deferred" 2-array split entirely; a new
+   mouseFlickImageUrlMap (Image -> URL) built alongside the frame table
+   lets the later interleave pass enqueue images without re-deriving
+   URLs, and a new mouseFlickFramesByDirection[key].base field holds
+   each direction's raw, un-ping-ponged base frames (needed since
+   .click reuses the same Image objects twice for its own reverse
+   tail).
+
+3. Loading Page Max Fill Progress slider (x, 0-1, def 1): "the loading
+   is complete when the circle is 100% drawn... if i set the slider to
+   0.5, the circle at 50% drawn will be the 100% loaded state." Rescales
+   the raw 0-1 loading fraction before converting to radians. Progress
+   itself was also switched to measure against Min Frames Required
+   (item 1) rather than the raw total, so the arc reaches "full" exactly
+   when the frame-count half of the real exit condition is satisfied.
+
+4. Draw order reversed for the arc's own 2 endcaps: "make the loading
+   rope endcap (the one that is moving) render under the rope and other
+   endcap." The moving/end endcap now draws first (bottom layer), then
+   the rope stroke, then the fixed/start endcap last (top layer) -- was
+   stroke then both endcaps on top, in the opposite order.
+
+5. Cursor Tangent + Loading Page Rotation slider (the largest item):
+   "I want the tangent of the circle end to point at the cursor...
+   draw a straight line out of the end, that straight line should
+   intersect the cursor point," plus "a slider to rotate the loading
+   circle animation overall." Implemented via the standard external-
+   point-to-circle tangent construction (2 candidate tangent points at
+   theta +/- acos(radius/distance) from center; whichever is angularly
+   closer to the arc's own persisted last-frame end angle is chosen,
+   for continuity). Falls back to a rotation-adjustable base angle (12
+   o'clock + Loading Page Rotation) whenever the cursor sits inside the
+   circle, where no real tangent exists. Since a fixed start point plus
+   a progress-driven sweep length fully determines the end angle with
+   no freedom left for the cursor, both arc endpoints now move each
+   frame by design: the end tracks the cursor's tangent, the start
+   recedes as the sweep grows with progress -- a disclosed tradeoff,
+   not an oversight.
+
+Verification: syntax-checked (full-file parse, brace balance 0) after
+every edit. Node simulation extracting the actual shipped
+drawLoadingPageArc(): the tangent property holds exactly (perpendicular
+dot product ~0, not just close) for cursor positions in 2 different
+quadrants; a 10px cursor move produces only a 0.0143 rad angular jump,
+confirming continuity; a cursor at the circle's own center correctly
+falls back to the rotation-adjusted base angle; the rotation slider
+shifts that fallback by the exact expected amount; Max Fill
+Progress=0.5 at full progress produces an arc spanning exactly pi
+radians; the endcap draw-order swap confirmed via which array index
+each drawEndcap() call caps and its sequence relative to
+strokeRopeCurve(). The interleaved load order was separately verified
+against a small, deliberately ragged mocked direction table (one
+direction missing drag entirely, one with a shorter base set) --
+matched a hand-computed expected sequence exactly, correctly skipping
+the missing-drag direction with no error. Not live-browser-verified
+(this environment's recurring dev-server page-boot stall) -- the
+geometry is proven correct in isolation, but how the cursor-tangent
+effect feels under continuous real mouse movement, and whether the new
+load order measurably changes perceived load time, have not been
+directly observed.

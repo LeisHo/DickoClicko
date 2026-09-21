@@ -5467,3 +5467,140 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     orientation-from-`tipDirection()` behavior against a SYNTHETIC,
     non-physics points array it was never originally designed for) has
     not been.
+- **Loading Page -- 5 follow-up requests landed together, 2026-09-21
+  (same day as the feature's own initial build), each a direct,
+  separate mid-turn ask.** Briefly, in request order:
+  1. **`loadingPageMinFramesRequired` slider** (frames, def `1539` --
+     matches the CURRENT live total exactly, a no-op preserving the
+     original "wait for every frame" behavior). `update()`'s own
+     loading-completion check now gates on `Math.min(cfg.
+     loadingPageMinFramesRequired, mouseFlickTotalFrameCount)` instead
+     of the raw total, so a value ABOVE the true total still means
+     "require everything" (never an unreachable threshold that would
+     strand the page loading forever) -- Minimum Loading Time keeps its
+     own, unchanged `AND` role in the same check, per the request's own
+     "unless overwridden by the minimum loading time."
+  2. **Cursor Animation's own frame-loading ORDER was rebuilt around an
+     explicit spec, superseding the earlier "core before deferred"
+     2-array split entirely.** Per direct spec: "there are 8 animation
+     types. For the waiting state, we have the 1st frame in each of the
+     original 8 folders... load those 8 frames first, then the 2nd
+     frames in those 8 folders, then continue as such until those
+     folders are complete. Then move on with Charge, then Drag, Then
+     Sciss, Then Tickle, Then Snap in that order, in similar fashion."
+     `MOUSE_FLICK_LOAD_VARIANT_ORDER = ['base','charge','drag','sciss',
+     'tickle','snap']`; for each variant IN THIS ORDER, a shared
+     interleave step walks frame-index 0, 1, 2... across all 8
+     directions (in `MOUSE_FLICK_DIRECTIONS`' own existing table order)
+     before advancing to the next index, producing one flat
+     `mouseFlickOrderedLoadJobs` array enqueued in a single pass (was 2
+     passes, core-array-then-deferred-array). `mouseFlickImageUrlMap`
+     (a `Map<Image,url>`, populated during the SAME table-construction
+     pass that builds `mouseFlickFramesByDirection`) is what lets this
+     later interleave step enqueue each image without re-deriving its
+     URL. `mouseFlickFramesByDirection[dir.key].base` is a NEW field
+     (the raw, un-ping-ponged base frame array) -- required because
+     `.click` reuses the SAME Image objects twice (forward, then
+     reversed for its own tail), so iterating `.click` directly would
+     double-enqueue every base frame but the last; `base` holds each
+     unique image exactly once. `mouseFlickTotalFrameCount` is now
+     simply `mouseFlickOrderedLoadJobs.length`. The 8-starter-frame
+     priority-load loop at boot is UNCHANGED (`click[0] === base[0]`,
+     same Image reference) -- now technically redundant since base
+     frame-index-0 is already first in the new order by construction,
+     but kept as a real, load-bearing guarantee against any FUTURE
+     reordering that moves 'base' out of first place.
+  3. **`loadingPageMaxFillProgress` slider** (`x`, 0-1, def `1`). Per
+     direct spec: "Right now, the loading is complete when the circle
+     is 100% drawn. So if i set the slider to 0.5, the circle at 50%
+     drawn will be the 100% loaded state." A pure visual rescale in
+     `drawLoadingPageArc()` -- `sweep = max(MIN_SWEEP, progress *
+     cfg.loadingPageMaxFillProgress * 2π)` -- applied BEFORE converting
+     to radians. **`progress` itself was ALSO changed** (same pass, to
+     stay internally consistent with item 1 above): measured against
+     `requiredFrames` (`Math.min(cfg.loadingPageMinFramesRequired,
+     mouseFlickTotalFrameCount)`), not the raw total -- so raw progress
+     reaching 1 coincides with the frame-count half of the ACTUAL exit
+     condition being satisfied, rather than the arc looking permanently
+     short of "full" whenever Min Frames Required is set below the true
+     total.
+  4. **Draw order reversed for the arc's own 2 endcaps.** Per direct
+     request: "make the loading rope endcap (the one that is moving)
+     render under the rope and other endcap." The endcap at
+     `arcPoints[length-1]` (the END -- see item 5 below for what "the
+     end" means after the cursor-tangent change landed the SAME pass)
+     is now drawn FIRST (bottom-most layer), THEN `strokeRopeCurve()`
+     (the rope body), THEN the endcap at `arcPoints[0]` (the START,
+     via the pre-existing `[...arcPoints].reverse()` trick) LAST
+     (topmost) -- was stroke, then END cap, then START cap (both caps
+     on top of the rope, in the opposite relative order).
+  5. **Cursor Tangent (the largest single item) + `loadingPageRotation`
+     slider.** Per direct spec: "I want the tangent of the circle end
+     to point at the cursor. When i say cursor tangent, I mean if you
+     pause the loading circle, then draw a straight line out of the
+     end, that straight line should intersect the cursor point," plus a
+     separate, same-turn follow-up: "provide me a slider to rotate the
+     loading circle animation overall."
+     - **The geometry**: for an external point (the cursor) and a
+       circle, there are 2 tangent lines, touching the circle at angle
+       `theta ± alpha` from center -- `theta` = the angle from center
+       to the cursor, `alpha = acos(radius/d)` where `d` = distance
+       from center to cursor (a right triangle formed by the center,
+       the tangent point, and the cursor, with the right angle AT the
+       tangent point, per the standard radius-perpendicular-to-tangent
+       property). Whichever candidate is angularly CLOSER to the arc's
+       own LAST-FRAME end angle is chosen (`loadingPageArcEndAngle`, a
+       new persistent global, so the tip doesn't flip to the opposite
+       side of the circle on an ordinary cursor move). If the cursor
+       sits INSIDE the circle (`d < radius`), no real tangent exists --
+       falls back to `baseAngle` (12 o'clock + `cfg.loadingPageRotation`
+       in degrees) every such frame, rather than freezing on a stale
+       value, which is what keeps the rotation slider meaningful even
+       then.
+     - **A real geometric constraint, resolved as a disclosed design
+       choice, not glossed over**: satisfying "arc length reflects
+       progress" (item 1/3 above) AND "the end's tangent always points
+       at the cursor" simultaneously is only possible if the WHOLE
+       arc's rotational position is free to move -- a fixed start point
+       plus a progress-driven sweep length fully determines the end
+       angle already, leaving no freedom for the cursor to influence it
+       at all. Resolved by making BOTH endpoints move each frame: the
+       END tracks the cursor's own tangent point; the START recedes
+       further away as `sweep = endAngle - startAngleForSweep` grows
+       with progress. This also means "the end" (the point item 4's own
+       draw-order fix refers to as "the one that is moving") is now the
+       CURSOR-reactive point specifically, not simply "whichever point
+       advances with progress" the way it was before this request
+       landed -- both descriptions happen to pick out the SAME point
+       (`arcPoints[length-1]`) by construction, so item 4's fix needed
+       no further change once this landed.
+  - **Verified via Node simulation extracting the ACTUAL shipped
+    `drawLoadingPageArc()`** (dependencies mocked to record their own
+    call args, same methodology as the feature's own initial build):
+    the tangent property (`(cursor-endPoint)·(endPoint-center) ≈ 0`,
+    i.e. genuinely perpendicular, not just "close") holds exactly for 2
+    cursor positions in different quadrants; a small cursor move (10px)
+    produces a small angular jump (0.0143 rad), confirming the
+    closer-candidate continuity rule; a cursor placed exactly at the
+    circle's own center correctly falls back to the rotation-adjusted
+    `baseAngle`; the rotation slider correctly shifts that fallback by
+    the exact expected amount; Max Fill Progress=0.5 at progress=1
+    produces an arc spanning EXACTLY π radians (half a circle), not an
+    approximation; the endcap draw-order swap is confirmed via which
+    array-index each `drawEndcap()` call caps and in what sequence
+    relative to `strokeRopeCurve()`. The interleaved load-order
+    algorithm was separately verified against a small, deliberately
+    RAGGED mocked direction table (3 directions, one missing `drag`
+    entirely, one with a shorter `base` set) -- the actual shipped
+    interleave code, extracted and run against real `mouseFlickFrameUrl()`-
+    style URLs, produced an order matching a hand-computed expected
+    sequence EXACTLY, including correctly skipping the missing-drag
+    direction with no error.
+  - **Not live-browser-verified** (this environment's recurring
+    dev-server page-boot stall, the same limitation as nearly every fix
+    in this project's recent history) -- the geometry is proven correct
+    in isolation, but whether the cursor-tangent effect actually FEELS
+    right in real, continuous mouse movement (rather than the 2
+    discrete sampled positions tested here), and whether the new load
+    order measurably changes perceived load time, have not been
+    directly observed.

@@ -504,9 +504,45 @@ const DEV_GROUPS = [
     // separately confirmed.
     { key:'loadingPageEnabled', label:'Loading Page On/Off', type:'checkbox', def:true },
     { key:'loadingPageMinDuration', label:'Minimum Loading Time (S)', type:'slider', unit:'s', min:0, max:5, step:0.1, def:1 },
+    // Loading Page Min Frames Required (2026-09-21) -- per direct
+    // request: "provide a slider for me to select how many frames
+    // should be loaded before the loading page can exit." Gates
+    // mouseFlickSettledFrameCount (loaded OR errored, same "settled"
+    // convention as everywhere else in this file) instead of requiring
+    // literally every one of the ~1,539 frames -- see update()'s own
+    // loading-completion block, which clamps this against the REAL
+    // live total (Math.min(cfg.loadingPageMinFramesRequired,
+    // mouseFlickTotalFrameCount)) so a value left above the true total
+    // still behaves as "require every frame," not an unreachable
+    // threshold. def:1539 matches the CURRENT live total exactly (a
+    // pure no-op preserving the pre-existing "wait for everything"
+    // behavior) -- if this project's real frame count ever grows past
+    // 1539, this default would need bumping too, or it'll silently cap
+    // out below "all frames"; not automatically self-correcting the
+    // way the min() clamp handles a SMALLER live total.
+    { key:'loadingPageMinFramesRequired', label:'Loading Page Min Frames Required', type:'slider', unit:'frames', min:1, max:1600, step:1, def:1539 },
     { key:'loadingPageXOffset', label:'Loading Page X Offset', type:'slider', unit:'%vw', min:-50, max:50, step:1, def:0 },
     { key:'loadingPageYOffset', label:'Loading Page Y Offset', type:'slider', unit:'%vh', min:-50, max:50, step:1, def:0 },
     { key:'loadingPageScale', label:'Loading Page Scale', type:'slider', unit:'%vmin', min:5, max:50, step:1, def:20 },
+    // Loading Page Max Fill Progress (2026-09-21) -- per direct
+    // request: "It determines what the max circle curve fill state is.
+    // Right now, the loading is complete when the circle is 100%
+    // drawn. So if i set the slider to 0.5, the circle at 50% drawn
+    // will be the 100% loaded state." A pure visual rescale of the
+    // arc's own sweep in drawLoadingPageArc() -- multiplies the raw
+    // 0-1 loading fraction by this value BEFORE converting to radians,
+    // so raw progress 0->1 maps to a displayed sweep of 0 -> (this
+    // value)*360deg. def:1 is a no-op, preserving "100% loaded = a
+    // full circle" exactly as it worked before this control existed.
+    { key:'loadingPageMaxFillProgress', label:'Loading Page Max Fill Progress', type:'slider', unit:'x', min:0, max:1, step:0.01, def:1 },
+    // Loading Page Rotation (2026-09-21) -- per direct request:
+    // "provide me a slider to rotate the loading circle animation
+    // overall." Rotates the arc's own base/fallback reference angle
+    // (12 o'clock + this offset) -- see drawLoadingPageArc()'s own
+    // Cursor Tangent comment for exactly when this applies vs. when the
+    // cursor-tangent calculation overrides it. def:0 is a no-op
+    // (unrotated, matching the arc's original fixed 12-o'clock start).
+    { key:'loadingPageRotation', label:'Loading Page Rotation (Deg)', type:'slider', unit:'deg', min:0, max:360, step:1, def:0 },
   ]},
   { title:'CIRCLE', controls:[
     { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:21.5 },
@@ -5334,16 +5370,12 @@ function mouseFlickRequestPriorityLoad(img){
   job.start();
 }
 const mouseFlickFramesByDirection = {};
-// Collected during the table-build pass below, actually enqueued only
-// once the WHOLE table has been built -- this is what makes "every
-// core job across all 8 directions before any tickle/drag job" possible
-// (the forEach below processes one direction fully, including ITS OWN
-// tickle/drag, before moving to the next direction, so enqueuing inline
-// would interleave direction 1's tickle/drag ahead of direction 2's
-// core -- collecting first and enqueuing in 2 explicit passes avoids
-// that).
-const mouseFlickCoreLoadJobs = [];
-const mouseFlickDeferredLoadJobs = [];
+// Loading Page (2026-09-21) -- maps each Image object back to its own
+// download URL, so the interleaved load-order pass below (built AFTER
+// the whole table exists, since it needs every direction's arrays
+// already populated) can enqueue images without re-deriving URLs.
+// Populated during the table-construction pass immediately below.
+const mouseFlickImageUrlMap = new Map();
 MOUSE_FLICK_DIRECTIONS.forEach(dir => {
   // variant.nums (explicit frame-number array) takes priority over
   // variant.count (implied contiguous 1..count) when both could apply --
@@ -5355,23 +5387,19 @@ MOUSE_FLICK_DIRECTIONS.forEach(dir => {
     const numbers = variant.nums || Array.from({ length: variant.count }, (_, i) => i + 1);
     return numbers.map(n => {
       const img = new Image();
-      mouseFlickCoreLoadJobs.push({ img, url: mouseFlickFrameUrl(variant, n) });
-      return img;
-    });
-  };
-  // Same Image-object shape as load() above, just collected into the
-  // LOWER-priority job list instead -- see this whole block's own
-  // header comment for why.
-  const loadDeferred = (variant) => {
-    const numbers = variant.nums || Array.from({ length: variant.count }, (_, i) => i + 1);
-    return numbers.map(n => {
-      const img = new Image();
-      mouseFlickDeferredLoadJobs.push({ img, url: mouseFlickFrameUrl(variant, n) });
+      mouseFlickImageUrlMap.set(img, mouseFlickFrameUrl(variant, n));
       return img;
     });
   };
   const baseForward = load(dir.base);
   mouseFlickFramesByDirection[dir.key] = {
+    // Raw, un-ping-ponged base frames (2026-09-21) -- kept as its own
+    // field so the interleaved load-order pass below can walk each
+    // direction's UNIQUE base images once. Iterating `click` directly
+    // would double-enqueue every base frame but the last, since its own
+    // reverse tail (built via concat below) reuses the SAME Image
+    // objects, not new ones.
+    base: baseForward,
     click: baseForward.concat(baseForward.slice(0, -1).reverse()),
     sciss: load(dir.sciss),
     snap: load(dir.snap),
@@ -5381,36 +5409,58 @@ MOUSE_FLICK_DIRECTIONS.forEach(dir => {
     // dir.tickle/truthiness rather than assumed present, so a FUTURE
     // direction added without tickle art (or one whose art is pulled)
     // degrades to the normal charge display instead of throwing.
-    tickle: dir.tickle ? loadDeferred(dir.tickle) : undefined,
+    tickle: dir.tickle ? load(dir.tickle) : undefined,
     // Drag Rope hand animation (2026-09-11) -- gated on dir.drag the same
     // way tickle is above; the 'front' direction has none as of this
     // writing (see its own comment in MOUSE_FLICK_DIRECTIONS), so a drag
     // on that direction just shows the ordinary charge display instead of
     // throwing.
-    drag: dir.drag ? loadDeferred(dir.drag) : undefined,
+    drag: dir.drag ? load(dir.drag) : undefined,
   };
 });
-// Loading Page (2026-09-21) -- the full denominator drawLoadingPageArc()/
-// update() measure progress against; every core + deferred job, set once
-// here now that both arrays are fully populated (declared `let`, not
-// `const`, purely so a hot-reload-style re-run couldn't double-declare
-// it -- this module only ever runs once per page load, so it's assigned
-// exactly once in practice).
-let mouseFlickTotalFrameCount = mouseFlickCoreLoadJobs.length + mouseFlickDeferredLoadJobs.length;
-// The 2 explicit passes this whole design exists for: every core job
-// enqueued before any deferred job, regardless of which direction
-// either belongs to.
-mouseFlickCoreLoadJobs.forEach(job => mouseFlickEnqueueLoad(job.img, job.url));
-mouseFlickDeferredLoadJobs.forEach(job => mouseFlickEnqueueLoad(job.img, job.url));
+// Loading Page (2026-09-21) -- explicit load ORDER, per direct spec:
+// "there are 8 animation types. For the waiting state, we have the 1st
+// frame in each of the original 8 folders... load those 8 frames
+// first, then the 2nd frames in those 8 folders, then continue as such
+// until those folders are complete. Then move on with Charge, then
+// Drag, Then Sciss, Then Tickle, Then Snap in that order, in similar
+// fashion." -- for each variant category IN THIS EXACT ORDER, walk
+// frame-index 0, 1, 2... and within each index, walk all 8 directions
+// (in MOUSE_FLICK_DIRECTIONS' own existing table order, which the
+// request's own examples -- "BEHIND, FRONT, SIDE PINKY" -- never asked
+// to change) before advancing to the next index. Supersedes the prior
+// "core (base/sciss/snap/charge) before deferred (tickle/drag)" 2-array
+// split -- this ordering is now fully explicit, not grouped.
+const MOUSE_FLICK_LOAD_VARIANT_ORDER = ['base', 'charge', 'drag', 'sciss', 'tickle', 'snap'];
+const mouseFlickOrderedLoadJobs = [];
+MOUSE_FLICK_LOAD_VARIANT_ORDER.forEach(variantKey => {
+  // `|| []` -- a direction genuinely missing this variant (e.g. a
+  // future direction shipped without drag art) contributes an empty
+  // array rather than throwing; Math.max(0, ...) below already
+  // tolerates every array in the list being empty the same way.
+  const arrays = MOUSE_FLICK_DIRECTIONS.map(dir => mouseFlickFramesByDirection[dir.key][variantKey] || []);
+  const maxLen = Math.max(0, ...arrays.map(a => a.length));
+  for (let i = 0; i < maxLen; i++){
+    arrays.forEach(arr => { if (arr[i]) mouseFlickOrderedLoadJobs.push(arr[i]); });
+  }
+});
+// The full denominator drawLoadingPageArc()/update() measure progress
+// against -- every image across every variant, now enqueued in the
+// exact order they'll actually be requested.
+let mouseFlickTotalFrameCount = mouseFlickOrderedLoadJobs.length;
+mouseFlickOrderedLoadJobs.forEach(img => mouseFlickEnqueueLoad(img, mouseFlickImageUrlMap.get(img)));
 mouseFlickPumpLoadQueue();
 // Loading Page (2026-09-21) -- the 8 "static starter" frames (each
 // direction's own click[0], i.e. its un-triggered idle pose) are needed
 // immediately, before anything else, so the loading page's own cursor
 // (the normal Cursor Animation sprite block, forced to stay in 'idle'
 // while loading -- see render()'s own comment) has something to draw
-// from frame one. Promoted to the front of the concurrency-limited
-// queue the same way an on-demand mid-game request already is
-// (mouseFlickRequestPriorityLoad(), see its own comment above).
+// from frame one. These are already first in mouseFlickOrderedLoadJobs
+// (base variant, frame-index 0, all 8 directions) as of this ordering,
+// but this priority-promotion call is kept anyway -- a safe no-op once
+// the queue has already reached them, and a real, load-bearing
+// guarantee if a future reordering ever moves 'base' out of first
+// place again.
 MOUSE_FLICK_DIRECTIONS.forEach(dir => {
   mouseFlickRequestPriorityLoad(mouseFlickFramesByDirection[dir.key].click[0]);
 });
@@ -7812,6 +7862,13 @@ let ropeThicknessMultiplier = 1;
 // just a flash").
 let appLoading = true;
 let loadingBootTimestamp = performance.now();
+// Cursor Tangent (2026-09-21) -- persists the loading arc's own current
+// END angle across frames so drawLoadingPageArc() can pick the closer of
+// its 2 tangent-point candidates each frame (continuity) and has a real
+// value to fall back to the instant the cursor sits inside the circle
+// (no tangent exists there). See that function's own comment for the
+// full mechanism.
+let loadingPageArcEndAngle = -Math.PI / 2;
 
 // The rate growRope() extends at during the startup animation's own
 // 'growing' phase -- either a flat Startup Extension Speed, or (when
@@ -10695,7 +10752,13 @@ function update(rawDt){
       appLoading = false;
     } else {
       const loadingElapsedMs = performance.now() - loadingBootTimestamp;
-      if (mouseFlickSettledFrameCount >= mouseFlickTotalFrameCount &&
+      // Loading Page Min Frames Required (2026-09-21) -- clamped
+      // against the REAL live total so a value left above the true
+      // frame count still means "require every frame" rather than an
+      // unreachable threshold that would strand the page loading
+      // forever.
+      const requiredFrames = Math.min(cfg.loadingPageMinFramesRequired, mouseFlickTotalFrameCount);
+      if (mouseFlickSettledFrameCount >= requiredFrames &&
           loadingElapsedMs >= cfg.loadingPageMinDuration * 1000){
         appLoading = false;
       }
@@ -13646,8 +13709,17 @@ function renderCutSweep(entity){
 // ready, matching the user's own goal across this whole troubleshooting
 // arc, not merely enough to render this one screen.
 function drawLoadingPageArc(){
-  const progressRaw = mouseFlickTotalFrameCount > 0
-    ? mouseFlickSettledFrameCount / mouseFlickTotalFrameCount
+  // Loading Page Min Frames Required (2026-09-21) -- progress is now
+  // measured against whatever ACTUALLY constitutes "loaded" per
+  // update()'s own exit gate (Math.min(cfg.loadingPageMinFramesRequired,
+  // mouseFlickTotalFrameCount)), not the raw total -- so raw progress
+  // reaching 1 (before Max Fill Progress rescales it for display)
+  // coincides with the frame-count half of the exit condition actually
+  // being satisfied, rather than the arc looking permanently short of
+  // "full" if Min Frames Required is set below the true total.
+  const requiredFrames = Math.min(cfg.loadingPageMinFramesRequired, mouseFlickTotalFrameCount);
+  const progressRaw = requiredFrames > 0
+    ? mouseFlickSettledFrameCount / requiredFrames
     : 1;
   const progress = Math.max(0, Math.min(1, progressRaw));
   // A minimum visible sweep at progress===0 so there's always a real,
@@ -13655,24 +13727,73 @@ function drawLoadingPageArc(){
   // point -- an unrequested but sensible floor, not part of the user's
   // own spec.
   const MIN_SWEEP = 0.05;
-  const sweep = Math.max(MIN_SWEEP, progress * Math.PI * 2);
+  // Loading Page Max Fill Progress (2026-09-21) -- rescales the raw 0-1
+  // loading fraction BEFORE converting to radians, per direct spec: "if
+  // i set the slider to 0.5, the circle at 50% drawn will be the 100%
+  // loaded state." def 1 is a no-op (full circle at progress===1,
+  // unchanged from before this control existed).
+  const sweep = Math.max(MIN_SWEEP, progress * cfg.loadingPageMaxFillProgress * Math.PI * 2);
   const center = {
     x: viewportW() / 2 + vw(cfg.loadingPageXOffset),
     y: viewportH() / 2 + vh(cfg.loadingPageYOffset),
   };
   const radius = vmin(cfg.loadingPageScale);
-  // 12 o'clock start (canvas angle convention: 0 = 3 o'clock, increasing
-  // angle sweeps clockwise since Y grows downward), growing clockwise as
-  // progress rises -- the user didn't specify a start point/direction,
-  // this is a judgment call.
-  const startAngle = -Math.PI / 2;
+  // Loading Page Rotation (2026-09-21) -- 12 o'clock (canvas angle
+  // convention: 0 = 3 o'clock, increasing angle sweeps clockwise since Y
+  // grows downward) plus the user's own rotation offset. This is the
+  // FALLBACK end angle whenever a real cursor tangent doesn't exist (see
+  // below) -- with the slider at its def 0, this is plain 12 o'clock,
+  // matching the arc's original fixed start point exactly.
+  const baseAngle = -Math.PI / 2 + (cfg.loadingPageRotation * Math.PI / 180);
+  // Cursor Tangent (2026-09-21, per direct request): "I want the tangent
+  // of the circle end to point at the cursor... if you pause the loading
+  // circle, then draw a straight line out of the end, that straight line
+  // should intersect the cursor point." For an external point (the
+  // cursor) and this circle, there are 2 tangent lines, touching the
+  // circle at angle (theta +/- alpha) from center -- theta = the angle
+  // from center to the cursor, alpha = acos(radius/d) where d = distance
+  // from center to cursor (a right triangle formed by the center, the
+  // tangent point, and the cursor, with the right angle AT the tangent
+  // point, per the standard radius-perpendicular-to-tangent property).
+  // Whichever of the 2 candidates is angularly CLOSER to the arc's own
+  // last-frame end angle is chosen, for continuity, so the tip doesn't
+  // flip to the opposite side of the circle on an ordinary cursor move --
+  // loadingPageArcEndAngle persists this choice across frames. If the
+  // cursor sits INSIDE the circle (d < radius), no real tangent exists --
+  // falls back to baseAngle (so Loading Page Rotation stays meaningful
+  // even then, rather than freezing on a stale value).
+  const dx = mouseX - center.x, dy = mouseY - center.y;
+  const cursorDist = Math.hypot(dx, dy);
+  if (cursorDist >= radius && cursorDist > 0){
+    const theta = Math.atan2(dy, dx);
+    const alpha = Math.acos(radius / cursorDist);
+    const candA = theta + alpha, candB = theta - alpha;
+    const angDelta = (a, b) => {
+      let diff = (a - b) % (Math.PI * 2);
+      if (diff > Math.PI) diff -= Math.PI * 2;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      return Math.abs(diff);
+    };
+    loadingPageArcEndAngle = angDelta(candA, loadingPageArcEndAngle) <= angDelta(candB, loadingPageArcEndAngle) ? candA : candB;
+  } else {
+    loadingPageArcEndAngle = baseAngle;
+  }
+  const endAngle = loadingPageArcEndAngle;
+  // The arc grows BACKWARD from the cursor-tracked end -- both endpoints
+  // move each frame (the end tracks the cursor's own tangent, the start
+  // recedes further as progress/sweep grows). Deliberate, disclosed
+  // design: satisfying "arc length reflects progress" AND "the end's
+  // tangent always points at the cursor" simultaneously is only possible
+  // if the whole arc's rotational position is free to move, not just one
+  // endpoint pinned in place.
+  const startAngleForSweep = endAngle - sweep;
   // One sample roughly every 4 degrees of the CURRENT sweep (never fewer
   // than 2 points), so strokeRopeCurve()'s own quadratic-through-points
   // technique renders a smooth arc rather than a faceted polygon.
   const sampleCount = Math.max(2, Math.ceil(sweep / (Math.PI / 45)) + 1);
   const arcPoints = [];
   for (let i = 0; i < sampleCount; i++){
-    const a = startAngle + (sweep * i) / (sampleCount - 1);
+    const a = startAngleForSweep + (sweep * i) / (sampleCount - 1);
     arcPoints.push({ x: center.x + radius * Math.cos(a), y: center.y + radius * Math.sin(a) });
   }
   // Exact same live-value formulas mainRope's own render call uses (see
@@ -13683,9 +13804,18 @@ function drawLoadingPageArc(){
   // this feature.
   const thickness = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
   const color = ropeStrokeColor(arcPoints, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
-  strokeRopeCurve(arcPoints, thickness, color);
   const gradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: arcPoints[0] } : null;
+  // Draw order (2026-09-21, per direct request: "make the loading rope
+  // endcap (the one that is moving) render under the rope and other
+  // endcap") -- arcPoints[last] is the SWEEPING/growing tip (its own
+  // angle advances with progress); arcPoints[0] is the fixed 12
+  // o'clock start, which never moves. The moving endcap is drawn
+  // FIRST (bottom-most layer), then the rope body stroke on top of
+  // it, then the fixed start endcap LAST (topmost) -- matching the
+  // request exactly: the moving cap renders under both the rope and
+  // the other (fixed) endcap.
   drawEndcap(arcPoints, thickness, cfg.endcapDesign, color, cfg.endcapHeight, 1, gradientInfo);
+  strokeRopeCurve(arcPoints, thickness, color);
   drawEndcap([...arcPoints].reverse(), thickness, cfg.endcapDesign, color, cfg.endcapHeight, 1, gradientInfo);
 }
 
