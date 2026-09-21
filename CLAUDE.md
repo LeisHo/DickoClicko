@@ -5316,3 +5316,154 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     Animation frame without this project's own established
     `.complete && naturalWidth > 0` guard pattern at all, which
     wouldn't be caught by this pass's "hook every EXISTING guard" sweep.
+- **Loading Page (2026-09-21)** -- a full-screen boot overlay, per direct,
+  fully-specified request (verbatim `*DC*`/`*D*` shorthand): a rope-styled
+  circular progress arc that grows from a sliver to a full circle,
+  rendered on top of everything else, blocking every other element until
+  loading completes; the Cursor Animation cursor still shows, but only its
+  8 static per-direction starter frames (no click functions during
+  loading).
+  - **`appLoading`** (module-scope `let`, starts `true`, one-way flip to
+    `false` -- same convention as `introPhase`) and
+    **`loadingBootTimestamp`** (`performance.now()` captured as early as
+    the module can observe, right at its own declaration, not deferred
+    into a later boot step) are the 2 pieces of state driving this.
+    Checked/settled at the very TOP of `update()`, every tick: exits
+    immediately if `cfg.loadingPageEnabled` is false (re-checked every
+    frame, not just once at boot, mirroring `introPhase`'s own established
+    handling of `cfg.introEnabled` for the identical reason --
+    `resetSettings()` is async/unawaited, so the real saved value may not
+    have landed yet the instant this file starts running); otherwise
+    exits once `mouseFlickSettledFrameCount >= mouseFlickTotalFrameCount`
+    **AND** `performance.now() - loadingBootTimestamp >=
+    cfg.loadingPageMinDuration * 1000` (Minimum Loading Time, "so even if
+    the frames load before the minimum loading time, the app will still
+    stay as the loading page until the duration is met," per the request
+    verbatim).
+  - **Progress is measured against EVERY Cursor Animation frame** (all
+    ~1,539 core+deferred images, `mouseFlickTotalFrameCount` --
+    `mouseFlickCoreLoadJobs.length + mouseFlickDeferredLoadJobs.length`,
+    set once right after both job arrays are fully built), not just the
+    loading page's own 8 starter frames -- "loading complete" means the
+    full asset set this whole multi-turn troubleshooting arc has been
+    about is actually ready, not merely enough to render this one screen.
+    `mouseFlickSettledFrameCount` increments inside
+    `mouseFlickEnqueueLoad()`'s own existing `settle` closure (fires on
+    BOTH `'load'` and `'error'` -- "settled" means "no longer waiting,"
+    not "succeeded," so one permanently-failed image can never block
+    loading forever).
+  - **The 8 starter frames** (each direction's own `click[0]`, i.e. its
+    un-triggered idle pose -- exactly `mfFramesForDir.click[0]`, what
+    render()'s own pre-existing `else` branch already draws whenever
+    `mfMode === 'idle'`) are priority-loaded immediately at boot, right
+    after the normal queue-build/enqueue passes, via the ALREADY-BUILT
+    `mouseFlickRequestPriorityLoad()` (see that function's own entry
+    above) -- no new loading mechanism needed for these specifically.
+  - **`render()`'s own wrapping (the biggest structural change here):**
+    everything between the background fill and the "FLICK MOUSE" comment
+    block (splatter/floor/circle/rope/pieces/debug overlays -- a large,
+    ~400-line span) is now wrapped in `if (!appLoading){ ... } else {
+    drawLoadingPageArc(); }`. Done via 2 small, surgical Edit calls at
+    each boundary (opening the brace right after the background fill,
+    closing it right before the "FLICK MOUSE" comment) rather than
+    touching/reindenting the ~400 lines in between -- JS doesn't care
+    about indentation, and re-flowing that entire span would have been
+    both far more token-expensive and far riskier than bracketing it.
+    **The Cursor Animation sprite block (`if (mouseFlickActive()){...}`)
+    is DELIBERATELY left OUTSIDE this wrap**, still gated only by
+    `mouseFlickActive()` exactly as before -- with every gesture-
+    triggering listener separately gated on `appLoading` (see below),
+    `mfMode` can never leave `'idle'` while loading, which ALREADY makes
+    that pre-existing block resolve to exactly the "static starter frame"
+    per direction the request asked for. No new cursor-drawing code was
+    needed at all -- the existing position/rotation/direction-bucket
+    logic in `update()` keeps running completely unconditionally (never
+    gated on `appLoading`), so the cursor tracks/rotates normally from
+    frame one, satisfying "The cursor etc should still rotate and align
+    the same way as it does in the main app" for free.
+  - **`drawLoadingPageArc()`** (new function, right before `render()`)
+    builds a SYNTHETIC points array tracing a circular arc (12 o'clock
+    start, sweeping clockwise as progress rises -- the request didn't
+    specify a start point/direction, this is a judgment call) and strokes
+    /caps it via the EXACT SAME functions and live cfg values `mainRope`'s
+    own render call already uses (`strokeRopeCurve()`, `drawEndcap()`
+    called twice via the pre-existing `[...points].reverse()`
+    double-endcap trick, `ropeStrokeColor()`, `vmin(cfg.ropeThickness) *
+    ropeThicknessMultiplier`) -- per "matches the same visual properties
+    as our main rope," this deliberately reuses `cfg.ropeThickness`/
+    `ropeColor`/`ropeGradientEnabled`/`endcapDesign`/`endcapHeight`
+    verbatim rather than adding new duplicate sliders for the arc's own
+    color/thickness/endcap design (only the 5 controls the request
+    actually asked for exist in the new LOADING PAGE dev-panel group).
+    A minimum visible sweep floor (0.05 rad) at progress≈0 is an
+    unrequested-but-sensible addition (a real, cappable 2-point segment
+    to draw rather than a degenerate single point) -- not part of the
+    request's own spec. Deliberately uses the plain rigid `drawEndcap()`
+    unconditionally, never Deformable Endcap's own curvature-sampling
+    renderer -- avoids reproducing that renderer's spine-walk logic
+    against a synthetic (non-physics) points array, a reasonable
+    simplification since the request only asked for "an End Cap on both
+    ends," not deformable behavior specifically.
+  - **Gesture gating ("there simply wont be click functions during the
+    loading page"):** a single `if (appLoading) return;` guard at the very
+    top of `onPointerDown` (the rope/circle's own gesture entry point) and
+    an identical guard in Cursor Animation's own completely separate
+    `canvas.addEventListener('pointerdown', ...)` listener (see that
+    whole block's own "independent gesture listeners" header comment --
+    this project already has 2 fully separate down-handlers for these 2
+    systems, so both needed their own guard). Deliberately does NOT touch
+    either system's own `pointerup`/`pointercancel` handlers -- blocking
+    the START of every gesture is sufficient, since nothing downstream can
+    act on a mode/hold-timer/`downInfo` that was never armed in the first
+    place; this keeps the change minimal against a codebase where nearly
+    every one of this exact gesture-listener region's past changes has
+    needed its own multi-pass correction (see the many drag/charge/
+    tickle/direction-lock gotchas above).
+  - **The new `LOADING PAGE` dev-panel group** (`loadingPageEnabled` def
+    `true` -- unlike most decorative/optional effects in this project,
+    which default `false`, this is core boot UX the request explicitly
+    asked for, a judgment call, not separately confirmed;
+    `loadingPageMinDuration` in `s`, def `1`, range 0-5;
+    `loadingPageXOffset`/`loadingPageYOffset` in `%vw`/`%vh` respectively,
+    def `0` = centered; `loadingPageScale` in `%vmin`, def `20`, the
+    circle's own radius) sits right after `UI` and before `CIRCLE` in
+    `DEV_GROUPS` -- none of its own values duplicate an existing rope/
+    endcap slider, per the "matches the same visual properties" reuse
+    described above.
+  - **Verified via Node simulation** extracting the ACTUAL shipped
+    `drawLoadingPageArc()` (with `strokeRopeCurve`/`drawEndcap`/
+    `ropeStrokeColor`/`viewportW`/`viewportH`/`vw`/`vh`/`vmin` mocked to
+    record their own call args): progress=0's minimum-sweep floor
+    produces a real >=2-point arc starting exactly at 12 o'clock;
+    progress=0.5 sweeps clockwise to exactly 6 o'clock; progress=1 wraps
+    to a full circle (first/last point coincide exactly); a
+    settled-count exceeding total clamps correctly rather than
+    overshooting; `mouseFlickTotalFrameCount===0` resolves to a full
+    circle with no NaN (the ternary's own fallback) rather than a
+    divide-by-zero. Also extracted and verified `update()`'s own loading-
+    completion block directly (7 scenarios: feature disabled exits
+    immediately regardless of frames/time; frames-not-settled-yet-but-
+    time-elapsed stays loading; frames-settled-but-time-not-elapsed stays
+    loading; both-satisfied exits; the exact `>=` boundary exits, not just
+    `>`; an already-`false` `appLoading` never flips back `true` even if
+    frames/time would otherwise regress -- confirming the one-way-flip
+    convention; the elapsed-time check is measured from
+    `loadingBootTimestamp`, not absolute `performance.now()`) -- all 7
+    passed. A full-file syntax check (`new Function()`) and a global
+    brace-balance count (0) both passed, plus a targeted check that
+    `render()`'s own wrapping braces appear exactly once each and that
+    `render()` parses standalone.
+  - **Not live-browser-verified** (this environment's recurring
+    dev-server page-boot stall, the same limitation as nearly every fix
+    in this project's recent history) -- the actual visual rendering (arc
+    shape/color/endcap orientation on screen, the cursor's own idle pose
+    actually showing during loading, the transition to normal gameplay
+    once loading ends) has not been directly observed in a real browser.
+    If a future report says the loading page doesn't visually match the
+    request (arc direction/start point, endcap orientation, cursor not
+    appearing), this is the first place to check against a real render,
+    since the geometry math itself is confirmed correct in isolation but
+    its ON-SCREEN appearance (particularly `drawEndcap()`'s own
+    orientation-from-`tipDirection()` behavior against a SYNTHETIC,
+    non-physics points array it was never originally designed for) has
+    not been.

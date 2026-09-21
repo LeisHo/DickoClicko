@@ -15694,3 +15694,61 @@ mechanism doesn't corrupt the regular pump/settle bookkeeping. Not
 live-browser-verified (this environment's recurring dev-server
 flakiness) -- whether this concretely eliminates the reported "blank
 frame" symptom in real gameplay has not been directly observed.
+
+--------------------------------------------------------------------------------
+2026-09-21 (Loading Page)
+
+Direct, fully-specified request (verbatim *DC*/*D* dev-panel shorthand):
+a full-screen boot overlay -- a rope-styled circular progress arc,
+matching mainRope's own visual properties with an endcap on both ends,
+growing from a sliver to a full circle -- rendered on top of every other
+element until loading completes, with the Cursor Animation cursor still
+visible but restricted to its 8 static per-direction starter frames (no
+click functions during loading).
+
+Implementation: `appLoading` (starts true, one-way flip to false, same
+convention as introPhase) and `loadingBootTimestamp` (captured as early
+as the module can observe) drive the state, checked every update() tick
+against 2 exit conditions -- cfg.loadingPageEnabled going false
+(re-checked every frame, mirroring introPhase's own async-settings
+handling), or every one of the ~1,539 Cursor Animation frames having
+settled (mouseFlickSettledFrameCount >= mouseFlickTotalFrameCount, both
+new) AND Minimum Loading Time having elapsed. The 8 starter frames
+(each direction's own click[0]) are priority-loaded at boot via the
+already-built mouseFlickRequestPriorityLoad(). render()'s own
+splatter/floor/circle/rope/pieces/debug-overlay span (~400 lines) is
+wrapped in `if (!appLoading){...} else { drawLoadingPageArc(); }` via 2
+small boundary edits, deliberately leaving the pre-existing Cursor
+Animation sprite block OUTSIDE the wrap -- since every gesture-
+triggering listener (onPointerDown, and Cursor Animation's own separate
+pointerdown listener) is now gated on appLoading, mfMode can never leave
+'idle' while loading, which already makes that existing block draw
+exactly the right static frame with no new cursor-drawing code needed.
+The new drawLoadingPageArc() function builds a synthetic circular-arc
+points array and strokes/caps it via the exact same
+strokeRopeCurve()/drawEndcap()/ropeStrokeColor() calls and live cfg
+values (ropeThickness/ropeColor/ropeGradientEnabled/endcapDesign/
+endcapHeight) mainRope's own render call already uses, per "matches the
+same visual properties as our main rope" -- no new duplicate sliders for
+the arc's own look. A new LOADING PAGE dev-panel group holds the 5
+requested controls (On/Off def true, Minimum Loading Time in seconds def
+1, X/Y Offset in %vw/%vh def 0, Scale in %vmin def 20).
+
+Verification: syntax-checked (full-file new Function() parse, brace
+balance 0, plus a targeted check that render()'s own wrapping braces
+appear exactly once and render() parses standalone). Verified via Node
+simulation extracting the ACTUAL shipped drawLoadingPageArc() (with its
+canvas/helper dependencies mocked to record their own call args):
+progress=0's minimum-sweep floor produces a real arc starting exactly at
+12 o'clock; progress=0.5 sweeps clockwise to exactly 6 o'clock;
+progress=1 wraps to a full circle; an out-of-range settled count clamps
+correctly; a zero total resolves to a full circle with no NaN. Also
+extracted and verified update()'s own loading-completion block directly
+across 7 scenarios (disabled-feature early exit, each individual exit
+condition alone vs. both together, the exact >= boundary, the one-way
+flip never reversing, elapsed time measured from boot not absolute now)
+-- all passed. Not live-browser-verified (this environment's recurring
+dev-server page-boot stall) -- the actual on-screen appearance (arc
+orientation, endcap orientation against a synthetic non-physics points
+array, the cursor's idle pose actually showing, the transition into
+normal gameplay) has not been directly observed.

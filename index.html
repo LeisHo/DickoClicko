@@ -486,6 +486,28 @@ const DEV_GROUPS = [
   { title:'UI', controls:[
     { key:'backgroundColor', label:'Background Color', type:'color', def:'#252546' },
   ]},
+  // Loading Page (2026-09-21) -- full-screen boot overlay, per explicit
+  // request/spec (see this control array's own *DC*/*D* shorthand in the
+  // request itself). Renders on top of everything else and blocks every
+  // other element from showing until mouseFlickSettledFrameCount reaches
+  // mouseFlickTotalFrameCount AND Minimum Loading Time has elapsed -- see
+  // render()'s own "if (!appLoading)" branch and update()'s own
+  // completion check. Deliberately reuses ROPE's own cfg.ropeThickness/
+  // ropeColor/ropeGradientEnabled/endcapDesign/endcapHeight verbatim
+  // (per "matches the same visual properties as our main rope") rather
+  // than adding new duplicate color/thickness/endcap sliders here --
+  // only the 5 controls the user actually asked for.
+  { title:'LOADING PAGE', controls:[
+    // Default true (unlike most decorative/optional effects in this
+    // project, which default false) -- this is core boot UX the user
+    // explicitly asked for, not an opt-in extra. A judgment call, not
+    // separately confirmed.
+    { key:'loadingPageEnabled', label:'Loading Page On/Off', type:'checkbox', def:true },
+    { key:'loadingPageMinDuration', label:'Minimum Loading Time (S)', type:'slider', unit:'s', min:0, max:5, step:0.1, def:1 },
+    { key:'loadingPageXOffset', label:'Loading Page X Offset', type:'slider', unit:'%vw', min:-50, max:50, step:1, def:0 },
+    { key:'loadingPageYOffset', label:'Loading Page Y Offset', type:'slider', unit:'%vh', min:-50, max:50, step:1, def:0 },
+    { key:'loadingPageScale', label:'Loading Page Scale', type:'slider', unit:'%vmin', min:5, max:50, step:1, def:20 },
+  ]},
   { title:'CIRCLE', controls:[
     { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:21.5 },
     { key:'circleX',     label:'Circle X Pos',  type:'slider', unit:'%vw',   min:0,   max:100, step:1,   def:50 },
@@ -5241,6 +5263,13 @@ const MOUSE_FLICK_LOAD_CONCURRENCY = 6;
 // whatever FIFO position it currently sits at.
 const mouseFlickLoadQueue = [];
 let mouseFlickLoadInFlight = 0;
+// Loading Page (2026-09-21) -- mouseFlickSettledFrameCount counts every
+// frame that has either loaded OR erred out (both are terminal --
+// "settled" means "no longer waiting," not "succeeded"), against
+// mouseFlickTotalFrameCount (every core + deferred job, set once below
+// after both job arrays are fully built). Read by drawLoadingPageArc()
+// and update()'s own loading-completion check.
+let mouseFlickSettledFrameCount = 0;
 function mouseFlickEnqueueLoad(img, url){
   mouseFlickLoadQueue.push({
     img,
@@ -5248,6 +5277,7 @@ function mouseFlickEnqueueLoad(img, url){
       mouseFlickLoadInFlight++;
       const settle = () => {
         mouseFlickLoadInFlight--;
+        mouseFlickSettledFrameCount++;
         mouseFlickPumpLoadQueue();
       };
       img.addEventListener('load', settle);
@@ -5360,12 +5390,30 @@ MOUSE_FLICK_DIRECTIONS.forEach(dir => {
     drag: dir.drag ? loadDeferred(dir.drag) : undefined,
   };
 });
+// Loading Page (2026-09-21) -- the full denominator drawLoadingPageArc()/
+// update() measure progress against; every core + deferred job, set once
+// here now that both arrays are fully populated (declared `let`, not
+// `const`, purely so a hot-reload-style re-run couldn't double-declare
+// it -- this module only ever runs once per page load, so it's assigned
+// exactly once in practice).
+let mouseFlickTotalFrameCount = mouseFlickCoreLoadJobs.length + mouseFlickDeferredLoadJobs.length;
 // The 2 explicit passes this whole design exists for: every core job
 // enqueued before any deferred job, regardless of which direction
 // either belongs to.
 mouseFlickCoreLoadJobs.forEach(job => mouseFlickEnqueueLoad(job.img, job.url));
 mouseFlickDeferredLoadJobs.forEach(job => mouseFlickEnqueueLoad(job.img, job.url));
 mouseFlickPumpLoadQueue();
+// Loading Page (2026-09-21) -- the 8 "static starter" frames (each
+// direction's own click[0], i.e. its un-triggered idle pose) are needed
+// immediately, before anything else, so the loading page's own cursor
+// (the normal Cursor Animation sprite block, forced to stay in 'idle'
+// while loading -- see render()'s own comment) has something to draw
+// from frame one. Promoted to the front of the concurrency-limited
+// queue the same way an on-demand mid-game request already is
+// (mouseFlickRequestPriorityLoad(), see its own comment above).
+MOUSE_FLICK_DIRECTIONS.forEach(dir => {
+  mouseFlickRequestPriorityLoad(mouseFlickFramesByDirection[dir.key].click[0]);
+});
 
 // Tickle sequence (2026-09-11): per explicit spec -- "1. begin from
 // frame 1 to frame 48. 2. reverse sequence from frame 48 to frame 13.
@@ -7753,6 +7801,18 @@ let anchorWasUnsettled = true;
 // thickness they had at the moment they existed.
 let ropeThicknessMultiplier = 1;
 
+// Loading Page (2026-09-21) -- appLoading starts true (checked/settled
+// every update() tick, see that function's own "Loading Page" block)
+// and is a one-way flip to false, same "never goes back" convention as
+// introPhase. loadingBootTimestamp is captured as early as realistically
+// possible (right here, at module-init time, not deferred into some
+// later boot step) so Minimum Loading Time is measured from as close to
+// true page-load-start as this file can observe, matching its own
+// purpose ("prevent fast cpu users [from seeing] the loading page as
+// just a flash").
+let appLoading = true;
+let loadingBootTimestamp = performance.now();
+
 // The rate growRope() extends at during the startup animation's own
 // 'growing' phase -- either a flat Startup Extension Speed, or (when
 // Startup Extension Speed Tween Enabled) linearly tweened from Startup
@@ -9743,6 +9803,12 @@ function hitTestAny(x, y, maxDist, circleCheckX, circleCheckY){
 }
 
 function onPointerDown(e){
+  // Loading Page (2026-09-21) -- "there simply wont be click functions
+  // during the loading page," per explicit request. Blocking the START
+  // of every gesture here is sufficient: nothing downstream (onPointerUp,
+  // pointercancel) can act on a mode/hold-timer/downInfo that never got
+  // armed in the first place.
+  if (appLoading) return;
   // Rope Attraction (right-click-and-hold): checked first and unconditionally
   // returns, same reasoning as the FLICK check just below -- a different
   // mouse button is an entirely separate gesture that should never also
@@ -10432,6 +10498,11 @@ window.addEventListener('pointermove', e => {
 });
 canvas.addEventListener('pointerdown', e => {
   if (!mouseFlickActive()) return;
+  // Loading Page (2026-09-21) -- see onPointerDown's own identical guard
+  // for the full reasoning; this is Cursor Animation's own completely
+  // separate gesture listener (see this whole block's own header
+  // comment) and needs the exact same guard independently.
+  if (appLoading) return;
   if (e.button === 2){
     // Right click OR right-click-hold: per explicit request, both TRIGGER
     // the same way (fires once per press, ignored while busy) -- what
@@ -10604,6 +10675,32 @@ window.addEventListener('pointercancel', () => {
 function floorY(){ return viewportH() - vh(cfg.floorHeight); }
 
 function update(rawDt){
+  // Loading Page (2026-09-21) -- checked every tick while still loading;
+  // a one-way flip to false, same "never goes back" convention as
+  // introPhase. 2 independent exit conditions: the feature itself is
+  // (or becomes) disabled -- re-checked every frame rather than once at
+  // boot, mirroring introPhase's own established handling of
+  // cfg.introEnabled, since resetSettings() is async/unawaited and may
+  // not have resolved the real saved value yet at the moment this file
+  // starts running -- OR every frame has settled AND Minimum Loading
+  // Time has elapsed. Physics/animation state (mainRope, Cursor
+  // Animation's own position/rotation tracking) is deliberately left
+  // running unconditionally below, loading or not -- only RENDERING and
+  // GESTURE-TRIGGERING are gated elsewhere (render()'s own
+  // "if (!appLoading)" branch; onPointerDown and Cursor Animation's own
+  // 2 independent pointerdown listeners), so nothing needs to "catch up"
+  // the instant loading ends.
+  if (appLoading){
+    if (!cfg.loadingPageEnabled){
+      appLoading = false;
+    } else {
+      const loadingElapsedMs = performance.now() - loadingBootTimestamp;
+      if (mouseFlickSettledFrameCount >= mouseFlickTotalFrameCount &&
+          loadingElapsedMs >= cfg.loadingPageMinDuration * 1000){
+        appLoading = false;
+      }
+    }
+  }
   // Cut Splatter's/Collision Splatter's own per-frame tick -- self-
   // contained (reads/writes only their own array), so placed first and
   // unconditionally; each array is simply always empty when that
@@ -13536,6 +13633,62 @@ function renderCutSweep(entity){
   ctx.stroke();
 }
 
+// Loading Page (2026-09-21) -- see render()'s own "if (!appLoading)"
+// branch for why this is called instead of the normal rope/circle/piece
+// rendering. Builds a SYNTHETIC points array tracing a circular arc
+// (center + radius from the 3 offset/scale dev controls) and strokes/
+// caps it with the exact same functions/live values mainRope's own
+// render call uses -- per explicit request, "a rope object that matches
+// the same visual properties as our main rope," with "an End Cap on
+// both ends." Progress is measured against EVERY Cursor Animation frame
+// (mouseFlickTotalFrameCount), not just the loading page's own 8
+// starter frames -- "loading complete" means the full asset set is
+// ready, matching the user's own goal across this whole troubleshooting
+// arc, not merely enough to render this one screen.
+function drawLoadingPageArc(){
+  const progressRaw = mouseFlickTotalFrameCount > 0
+    ? mouseFlickSettledFrameCount / mouseFlickTotalFrameCount
+    : 1;
+  const progress = Math.max(0, Math.min(1, progressRaw));
+  // A minimum visible sweep at progress===0 so there's always a real,
+  // cappable 2-point segment to draw rather than a degenerate single
+  // point -- an unrequested but sensible floor, not part of the user's
+  // own spec.
+  const MIN_SWEEP = 0.05;
+  const sweep = Math.max(MIN_SWEEP, progress * Math.PI * 2);
+  const center = {
+    x: viewportW() / 2 + vw(cfg.loadingPageXOffset),
+    y: viewportH() / 2 + vh(cfg.loadingPageYOffset),
+  };
+  const radius = vmin(cfg.loadingPageScale);
+  // 12 o'clock start (canvas angle convention: 0 = 3 o'clock, increasing
+  // angle sweeps clockwise since Y grows downward), growing clockwise as
+  // progress rises -- the user didn't specify a start point/direction,
+  // this is a judgment call.
+  const startAngle = -Math.PI / 2;
+  // One sample roughly every 4 degrees of the CURRENT sweep (never fewer
+  // than 2 points), so strokeRopeCurve()'s own quadratic-through-points
+  // technique renders a smooth arc rather than a faceted polygon.
+  const sampleCount = Math.max(2, Math.ceil(sweep / (Math.PI / 45)) + 1);
+  const arcPoints = [];
+  for (let i = 0; i < sampleCount; i++){
+    const a = startAngle + (sweep * i) / (sampleCount - 1);
+    arcPoints.push({ x: center.x + radius * Math.cos(a), y: center.y + radius * Math.sin(a) });
+  }
+  // Exact same live-value formulas mainRope's own render call uses (see
+  // that call site's own liveThickness/mainRopeColor/mainGradientInfo)
+  // -- "matches the same visual properties as our main rope" means
+  // reusing cfg.ropeThickness/ropeColor/ropeGradientEnabled/
+  // endcapDesign/endcapHeight verbatim, not new duplicate sliders for
+  // this feature.
+  const thickness = vmin(cfg.ropeThickness) * ropeThicknessMultiplier;
+  const color = ropeStrokeColor(arcPoints, cfg.ropeGradientEnabled, cfg.ropeGradientColors, cfg.ropeColor);
+  strokeRopeCurve(arcPoints, thickness, color);
+  const gradientInfo = cfg.endcapGradientEnabled ? { stops: cfg.endcapGradientColors, worldTop: arcPoints[0] } : null;
+  drawEndcap(arcPoints, thickness, cfg.endcapDesign, color, cfg.endcapHeight, 1, gradientInfo);
+  drawEndcap([...arcPoints].reverse(), thickness, cfg.endcapDesign, color, cfg.endcapHeight, 1, gradientInfo);
+}
+
 function render(){
   // Per explicit request: hide the native OS/browser cursor whenever
   // FLICK MOUSE is actually showing, so the player doesn't see both the
@@ -13548,6 +13701,21 @@ function render(){
   ctx.fillStyle = cfg.backgroundColor;
   ctx.fillRect(0, 0, viewportW(), viewportH());
 
+  // Loading Page (2026-09-21): while appLoading is true, everything
+  // below this point through the "Debug: Show Rise Clear Offset Line"
+  // block (splatter/floor/circle/rope/pieces/debug overlays) is SKIPPED
+  // entirely -- "None of the main elements should show until loading is
+  // complete," per explicit request -- and a synthetic rope-styled
+  // progress arc is drawn in their place instead (drawLoadingPageArc()).
+  // The Cursor Animation sprite block further below is DELIBERATELY left
+  // OUTSIDE this branch (still gated only by mouseFlickActive(), as
+  // always): every gesture-triggering listener is separately gated on
+  // appLoading (see onPointerDown and Cursor Animation's own 2
+  // independent pointerdown listeners), so mfMode can never leave 'idle'
+  // while loading -- which already makes that block resolve to exactly
+  // the "static starter frame" per direction the user asked for, with no
+  // separate cursor-drawing code needed here.
+  if (!appLoading){
   // Drawn immediately after the background fill, before anything else
   // (floor/circle/rope/pieces) -- per explicit request ("blood splatter
   // on the background"), so it reads as painted on the wall behind
@@ -13951,6 +14119,9 @@ function render(){
     ctx.lineTo(anchor.x + lineHalfWidth, bottomY);
     ctx.stroke();
     ctx.restore();
+  }
+  } else {
+    drawLoadingPageArc();
   }
 
   // FLICK MOUSE -- draws rotated/translated to the entity's own
