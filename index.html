@@ -5235,30 +5235,73 @@ function mouseFlickFrameUrl(variant, n){
 // pre-existing robustness pattern this change relies on rather than
 // introduces.
 const MOUSE_FLICK_LOAD_CONCURRENCY = 6;
+// Each entry is {img, start} -- kept as a real object (not a bare
+// closure) so mouseFlickRequestPriorityLoad() below can find a
+// specific PENDING job by its own `img` reference and pull it out of
+// whatever FIFO position it currently sits at.
 const mouseFlickLoadQueue = [];
 let mouseFlickLoadInFlight = 0;
 function mouseFlickEnqueueLoad(img, url){
-  mouseFlickLoadQueue.push(() => {
-    mouseFlickLoadInFlight++;
-    const settle = () => {
-      mouseFlickLoadInFlight--;
-      mouseFlickPumpLoadQueue();
-    };
-    img.addEventListener('load', settle);
-    img.addEventListener('error', settle);
-    img.src = url;
+  mouseFlickLoadQueue.push({
+    img,
+    start(){
+      mouseFlickLoadInFlight++;
+      const settle = () => {
+        mouseFlickLoadInFlight--;
+        mouseFlickPumpLoadQueue();
+      };
+      img.addEventListener('load', settle);
+      img.addEventListener('error', settle);
+      img.src = url;
+    },
   });
 }
 // Starts as many queued jobs as the concurrency cap currently allows --
 // called once after the whole queue is built (to fill the initial N
 // slots) and again every time an in-flight image settles (to backfill
-// the slot it just freed). A job is a plain closure (not a data object)
-// so starting one is just calling it -- no separate dispatch logic
-// needed here beyond the queue/in-flight bookkeeping itself.
+// the slot it just freed).
 function mouseFlickPumpLoadQueue(){
   while (mouseFlickLoadInFlight < MOUSE_FLICK_LOAD_CONCURRENCY && mouseFlickLoadQueue.length > 0){
-    mouseFlickLoadQueue.shift()();
+    mouseFlickLoadQueue.shift().start();
   }
+}
+// On-demand priority promotion (2026-09-21) -- real follow-up to the
+// concurrency-limited queue above. Direct report: "Sometimes, the
+// first png of the animation sequence loads, but if i click or
+// clickhold or something. It goes blank as i assume those frames have
+// yet to load." Root cause: the queue's own strict FIFO order was
+// fixed at BOOT time (every direction's base/sciss/snap/charge, in
+// table order, before any tickle/drag) with NO awareness of what the
+// player is actually trying to look at right now -- a frame the user
+// genuinely needs THIS instant (e.g. a later frame in a direction/
+// variant that happens to sit far back in the queue) could still be
+// waiting its turn behind a large amount of currently-irrelevant
+// background preloading, reading as "goes blank" exactly as reported,
+// even though the concurrency fix itself (avoiding connection-reset
+// bursts) is working correctly.
+//
+// Called from render()'s own frame-resolution logic, right where a
+// resolved `mfImg` turns out to not be ready yet (see that call site's
+// own comment) -- if the image is still sitting in the background
+// queue (not yet started), this pulls it out of whatever position it
+// occupies and starts it IMMEDIATELY, bypassing the concurrency cap
+// for this one on-demand request. Deliberately NOT queue-respecting:
+// the cap exists to prevent firing HUNDREDS of requests in one burst
+// (the actual connection-reset failure mode this project measured
+// directly) -- a single promoted request, even occasionally landing a
+// handful over the cap, never reproduces that failure mode, and
+// correctness (the user's own actively-needed frame actually
+// appearing) matters more here than strict concurrency discipline for
+// one already-necessary request. A no-op if the image has already been
+// started (by the background queue OR a prior promotion) or already
+// finished loading -- `img.src` is only ever set once, by whichever
+// happens first.
+function mouseFlickRequestPriorityLoad(img){
+  if (!img || img.src) return;
+  const idx = mouseFlickLoadQueue.findIndex(job => job.img === img);
+  if (idx === -1) return; // not a queued frame at all (defensive -- every real frame is queued exactly once at boot)
+  const [job] = mouseFlickLoadQueue.splice(idx, 1);
+  job.start();
 }
 const mouseFlickFramesByDirection = {};
 // Collected during the table-build pass below, actually enqueued only
@@ -5994,7 +6037,13 @@ function mouseFlickInteractionPointWorld(purpose){
   const refVariant = MOUSE_FLICK_INTERACTION_REF_IMAGE[purpose];
   const framesForDir = mouseFlickFramesByDirection[dirKey];
   const img = framesForDir && framesForDir[refVariant] && framesForDir[refVariant][0];
-  if (!img || !img.complete || !img.naturalWidth) return null;
+  if (!img || !img.complete || !img.naturalWidth){
+    // Same on-demand priority promotion as every other FLICK MOUSE
+    // point-transform function here -- see
+    // mouseFlickRequestPriorityLoad()'s own comment.
+    if (img) mouseFlickRequestPriorityLoad(img);
+    return null;
+  }
   const drawW = vmin(cfg.mouseFlickScale);
   const drawH = drawW * (img.naturalHeight / img.naturalWidth);
   const vb = mouseFlickVisibleBounds(dirKey, MOUSE_FLICK_INTERACTION_VARIANT[purpose]);
@@ -6027,7 +6076,15 @@ function mouseFlickInteractionPos(realX, realY, purpose){
 function mouseFlickDragPointWorld(dirKey, pt){
   const framesForDir = mouseFlickFramesByDirection[dirKey];
   const img = framesForDir && framesForDir.drag && framesForDir.drag[0];
-  if (!img || !img.complete || !img.naturalWidth) return null;
+  if (!img || !img.complete || !img.naturalWidth){
+    // Same on-demand priority promotion render()'s own frame-draw guard
+    // uses (see mouseFlickRequestPriorityLoad()'s own comment) -- this
+    // specific frame (drag's own frame 1, used for anchor-solve math)
+    // is genuinely needed right now, so promote it instead of leaving
+    // it to wait behind unrelated background preloading.
+    if (img) mouseFlickRequestPriorityLoad(img);
+    return null;
+  }
   const drawW = vmin(cfg.mouseFlickScale);
   const drawH = drawW * (img.naturalHeight / img.naturalWidth);
   const vb = mouseFlickVisibleBounds(dirKey, 'base');
@@ -6065,7 +6122,13 @@ function mouseFlickDragEntityOriginForAnchor(anchorWorld){
   if (!pt) return null;
   const framesForDir = mouseFlickFramesByDirection[dirKey];
   const img = framesForDir && framesForDir.drag && framesForDir.drag[0];
-  if (!img || !img.complete || !img.naturalWidth) return null;
+  if (!img || !img.complete || !img.naturalWidth){
+    // Same on-demand priority promotion as every other FLICK MOUSE
+    // point-transform function here -- see
+    // mouseFlickRequestPriorityLoad()'s own comment.
+    if (img) mouseFlickRequestPriorityLoad(img);
+    return null;
+  }
   const drawW = vmin(cfg.mouseFlickScale);
   const drawH = drawW * (img.naturalHeight / img.naturalWidth);
   const vb = mouseFlickVisibleBounds(dirKey, 'base');
@@ -13980,6 +14043,15 @@ function render(){
       } else {
         mfImg = mfFramesForDir.click[0];
       }
+      // On-demand priority load (2026-09-21) -- see
+      // mouseFlickRequestPriorityLoad()'s own comment. This specific
+      // frame is skipped (blank) for THIS render call regardless (no
+      // way to draw an image that hasn't loaded), but promoting its
+      // load now means it stops waiting behind unrelated background
+      // preloading and (typically) becomes drawable within one more
+      // HTTP round-trip, not whenever the boot-time queue happens to
+      // reach it.
+      if (mfImg && !(mfImg.complete && mfImg.naturalWidth > 0)) mouseFlickRequestPriorityLoad(mfImg);
       if (mfImg && mfImg.complete && mfImg.naturalWidth > 0){
         const mfSize = vmin(cfg.mouseFlickScale);
         const mfDrawW = mfSize, mfDrawH = mfSize * (mfImg.naturalHeight / mfImg.naturalWidth);

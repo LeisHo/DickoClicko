@@ -15648,3 +15648,49 @@ timing comparison), but the specific failure mode this fix targets
 (net::ERR_CONNECTION_RESET during a large synchronous request burst)
 was directly observed in this same environment before the fix, in the
 same live-testing session that diagnosed it.
+
+--------------------------------------------------------------------------------
+2026-09-21 (16th pass)
+
+Direct report, 3rd round on the same load-time complaint, with a new
+diagnostic detail: "its still taking time to load. Sometimes, the
+first png of the animation sequence loads, but if i click or
+clickhold or something. It goes blank as i assume those frames have
+yet to load." This pinpointed a real gap in the prior pass's own fix:
+the concurrency-limited queue's strict FIFO order was fixed at BOOT
+time (every direction's core frames, in table order, before any
+tickle/drag), with no awareness of what the player is actually trying
+to use right now -- a frame genuinely needed THIS instant could still
+be sitting far back in the queue behind a large amount of currently-
+irrelevant background preloading, reading as "goes blank" exactly as
+reported, even though the queue itself (avoiding connection-reset
+bursts) was working correctly.
+
+Fixed with on-demand priority promotion: `mouseFlickRequestPriorityLoad(img)`
+finds a specific image still sitting in the background queue, pulls it
+out of whatever FIFO position it occupies, and starts loading it
+immediately -- deliberately bypassing the concurrency cap for this one
+on-demand request, since a single promoted request never reproduces
+the "hundreds of simultaneous requests" failure mode the cap exists to
+prevent. Hooked into all 4 places in this file that already check
+`img.complete && naturalWidth > 0` before using a Cursor Animation
+frame (the actual render() draw call, plus 3 point-transform functions
+used for click/hold/cut/drag distance gating and live drag anchoring)
+-- whenever any of them find their needed frame isn't ready, they now
+promote it instead of just silently falling back/skipping for however
+long it would otherwise take the background queue to reach it.
+
+Verification: syntax-checked. Verified via a Node simulation extracting
+the ACTUAL shipped functions: confirmed a frame deliberately chosen to
+sit at the very back of the queue (the last direction's own last
+tickle/drag frame) gets found and pulled out correctly; that a priority
+request correctly bypasses the concurrency cap by exactly one (in-flight
+count 6 -> 7, not capped at 6); that re-requesting an already-started
+frame, requesting an untracked/stray image, and requesting null/
+undefined are all safe no-ops (no throw, no double-start); and that
+settling the priority-loaded frame correctly returns in-flight back to
+the cap value, refilled from the normal queue, confirming the priority
+mechanism doesn't corrupt the regular pump/settle bookkeeping. Not
+live-browser-verified (this environment's recurring dev-server
+flakiness) -- whether this concretely eliminates the reported "blank
+frame" symptom in real gameplay has not been directly observed.

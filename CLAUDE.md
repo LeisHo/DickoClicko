@@ -5244,3 +5244,75 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     project's own real deployment target -- 6 was chosen to match a
     typical browser's own per-origin HTTP/1.1 connection limit, a
     reasonable but not empirically-tuned-for-this-project default.
+- **On-demand priority load promotion (2026-09-21, 3rd round on the
+  same load-time complaint) -- the concurrency-limited queue above
+  fixed connection resets, but its strict FIFO order had no awareness
+  of what the player is actually trying to use RIGHT NOW, so a
+  genuinely-needed frame could still sit far back in the queue and read
+  as "goes blank."** Direct report: "its still taking time to load.
+  Sometimes, the first png of the animation sequence loads, but if i
+  click or clickhold or something. It goes blank as i assume those
+  frames have yet to load." Precisely correct diagnosis -- the queue's
+  own boot-time order (every direction's core frames before any
+  tickle/drag, in fixed table order) has zero relationship to which
+  SPECIFIC frame a real gesture happens to need at a given moment; that
+  frame could easily be sitting deep in the queue behind hundreds of
+  currently-irrelevant background jobs.
+  - **`mouseFlickRequestPriorityLoad(img)`** (added right after
+    `mouseFlickPumpLoadQueue()`): finds a specific image still sitting
+    anywhere in `mouseFlickLoadQueue` (the queue's own entries changed
+    shape from a bare closure to `{img, start}` specifically so this
+    lookup-by-`img`-reference is possible), pulls it out of whatever
+    FIFO position it occupies, and calls `.start()` on it immediately
+    -- DELIBERATELY bypassing `MOUSE_FLICK_LOAD_CONCURRENCY` for this
+    one call. This is intentional, not an oversight: the cap exists
+    specifically to prevent firing HUNDREDS of simultaneous requests
+    (the actual measured connection-reset failure mode); one promoted
+    request occasionally pushing in-flight to N+1 never reproduces that
+    failure mode, and correctness (the frame the user is actively
+    blocked on actually appearing) matters more here than strict
+    concurrency discipline for a single already-necessary request. A
+    safe no-op if the image already has a `.src` (already
+    loading/loaded by the background queue OR an earlier promotion) or
+    isn't found in the queue at all (defensive -- every real Cursor
+    Animation frame is enqueued exactly once at boot, so this should
+    never actually miss for a legitimate frame).
+  - **Hooked into all 4 places in this file that check `img.complete &&
+    naturalWidth > 0` before using a frame** -- render()'s own actual
+    draw call, `mouseFlickInteractionPointWorld()` (click/hold/cut/drag
+    distance gating), `mouseFlickDragPointWorld()` (arbitrary annotated-
+    point transforms), and `mouseFlickDragEntityOriginForAnchor()` (the
+    live dragging anchor solve) -- every one of these functions already
+    had its own "frame isn't ready, gracefully fall back/skip" branch;
+    this change ADDS a priority-load call inside that exact branch
+    (never touches the ready-frame path), so a frame that's merely
+    "not loaded YET" now gets a real chance to become ready within one
+    more HTTP round-trip instead of whenever the boot-time queue
+    happens to reach it. **If a FUTURE function is added that reads a
+    Cursor Animation frame's own `img` and checks `.complete`/
+    `naturalWidth` before using it, it needs this same
+    `mouseFlickRequestPriorityLoad(img)` call in its own not-ready
+    branch** -- the pattern is now established project-wide for this
+    exact system, not meant to be re-derived per call site.
+  - **Verified via a Node simulation extracting the ACTUAL shipped
+    functions**: a frame deliberately chosen to sit at the very back of
+    the full ~1,539-image queue (the last direction's own last tickle/
+    drag frame) is correctly found and pulled out; a priority request
+    correctly bypasses the cap by exactly one (in-flight 6 -> 7, not
+    clamped at 6); re-requesting an already-started frame, an untracked
+    stray image, and `null`/`undefined` are all confirmed safe no-ops;
+    settling the priority-loaded frame correctly returns in-flight to
+    the cap value, refilled from the normal queue -- confirming this
+    doesn't corrupt the regular pump/settle bookkeeping in any way.
+  - **Not live-browser-verified** (this environment's recurring
+    dev-server flakiness) -- whether this concretely eliminates the
+    reported "blank frame" symptom during real gameplay has not been
+    directly observed. If a future report says frames STILL go blank
+    after this, the next place to look is whether
+    `mouseFlickRequestPriorityLoad()` is actually being CALLED for the
+    specific frame in question (add a temporary debug hook logging its
+    own `img`/URL argument) before assuming the promotion mechanism
+    itself is broken -- it's possible a 5th call site reads a Cursor
+    Animation frame without this project's own established
+    `.complete && naturalWidth > 0` guard pattern at all, which
+    wouldn't be caught by this pass's "hook every EXISTING guard" sweep.
