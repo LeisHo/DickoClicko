@@ -5801,3 +5801,78 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   (this environment's recurring dev-server page-boot stall) -- how the
   2 sliders feel together under real, continuous mouse movement across
   the circle boundary has not been directly observed.
+- **Cursor Tangent -- "offset retained, doesn't re-align regardless of
+  smoothing" -- INVESTIGATED EXTENSIVELY, a real concrete gap found
+  and fixed, but the EXACT reported mechanism was never reproduced.
+  Reported honestly as such, not claimed as a confirmed root-cause
+  fix.** Real, direct report (2026-09-21): "if i enter the circle and
+  exit the cricle. the offset between my enter and exit point seems to
+  be retained and the loading circle no longer rotates to align that
+  tangent. Regardless of smoothing settings."
+  - **3 separate Node simulations of the ACTUAL shipped tangent-
+    tracking math, none of which reproduced a genuinely PERMANENT stuck
+    state**: (1) a single enter-wander-exit-on-the-opposite-side
+    sequence -- converged to the exact true tangent (0.0000 rad error)
+    and kept tracking correctly as the cursor continued moving; (2) a
+    15-simulated-second continuous spiral path crossing the boundary 6
+    times -- a real, sometimes-large (up to 137°) MOMENTARY error right
+    at each crossing (expected -- the target itself jumps discontinuously
+    there), but the longest any single "large error" episode lasted was
+    3 ticks (0.05s), and the FINAL state matched the true tangent to
+    within 0.0007 rad; (3) a worst-case cursor JITTERING back and forth
+    exactly at the boundary every single tick (spamming boundary-
+    crossing detection on every tick) -- settled into a small, stable
+    oscillation, not a freeze. **A 4th hypothesis (candidate selection
+    referencing the SMOOTHED, lagging display angle instead of a
+    separately-tracked RAW target) was implemented and A/B-tested
+    against the exact same stress path -- produced IDENTICAL results
+    to the original, ruling it out as a contributing factor** (not
+    shipped, since it changed nothing).
+  - **The one real, concrete gap the investigation DID confirm**:
+    `loadingPageArcEndAngle`/`loadingPageArcWasCursorOutside` were
+    NEVER reset when the loading page is RE-triggered (the "Trigger
+    Loading Page" dev button, added the same day) -- both simply carried
+    over whatever they last were at the END of the PREVIOUS loading
+    session (including however far mid-transition the tangent had
+    drifted the instant that session's `appLoading` flipped false and
+    the whole tracking block stopped running). A re-trigger's first
+    frame then had to re-converge from that stale, arbitrary starting
+    point instead of snapping cleanly to the cursor's actual current
+    position -- plausibly matching "the offset... seems to be retained"
+    if testing happens via repeated Trigger-button clicks, each one
+    silently inheriting the last session's own leftover angle.
+  - **Fixed** with `resetLoadingPageArcTracking()` (new function, right
+    after the loading-page globals' own declarations), called from the
+    Trigger button's `onClick` -- snaps BOTH tracking variables
+    immediately, with NO easing, to whatever is geometrically correct
+    for the CURRENT cursor position at the exact instant the page is
+    (re)triggered (a real tangent point if outside the circle, `baseAngle`
+    if inside), so every fresh loading session starts already correctly
+    aligned rather than inheriting anything from a previous one. NOT
+    called at true page boot -- the existing `-Math.PI/2`-matching
+    defaults there are already correct (no real cursor position exists
+    yet at that point).
+  - **Verified via Node simulation extracting the ACTUAL shipped
+    `resetLoadingPageArcTracking()`**: correctly snaps to a real tangent
+    candidate when the cursor is outside (0 error vs. the true
+    candidate); correctly snaps to exactly `baseAngle` when inside;
+    critically, snaps CORRECTLY regardless of how wildly wrong the
+    prior state was (seeded with an absurd placeholder value `12345`
+    before calling it -- the result was unaffected, confirming zero
+    stale-state leakage).
+  - **Honestly flagged**: this fix closes a real, concrete gap and is a
+    genuine improvement toward "always trying to align," but since the
+    investigation could not reproduce the user's own EXACT described
+    symptom via simulation, it is NOT certain this is the full or only
+    cause -- **if the report persists after this fix (tested via a
+    single, fresh Trigger click rather than repeated re-triggering),
+    the next place to look is outside this file's own math entirely**:
+    whether `mouseX`/`mouseY` themselves are being read correctly
+    during the test (e.g. Pointer Lock state leaking in from an
+    unrelated Drag Rope test earlier in the same page session -- see
+    that feature's own gotcha for how `mouseX` switches to relative
+    `movementX` accumulation while locked, which would desync from the
+    visible cursor in exactly an "offset that never re-aligns" way),
+    rather than re-auditing the tangent-selection math again, which
+    this pass already stress-tested thoroughly. Not live-browser-
+    verified (this environment's recurring dev-server page-boot stall).

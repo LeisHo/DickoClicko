@@ -592,6 +592,11 @@ const DEV_GROUPS = [
     { key:'loadingPageTriggerButton', label:'Trigger Loading Page', type:'button', buttonText:'Trigger', onClick: () => {
       appLoading = true;
       loadingBootTimestamp = performance.now();
+      // Snaps the tangent tracking fresh, from wherever the cursor
+      // actually is RIGHT NOW -- see resetLoadingPageArcTracking()'s
+      // own comment for the real bug this fixes (a re-trigger used to
+      // silently inherit the PREVIOUS session's own leftover angle).
+      resetLoadingPageArcTracking();
     } },
   ]},
   { title:'CIRCLE', controls:[
@@ -7945,6 +7950,67 @@ let loadingPageArcEndAngle = -Math.PI / 2;
 // real tangent yet" condition), so the very first real tick never
 // reads as a spurious crossing before the cursor has ever been sampled.
 let loadingPageArcWasCursorOutside = true;
+// Cursor Tangent -- re-trigger fix (2026-09-21). Real, reported bug:
+// "if i enter the circle and exit the cricle. the offset between my
+// enter and exit point seems to be retained and the loading circle no
+// longer rotates to align that tangent. Regardless of smoothing
+// settings." Extensive Node-simulation investigation (a single enter/
+// exit, a 15-simulated-second continuous spiral crossing the boundary
+// 6 times, and a worst-case cursor JITTERING right at the boundary
+// every tick) never reproduced a genuinely PERMANENT stuck state --
+// the tangent math always kept re-converging, typically within a
+// fraction of a second, in every scenario tried. What the investigation
+// DID confirm as a real, concrete gap: neither loadingPageArcEndAngle
+// nor loadingPageArcWasCursorOutside was ever reset when the loading
+// page is RE-triggered (the "Trigger Loading Page" dev button, added
+// the same day) -- both simply carried over whatever they last were at
+// the END of the PREVIOUS loading session, including however far the
+// tangent had drifted mid-transition when that session's appLoading
+// flipped false and the whole tracking block stopped running. A
+// re-trigger's very first frame then had to re-converge from that
+// stale, arbitrary starting point instead of snapping cleanly to
+// wherever the cursor ACTUALLY is right now -- exactly matching "the
+// offset... seems to be retained" if the user is testing via repeated
+// Trigger-button clicks (each one silently inheriting the last
+// session's own leftover angle rather than starting fresh).
+// resetLoadingPageArcTracking() (called from the Trigger button's own
+// onClick, right below) snaps BOTH variables immediately, with NO
+// easing, to whatever is geometrically correct for the CURRENT cursor
+// position at the exact instant the page is (re)triggered -- so every
+// fresh loading session starts already correctly aligned, never
+// inheriting a stale reference from a previous one. Not called at
+// TRUE page boot -- the existing baseAngle-matching defaults above are
+// already correct there (no real cursor position exists to align to
+// yet at that point in boot).
+function resetLoadingPageArcTracking(){
+  const center = {
+    x: viewportW() / 2 + vw(cfg.loadingPageXOffset),
+    y: viewportH() / 2 + vh(cfg.loadingPageYOffset),
+  };
+  const radius = vmin(cfg.loadingPageScale);
+  const baseAngle = -Math.PI / 2 + (cfg.loadingPageRotation * Math.PI / 180);
+  const dx = mouseX - center.x, dy = mouseY - center.y;
+  const cursorDist = Math.hypot(dx, dy);
+  if (cursorDist >= radius && cursorDist > 0){
+    const theta = Math.atan2(dy, dx);
+    const alpha = Math.acos(radius / cursorDist);
+    const candA = theta + alpha, candB = theta - alpha;
+    // No prior reference exists yet to disambiguate the 2 candidates on
+    // a fresh (re)start -- picks whichever is closer to baseAngle (a
+    // deterministic, reasonable default) rather than an arbitrary pick.
+    const angDelta = (a, b) => {
+      let diff = (a - b) % (Math.PI * 2);
+      if (diff > Math.PI) diff -= Math.PI * 2;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      return Math.abs(diff);
+    };
+    loadingPageArcEndAngle = angDelta(candA, baseAngle) <= angDelta(candB, baseAngle) ? candA : candB;
+    loadingPageArcWasCursorOutside = true;
+  } else {
+    loadingPageArcEndAngle = baseAngle;
+    loadingPageArcWasCursorOutside = false;
+  }
+}
 
 // The rate growRope() extends at during the startup animation's own
 // 'growing' phase -- either a flat Startup Extension Speed, or (when

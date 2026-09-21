@@ -15925,3 +15925,42 @@ snaps fully every tick; the exact crossing tick takes a step roughly
 20x smaller than a full snap would have been; the very next tick (no
 new crossing) reverts to snapping fully again. Not live-browser-verified
 (this environment's recurring dev-server page-boot stall).
+
+--------------------------------------------------------------------------------
+2026-09-21 (Cursor Tangent -- investigated a "doesn't re-align" report)
+
+Direct report: entering and exiting the loading circle leaves the
+tangent tracking retained at an offset and it stops rotating to realign,
+regardless of smoothing settings. Investigated via 3 separate Node
+simulations of the actual shipped math (a single enter/exit, a
+15-simulated-second continuous spiral crossing the boundary 6 times, and
+a worst-case cursor jittering at the boundary every tick) -- none
+reproduced a permanent stuck state; the tangent always re-converged,
+typically within a fraction of a second. A 4th hypothesis (candidate
+selection referencing the smoothed display angle instead of a separate
+raw target) was implemented and A/B-tested -- identical results, ruled
+out, not shipped.
+
+The investigation did confirm one real, concrete gap: neither of the
+tangent-tracking state variables was ever reset when the loading page is
+re-triggered via the dev button added earlier the same day -- a
+re-trigger silently inherited whatever angle the previous session had
+left off at, including mid-transition drift, rather than starting fresh
+from the current cursor position. Fixed with a new
+resetLoadingPageArcTracking() function, called from the Trigger button's
+own click handler, that snaps both variables immediately (no easing) to
+whatever is geometrically correct for the cursor's position at that
+exact instant.
+
+Honestly flagged: this closes a real gap but the investigation could not
+reproduce the user's exact described symptom, so it isn't certain this
+is the full cause. If the report persists after a single fresh Trigger
+click (not repeated re-triggering), the next place to look is outside
+this file's own tangent math -- e.g. Pointer Lock state possibly leaking
+in from an unrelated Drag Rope test earlier in the same session.
+
+Verification: syntax-checked. Node simulation of the actual shipped
+resetLoadingPageArcTracking(): snaps correctly to a true tangent when
+outside, to baseAngle when inside, and is provably unaffected by how
+wildly wrong the prior state was. Not live-browser-verified (this
+environment's recurring dev-server page-boot stall).
