@@ -248,7 +248,7 @@
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
       "punchPowerAbsolute": 40,
-      "dragMouseSensitivity": 2,
+      "dragMouseSensitivity": 0.35,
       "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
       "ceilingBounciness": 1,
