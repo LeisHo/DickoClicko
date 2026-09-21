@@ -270,12 +270,12 @@
       "collisionSplatterFadeTime": 6,
       "collisionSplatterOpacity": 0.85,
       "loadingPageEnabled": true,
-      "loadingPageMinDuration": 1,
+      "loadingPageMinDuration": 5,
       "loadingPageXOffset": 0,
       "loadingPageYOffset": 0,
       "loadingPageScale": 20,
-      "loadingPageMinFramesRequired": 309,
-      "loadingPageMaxFillProgress": 0.85,
+      "loadingPageMinFramesRequired": 289,
+      "loadingPageMaxFillProgress": 0.84,
       "loadingPageRotation": 0
     },
     "mobile": {},
@@ -326,15 +326,7 @@
       "cutSplatterFlightDuration": false,
       "cutSplatterFlightDurationVariance": false,
       "cutSplatterFadeTime": false,
-      "cutSplatterOpacity": false,
-      "loadingPageEnabled": false,
-      "loadingPageMinDuration": false,
-      "loadingPageMinFramesRequired": false,
-      "loadingPageMaxFillProgress": false,
-      "loadingPageScale": false,
-      "loadingPageXOffset": false,
-      "loadingPageYOffset": false,
-      "loadingPageRotation": false
+      "cutSplatterOpacity": false
     }
   },
   "order": {
@@ -346,14 +338,6 @@
         "items": [
           {
             "type": "row",
-            "key": "loadingPageEnabled"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageMinDuration"
-          },
-          {
-            "type": "row",
             "key": "loadingPageMinFramesRequired"
           },
           {
@@ -362,7 +346,15 @@
           },
           {
             "type": "row",
-            "key": "loadingPageScale"
+            "key": "loadingPageRotation"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageEnabled"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageMinDuration"
           },
           {
             "type": "row",
@@ -374,18 +366,18 @@
           },
           {
             "type": "row",
-            "key": "loadingPageRotation"
+            "key": "loadingPageScale"
           }
         ],
         "settings": [
-          "loadingPageEnabled",
-          "loadingPageMinDuration",
           "loadingPageMinFramesRequired",
           "loadingPageMaxFillProgress",
-          "loadingPageScale",
+          "loadingPageRotation",
+          "loadingPageEnabled",
+          "loadingPageMinDuration",
           "loadingPageXOffset",
           "loadingPageYOffset",
-          "loadingPageRotation"
+          "loadingPageScale"
         ],
         "subgroups": []
       },
@@ -1519,7 +1511,7 @@
       },
       {
         "key": "DEBUG",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
