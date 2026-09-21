@@ -12,7 +12,7 @@
       "endcapHeight": 1,
       "ropeThickness": 6.4,
       "segmentLength": 2.95,
-      "ropeLength": 6.287182016080134,
+      "ropeLength": 25.160512013012728,
       "ropeDefaultLength": 25,
       "ropeColor": "#feead7",
       "ropeGradientEnabled": true,
@@ -277,7 +277,7 @@
       "loadingPageMinFramesRequired": 309,
       "loadingPageMaxFillProgress": 0.9,
       "loadingPageRotation": 0,
-      "loadingPageRotationSmoothing": 0.59,
+      "loadingPageRotationSmoothing": 0.86,
       "loadingPageShowFrameCounter": true
     },
     "mobile": {},
