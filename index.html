@@ -556,6 +556,17 @@ const DEV_GROUPS = [
     // so shipping this "fixed but effectively off by default" would
     // leave the bug in place for anyone who never finds this slider.
     { key:'loadingPageRotationSmoothing', label:'Loading Page Rotation Smoothing (x)', type:'slider', unit:'x', min:0.02, max:1, step:0.01, def:0.15 },
+    // Loading Page Circle Enter/Exit Smoothing (2026-09-21) -- per
+    // direct follow-up: "the current rotation smooth slider controls
+    // all rotation. i want antoehr slider to control the speciic
+    // instance of when the cursor enters and exits the circle."
+    // SEPARATE from loadingPageRotationSmoothing above -- that one now
+    // governs every OTHER angle update (ordinary continuous tangent
+    // tracking while outside, or holding at baseAngle while inside);
+    // this one governs ONLY the single tick a boundary crossing is
+    // detected on. Same 1=instant/smaller=more-smoothing convention,
+    // same def:0.15 starting point.
+    { key:'loadingPageBoundarySmoothing', label:'Loading Page Circle Enter/Exit Smoothing (x)', type:'slider', unit:'x', min:0.02, max:1, step:0.01, def:0.15 },
     // Loading Page Show Frame Counter (2026-09-21) -- per direct
     // request: "provide a checbox. when turned on, it shows a counter
     // of how many frames have been loaded." def:false, same
@@ -566,6 +577,22 @@ const DEV_GROUPS = [
     // been loaded" reading, not the possibly-smaller Min Frames
     // Required threshold).
     { key:'loadingPageShowFrameCounter', label:'Loading Page Show Frame Counter', type:'checkbox', def:false },
+    // Trigger Loading Page (2026-09-21) -- per direct request: "provide
+    // me a button to trigger the loading page." A dev/testing
+    // convenience so the loading page's own visual behavior (arc fill,
+    // cursor tangent, rotation smoothing, frame counter) can be
+    // re-previewed without a full page reload. Re-arms appLoading and
+    // resets loadingBootTimestamp to NOW, so Minimum Loading Time
+    // counts from the click, not from the page's original boot.
+    // Deliberately does NOT touch mouseFlickSettledFrameCount/
+    // mouseFlickTotalFrameCount -- frames are already loaded/cached by
+    // this point in a real session, so this replays the VISUAL loading
+    // page against whatever the real settled count already is; it
+    // never re-downloads anything.
+    { key:'loadingPageTriggerButton', label:'Trigger Loading Page', type:'button', buttonText:'Trigger', onClick: () => {
+      appLoading = true;
+      loadingBootTimestamp = performance.now();
+    } },
   ]},
   { title:'CIRCLE', controls:[
     { key:'circleSize',  label:'Circle Size',   type:'slider', unit:'%vmin', min:1,   max:30,  step:0.5, def:21.5 },
@@ -3544,6 +3571,21 @@ function buildRow(ctrl){
     row.appendChild(wrap);
     numEls[ctrl.key] = { type:'curve', redraw, setPoints: newPoints => { cfg[ctrl.key] = newPoints.map(p => ({ ...p })); redraw(); } };
     redraw();
+  } else if (ctrl.type === 'button') {
+    // Generic dev-panel action button (2026-09-21), first use: Trigger
+    // Loading Page. Deliberately holds NO cfg value at all -- ctrl.onClick
+    // just runs a side effect, so it never appears in cfg/Object.keys(cfg)
+    // and is therefore automatically skipped by buildValuesByDeviceForSave()/
+    // applyValues()/captureFullDevPanelState() (all of which key off cfg or
+    // an explicit saved-values object) with no special-casing needed
+    // anywhere else -- reordering/renaming/grouping still work normally
+    // since those only depend on ctrl.key/row structure, not a value.
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.addEventListener('click', () => { if (ctrl.onClick) ctrl.onClick(); });
+    btn.textContent = ctrl.buttonText || 'Trigger';
+    row.appendChild(btn);
+    numEls[ctrl.key] = { type:'button' };
   }
   // "Show On Mobile & Landscape" checkbox (2026-09-14, [JS-4b0]-adjacent) --
   // the Desktop-side mirror of the "Independent from Desktop" checkbox
@@ -7892,6 +7934,17 @@ let loadingBootTimestamp = performance.now();
 // (no tangent exists there). See that function's own comment for the
 // full mechanism.
 let loadingPageArcEndAngle = -Math.PI / 2;
+// Loading Page Circle Enter/Exit Smoothing (2026-09-21) -- tracks
+// whether the cursor was OUTSIDE the circle last tick, so update()'s
+// own Cursor Tangent smoothing block can detect the exact tick a
+// boundary crossing happens (inside->outside or outside->inside) and
+// apply a SEPARATE smoothing factor (cfg.loadingPageBoundarySmoothing)
+// just for that transition, distinct from cfg.loadingPageRotationSmoothing's
+// own general-purpose tracking smoothing. Initialized `true` to match
+// loadingPageArcEndAngle's own initial fallback-angle state (the "no
+// real tangent yet" condition), so the very first real tick never
+// reads as a spurious crossing before the cursor has ever been sampled.
+let loadingPageArcWasCursorOutside = true;
 
 // The rate growRope() extends at during the startup animation's own
 // 'growing' phase -- either a flat Startup Extension Speed, or (when
@@ -10811,8 +10864,9 @@ function update(rawDt){
       const baseAngle = -Math.PI / 2 + (cfg.loadingPageRotation * Math.PI / 180);
       const dx = mouseX - center.x, dy = mouseY - center.y;
       const cursorDist = Math.hypot(dx, dy);
+      const cursorOutside = cursorDist >= radius && cursorDist > 0;
       let targetAngle;
-      if (cursorDist >= radius && cursorDist > 0){
+      if (cursorOutside){
         const theta = Math.atan2(dy, dx);
         const alpha = Math.acos(radius / cursorDist);
         const candA = theta + alpha, candB = theta - alpha;
@@ -10826,6 +10880,20 @@ function update(rawDt){
       } else {
         targetAngle = baseAngle;
       }
+      // Loading Page Circle Enter/Exit Smoothing (2026-09-21) -- per
+      // direct follow-up: "the current rotation smooth slider controls
+      // all rotation. i want another slider to control the specific
+      // instance of when the cursor enters and exits the circle."
+      // loadingPageArcWasCursorOutside persists whether the cursor was
+      // outside the circle LAST tick; a mismatch against `cursorOutside`
+      // (computed this tick) means a boundary crossing just happened --
+      // that one transition step uses cfg.loadingPageBoundarySmoothing
+      // instead of the general cfg.loadingPageRotationSmoothing used for
+      // every other (non-crossing) update, whether that's ordinary
+      // continuous tangent tracking while outside, or sitting frozen at
+      // baseAngle while inside.
+      const isBoundaryCrossing = cursorOutside !== loadingPageArcWasCursorOutside;
+      loadingPageArcWasCursorOutside = cursorOutside;
       // Shortest-path angular ease -- wrap the raw delta into (-PI, PI]
       // BEFORE scaling by the smoothing factor and adding it back onto
       // the current angle, rather than lerping the raw angle values
@@ -10834,7 +10902,8 @@ function update(rawDt){
       let angDiff = (targetAngle - loadingPageArcEndAngle) % (Math.PI * 2);
       if (angDiff > Math.PI) angDiff -= Math.PI * 2;
       if (angDiff < -Math.PI) angDiff += Math.PI * 2;
-      const smoothFactor = mouseFlickExpSmoothFactor(cfg.loadingPageRotationSmoothing, rawDt);
+      const smoothing = isBoundaryCrossing ? cfg.loadingPageBoundarySmoothing : cfg.loadingPageRotationSmoothing;
+      const smoothFactor = mouseFlickExpSmoothFactor(smoothing, rawDt);
       loadingPageArcEndAngle += angDiff * smoothFactor;
     }
   }

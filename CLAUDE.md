@@ -5716,3 +5716,88 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     code, but how the smoothed rotation and the no-longer-frozen fill
     actually FEEL under continuous real mouse movement and real network
     load timing have not been directly observed.
+- **Trigger Loading Page button (2026-09-21) -- a NEW generic
+  `type:'button'` case in `buildRow()`, the first of its kind in this
+  panel.** Per direct request: "provide me a button to trigger the
+  loading page." A dev/testing convenience so the whole feature (arc
+  fill, cursor tangent, rotation smoothing, frame counter) can be
+  re-previewed without a full page reload -- the click handler just
+  does `appLoading = true; loadingBootTimestamp = performance.now();`,
+  deliberately leaving `mouseFlickSettledFrameCount`/
+  `mouseFlickTotalFrameCount` untouched (frames are already loaded/
+  cached by the time this button is ever clickable, so this replays
+  the VISUAL loading page against the real current settled count --
+  it never re-downloads anything).
+  - **Deliberately holds NO `cfg` value at all** -- `ctrl.onClick` is a
+    pure side effect with no `def:` field, so `Object.keys(cfg)` is
+    the only thing that could ever surface it to
+    `buildValuesByDeviceForSave()`/`captureFullDevPanelState()`, and it
+    only does so as a transient `cfg[key] === undefined` property (from
+    `DEV_GROUPS`' own generic `merged[c.key] = c.def` default-merge
+    pass) -- which `JSON.stringify()` drops automatically when the
+    settings log is actually written, so no spurious key ever reaches
+    the saved file. This is WHY a button control needs no special-
+    casing in any of those functions, or in `applyValues()` (whose own
+    `if (!(ctrl.key in values)) return;` early-out, combined with there
+    being no `'button'` branch in its own type-chain, means a saved
+    value for this key -- which will never exist -- would be silently
+    ignored anyway).
+  - **`numEls[ctrl.key] = { type:'button' }`** is still required despite
+    holding no real state -- the row's own trailing "Show On Mobile /
+    Landscape" and "Independent from Desktop" checkboxes (appended
+    unconditionally after the type-specific branch, for EVERY control
+    type) write onto `numEls[ctrl.key]` directly and would throw
+    `Cannot set property of undefined` without this.
+  - **A generic capability, not a one-off hack** -- per this project's
+    own established convention (see the Overstretch Sensitivity Curve
+    gotcha: "the OLD hand-built widget... is REMOVED entirely... a
+    single new `type:'curve'` DEV_GROUPS control... so reordering/
+    independence/visibility/Save/Copy/Reset all come for free... with
+    NO special-casing needed the way the old hand-built widget once
+    required"), this was added as a real `buildRow()` type rather than
+    a hand-injected DOM element after a specific row -- any FUTURE
+    "trigger X" dev-panel button in this project can reuse
+    `type:'button', buttonText:'...', onClick: () => {...}` directly,
+    no new plumbing needed.
+  - **Verified**: the control's presence/shape in `DEV_GROUPS` (grep),
+    that `JSON.stringify()` genuinely drops an `undefined`-valued key
+    (the exact mechanism keeping this out of the saved settings file),
+    and the `onClick` body's own state mutation in isolation. Not
+    live-browser-verified (this environment's recurring dev-server
+    page-boot stall) -- the actual button click, and whether the panel
+    renders/positions a bare `<button>` reasonably inside a `.dp-row`
+    with no prior styling written for this exact case, have not been
+    directly observed.
+- **Loading Page Circle Enter/Exit Smoothing (2026-09-21) -- a SECOND,
+  separate damping slider, split off from Loading Page Rotation
+  Smoothing.** Per direct follow-up: "the current rotation smooth
+  slider controls all rotation. i want antoehr slider to control the
+  speciic instance of when the cursor enters and exits the circle."
+  `loadingPageArcWasCursorOutside` (new persistent global, init `true`
+  to match `loadingPageArcEndAngle`'s own initial fallback-angle state
+  so the very first real tick never misreads as a spurious crossing)
+  tracks whether the cursor was outside the circle LAST tick;
+  `update()`'s own Cursor Tangent smoothing block compares that against
+  THIS tick's `cursorOutside` -- a mismatch means a boundary crossing
+  just happened, and ONLY that one transition tick uses
+  `cfg.loadingPageBoundarySmoothing` instead of the general
+  `cfg.loadingPageRotationSmoothing` (which still governs every OTHER
+  update: ordinary continuous tangent tracking while outside, or
+  sitting held at `baseAngle` while inside). Both default `0.15`, same
+  1=instant/smaller=more-smoothing convention. Verified via a Node
+  simulation extracting the ACTUAL shipped `update()` block, with
+  `loadingPageRotationSmoothing=1.0` (instant) and
+  `loadingPageBoundarySmoothing=0.05` (heavy) deliberately set far
+  apart so the 2 sliders' effects are unmistakable: ordinary tracking
+  ticks snap fully to their target every time (confirming
+  RotationSmoothing governs them); the EXACT tick a crossing is
+  detected takes a step roughly 20x smaller than the full jump to the
+  target would have been (confirming BoundarySmoothing, not
+  RotationSmoothing, governed that one tick); the VERY NEXT tick (same
+  side of the boundary, no new crossing) snaps the rest of the way
+  instantly again, confirming control correctly reverts to
+  RotationSmoothing the moment the crossing itself is over, not for
+  the whole subsequent "settling" period. Not live-browser-verified
+  (this environment's recurring dev-server page-boot stall) -- how the
+  2 sliders feel together under real, continuous mouse movement across
+  the circle boundary has not been directly observed.

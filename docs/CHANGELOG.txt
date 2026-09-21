@@ -15881,3 +15881,47 @@ environment's recurring dev-server page-boot stall) -- the math is
 proven correct in isolation but how it actually feels under continuous
 real mouse movement and real network timing has not been directly
 observed.
+
+--------------------------------------------------------------------------------
+2026-09-21 (Trigger Loading Page button)
+
+Added a "Trigger Loading Page" button to the LOADING PAGE dev-panel
+group, per direct request. Required a new generic type:'button' case in
+buildRow() (the first button control type this panel has had) -- click
+handler re-arms appLoading and resets loadingBootTimestamp to now, so
+the whole feature can be re-previewed without a page reload; deliberately
+leaves the frame-settle counters untouched since frames are already
+cached. Built as a real, reusable DEV_GROUPS control type rather than a
+hand-injected one-off, matching this project's own established
+preference (see the Overstretch Sensitivity Curve widget's own history)
+-- any future dev-panel action button can reuse the same
+type:'button'/buttonText/onClick shape with no new plumbing. Holds no
+cfg value at all; verified JSON.stringify() drops the resulting
+undefined-valued key automatically, so it never pollutes the saved
+settings file.
+
+Verification: syntax-checked, control shape confirmed via grep, the
+JSON.stringify-drops-undefined mechanism and the click handler's own
+state mutation verified directly. Not live-browser-verified (this
+environment's recurring dev-server page-boot stall).
+
+--------------------------------------------------------------------------------
+2026-09-21 (Loading Page Circle Enter/Exit Smoothing)
+
+Split the loading arc's single rotation-damping slider into 2, per
+direct follow-up: "the current rotation smooth slider controls all
+rotation. i want antoehr slider to control the speciic instance of
+when the cursor enters and exits the circle." Loading Page Rotation
+Smoothing still governs ordinary continuous tangent tracking; a new
+Loading Page Circle Enter/Exit Smoothing slider governs ONLY the single
+tick a boundary crossing (cursor entering or exiting the circle) is
+detected, then control reverts to the general slider immediately
+afterward.
+
+Verification: syntax-checked. Node simulation extracting the actual
+shipped update() block, with the 2 sliders set far apart (instant vs.
+heavy) to make their separate effects unmistakable: ordinary tracking
+snaps fully every tick; the exact crossing tick takes a step roughly
+20x smaller than a full snap would have been; the very next tick (no
+new crossing) reverts to snapping fully again. Not live-browser-verified
+(this environment's recurring dev-server page-boot stall).
