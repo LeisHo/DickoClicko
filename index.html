@@ -8783,20 +8783,29 @@ function spawnCollisionSplatter(x, y){
 // divergent proximity check.
 //
 // "The moment 1 cutpiece is collided with by a new cut piece" is
-// modeled as a ONE-TIME EVENT per piece, not a per-pair matrix: every
-// piece gets an (implicit, lazily-true) `collisionSplatterFired` flag,
-// and the FIRST time a not-yet-fired piece is found touching ANY other
-// piece (fired or not), its own splatter bursts from ITS OWN endcap
-// endpoint and the flag is set so it can never fire again -- matching
-// the request's own singular "the moment," not "every new pair of
-// pieces that ever touch." An already-fired piece can still freely
-// serve as the "existing piece being hit" for a DIFFERENT, still-
-// eligible piece's own first impact -- only the NEWLY-firing piece's
-// own eligibility is gated, never its partner's. If BOTH pieces in a
-// pair are simultaneously still-eligible (2 freshly-cut pieces landing
-// on each other before either has touched anything else), both fire
-// independently, each from its own endpoint -- a deliberately simple,
-// symmetric rule rather than an arbitrary tie-break for a rare case.
+// modeled as a ONE-TIME EVENT GATE per piece, not a per-pair matrix:
+// every piece gets an (implicit, lazily-true) `collisionSplatterFired`
+// flag, and the FIRST time a not-yet-fired piece is found touching ANY
+// other piece (fired or not), that counts as a genuine new collision
+// EVENT and the flag is set on whichever piece(s) were still eligible
+// so this exact piece can never re-trigger the gate again -- matching
+// the request's own singular "the moment," not "every frame 2 pieces
+// happen to still be touching." An already-fired piece can still
+// freely serve as "the existing piece being hit" for a DIFFERENT,
+// still-eligible piece's own first impact.
+//
+// Corrected 2026-09-21 (direct follow-up, same day): "the splatter
+// should occur at the endcap endpoints of BOTH rope pieces" -- once
+// the gate above decides this collision counts as a genuine new event
+// (at least one piece was still eligible), the actual VISUAL burst now
+// spawns from BOTH pieceA's AND pieceB's own endcap endpoints, not
+// just whichever piece(s) happened to be the newly-firing one(s) --
+// a real impact splatters both contact surfaces, regardless of
+// whether the OTHER piece already had its own "first contact" moment
+// against someone else earlier. The gate itself is unchanged (still
+// only ever opens once per newly-eligible piece, so 2 pieces resting
+// together forever don't re-trigger every frame) -- only which
+// endpoint(s) the resulting burst comes from changed.
 //
 // Spawn origin: "the Endcap Endpoint (same as the endcap dragpoint)"
 // per the request's own wording -- endcapDragPointWorld() is already
@@ -8812,11 +8821,12 @@ function spawnCollisionSplatter(x, y){
 // above -- no stretch (a piece is never being Drag-Rope-dragged).
 function checkCollisionSplatterTrigger(pieceA, pieceB){
   if (!cfg.collisionSplatterEnabled || !DEV_MODE) return;
-  const candidates = [];
-  if (!pieceA.collisionSplatterFired) candidates.push(pieceA);
-  if (!pieceB.collisionSplatterFired) candidates.push(pieceB);
-  for (const piece of candidates){
-    piece.collisionSplatterFired = true;
+  const aEligible = !pieceA.collisionSplatterFired;
+  const bEligible = !pieceB.collisionSplatterFired;
+  if (!aEligible && !bEligible) return; // neither piece is having a first-contact moment -- not a new event
+  if (aEligible) pieceA.collisionSplatterFired = true;
+  if (bEligible) pieceB.collisionSplatterFired = true;
+  for (const piece of [pieceA, pieceB]){
     const pt = endcapDragPointWorld(
       piece.points, cfg.endcapDesign, pieceThickness(piece), cfg.endcapHeight,
       cfg.endcapDeformableEnabled, cfg.endcapBendStrength, 1

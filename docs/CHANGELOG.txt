@@ -15457,3 +15457,46 @@ and the correct 0-120% range at variance=1. Not live-browser-verified
 piece-collision trigger in particular has never been exercised against
 a real, physically-falling pair of pieces, only the extracted logic in
 isolation.
+
+--------------------------------------------------------------------------------
+2026-09-21 (12th pass)
+
+1. Corrected Collision Splatter (per direct same-day follow-up): the
+   splatter burst now spawns from BOTH pieces' own endcap endpoints on
+   every genuine collision event, not just whichever piece happened to
+   be newly-eligible. The one-time-per-piece gate that decides whether
+   a given contact counts as a "new event" at all is unchanged; only
+   which endpoint(s) the resulting burst comes from changed. Verified
+   via a Node simulation extracting the actual shipped function: a
+   fresh pair's first contact and a new-piece-vs-already-fired-piece
+   contact both now spawn exactly 2 bursts (one per piece's own tip);
+   a contact between 2 already-fired pieces still spawns 0.
+
+2. Investigated a report that "the flick animations" still need
+   removing and that Cursor Animation frames are still slow to load.
+   Confirmed via grep that the flick1/2/3 proof-of-concept removal
+   (this session's own 8th pass) is already 100% complete -- zero
+   remaining references to flick1/flick2/flick3/FLICK ANIMATION/
+   THREETONED_SETS/TWOTONED_SETS anywhere in index.html outside 3
+   historical comments, and no leftover asset-path references. Traced
+   Cursor Animation's own preload code directly and confirmed the
+   REAL, much larger remaining cost: EVERY direction's base/sciss/snap/
+   charge/tickle/drag frame set (not just the 608-image base/sciss/
+   snap/charge set this project's own prior investigation had already
+   quantified) is loaded eagerly and unconditionally at script-parse
+   time, with tickle (48/direction) and drag (48/direction) on top --
+   roughly 1,376 images total across all 8 directions, not 608. No
+   code change made this pass -- reported to the user with a concrete,
+   low-risk proposal (defer the 2 rarer tickle/drag sets to load AFTER
+   the core click/charge/sciss/snap set) pending their own go-ahead,
+   since this project's own history already flagged Cursor Animation's
+   loading strategy as something to change carefully, having been
+   explicitly told not to touch the feature itself in an adjacent
+   earlier request this same session.
+
+Verification: item 1 verified via Node simulation of the actual
+shipped function (3 scenarios: fresh pair, new-vs-fired, both-fired).
+Item 2 is a read-only investigation, verified via direct grep/code
+inspection of the real preload loop -- no code changed, nothing to
+verify beyond confirming the counted image totals against the loop's
+own explicit variant/count table.

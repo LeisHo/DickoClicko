@@ -4961,24 +4961,40 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     resolved -- so Collision Splatter's own definition of "touching" is
     IDENTICAL to what the physics itself just acted on, never a
     separate, possibly-divergent proximity check.
-  - **"The moment" is modeled as a ONE-TIME EVENT per piece, not a
+  - **"The moment" is modeled as a ONE-TIME EVENT GATE per piece, not a
     per-pair matrix**: every piece gets an implicit, lazily-true
     `collisionSplatterFired` flag. The FIRST time a not-yet-fired piece
-    is found touching ANY other piece (fired or not), ITS OWN splatter
-    fires from ITS OWN endcap endpoint and the flag is set so it can
-    never fire again for that piece. An already-fired piece can still
-    freely serve as "the existing piece being hit" for a DIFFERENT,
-    still-eligible piece's own first impact -- only the newly-firing
-    piece's own eligibility is gated, never its partner's. If both
-    pieces in a pair are simultaneously still-eligible (2 freshly-cut
-    pieces landing on each other before either has touched anything
-    else), BOTH fire independently, each from its own endpoint --
-    deliberately simple/symmetric rather than an arbitrary tie-break
-    for what should be a rare case. Verified via a Node simulation
-    extracting the actual shipped functions: fires for both pieces on
-    a fresh pair's first contact, fires exactly once more for a 3rd new
-    piece touching an already-fired one, fires zero times once both
-    pieces in a pair have already fired.
+    is found touching ANY other piece (fired or not), that counts as a
+    genuine new collision EVENT, and the flag is set on whichever
+    piece(s) were still eligible so THAT piece can never re-open the
+    gate again. An already-fired piece can still freely serve as "the
+    existing piece being hit" for a DIFFERENT, still-eligible piece's
+    own first impact.
+  - **Corrected same day -- the splatter now comes from BOTH pieces'
+    own endcap endpoints, not just whichever piece(s) newly opened the
+    gate.** Per direct follow-up: "for the Collision splatter, the
+    splatter should occur at the endcap endpoints of both rope pieces."
+    The GATE is unchanged (still only opens once per newly-eligible
+    piece, so 2 pieces resting together forever don't re-trigger every
+    frame) -- once it opens, `checkCollisionSplatterTrigger()` now
+    always spawns 2 bursts, one from `pieceA`'s own endpoint and one
+    from `pieceB`'s, regardless of which piece(s) were actually
+    eligible. So a brand-new piece landing on an OLD, already-fired
+    piece now produces splatter at BOTH contact points (2 bursts), not
+    just the new piece's own (1 burst, the original design) -- a real
+    impact splatters both surfaces, and the other piece having "already
+    had its own turn" against someone else earlier doesn't make this a
+    less real collision. If both pieces in a pair are simultaneously
+    still-eligible, both also get their own flag set, same as before --
+    that part of the design is unchanged. Verified via a Node
+    simulation extracting the actual shipped functions: a fresh pair's
+    first contact spawns exactly 2 bursts (one per piece's own tip); a
+    new piece touching an already-fired one ALSO spawns exactly 2
+    bursts now (both endpoints, confirmed by comparing each burst's own
+    origin against each piece's own tip position); once both pieces in
+    a pair have already fired, a further contact between them spawns 0
+    (the gate itself, not the burst-count change, is what prevents
+    infinite re-firing).
   - **Spawn origin uses `endcapDragPointWorld()`**, the SAME shared,
     fully-generalized (over an arbitrary points array, not mainRope-
     specific) function every OTHER endcap-endpoint consumer in this
