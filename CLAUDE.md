@@ -4662,3 +4662,156 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   since changing Cursor Animation's own loading strategy risks
   introducing new lag/wrong-frame bugs to the exact system the user
   explicitly said not to touch, and wasn't yet confirmed necessary.
+- **`cfg.growDistance` (2026-09-21) is a NEW, dedicated slider for the
+  circle's own hold-to-grow trigger radius, SPLIT off from
+  `cfg.holdDistance` (Click And Hold Distance)** -- per direct `*D*`
+  request. `isNearCircleCenterForGrow()` previously reused
+  `cfg.holdDistance` per an earlier, now-superseded decision (see that
+  function's own prior gotcha history) -- sharing one value for 2
+  genuinely different purposes (a charge-release distance gate, and a
+  completely separate circle-grow trigger zone) already caused one
+  real, confirmed bug once (independently tuning `holdDistance` for its
+  charge purpose silently shrank the circle's own grow zone to a
+  sliver -- see the 2026-09-14 "holdDistance is dual-purposed" gotcha).
+  This removes that coupling entirely rather than re-tuning around it
+  again. Default (22) matches `holdDistance`'s own CODE default, not
+  its live-drifted value, so existing "click near the circle to grow"
+  behavior was preserved at the moment of the split. If a future report
+  says the circle's grow zone feels wrong, this is now the ONLY slider
+  that controls it -- `holdDistance` no longer has any effect on it.
+- **Overstretch sensitivity direction-gating re-verified 2026-09-21,
+  no bug found, no change made.** Investigated per a request phrased as
+  a bug report ("I want the mouse sensitivity to be 1 when the click
+  and drag is shortening the rope length... when i overstretch, the
+  sensitivity decreases, but when i unstretch, the sensitivity should
+  be 1") -- but this exact behavior was ALREADY the intended, shipped
+  design as of the 2026-09-17 "Corrected" pass on this same mechanism
+  (see that entry: "the reduction now applies ONLY while the user is
+  actively pulling FURTHER from the anchor... never while moving back
+  toward it"). Re-verified via a fresh Node simulation of the live
+  production formula (the `outwardComponent > 0` gate at `update()`'s
+  own drag-pin block): while stretching, the multiplier ramps down
+  (1.0->0.46->0.42->0.38->0.35 across 5 sampled frames); the INSTANT
+  the raw cursor delta's outward-radial component goes non-positive
+  (un-stretching or moving sideways), the multiplier reads exactly 1.0
+  on that very next frame, with no lag or partial-reduction artifact.
+  Per §0b, this is a case where the investigation itself (not a code
+  fix) was the correct, complete response -- logged here so a future
+  session doesn't re-investigate the identical question from scratch.
+- **The Overstretch Sensitivity curve widget was upgraded from a fixed
+  2-point straight line to a full multi-point Catmull-Rom + optional
+  Bezier-handle curve editor (2026-09-21)**, per direct request:
+  "For our linear graph setting inputs. I want to be able to place dots
+  with left click and delete with right click. I also want Bezier curve
+  handles. Take a look at Handy Dandies' Click Function implementation
+  of these graph inputs." `catmullRomY()`/`cubicBezier1D()`/
+  `bezierSegmentY()`/`evaluateCurvePoints()` (near `round()`) are ported
+  near-verbatim from Handy Dandies' own `main.js` (same function
+  bodies, generalized name only -- `evaluateArmLengthCurve` ->
+  `evaluateCurvePoints`, since this project has no "arm length"
+  concept). The OLD hand-built `buildOverstretchSensitivityCurveWidget()`
+  function (a 2-point-only SVG, hand-injected after the
+  `dragOverstretchMinSensitivity` slider's own row) is REMOVED entirely,
+  along with its own DEV_GROUPS scalar control -- both are replaced by
+  a single new `type:'curve'` DEV_GROUPS control,
+  `dragOverstretchMinSensitivityCurve` (def:
+  `[{x:0,y:1},{x:1,y:1}]`, x = overstretch fraction 0-1, y = sensitivity
+  multiplier), rendered inline by `buildRow()`'s own new `'curve'`
+  branch -- the SAME structural pattern the pre-existing `'gradient'`
+  type already established (a fully custom SVG widget built inside the
+  generic control-registration pipeline, so reordering/independence/
+  visibility/Save/Copy/Reset all come for free via the same generic
+  mechanisms every other control type already gets, with NO
+  special-casing needed the way the old hand-built widget once required
+  a dedicated reorder/persistence fix). Interaction, ported directly
+  from Handy Dandies' `buildGenericCurveWidget()`: left-click empty
+  graph space adds a point; a point drags freely (both endpoints: Y
+  only, X pinned at 0/1 -- interior points: full X/Y); double-click OR
+  right-click an interior point deletes it (never an endpoint, never
+  below 2 points); Alt+drag a point creates/drags its `h1` (out) handle,
+  Shift+drag creates/drags its `h2` (in) handle; dragging a handle back
+  within 6px of its own point removes it on release. The physics
+  formula (`update()`'s drag-pin block, `overstretchSensitivityMult`)
+  now calls `evaluateCurvePoints(cfg.dragOverstretchMinSensitivityCurve,
+  lastFrameOverstretchFrac)` instead of the old fixed linear
+  interpolation `1 - frac*(1-cfg.dragOverstretchMinSensitivity)` -- the
+  direction-gating around it (see the entry directly above) is
+  UNCHANGED, only the VALUE being gated changed.
+  **A real, disclosed behavior difference from the OLD widget, verified
+  via Node simulation, not a bug:** a 2-point curve at its EXACT default
+  (`y=1` at both ends) still evaluates to exactly 1 everywhere (the
+  cubic terms all cancel when every control point shares the same y --
+  confirmed via simulation, so the no-op default is preserved
+  byte-for-byte) -- but a 2-point curve with DIFFERENT y-values at each
+  end (e.g. a rebuilt "1.0 -> 0.3" line, matching what the OLD scalar
+  slider used to produce) no longer evaluates as a literal straight
+  line -- Catmull-Rom's own repeated-endpoint boundary handling produces
+  a slight ease-in/ease-out S-curve instead (matches exactly at t=0,
+  0.5, and 1; diverges from a straight line at t=0.25/0.75 by
+  measurable amounts -- e.g. 0.858 vs. a straight line's 0.825 at
+  t=0.25 in one sampled case). This is the SAME behavior Handy Dandies'
+  own curve system already has by design (its own comment: "the arm
+  length curve input should not be angled lines, it should be a smooth
+  curve"), not a defect introduced by this port -- if a future report
+  says the overstretch sensitivity curve "isn't quite linear anymore"
+  between only 2 points, this is why, and the fix (if ever wanted) is a
+  deliberate design choice about whether 2-point curves should special-
+  case to a true straight line, not a bug to silently patch around.
+- **Renaming a hardcoded `DEV_GROUPS` control's `label:` field is safe
+  and was done directly (2026-09-21); renaming/regrouping/renesting a
+  hardcoded GROUP's `title:` field is NOT safe to bake into source
+  without a coordinated live-settings migration, and was deliberately
+  NOT attempted.** Investigated per direct request: "I have renamed and
+  regrouped and renested our settings, I want the new labels and
+  groupings etc to overwrite the hardcoded aspects. Check if there are
+  risks, if not, implement." Read the live
+  `data/processed/dev-panel-settings.json`'s own `textOverrides`/
+  `order` directly (same "check the actual saved value" precedent this
+  file already established repeatedly) and found 2 real, still-active
+  ROW-level renames (`punchPowerAbsolute`: "Punch Power Cap (Absolute,
+  %vh)" -> "Intensity Cap"; `pieceEndEmergeSpeed`: "Piece Endcap Emerge
+  Speed" -> "Cut Piece Endcap Emerge Speed" -- both baked directly into
+  `DEV_GROUPS`' own `label:` fields, since a control's `label:` is pure
+  display text, never used as a lookup key anywhere -- `key:` is the
+  stable identifier every value/order/independence/visibility system
+  actually keys off, and it was NOT touched) plus a 3rd, no-op entry
+  (`"row:dragMouseSensitivity": null` -- confirmed via
+  `applyDevTextOverrides()`'s own `!= null` check that `null` means "no
+  override, use the hardcoded original," so this was a rename that got
+  explicitly cleared back out; nothing to bake in). The GROUP-level
+  entries (`"group:New Group (2)": "Endcap"`, `"group:CLICK":
+  "CLICK-FLICK"`, several more) are structurally different and DO carry
+  real risk: `createGroupElement()`'s own `dataset.key` for a
+  DEV_GROUPS-sourced group IS its hardcoded `title:` string (confirmed
+  via `applyDevTextOverrides()`'s own `'group:' + g.dataset.key`
+  lookup) -- so renaming a hardcoded `title:` directly would silently
+  orphan every saved `order`/`independence`/`visibility`/`lockedGroups`
+  entry that still references the group by its OLD title/key.
+  `placeGroup()`'s own fallback (create a new, empty group when no
+  existing element matches the saved key) means this wouldn't error --
+  it would silently duplicate or misplace groups instead, exactly the
+  kind of quiet corruption that's hard to notice until much later. Most
+  of the new group names in the live settings (`"New Group"`,
+  `"New Group (2)"` through `"New Group (10)"`) are also RUNTIME-CREATED
+  custom groups from the panel's own "+ Add Group" feature -- they have
+  no corresponding hardcoded `DEV_GROUPS` array entry to rename AT ALL,
+  so "baking them into source" would mean inventing brand-new
+  `DEV_GROUPS` array entries and re-deriving their exact nesting/
+  membership from `order.groups`, a genuinely large, error-prone
+  restructuring of a 39+-entry array performed blind (no live-browser
+  verification possible in this environment -- see this file's own
+  recurring dev-server page-boot-stall notes). Per the user's own
+  conditional instruction ("if no risks, implement") and workspace
+  CLAUDE.md §0a's "material change -> surface, don't silently execute"
+  rule, this part was NOT implemented. It also isn't NEEDED functionally
+  -- `applyDevTextOverrides()`/`applyOrder()` already apply the live
+  saved renames/regroupings/renesting automatically on every load,
+  which is the full behavior the user asked for ("the new labels and
+  groupings... overwrite the hardcoded aspects") already happening live,
+  today, for every visitor -- baking it into source would only matter
+  for what a BRAND-NEW/reset settings file defaults to, not current
+  behavior. If this is still wanted, the safe path is a coordinated
+  edit: rename hardcoded `title:`s AND simultaneously update every
+  matching key in `order`/`textOverrides`/`independence`/`visibility`/
+  `lockedGroups` in the same commit, verified group-by-group -- not
+  attempted here.

@@ -653,6 +653,24 @@ const DEV_GROUPS = [
   { title:'CLICK', controls:[
     { key:'clickIntensity', label:'Click Intensity', type:'slider', unit:'x',     min:0,   max:5,  step:0.1, def:1.1 },
     { key:'holdDistance',   label:'Click And Hold Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:22 },
+    // Click to Grow (Circle) Distance (2026-09-21, *D* request) -- own
+    // dedicated slider for the circle's hold-to-grow trigger zone,
+    // SPLITTING it off from cfg.holdDistance (Click And Hold Distance),
+    // which isNearCircleCenterForGrow() previously reused per an
+    // earlier, now-superseded explicit decision (see that function's
+    // own gotcha history). Reusing one shared value for 2 genuinely
+    // different purposes (a charge-release distance gate, and a
+    // completely separate circle-grow trigger radius) already caused
+    // one real, confirmed bug once (independently tuning holdDistance
+    // for its charge purpose silently shrank the circle's own grow
+    // zone to a sliver) -- this removes that coupling entirely rather
+    // than re-tuning around it again. Default (22) matches the OLD
+    // shared control's own code default (holdDistance's own def:22),
+    // not its currently live-drifted value, so existing "click near
+    // the circle to grow" behavior is preserved at the moment of the
+    // split -- the two are now free to be tuned completely
+    // independently going forward.
+    { key:'growDistance',   label:'Click to Grow (Circle) Distance', type:'slider', unit:'%vmin', min:1, max:40, step:0.5, def:22 },
     // Per explicit request: click-and-drag the rope, anchored at the
     // point clicked, overriding the Click-And-Hold charge/punch above
     // (mutually exclusive per hold -- see onPointerDown's own holdTimer
@@ -714,24 +732,29 @@ const DEV_GROUPS = [
     // just being pulled toward half the real cursor's own distance from
     // the anchor). See that block's own comment for the full mechanism.
     { key:'dragMouseSensitivity', label:'Drag Mouse Sensitivity (x)', type:'slider', unit:'x', min:0.05, max:2, step:0.05, def:1 },
-    // Overstretch Min Sensitivity (2026-09-16), per direct request:
-    // "When the rope gets overstetched, I want the mouse sensitivity to
-    // decrease progressively. Provide me a slider for minimum
-    // sensitivity and a curve graph input ui to set the linear
-    // relationship of overstretch to mouse sensitivity." Defines the
-    // sensitivity multiplier at FULL overstretch (100%, i.e.
-    // overstretchFrac=1) -- at 0% overstretch, the multiplier is always
-    // 1.0 (full, undiminished sensitivity), linearly interpolating down
-    // to this value as overstretch increases. Composes MULTIPLICATIVELY
-    // with cfg.dragMouseSensitivity (item 3, above) -- 2 independent,
-    // orthogonal reductions, not a replacement for one another. def:1
-    // (no reduction at all, even at full overstretch) is a pure no-op
-    // for any project/save that's never touched it. The interactive
-    // curve-graph widget (see buildOverstretchSensitivityCurveWidget())
-    // drives/mirrors this SAME value -- dragging the widget's own
-    // endpoint updates this slider and vice versa, 2 views of one
-    // number, not 2 separate settings to keep in sync.
-    { key:'dragOverstretchMinSensitivity', label:'Overstretch Min Sensitivity (x)', type:'slider', unit:'x', min:0, max:1, step:0.01, def:1 },
+    // Overstretch Sensitivity Curve (2026-09-16, upgraded 2026-09-21).
+    // Originally a single "Overstretch Min Sensitivity" scalar slider
+    // driving a fixed 2-point straight-line widget (1.0 at 0%
+    // overstretch, down to that scalar at 100%). Per direct request:
+    // "For our linear graph setting inputs. I want to be able to place
+    // dots with left click and delete with right click. I also want
+    // Bezier curve handles. Take a look at Handy Dandies' Click Function
+    // implementation of these graph inputs" -- the scalar is gone, and
+    // this control's own point array (x: overstretch fraction 0-1, y:
+    // sensitivity multiplier) is now the single, full source of truth,
+    // evaluated via evaluateCurvePoints() -- see its own comment and
+    // this control's buildRow() branch (type:'curve') for the full
+    // point-add/delete/drag/bezier-handle mechanism, ported from Handy
+    // Dandies' buildGenericCurveWidget(). def: a flat line at y=1
+    // reproduces the OLD scalar's own default (1, i.e. no reduction at
+    // any overstretch amount) exactly -- a pure no-op for any
+    // project/save whose curve was never touched. Composes
+    // MULTIPLICATIVELY with cfg.dragMouseSensitivity (item 3, above) --
+    // 2 independent, orthogonal reductions, not a replacement for one
+    // another. Only 2 endpoints are order-fixed at x=0/x=1 (see the
+    // buildRow() branch's own isEndpoint handling) -- every point in
+    // between is freely x/y-draggable and deletable.
+    { key:'dragOverstretchMinSensitivityCurve', label:'Overstretch Sensitivity Curve', type:'curve', def:[{x:0,y:1},{x:1,y:1}] },
     // Rope Overstretch (2026-09-14, per explicit spec) -- Drag Max
     // Distance above stays the REST limit; this adds a genuinely elastic
     // "give" zone beyond it (the true hard limit becomes maxDragDist +
@@ -950,7 +973,7 @@ const DEV_GROUPS = [
     // as long as the resulting effective multiplier stays within the
     // established 1x-20x safe range) and gracefully degrade only in
     // genuinely extreme territory beyond that range, never exceeding it.
-    { key:'punchPowerAbsolute', label:'Punch Power Cap (Absolute, %vh)', type:'slider', unit:'%vh', min:1, max:30, step:0.1, def:180/19 },
+    { key:'punchPowerAbsolute', label:'Intensity Cap', type:'slider', unit:'%vh', min:1, max:30, step:0.1, def:180/19 },
   ]},
   { title:'ROPE CUT', controls:[
     { key:'minRopeLength',   label:'Minimum Rope Length', type:'slider', unit:'%vh', min:0.1, max:15, step:0.1, def:0.5 },
@@ -1062,7 +1085,7 @@ const DEV_GROUPS = [
     // rope still attached to the anchor. Same range/default as its
     // sibling for consistency; Delay/Easing/Tweening stay shared (not
     // asked to split).
-    { key:'pieceEndEmergeSpeed', label:'Piece Endcap Emerge Speed', type:'slider', unit:'x', min:0.01, max:1.5, step:0.01, def:0.01 },
+    { key:'pieceEndEmergeSpeed', label:'Cut Piece Endcap Emerge Speed', type:'slider', unit:'x', min:0.01, max:1.5, step:0.01, def:0.01 },
     { key:'endEmergeEasingStrength', label:'End Emerge Easing Strength', type:'slider', unit:'x', min:1, max:6, step:0.1, def:6 },
     { key:'endEmergeTweening', label:'End Emerge Tweening', type:'dropdown', def:'easeInOut',
       options:[
@@ -2942,6 +2965,70 @@ function syncControlDisplay(key, value){
 
 function round(v, d){ const m = Math.pow(10,d); return Math.round(v*m)/m; }
 
+// Generic Catmull-Rom + optional per-point Bezier-handle curve evaluator
+// (2026-09-21), ported near-verbatim from Handy Dandies' own main.js
+// (catmullRomY/cubicBezier1D/bezierSegmentY/evaluateArmLengthCurve) per
+// direct request: "For our linear graph setting inputs. I want to be
+// able to place dots with left click and delete with right click. I
+// also want Bezier curve handles. Take a look at Handy Dandies' Click
+// Function implementation of these graph inputs." Smooth spline through
+// every point by default (C1-continuous, passes exactly through each
+// control point); a segment switches to an explicit cubic bezier only
+// when at least one of its 2 endpoints defines the relevant handle
+// (`h1` = out-handle on the segment's start point, `h2` = in-handle on
+// its end point) -- additive, not a replacement, so a curve with no
+// handles renders identically to plain Catmull-Rom, and the OLD
+// 2-point-straight-line default ([{x:0,y:1},{x:1,y:1}]) evaluates the
+// same way it always visually looked (a flat line has no curvature to
+// show either way).
+function catmullRomY(y0, y1, y2, y3, t){
+  const t2 = t*t, t3 = t2*t;
+  return 0.5 * ((2*y1) + (-y0+y2)*t + (2*y0-5*y1+4*y2-y3)*t2 + (-y0+3*y1-3*y2+y3)*t3);
+}
+function cubicBezier1D(p0, p1, p2, p3, t){
+  const u = 1-t;
+  return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
+}
+// A cubic bezier isn't naturally parameterized by X, so this solves for
+// the parameter t whose X(t) matches the requested x via binary search
+// (24 iterations, same as the ported source), then reads Y(t) off that
+// same t. Assumes X(t) is monotonic across the segment (true for any
+// handle configuration that doesn't double back on itself horizontally)
+// -- a disclosed edge case, not a hard block on dragging a handle past
+// its neighbor, same as the ported source.
+function bezierSegmentY(P0, C1, C2, P3, x){
+  let lo = 0, hi = 1;
+  for (let iter = 0; iter < 24; iter++){
+    const mid = (lo+hi)/2;
+    const xm = cubicBezier1D(P0.x, C1.x, C2.x, P3.x, mid);
+    if (xm < x) lo = mid; else hi = mid;
+  }
+  const t = (lo+hi)/2;
+  return cubicBezier1D(P0.y, C1.y, C2.y, P3.y, t);
+}
+function evaluateCurvePoints(points, x){
+  if (!points || points.length === 0) return 0;
+  if (points.length === 1) return points[0].y;
+  const sorted = points; // already kept sorted by x by the widget itself
+  if (x <= sorted[0].x) return sorted[0].y;
+  if (x >= sorted[sorted.length-1].x) return sorted[sorted.length-1].y;
+  for (let i = 0; i < sorted.length-1; i++){
+    const p1 = sorted[i], p2 = sorted[i+1];
+    if (x >= p1.x && x <= p2.x){
+      if (p1.h1 || p2.h2){
+        const C1 = p1.h1 ? { x: p1.x + p1.h1.x, y: p1.y + p1.h1.y } : p1;
+        const C2 = p2.h2 ? { x: p2.x + p2.h2.x, y: p2.y + p2.h2.y } : p2;
+        return bezierSegmentY(p1, C1, C2, p2, x);
+      }
+      const p0 = sorted[i-1] || p1;
+      const p3 = sorted[i+2] || p2;
+      const segT = p2.x === p1.x ? 0 : (x - p1.x) / (p2.x - p1.x);
+      return catmullRomY(p0.y, p1.y, p2.y, p3.y, segT);
+    }
+  }
+  return sorted[sorted.length-1].y;
+}
+
 function buildRow(ctrl){
   const row = document.createElement('div');
   row.className = 'dp-row';
@@ -3132,6 +3219,165 @@ function buildRow(ctrl){
     row.appendChild(wrap);
     numEls[ctrl.key] = { type:'gradient', renderStops, setStops: newStops => { cfg[ctrl.key] = newStops.map(s => ({ ...s })); renderStops(); } };
     renderStops();
+  } else if (ctrl.type === 'curve') {
+    // Interactive draggable curve-graph editor with arbitrary point
+    // add/delete and Bezier handles (2026-09-21), ported from Handy
+    // Dandies' own buildGenericCurveWidget() per direct request. Left
+    // click on empty graph space adds a point there; a point drags
+    // freely (endpoints: Y only, X pinned at 0/1 -- interior points:
+    // full X/Y); double-click OR right-click an interior point deletes
+    // it (never the 2 endpoints, and never below 2 points); Alt+drag a
+    // point creates/drags its OUT handle (h1, shapes the curve leaving
+    // it toward the next point -- never offered on the last point);
+    // Shift+drag creates/drags its IN handle (h2, shapes the curve
+    // arriving from the previous point -- never offered on the first
+    // point); dragging a handle back within a small pixel threshold of
+    // its own point removes it on release. cfg[key] holds the point
+    // array directly (kept sorted by x after every structural change),
+    // evaluated via evaluateCurvePoints().
+    const W = 240, H = 110, PAD = 10;
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', String(W)); svg.setAttribute('height', String(H));
+    svg.style.background = 'rgba(255,255,255,0.05)';
+    svg.style.borderRadius = '4px';
+    svg.style.touchAction = 'none';
+    svg.style.cursor = 'crosshair';
+    svg.style.display = 'block';
+
+    const border = document.createElementNS(svgNS, 'rect');
+    border.setAttribute('x', '0.5'); border.setAttribute('y', '0.5');
+    border.setAttribute('width', String(W-1)); border.setAttribute('height', String(H-1));
+    border.setAttribute('fill', 'none'); border.setAttribute('stroke', 'rgba(255,255,255,0.15)');
+    svg.appendChild(border);
+
+    const curvePath = document.createElementNS(svgNS, 'path');
+    curvePath.setAttribute('fill', 'none'); curvePath.setAttribute('stroke', 'var(--dp-accent, #6cf)'); curvePath.setAttribute('stroke-width', '2');
+    svg.appendChild(curvePath);
+
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex'; wrap.style.flexDirection = 'column'; wrap.style.gap = '2px';
+    wrap.appendChild(svg);
+    const hint = document.createElement('div');
+    hint.style.fontSize = '9px'; hint.style.opacity = '0.5'; hint.style.fontStyle = 'italic';
+    hint.textContent = 'Click empty space: Add point · Dbl/Right-click a point: Delete · Alt+Drag: Out Handle · Shift+Drag: In Handle · Drag a handle onto its point: Remove';
+    wrap.appendChild(hint);
+
+    const toPx = (p) => ({ x: PAD + p.x*(W-2*PAD), y: PAD + (1-p.y)*(H-2*PAD) });
+    const fromPx = (px, py) => ({ x: Math.max(0, Math.min(1, (px-PAD)/(W-2*PAD))), y: Math.max(0, Math.min(1, 1-(py-PAD)/(H-2*PAD))) });
+    const CURVE_SAMPLES = 48;
+    const HANDLE_REMOVE_THRESHOLD_PX = 6;
+    let handleEls = [], pointEls = [];
+
+    function commitPoints(){
+      cfg[ctrl.key].sort((a, b) => a.x - b.x);
+    }
+    function startHandleDrag(p, i, kind, downEv){
+      downEv.stopPropagation(); downEv.preventDefault();
+      const points = cfg[ctrl.key];
+      const canHave = kind === 'h1' ? i < points.length-1 : i > 0;
+      if (!canHave) return;
+      if (!p[kind]) p[kind] = { x: kind === 'h1' ? 0.08 : -0.08, y: 0 };
+      function onMove(moveEv){
+        const rect = svg.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        const np = fromPx(moveEv.clientX-rect.left, moveEv.clientY-rect.top);
+        p[kind] = { x: np.x-p.x, y: np.y-p.y };
+        redraw();
+      }
+      function onUp(){
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        const handlePx = toPx({ x: p.x+p[kind].x, y: p.y+p[kind].y });
+        const pointPx = toPx(p);
+        if (Math.hypot(handlePx.x-pointPx.x, handlePx.y-pointPx.y) <= HANDLE_REMOVE_THRESHOLD_PX) delete p[kind];
+        redraw();
+        commitPoints();
+      }
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    }
+    function redraw(){
+      const points = cfg[ctrl.key];
+      let d = '';
+      for (let i = 0; i <= CURVE_SAMPLES; i++){
+        const x = i/CURVE_SAMPLES;
+        const y = Math.max(0, Math.min(1, evaluateCurvePoints(points, x)));
+        const px = toPx({ x, y });
+        d += (i === 0 ? 'M' : 'L') + px.x.toFixed(2) + ',' + px.y.toFixed(2) + ' ';
+      }
+      curvePath.setAttribute('d', d.trim());
+      handleEls.forEach(el => svg.removeChild(el)); handleEls = [];
+      pointEls.forEach(el => svg.removeChild(el)); pointEls = [];
+      points.forEach((p, i) => {
+        ['h1','h2'].forEach(kind => {
+          if (!p[kind]) return;
+          const px = toPx(p);
+          const hx = toPx({ x: p.x+p[kind].x, y: p.y+p[kind].y });
+          const line = document.createElementNS(svgNS, 'line');
+          line.setAttribute('x1', px.x); line.setAttribute('y1', px.y); line.setAttribute('x2', hx.x); line.setAttribute('y2', hx.y);
+          line.setAttribute('stroke', 'rgba(255,255,255,0.4)'); line.setAttribute('stroke-width', '1');
+          svg.appendChild(line); handleEls.push(line);
+          const marker = document.createElementNS(svgNS, 'rect');
+          marker.setAttribute('x', hx.x-3.5); marker.setAttribute('y', hx.y-3.5); marker.setAttribute('width', 7); marker.setAttribute('height', 7);
+          marker.setAttribute('fill', '#e0a030');
+          marker.style.cursor = 'grab';
+          marker.addEventListener('pointerdown', downEv => startHandleDrag(p, i, kind, downEv));
+          svg.appendChild(marker); handleEls.push(marker);
+        });
+        const px = toPx(p);
+        const c = document.createElementNS(svgNS, 'circle');
+        c.setAttribute('cx', px.x); c.setAttribute('cy', px.y); c.setAttribute('r', 5);
+        c.setAttribute('fill', 'var(--dp-accent, #6cf)');
+        c.style.cursor = 'grab';
+        let dragged = false;
+        c.addEventListener('pointerdown', downEv => {
+          if (downEv.altKey){ startHandleDrag(p, i, 'h1', downEv); return; }
+          if (downEv.shiftKey){ startHandleDrag(p, i, 'h2', downEv); return; }
+          downEv.stopPropagation();
+          dragged = false;
+          const isEndpoint = i === 0 || i === cfg[ctrl.key].length-1;
+          function onMove(moveEv){
+            const rect = svg.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+            dragged = true;
+            const np = fromPx(moveEv.clientX-rect.left, moveEv.clientY-rect.top);
+            if (isEndpoint) p.y = np.y; else { p.x = np.x; p.y = np.y; }
+            redraw();
+          }
+          function onUp(){
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            if (dragged) commitPoints();
+          }
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+        });
+        function deletePointIfRemovable(){
+          const pts = cfg[ctrl.key];
+          if (pts.length > 2 && i !== 0 && i !== pts.length-1){
+            pts.splice(pts.indexOf(p), 1);
+            redraw();
+            commitPoints();
+          }
+        }
+        c.addEventListener('dblclick', dblEv => { dblEv.stopPropagation(); deletePointIfRemovable(); });
+        c.addEventListener('contextmenu', ctxEv => { ctxEv.preventDefault(); ctxEv.stopPropagation(); deletePointIfRemovable(); });
+        svg.appendChild(c); pointEls.push(c);
+      });
+    }
+    svg.addEventListener('click', clickEv => {
+      if (clickEv.target.tagName !== 'svg' && clickEv.target !== border) return;
+      const rect = svg.getBoundingClientRect();
+      const np = fromPx(clickEv.clientX-rect.left, clickEv.clientY-rect.top);
+      if (np.x <= 0 || np.x >= 1) return;
+      cfg[ctrl.key].push(np);
+      redraw();
+      commitPoints();
+    });
+    row.appendChild(wrap);
+    numEls[ctrl.key] = { type:'curve', redraw, setPoints: newPoints => { cfg[ctrl.key] = newPoints.map(p => ({ ...p })); redraw(); } };
+    redraw();
   }
   // "Show On Mobile & Landscape" checkbox (2026-09-14, [JS-4b0]-adjacent) --
   // the Desktop-side mirror of the "Independent from Desktop" checkbox
@@ -3668,155 +3914,6 @@ function initDevPanelSearch(){
     dpSearchUpdateCount();
   }, true);
 }
-// Interactive draggable curve-graph widget for Overstretch Min
-// Sensitivity (2026-09-16) -- per direct request: "Provide me a slider
-// for minimum sensitivity and a curve graph input ui to set the linear
-// relationship of overstretch to mouse sensitivity," with a genuinely
-// interactive draggable editor explicitly chosen over a static preview
-// graph or plain slider-only. Hand-built DOM injected directly after
-// the dragOverstretchMinSensitivity slider's own row, following this
-// project's OWN established pattern for a custom widget that doesn't
-// fit the generic slider/checkbox/dropdown system -- Mouse Log is the
-// precedent (hand-built DOM, wired to its own state separately from
-// the standard control-registration pipeline, per that feature's own
-// gotcha). NOT registered as its own DEV_GROUPS control -- the SLIDER
-// it sits beside (dragOverstretchMinSensitivity) stays the single
-// source of truth cfg/Save/Copy/Reset all read; this widget is purely
-// an ADDITIONAL way to view/edit that same value, kept in sync in both
-// directions (dragging the widget's handle updates the slider live via
-// the existing syncControlDisplay() helper; moving the slider updates
-// the widget's own rendered handle position via a plain 'input'
-// listener).
-//
-// The curve is a straight line from a FIXED left point (0% overstretch
-// -> sensitivity 1.0, deliberately never draggable -- "at zero
-// overstretch, always full sensitivity" isn't something this feature
-// asked to be adjustable) to a DRAGGABLE right point (100% overstretch
-// -> sensitivity = the slider's own current value). Only the right
-// point's Y position is meaningful to drag, since its X is fixed at
-// the 100% mark by definition.
-//
-// HONEST LIMITATION: this widget re-renders on its own drag and on the
-// paired slider's own 'input' event, but NOT on every possible way
-// cfg.dragOverstretchMinSensitivity could change externally (e.g. a
-// Reset/Load calling syncControlDisplay() directly sets the slider's
-// OWN value without dispatching an 'input' event, so this widget can
-// go briefly stale until next interacted with). Acceptable for a
-// visual-preview/alt-input widget where the slider remains the
-// authoritative control; not worth a fuller observer/event system for
-// one small widget. NOT reorder-aware either -- if the paired row is
-// ever drag-reordered elsewhere in the panel, this widget stays a
-// plain DOM sibling of wherever that row USED to be.
-//
-// Not live-browser-verified (this environment's recurring dev-server
-// page-boot stall) -- the drag-interaction code itself follows the
-// SAME tryCapture()/pointer-capture pattern every other draggable
-// element in this panel already uses (group/row drag-reorder, the 8
-// panel resize handles), and the pure coordinate math (valueToY/
-// yToValue) was checked by hand for both directions round-tripping
-// correctly, but the actual live pointer-drag GESTURE has not been
-// exercised in a real browser the way this session's pure physics/
-// logic changes have been via Node simulation.
-function buildOverstretchSensitivityCurveWidget(){
-  const anchorRow = findRowByKey('dragOverstretchMinSensitivity');
-  if (!anchorRow) return; // control not found (shouldn't happen) -- skip rather than throw
-  const W = 240, H = 90, PAD = 10;
-  const wrap = document.createElement('div');
-  wrap.className = 'dp-row dp-curve-widget-row';
-  // Reorder/persistence fix (2026-09-17), real reported bug: "I cant
-  // seem to reorder or move the curve graph input." Root cause: this
-  // row was built with NO drag-handle element at all -- makeReorderable()'s
-  // delegated pointerdown listener (see its own call site,
-  // `makeReorderable(dpBody, 'dp-row', 'dp-row-handle', ...)`) only ever
-  // starts a reorder-drag when the pointerdown TARGET is inside a real
-  // `.dp-row-handle` element (per this project's own established
-  // "reordering starts only from a dedicated drag-handle icon"
-  // convention -- every other row gets one from buildRow(), this
-  // hand-built one never did). With no such element anywhere inside
-  // `wrap`, `e.target.closest('.dp-row-handle')` was ALWAYS null for a
-  // pointerdown here, so the function returned immediately every time --
-  // this row could never be grabbed for reordering at all, not just
-  // "doesn't move with its slider." A `data-key` is also set now (this
-  // row never had one) -- getPanelOrder()/captureGroup() read
-  // `row.dataset.key` generically for EVERY `.dp-row` in a group
-  // (this widget's own extra `dp-curve-widget-row` class doesn't
-  // exempt it from that generic query), so a future Save now genuinely
-  // remembers this row's own position via the same mechanism every
-  // other row already uses -- findRowByKey() on restore, no special-
-  // casing needed anywhere else.
-  wrap.dataset.key = 'dragOverstretchMinSensitivityCurve';
-  const reorderHandle = document.createElement('span');
-  reorderHandle.className = 'dp-row-handle dp-drag-handle';
-  reorderHandle.textContent = '⠿';
-  wrap.appendChild(reorderHandle);
-  wrap.style.paddingLeft = '2px';
-  wrap.style.paddingBottom = '6px';
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('width', String(W));
-  svg.setAttribute('height', String(H));
-  svg.style.background = 'rgba(255,255,255,0.05)';
-  svg.style.borderRadius = '4px';
-  svg.style.touchAction = 'none'; // a touch-drag on the handle shouldn't also scroll the panel
-
-  const border = document.createElementNS(svgNS, 'rect');
-  border.setAttribute('x', '0.5'); border.setAttribute('y', '0.5');
-  border.setAttribute('width', String(W - 1)); border.setAttribute('height', String(H - 1));
-  border.setAttribute('fill', 'none'); border.setAttribute('stroke', 'rgba(255,255,255,0.15)');
-  svg.appendChild(border);
-
-  const line = document.createElementNS(svgNS, 'line');
-  line.setAttribute('stroke', 'var(--dp-accent, #6cf)'); line.setAttribute('stroke-width', '2');
-  svg.appendChild(line);
-
-  const leftDot = document.createElementNS(svgNS, 'circle');
-  leftDot.setAttribute('r', '3'); leftDot.setAttribute('fill', 'rgba(255,255,255,0.4)');
-  svg.appendChild(leftDot);
-
-  const handle = document.createElementNS(svgNS, 'circle');
-  handle.setAttribute('r', '6'); handle.setAttribute('fill', 'var(--dp-accent, #6cf)');
-  handle.style.cursor = 'ns-resize';
-  svg.appendChild(handle);
-
-  function valueToY(v){ return PAD + (1 - v) * (H - 2 * PAD); }
-  function yToValue(y){ return Math.max(0, Math.min(1, 1 - (y - PAD) / (H - 2 * PAD))); }
-
-  function render(){
-    const v = cfg.dragOverstretchMinSensitivity;
-    const x0 = PAD, y0 = valueToY(1); // left point fixed at sensitivity=1
-    const x1 = W - PAD, y1 = valueToY(v);
-    line.setAttribute('x1', String(x0)); line.setAttribute('y1', String(y0));
-    line.setAttribute('x2', String(x1)); line.setAttribute('y2', String(y1));
-    leftDot.setAttribute('cx', String(x0)); leftDot.setAttribute('cy', String(y0));
-    handle.setAttribute('cx', String(x1)); handle.setAttribute('cy', String(y1));
-  }
-  render();
-
-  let dragging = false;
-  handle.addEventListener('pointerdown', (e) => {
-    dragging = true;
-    tryCapture(handle, e.pointerId);
-    e.preventDefault();
-  });
-  window.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    const rect = svg.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const v = round(yToValue(y), 2);
-    cfg.dragOverstretchMinSensitivity = v;
-    syncControlDisplay('dragOverstretchMinSensitivity', v);
-    render();
-  });
-  window.addEventListener('pointerup', () => { dragging = false; });
-
-  const sliderEls = numEls['dragOverstretchMinSensitivity'];
-  if (sliderEls && sliderEls.slider){
-    sliderEls.slider.addEventListener('input', render);
-  }
-
-  wrap.appendChild(svg);
-  anchorRow.insertAdjacentElement('afterend', wrap);
-}
 // order.ungrouped: the row keys currently sitting directly in
 // #dpUngrouped, in order -- new field, alongside the pre-existing
 // order.groups (was the WHOLE return value before ungrouped settings
@@ -3939,6 +4036,15 @@ function applyValues(values){
         // 'slider' branch above.
         if (el && el.setStops) el.setStops(stops);
         else cfg[ctrl.key] = stops.map(s => ({ ...s }));
+      }
+    } else if (ctrl.type === 'curve'){
+      if (Array.isArray(v) && v.length >= 2){
+        // el.setPoints() writes cfg[ctrl.key] itself AND re-renders the
+        // curve widget -- but el is always undefined for a real visitor
+        // with no dev panel built, so cfg has to be set directly here
+        // too, same reasoning as 'gradient' above.
+        if (el && el.setPoints) el.setPoints(v);
+        else cfg[ctrl.key] = v.map(p => ({ ...p }));
       }
     }
   }));
@@ -8988,7 +9094,7 @@ function isOnCircle(x, y){
 // zone definition in both places, no separate priority logic needed.
 function isNearCircleCenterForGrow(x, y){
   const anchor = circleAnchor();
-  return Math.hypot(x - anchor.x, y - anchor.y) <= vmin(cfg.holdDistance);
+  return Math.hypot(x - anchor.x, y - anchor.y) <= vmin(cfg.growDistance);
 }
 
 // circleCheckX/Y (2026-09-15, per direct report: "rope full cut works
@@ -9199,9 +9305,10 @@ function onPointerDown(e){
   // (MOUSE_FLICK_INTERACTION_POINT_KEY.hold='default', sourced from
   // the "Flick" annotated category per that feature's own comment --
   // matching the user's own recollection, "the Flick one") for exactly
-  // this measurement (Click And Hold Distance, the SAME cfg.holdDistance
-  // slider isNearCircleCenterForGrow() already reuses per its own
-  // gotcha) but was never actually wired into either call site here.
+  // this measurement (originally the SAME cfg.holdDistance slider
+  // isNearCircleCenterForGrow() reused at the time -- since split into
+  // its own dedicated cfg.growDistance, 2026-09-21, see that control's
+  // own comment) but was never actually wired into either call site here.
   // Computed ONCE and reused at both call sites below so they agree on
   // the identical substituted point for the same press.
   const growPos = mouseFlickInteractionPos(x, y, 'hold');
@@ -10568,17 +10675,21 @@ function update(rawDt){
       // exactly equals mouseX/mouseY (pure no-op, byte-for-byte the
       // prior behavior).
       //
-      // Composed with Overstretch Min Sensitivity here too -- reads
+      // Composed with the Overstretch Sensitivity Curve here too -- reads
       // mainRope.overstretchPx from LAST FRAME (a genuine circular
       // dependency otherwise: this frame's own overstretch amount can
       // only be known AFTER this same leash/sensitivity computation
       // decides where the drag point ends up) -- same one-frame-lag
       // convention this file already establishes for the identical
       // problem (see mainRope.endcapStretchMult's own comment a few
-      // lines below). Linearly interpolates from 1.0 (no reduction, at
-      // 0% overstretch) down to cfg.dragOverstretchMinSensitivity (at
-      // 100% overstretch), then MULTIPLIES with cfg.dragMouseSensitivity
-      // -- 2 independent reductions compose, neither replaces the other.
+      // lines below). Evaluated via evaluateCurvePoints() at the current
+      // overstretch fraction (x: 0=no overstretch, 1=fully overstretched)
+      // -- REPLACING the old fixed linear interpolation from 1.0 down to
+      // a single dragOverstretchMinSensitivity scalar (2026-09-21, per
+      // direct request to upgrade this into a genuine multi-point/
+      // Bezier-handle curve -- see that control's own DEV_GROUPS comment)
+      // -- then MULTIPLIES with cfg.dragMouseSensitivity -- 2 independent
+      // reductions compose, neither replaces the other.
       //
       // Corrected 2026-09-17 -- the reduction now applies ONLY while the
       // user is actively pulling FURTHER from the anchor (stretching),
@@ -10596,12 +10707,19 @@ function update(rawDt){
       // means the raw cursor is moving further out along that same
       // line (stretching), so the reduction applies; zero/negative
       // (moving inward, or purely sideways) keeps full
-      // dragMouseSensitivity with no reduction. (This also compounds
-      // naturally with the same-day overstretchTolerance fix above --
-      // overstretchFrac now actually ramps across a meaningful range of
-      // drag distances instead of staying near 0 or jumping straight to
-      // 1, so the sensitivity reduction itself becomes gradual and
-      // perceptible for the first time, not just direction-gated.)
+      // dragMouseSensitivity with no reduction. Re-verified 2026-09-21
+      // (direct investigation, no report of a regression) via a Node
+      // simulation of this exact gating using the live production
+      // formula -- the multiplier returns to exactly 1.0 on the very
+      // first frame after the outward component goes non-positive, with
+      // no lag or partial-reduction artifact; this direction-gating
+      // itself needed no change for the curve upgrade, only the VALUE
+      // it multiplies by (the curve evaluation replacing the old linear
+      // interpolation) changed. (This also compounds naturally with the
+      // same-day overstretchTolerance fix above -- overstretchFrac now
+      // actually ramps across a meaningful range of drag distances
+      // instead of staying near 0 or jumping straight to 1, so the
+      // sensitivity reduction itself becomes gradual and perceptible.)
       const radialX = dragPoint.x - anchor.x, radialY = dragPoint.y - anchor.y;
       const radialLen = Math.hypot(radialX, radialY) || 1e-6;
       const rawDeltaX = mouseX - downInfo.dragSensLastRawX, rawDeltaY = mouseY - downInfo.dragSensLastRawY;
@@ -10609,7 +10727,7 @@ function update(rawDt){
       const lastFrameOverstretchFrac = (cfg.overstretchEnabled && overstretchTol > 0)
         ? Math.min(1, mainRope.overstretchPx / overstretchTol) : 0;
       const overstretchSensitivityMult = outwardComponent > 0
-        ? 1 - lastFrameOverstretchFrac * (1 - cfg.dragOverstretchMinSensitivity)
+        ? Math.max(0, evaluateCurvePoints(cfg.dragOverstretchMinSensitivityCurve, lastFrameOverstretchFrac))
         : 1;
       const effectiveDragSensitivity = cfg.dragMouseSensitivity * overstretchSensitivityMult;
       downInfo.dragSensCursorX += (mouseX - downInfo.dragSensLastRawX) * effectiveDragSensitivity;
@@ -13586,7 +13704,6 @@ if (DEV_MODE){
   applyDefaultDevPanelSubgroupOrder();
   injectGroupLockIcons();
   injectGroupUndockButtons();
-  buildOverstretchSensitivityCurveWidget();
   // Row (setting) dragging, registered ONCE here -- delegation-based
   // (see makeReorderable()'s own comment), so this single call reaches
   // every row in every group AND #dpUngrouped, including ones created/

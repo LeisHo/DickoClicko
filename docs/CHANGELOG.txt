@@ -15259,3 +15259,86 @@ references outside Cursor Animation's own mf/mouseFlick/FLICK_BASE_FPS
 namespace. Not live-browser-verified (this environment's recurring
 dev-server page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-21 (9th pass)
+
+4 requests, handled together.
+
+1. Added a new "Click to Grow (Circle) Distance" slider
+   (cfg.growDistance, CLICK group, def:22), splitting the circle's own
+   hold-to-grow trigger radius off from cfg.holdDistance (Click And
+   Hold Distance), which isNearCircleCenterForGrow() previously reused.
+   Sharing one value for 2 different purposes already caused one real
+   bug once (see the 2026-09-14 "holdDistance is dual-purposed"
+   gotcha) -- this removes that coupling entirely. Default matches
+   holdDistance's own code default, preserving existing behavior at
+   the moment of the split.
+
+2. Investigated a reported bug ("mouse sensitivity should be 1 when
+   unstretching, decreased only when overstretching") -- found this
+   exact behavior was ALREADY the shipped design as of the 2026-09-17
+   correction to this same mechanism. Re-verified via a fresh Node
+   simulation of the live production formula: the sensitivity
+   multiplier returns to exactly 1.0 on the very first frame the raw
+   cursor's outward-radial component goes non-positive, no lag or
+   partial-reduction artifact. No code change made or needed.
+
+3. Upgraded the Overstretch Sensitivity curve widget from a fixed
+   2-point straight line (backed by a single scalar,
+   dragOverstretchMinSensitivity) to a full multi-point Catmull-Rom +
+   optional Bezier-handle curve editor, per direct request to port
+   Handy Dandies' own curve-graph implementation. Added
+   catmullRomY()/cubicBezier1D()/bezierSegmentY()/evaluateCurvePoints()
+   (near-verbatim ports of Handy Dandies' main.js functions). Removed
+   the old hand-built buildOverstretchSensitivityCurveWidget() function
+   and its scalar DEV_GROUPS control entirely; replaced with a new
+   'curve' DEV_GROUPS control type (dragOverstretchMinSensitivityCurve,
+   def [{x:0,y:1},{x:1,y:1}]), rendered inline by buildRow()'s new
+   'curve' branch using the same structural pattern the pre-existing
+   'gradient' type already established -- so reordering/independence/
+   visibility/Save/Copy/Reset all come for free via the generic
+   control-registration pipeline, unlike the old hand-built widget
+   which needed its own dedicated reorder/persistence fix. Interaction:
+   left-click empty space adds a point, drag repositions (endpoints:
+   Y-only; interior: full X/Y), double-click or right-click an interior
+   point deletes it, Alt+drag/Shift+drag create/drag out/in Bezier
+   handles, dragging a handle onto its own point removes it. The
+   physics formula (update()'s drag-pin block) now evaluates this curve
+   at the current overstretch fraction instead of the old fixed linear
+   interpolation. Disclosed, verified-via-simulation behavior
+   difference: a 2-point curve with matching y-values at both ends
+   still evaluates to that flat value everywhere (the old default is
+   preserved byte-for-byte), but a 2-point curve with DIFFERING
+   y-values no longer renders as a literal straight line -- Catmull-Rom
+   boundary handling produces a slight ease-in/ease-out S-curve instead
+   -- matching Handy Dandies' own design intent, not a defect.
+
+4. Investigated whether the user's own live-saved dev-panel renames/
+   regroupings/renesting (data/processed/dev-panel-settings.json's own
+   textOverrides/order) can safely be baked into the hardcoded
+   DEV_GROUPS source. Found 2 real, still-active ROW-level renames
+   (punchPowerAbsolute -> "Intensity Cap", pieceEndEmergeSpeed ->
+   "Cut Piece Endcap Emerge Speed") and applied both directly to
+   DEV_GROUPS' own label: fields -- safe, since label: is pure display
+   text never used as a lookup key (key: is the stable identifier).
+   Found the GROUP-level renames/regroupings carry real risk instead:
+   a DEV_GROUPS-sourced group's dataset.key IS its hardcoded title:
+   string, so renaming a hardcoded title: directly would orphan every
+   saved order/independence/visibility/lockedGroups entry still
+   referencing the group by its old key, and most of the new group
+   names in the live settings are runtime-created custom groups with
+   no corresponding hardcoded DEV_GROUPS entry to rename at all. Per
+   the user's own conditional instruction ("if no risks, implement")
+   and workspace CLAUDE.md Section 0a, this part was NOT implemented --
+   it also isn't functionally needed, since applyDevTextOverrides()/
+   applyOrder() already apply the live saved renames/regroupings
+   automatically on every load, for every visitor, today.
+
+Verification: syntax-checked after every edit (full-file new Function()
+parse); items 1/3/4 additionally verified via targeted Node simulations
+(the curve math against hand-derived expected values and the OLD
+scalar-linear formula for equivalence at t=0/0.5/1; the default flat
+curve confirmed to evaluate to exactly 1 everywhere). Not
+live-browser-verified (this environment's recurring dev-server
+page-boot stall).
+
