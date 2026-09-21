@@ -5018,11 +5018,18 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     saved `true` in the live settings file, same "check the actual
     saved value" precedent this file has already established
     repeatedly for a shipped-but-seemingly-inert feature.
-- **Cursor Animation's `tickle`/`drag` frame sets (48 frames x 8
-  directions each, ~765 images) are now DEFERRED, no longer loaded
-  eagerly alongside the core base/sciss/snap/charge set (~774 images)
-  -- 2026-09-21, real follow-up to the same-day flick1/2/3 removal.**
-  Direct report: "My cursor animation frame is still taking time to
+- **SUPERSEDED the same day by the concurrency-limited queue entry
+  further below -- left here, corrected rather than deleted, since the
+  investigation/mechanism/verification below are still accurate
+  history of what this pass actually did, and the "core before
+  tickle/drag" PRIORITIZATION it established is still preserved by the
+  newer design, just expressed differently (queue order instead of a
+  hard all-core-must-settle gate).** Cursor Animation's `tickle`/`drag`
+  frame sets (48 frames x 8 directions each, ~765 images) were made
+  DEFERRED, no longer loaded eagerly alongside the core
+  base/sciss/snap/charge set (~774 images) -- 2026-09-21, real
+  follow-up to the same-day flick1/2/3 removal. Direct report: "My
+  cursor animation frame is still taking time to
   load" -- confirmed the flick1/2/3 removal was already 100% complete
   (zero remaining references anywhere), and found the REAL remaining
   cost had never actually been measured: tickle/drag were ALSO loaded
@@ -5144,3 +5151,96 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     "CLICK-FLICK" display override on a completely different group).
     `git diff --stat` confirmed a clean, pure-deletion diff (80 lines
     removed, 0 added) -- nothing else in the file was touched.
+- **Cursor Animation's ENTIRE image preload (all ~1,539 frames, core
+  AND tickle/drag alike) now goes through a SINGLE, shared,
+  concurrency-limited loading queue (`mouseFlickLoadQueue`, capped at
+  `MOUSE_FLICK_LOAD_CONCURRENCY = 6`) -- 2026-09-21, 2nd round on the
+  same load-time complaint, superseding the earlier "defer tickle/drag
+  until core settles" design (see that entry's own now-corrected
+  header, above).** Direct report: "The cursor frame still akes tme
+  load. I recall it not needing to do so before, even after i had set
+  all the cursor animation frames. This issue started today or
+  yesterday. Investigate and fix."
+  - **Ruled out simpler explanations first, per §0b, before touching
+    any code.** A script confirmed all 1,539 currently-referenced frame
+    files exist on disk (0 missing); only one commit touched
+    `data/FLICK/2TONED` assets in the prior 2 days (a folder reorg that
+    only added new, UNREFERENCED "_MF"/"_TU" staging folders and
+    removed old unused ones -- confirmed the currently-live reference
+    set was unaffected, via the same missing-file check); total
+    referenced payload measured at 15.05MB across those 1,539 files,
+    nothing obviously grown.
+  - **Found the real cause via an ACTUAL live browser test** (not
+    attempted for this issue before, despite this project's own
+    extensive history of "not live-browser-verified" caveats on nearly
+    every prior Cursor Animation fix) -- loading the page fires all
+    ~774 core-variant requests in one synchronous burst, and the
+    browser console showed real `net::ERR_CONNECTION_RESET` failures
+    during exactly that burst. This is a well-known failure mode for
+    ANY simple/low-concurrency static server under a request burst that
+    size -- this project's own local dev server config
+    (`.claude/launch.json`) runs Python's `http.server`, which is
+    single-threaded by default with a small connection backlog -- but
+    the underlying lesson (don't fire hundreds of simultaneous image
+    requests in one synchronous loop) holds regardless of exactly which
+    server ends up serving them. The PRIOR pass's fix (defer tickle/
+    drag until core settles) correctly cut the peak burst from ~1,539
+    to ~774, but 774 simultaneous requests turned out to still be
+    enough to trigger this.
+  - **Mechanism**: `mouseFlickEnqueueLoad(img, url)` pushes a closure
+    onto `mouseFlickLoadQueue` rather than setting `.src` immediately;
+    `mouseFlickPumpLoadQueue()` starts jobs off the front of the queue
+    until `mouseFlickLoadInFlight` reaches the concurrency cap, and is
+    called both once (to fill the initial N slots) after the whole
+    queue is built AND again from every job's own `load`/`error`
+    listener (treating both as "settled," same convention the prior
+    pass already established) -- so a freed slot is immediately
+    backfilled from the queue. `new Image()` objects are still created
+    immediately for EVERY frame during the `MOUSE_FLICK_DIRECTIONS.forEach()`
+    table-build pass (so `mouseFlickFramesByDirection`'s own shape --
+    what every consumer reads -- is completely unchanged) but are
+    collected into 2 separate job lists (`mouseFlickCoreLoadJobs`/
+    `mouseFlickDeferredLoadJobs`) DURING that pass, then enqueued in 2
+    explicit passes AFTER the whole table is built (core first, then
+    deferred) -- this is what makes "every core job across all 8
+    directions before any tickle/drag job" possible; enqueuing inline
+    during the single per-direction forEach would have interleaved
+    direction 1's own tickle/drag ahead of direction 2's core.
+  - **Safety argument unchanged from the prior pass**: a still-queued
+    (not-yet-started) frame has `.complete === true` (vacuously) but
+    `.naturalWidth === 0`, and every real consumer already guards on
+    `naturalWidth > 0`, not `.complete` alone -- so a queued-but-not-
+    started frame is already treated exactly like a still-downloading
+    one, same pre-existing robustness pattern relied upon, not
+    introduced, by either pass.
+  - **Verified via a Node simulation extracting the ACTUAL shipped
+    queue code** (not a hand-reconstructed approximation) against the
+    real `MOUSE_FLICK_DIRECTIONS` table: exactly 6 images start
+    immediately after the initial pump (matching the concurrency cap),
+    none of those first 6 are tickle/drag (confirming core priority is
+    preserved); a full simulated drain -- settling one image at a time
+    via alternating `'load'`/`'error'` events (~1/7 simulated as
+    failures, to exercise the error path) -- confirmed the concurrency
+    cap is NEVER exceeded at any single point during the entire drain
+    (max observed in-flight: exactly 6, never more), every one of the
+    1,539 images eventually receives a real `.src` (a failure never
+    gets a queued image stuck behind it), and the queue fully drains
+    with exactly 1,539 settle events, matching the total image count
+    precisely.
+  - **Not fully live-browser-verified end-to-end** (this environment's
+    own recurring dev-server flakiness interfered with a clean full-
+    page-load timing A/B comparison) -- but the SPECIFIC failure mode
+    this fix targets (`net::ERR_CONNECTION_RESET` during a large
+    synchronous request burst) WAS directly, concretely observed in
+    this same environment during THIS pass's own investigation, before
+    the fix -- a stronger evidentiary basis than the purely-simulated
+    verification most fixes in this project's history have had to rely
+    on. If a future report says load is STILL slow after this, the
+    concurrency cap itself (`MOUSE_FLICK_LOAD_CONCURRENCY`, currently
+    6) is the first knob to reconsider -- raising it trades fewer
+    connection-reset-risk-reducing benefits for faster theoretical
+    throughput on a server that CAN handle more concurrency; lowering
+    it does the reverse. No measured "correct" value exists for this
+    project's own real deployment target -- 6 was chosen to match a
+    typical browser's own per-origin HTTP/1.1 connection limit, a
+    reasonable but not empirically-tuned-for-this-project default.

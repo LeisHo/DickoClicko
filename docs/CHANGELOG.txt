@@ -15590,3 +15590,61 @@ key, and an unrelated "CLICK-FLICK" display override on a completely
 different group). `git diff --stat` confirmed a clean, pure-deletion
 diff (80 lines removed, 0 added) -- no other content in the file was
 touched.
+
+--------------------------------------------------------------------------------
+2026-09-21 (15th pass)
+
+Direct report, 2nd round on this exact complaint: "The cursor frame
+still akes tme load. I recall it not needing to do so before, even
+after i had set all the cursor animation frames. This issue started
+today or yesterday. Investigate and fix." Ruled out simpler
+explanations first: a script confirmed all 1,539 currently-referenced
+Cursor Animation frame files exist on disk (0 missing) and only one
+commit touched data/FLICK/2TONED assets in the last 2 days (the
+2026-09-20 folder reorg, which only added new unused "_MF"/"_TU"
+staging folders and removed old unused ones -- confirmed via the same
+missing-file check that the currently-live reference set was
+unaffected); total referenced payload measured at 15.05MB across those
+1,539 files, nothing obviously blown up.
+
+Found the real cause via an actual live browser test (not attempted
+before for this issue): loading the page fires all ~774 core-variant
+image requests in one synchronous burst, and the browser console
+showed real net::ERR_CONNECTION_RESET failures during exactly that
+burst -- a well-known failure mode for any simple/low-concurrency
+static server (this project's own local dev server, Python's
+http.server, is single-threaded by default with a small connection
+backlog) under a request burst that size. The prior pass's fix
+(deferring tickle/drag until core finished) correctly cut the peak
+burst from ~1,539 to ~774, but 774 simultaneous requests turned out to
+still be enough to trigger this.
+
+Fixed by replacing the "core-then-deferred" 2-wave design with a
+proper concurrency-limited loading queue: every image (core AND
+tickle/drag) now goes through one shared queue capped at 6 simultaneous
+in-flight requests (matching a typical browser's own per-origin
+HTTP/1.1 connection limit), with every core job enqueued before any
+tickle/drag job (preserving the same prioritization the prior pass
+established, now expressed as queue order instead of a hard "wait for
+every core image" gate) -- so tickle/drag can start filling freed-up
+concurrency slots as soon as they open, rather than waiting for a slow
+or failed core image to hold up the whole queue.
+
+Verification: syntax-checked. Verified via a Node simulation extracting
+the ACTUAL shipped queue code (mouseFlickEnqueueLoad(),
+mouseFlickPumpLoadQueue(), and the full table-build pass) against the
+real MOUSE_FLICK_DIRECTIONS table: exactly 6 images start immediately
+(matching the concurrency cap), none of the first 6 are tickle/drag
+(confirming core priority), and a full simulated drain -- settling one
+image at a time via alternating 'load'/'error' events (~1/7 simulated
+as failures, to exercise the error path) -- confirmed the concurrency
+cap is NEVER exceeded at any point (max observed in-flight: exactly 6),
+every one of the 1,539 images eventually receives a real `.src`
+(nothing gets stuck behind a failure), and the queue fully drains with
+exactly 1,539 settle events, matching the total image count precisely.
+Not fully live-browser-verified end-to-end (this environment's
+recurring dev-server flakiness interfered with a full page-load
+timing comparison), but the specific failure mode this fix targets
+(net::ERR_CONNECTION_RESET during a large synchronous request burst)
+was directly observed in this same environment before the fix, in the
+same live-testing session that diagnosed it.
