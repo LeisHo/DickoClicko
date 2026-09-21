@@ -23,9 +23,19 @@ panel's own settings.
 SCOPE
 
 In scope: the circle + rope animation, its physics (punch, hold-to-grow,
-cut-and-fall, floor collision/piling), the dev panel that tunes it, and a
-small looping FLICK animation graphic (position/scale/speed tunable) drawn
-independently on top of the rope scene.
+cut-and-fall, floor collision/piling), the dev panel that tunes it, and
+Cursor Animation (a mouse-follow hand-pose overlay, "mf"/"mouseFlick"-
+prefixed in code) drawn independently on top of the rope scene.
+
+(This SCOPE section, and much of this doc below, predates most of this
+project's later work and has not been kept current -- flagged here, not
+fixed in full, per this project's own established precedent for exactly
+this kind of drift; a dedicated cleanup pass is still owed. The one
+exception: the static-PNG "FLICK animation 1/2/3" proof-of-concept this
+section and DATA SOURCES below used to describe was removed entirely on
+2026-09-21, per explicit request -- that specific claim is corrected here
+since it would otherwise misrepresent a feature this doc's own reader
+might go looking for.)
 
 Out of scope / dormant: a possible future Three.js-based physics/collision
 upgrade was mentioned by the user as a maybe-later direction, not part of
@@ -72,9 +82,13 @@ DECISIONS
 --------------------------------------------------------------------------------
 DATA SOURCES
 
-`data/FLICK/ANI/` -- 17 PNG frames (`FRAMES-01.png`...`FRAMES-17.png`) of a
-looping hand-gesture animation, drawn as the FLICK animation overlay. No
-other external data or APIs.
+`data/FLICK/ANI/` was the original 17-frame set for the now-removed
+static "FLICK animation" proof-of-concept (see SCOPE above) -- left
+on disk, unreferenced, per this project's "nothing gets deleted by
+default" convention, not currently used by any code. Cursor Animation's
+own frame sets live under `data/FLICK/2TONED/` (see CLAUDE.md for the
+per-direction folder/prefix conventions). No other external data or
+APIs.
 
 --------------------------------------------------------------------------------
 KNOWN LIMITATIONS

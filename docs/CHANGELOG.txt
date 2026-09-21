@@ -15200,3 +15200,62 @@ control-flow change, not a numerical computation warranting a
 simulation). Syntax-checked. Not live-browser-verified (this
 environment's recurring dev-server page-boot stall).
 
+--------------------------------------------------------------------------------
+2026-09-21 (8th pass)
+
+2 requests, handled together since they turned out to be directly
+related.
+
+1. Removed the old "FLICK animation 1/2/3" static-PNG proof-of-concept
+   entirely, per explicit request -- a completely separate system from
+   Cursor Animation (the mf/mouseFlick-prefixed true-cursor-following
+   overlay this project actively uses), confirmed by the user as never
+   having moved and no longer needed. Removed: 4 DEV_GROUPS entries
+   (FLICK ANIMATION, FLICK ANIMATION 2, FLICK ANIMATION 3, and FLICK
+   HOLD -- the last one exclusive plumbing for 1/3's own hold-preview
+   rate, confirmed via grep, not named in the request but orphaned
+   without it); the entire standalone definitions block
+   (THREETONED_SETS/TWOTONED_SETS, flick/flick2/flick3's own frame-
+   index/hit-test functions, the shared isPixelVisible() alpha
+   hit-test); the onPointerDown/onPointerUp arm/release branches; the
+   update() hold-cycling/playing-advance blocks; the render() draw
+   block. 2 shared-dependency traps found and fixed via a post-removal
+   grep sweep across the whole file (neither would have been caught by
+   a syntax check alone, since both were runtime dependencies from
+   OUTSIDE the removed block): FLICK_BASE_FPS (a playback-rate
+   constant Cursor Animation's own charge/tickle/drag cycling also
+   uses) was re-homed rather than lost; isFrameBlocking() (a
+   still-loading-image guard Cursor Animation's own SNAP-freeze code
+   also calls) was kept, only its 3 flick-specific call sites removed.
+   Source PNGs left on disk, unreferenced, per this project's "nothing
+   deleted by default" convention. docs/PROJECT_SUMMARY.md's own
+   (already stale) SCOPE/DATA SOURCES sections corrected to stop
+   describing this feature as current.
+
+2. Investigated: "the cursor animation frames takes a couple seconds
+   to load on startup... this didnt use to happen." Found that the
+   just-removed flick1/2/3 system was eagerly loading a large,
+   independent batch of images at page load UNCONDITIONALLY (regardless
+   of DEV_MODE -- only the controls/draw calls were dev-gated, never
+   the underlying image requests), competing directly with Cursor
+   Animation's own already-substantial preload (608+ images for its
+   main sequence alone). This project's own prior documentation had
+   already quantified flick1/2's own competing load at "10+MB per
+   animation" and "~40+ images" -- meaning every real, non-dev visitor
+   was paying this cost the whole time, for a feature only a dev-mode
+   visitor could ever see. Removing flick1/2/3 eliminates this
+   competing load outright. Honestly caveated: not live-measured
+   before/after (this environment's recurring dev-server page-boot
+   stall) -- well-evidenced by the code's own prior documentation of
+   the competing load's real scale, but the user's next real-world
+   test is what confirms whether this is the full explanation. If
+   still slow, Cursor Animation's own large preload itself (not
+   touched this pass, per the explicit "don't touch" instruction) is
+   the next place to look.
+
+Verification: syntax-checked; brace count balanced (1563/1563); a
+full-file grep for every flick*-prefixed token confirmed zero remaining
+references outside Cursor Animation's own mf/mouseFlick/FLICK_BASE_FPS
+namespace. Not live-browser-verified (this environment's recurring
+dev-server page-boot stall).
+

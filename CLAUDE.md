@@ -4554,3 +4554,111 @@ collapsible group fits best (per §12g); create a new group only if none fit.
   would add little here, per §0b's own proportionality guidance).
   Syntax-checked. Not live-browser-verified (this environment's
   recurring dev-server page-boot stall).
+- **The old "FLICK animation 1/2/3" static-PNG proof-of-concept is
+  REMOVED ENTIRELY, 2026-09-21, per explicit request** ("Remove the
+  Flick Animation Setting Groups... completely from the project. That
+  was a proof of concept and i dont need it anymore. Do not touch the
+  cursor animations..."). This is a COMPLETELY SEPARATE system from
+  Cursor Animation (the "mf"/"mouseFlick"-prefixed, true-cursor-
+  following overlay this project actively uses) -- 3 independent,
+  fixed-position, click-to-trigger hand-pose graphics (`flick`/`flick2`/
+  `flick3`, their own `THREETONED_SETS`/`TWOTONED_SETS` asset tables,
+  their own hold-to-preview mechanic) that the user confirmed "never
+  moved" and had no ongoing purpose. Removed: the 4 DEV_GROUPS entries
+  (FLICK ANIMATION, FLICK ANIMATION 2, FLICK ANIMATION 3, and FLICK
+  HOLD -- this 4th group wasn't named in the request but was 100%
+  exclusive plumbing for animations 1/3's own hold-preview cycling
+  rate, confirmed via grep before removing; leaving it would have been
+  2 orphaned sliders controlling nothing); the entire standalone
+  definitions block (`THREETONED_SETS`/`TWOTONED_SETS` and their own
+  A/B/C frame tables, `flickFrames()`/`flick2FrameIndex()`/
+  `flick3FrameIndex()` and friends, `isPointInFlick()`/`isPointInFlick2()`/
+  `isPointInFlick3()`, the shared `isPixelVisible()` alpha hit-test --
+  confirmed via grep this had no OTHER caller); the `onPointerDown`/
+  `onPointerUp` arm/release branches; the `update()` hold-preview-
+  cycling and playing-state-advance blocks; the `render()` draw block.
+  **2 real shared-dependency traps found and fixed during removal, both
+  the kind a syntax check alone would NOT catch (JS doesn't error at
+  parse time for an undefined global used inside a function body, only
+  at runtime the first time that code path executes):**
+  1. `FLICK_BASE_FPS` (a plain playback-rate constant, `12`) was
+     declared INSIDE the block being removed, but is ALSO used by
+     Cursor Animation's own charge/tickle/drag cycle-position
+     advancement (`mfHoldCyclePos`/`mfTickleCyclePos`/`mfDragCyclePos`)
+     -- a genuinely shared constant with a misleadingly flick1/2/3-
+     specific-sounding name. Caught via a deliberate POST-REMOVAL
+     comprehensive grep sweep for every `flick*`-prefixed identifier
+     across the WHOLE file (not just the block being removed) BEFORE
+     declaring the task done -- re-homed with a fresh comment noting
+     Cursor Animation is now its sole owner, same value/meaning
+     unchanged.
+  2. `isFrameBlocking(img)` (a tiny "is this image still mid-load"
+     guard) was defined WITHIN `update()`'s own flick1/2/3-specific
+     comment block, but Cursor Animation's own SNAP-freeze frame-
+     loading code (its own comment explicitly says "guard the other 3
+     FLICK animations already use") ALSO calls it. Kept the function,
+     removed only its 3 flick1/2/3-specific CALL SITES and the
+     giant flick-specific rationale comment explaining it, replaced
+     with a short comment reflecting its new sole purpose.
+  **The same post-removal grep sweep is the methodology to reuse for
+  any FUTURE whole-feature removal in this file** -- it's what caught
+  both traps above; a syntax check and a visual glance at the removed
+  region's own boundaries would have missed both, since both were
+  genuine RUNTIME dependencies from OUTSIDE the removed block, not
+  anything visible by reading the block being deleted in isolation.
+  Final state confirmed via: syntax check (passed), open/close brace
+  count (1563/1563, balanced), and a full-file case-insensitive grep
+  for every `flick*` token with zero remaining hits outside Cursor
+  Animation's own `mf`/`mouseFlick`/`FLICK_BASE_FPS` namespace (a
+  handful of plain-English "flicked"/"flicking"/"flicks" words in
+  unrelated comments, confirmed harmless). The removed feature's own
+  source PNGs (`data/FLICK/ANI/`, `data/FLICK/3TONED/`,
+  `data/FLICK/TWOTONED`-equivalent assets) were left on disk,
+  unreferenced -- per this project's own "nothing gets deleted by
+  default" convention, not an oversight. `docs/PROJECT_SUMMARY.md`'s
+  own (already very stale, pre-dating most of this project's history)
+  SCOPE/DATA SOURCES sections were corrected to stop describing this
+  feature as current -- the REST of that doc's staleness was flagged
+  in place, not fixed, as clearly out of scope for this task.
+- **Investigated: "Cursor Animation frames take a couple seconds to
+  load on startup, this didn't used to happen."** Found a strong,
+  well-evidenced likely cause while removing the item directly above:
+  Cursor Animation's own preload is ALREADY substantial by design (its
+  own comment: "8 directions x 4 variants x (20+8+24+24 frames) = 608
+  images total" for the main click/charge/sciss/snap set alone, plus
+  separate tickle/drag/snap-freeze sets on top) -- but the JUST-REMOVED
+  flick1/2/3 system was ALSO eagerly loading a large, independent batch
+  of images at the exact same page-load moment, UNCONDITIONALLY
+  (`new Image(); img.src = ...` at top-level script scope runs on
+  EVERY page load regardless of DEV_MODE -- only the dev-panel
+  CONTROLS and the render() draw calls were DEV_MODE-gated, never the
+  underlying asset requests), even though flick1/2/3 was only ever
+  VISIBLE to `?dev=1` visitors. This project's own prior documentation
+  (preserved in this exact block's history before removal) had already
+  quantified this once: "17-21 frames at ~500KB+ each is 10+MB per
+  animation" for flick1+flick2 alone, and "~40+ FLICK images across
+  both animations" competing for load bandwidth right as the page
+  boots -- flick3's own THREETONED/TWOTONED-scale asset tables added a
+  comparable amount again. **This means EVERY real, non-dev visitor on
+  the live deployment was ALSO paying this loading cost the entire
+  time**, for a feature they could never even see -- not just a local
+  dev-testing artifact. Removing flick1/2/3 entirely eliminates this
+  competing load outright, which should measurably reduce time-to-
+  interactive for Cursor Animation's own frames, especially on a
+  connection where concurrent requests are bandwidth- or connection-
+  limited. **Honestly caveated: this was NOT live-measured before/after
+  in a real browser** (this environment's recurring dev-server page-
+  boot stall, documented extensively elsewhere in this file, blocks
+  that kind of test) -- the fix is well-evidenced by the code's own
+  prior documentation of the competing load's real scale, and directly
+  targets a genuine, confirmed (not merely suspected) source of
+  unconditional extra page-load work, but the user's own next real-world
+  test is what will confirm whether it's the FULL explanation or only a
+  partial one. If load still feels slow after this, the next place to
+  look is Cursor Animation's OWN ~608+-image eager preload itself
+  (e.g., whether its own rarer variants -- tickle/drag/snap-freeze --
+  could be deferred to load AFTER the core click/charge/sciss set so
+  the cursor becomes interactive sooner) -- NOT attempted this pass,
+  since changing Cursor Animation's own loading strategy risks
+  introducing new lag/wrong-frame bugs to the exact system the user
+  explicitly said not to touch, and wasn't yet confirmed necessary.
