@@ -283,7 +283,7 @@
       "collisionSplatterParticleSize": 1.1,
       "collisionSplatterSizeVariance": 0.6,
       "collisionSplatterGravity": 2.4,
-      "collisionSplatterFlightDuration": 0.2,
+      "collisionSplatterFlightDuration": 0.1,
       "collisionSplatterFlightDurationVariance": 0.15,
       "collisionSplatterFadeEnabled": false,
       "collisionSplatterFadeTime": 6,
@@ -345,7 +345,7 @@
     "groups": [
       {
         "key": "COLLISION SPLATTER",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
