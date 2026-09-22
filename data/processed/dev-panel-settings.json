@@ -270,7 +270,7 @@
       "collisionSplatterFadeTime": 6,
       "collisionSplatterOpacity": 0.85,
       "loadingPageEnabled": true,
-      "loadingPageMinDuration": 3,
+      "loadingPageMinDuration": 6,
       "loadingPageXOffset": 0,
       "loadingPageYOffset": 0,
       "loadingPageScale": 24,
@@ -286,7 +286,20 @@
   },
   "independence": {
     "mobile": {
-      "settings": {}
+      "settings": {
+        "loadingPageBoundarySmoothing": false,
+        "loadingPageTriggerButton": false,
+        "loadingPageRotationSmoothing": false,
+        "loadingPageShowFrameCounter": false,
+        "loadingPageEnabled": false,
+        "loadingPageMinDuration": false,
+        "loadingPageMinFramesRequired": false,
+        "loadingPageMaxFillProgress": false,
+        "loadingPageScale": false,
+        "loadingPageXOffset": false,
+        "loadingPageYOffset": false,
+        "loadingPageRotation": false
+      }
     },
     "landscape": {
       "settings": {}
@@ -431,7 +444,7 @@
     "groups": [
       {
         "key": "LOADING PAGE",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
