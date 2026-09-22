@@ -10,7 +10,7 @@
       "anchorWeight": 0.7,
       "endcapDesign": "form1-01",
       "endcapHeight": 1,
-      "ropeThickness": 6.4,
+      "ropeThickness": 8.8,
       "segmentLength": 2.95,
       "ropeLength": 25.160512013012728,
       "ropeDefaultLength": 25,
@@ -343,14 +343,14 @@
       "cutSplatterFlightDurationVariance": false,
       "cutSplatterFadeTime": false,
       "cutSplatterOpacity": false,
-      "loadingPageEnabled": false,
-      "loadingPageMinDuration": false,
-      "loadingPageMinFramesRequired": false,
-      "loadingPageMaxFillProgress": false,
-      "loadingPageScale": false,
-      "loadingPageXOffset": false,
-      "loadingPageYOffset": false,
-      "loadingPageRotation": false,
+      "loadingPageEnabled": true,
+      "loadingPageMinDuration": true,
+      "loadingPageMinFramesRequired": true,
+      "loadingPageMaxFillProgress": true,
+      "loadingPageScale": true,
+      "loadingPageXOffset": true,
+      "loadingPageYOffset": true,
+      "loadingPageRotation": true,
       "mouseFlickEnabledLiveMode": false,
       "cursorAnimationDragToleranceMult": false,
       "mouseFlickTickleSpeed": false,
@@ -443,75 +443,6 @@
     "ungrouped": [],
     "groups": [
       {
-        "key": "LOADING PAGE",
-        "collapsed": false,
-        "items": [
-          {
-            "type": "row",
-            "key": "loadingPageBoundarySmoothing"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageTriggerButton"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageRotationSmoothing"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageShowFrameCounter"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageEnabled"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageMinDuration"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageMinFramesRequired"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageMaxFillProgress"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageScale"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageXOffset"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageYOffset"
-          },
-          {
-            "type": "row",
-            "key": "loadingPageRotation"
-          }
-        ],
-        "settings": [
-          "loadingPageBoundarySmoothing",
-          "loadingPageTriggerButton",
-          "loadingPageRotationSmoothing",
-          "loadingPageShowFrameCounter",
-          "loadingPageEnabled",
-          "loadingPageMinDuration",
-          "loadingPageMinFramesRequired",
-          "loadingPageMaxFillProgress",
-          "loadingPageScale",
-          "loadingPageXOffset",
-          "loadingPageYOffset",
-          "loadingPageRotation"
-        ],
-        "subgroups": []
-      },
-      {
         "key": "COLLISION SPLATTER",
         "collapsed": true,
         "items": [
@@ -592,6 +523,75 @@
           "collisionSplatterFadeEnabled",
           "collisionSplatterFadeTime",
           "collisionSplatterOpacity"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "LOADING PAGE",
+        "collapsed": true,
+        "items": [
+          {
+            "type": "row",
+            "key": "loadingPageBoundarySmoothing"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageTriggerButton"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageRotationSmoothing"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageShowFrameCounter"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageEnabled"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageMinDuration"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageMinFramesRequired"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageMaxFillProgress"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageScale"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageXOffset"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageYOffset"
+          },
+          {
+            "type": "row",
+            "key": "loadingPageRotation"
+          }
+        ],
+        "settings": [
+          "loadingPageBoundarySmoothing",
+          "loadingPageTriggerButton",
+          "loadingPageRotationSmoothing",
+          "loadingPageShowFrameCounter",
+          "loadingPageEnabled",
+          "loadingPageMinDuration",
+          "loadingPageMinFramesRequired",
+          "loadingPageMaxFillProgress",
+          "loadingPageScale",
+          "loadingPageXOffset",
+          "loadingPageYOffset",
+          "loadingPageRotation"
         ],
         "subgroups": []
       },
@@ -1816,7 +1816,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
@@ -3475,9 +3475,9 @@
     },
     "mobile": {
       "left": 1.1845238208770752,
-      "top": 87.5952377319336,
+      "top": 526.7559814453125,
       "width": 409.7976379394531,
-      "height": 642.0357055664062,
+      "height": 202.86904907226562,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
