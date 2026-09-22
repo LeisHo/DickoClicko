@@ -219,7 +219,7 @@
       "overstretchBounceDamping": 31.9,
       "overstretchBounceMinAmplitude": 0.1,
       "dragPickupDuration": 130,
-      "overstretchThinningSmoothness": 16,
+      "overstretchThinningSmoothness": 10,
       "overstretchBounceMaxAmplitude": 1,
       "cursorAnimationDragToleranceMult": 1,
       "endcapDeformableEnabled": true,
@@ -229,7 +229,7 @@
       "endcapStretchMaxMult": 2.05,
       "maxPunchSegments": 10.5,
       "punchPowerAbsolute": 40,
-      "dragMouseSensitivity": 0.35,
+      "dragMouseSensitivity": 0.75,
       "dragOverstretchMinSensitivity": 0,
       "dragMinThinDepth": 0.15,
       "ceilingBounciness": 1,
@@ -2703,7 +2703,7 @@
                   "type": "group",
                   "group": {
                     "key": "New Group (8)",
-                    "collapsed": true,
+                    "collapsed": false,
                     "items": [
                       {
                         "type": "row",
@@ -2775,7 +2775,7 @@
               "subgroups": [
                 {
                   "key": "New Group (8)",
-                  "collapsed": true,
+                  "collapsed": false,
                   "items": [
                     {
                       "type": "row",
@@ -3023,7 +3023,7 @@
                 "type": "group",
                 "group": {
                   "key": "New Group (8)",
-                  "collapsed": true,
+                  "collapsed": false,
                   "items": [
                     {
                       "type": "row",
@@ -3095,7 +3095,7 @@
             "subgroups": [
               {
                 "key": "New Group (8)",
-                "collapsed": true,
+                "collapsed": false,
                 "items": [
                   {
                     "type": "row",
