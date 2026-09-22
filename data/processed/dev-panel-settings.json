@@ -270,7 +270,7 @@
       "collisionSplatterFadeTime": 6,
       "collisionSplatterOpacity": 0.85,
       "loadingPageEnabled": true,
-      "loadingPageMinDuration": 6,
+      "loadingPageMinDuration": 5,
       "loadingPageXOffset": 0,
       "loadingPageYOffset": 0,
       "loadingPageScale": 26,
@@ -279,9 +279,11 @@
       "loadingPageRotation": 0,
       "loadingPageRotationSmoothing": 0.3,
       "loadingPageShowFrameCounter": true,
-      "loadingPageBoundarySmoothing": 0.15
+      "loadingPageBoundarySmoothing": 0
     },
-    "mobile": {},
+    "mobile": {
+      "loadingPageRotationSmoothing": 0.04
+    },
     "landscape": {}
   },
   "independence": {
@@ -289,7 +291,7 @@
       "settings": {
         "loadingPageBoundarySmoothing": false,
         "loadingPageTriggerButton": false,
-        "loadingPageRotationSmoothing": false,
+        "loadingPageRotationSmoothing": true,
         "loadingPageShowFrameCounter": false,
         "loadingPageEnabled": false,
         "loadingPageMinDuration": false,
@@ -3474,10 +3476,10 @@
       }
     },
     "mobile": {
-      "left": 1.1845238208770752,
-      "top": 526.7559814453125,
+      "left": 1.1904761791229248,
+      "top": 238.86904907226562,
       "width": 409.7976379394531,
-      "height": 202.86904907226562,
+      "height": 38.52381134033203,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
