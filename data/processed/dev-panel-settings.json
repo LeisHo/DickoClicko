@@ -9,7 +9,7 @@
       "circleBoundaryOffset": 1,
       "anchorWeight": 0.7,
       "endcapDesign": "form1-01",
-      "endcapHeight": 1,
+      "endcapHeight": 1.2,
       "ropeThickness": 9.5,
       "segmentLength": 2.95,
       "ropeLength": 25.160512013012728,
@@ -100,7 +100,7 @@
       "clickIntensity": 5,
       "holdDistance": 7,
       "dragRopeEnabled": true,
-      "dragRopeHoldDistance": 6,
+      "dragRopeHoldDistance": 20,
       "dragOverridesGrowOnRopeHold": true,
       "dragMaxDistance": 150,
       "bendStiffness": 0.15,
@@ -528,7 +528,7 @@
       },
       {
         "key": "LOADING PAGE",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
@@ -1954,7 +1954,7 @@
             "type": "group",
             "group": {
               "key": "New Group (2)",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2287,7 +2287,7 @@
           },
           {
             "key": "New Group (2)",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
