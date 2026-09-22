@@ -10,7 +10,7 @@
       "anchorWeight": 0.7,
       "endcapDesign": "form1-01",
       "endcapHeight": 1,
-      "ropeThickness": 8.8,
+      "ropeThickness": 9.5,
       "segmentLength": 2.95,
       "ropeLength": 25.160512013012728,
       "ropeDefaultLength": 25,
@@ -528,7 +528,7 @@
       },
       {
         "key": "LOADING PAGE",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
