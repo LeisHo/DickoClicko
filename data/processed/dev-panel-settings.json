@@ -337,7 +337,93 @@
       "loadingPageScale": false,
       "loadingPageXOffset": false,
       "loadingPageYOffset": false,
-      "loadingPageRotation": false
+      "loadingPageRotation": false,
+      "mouseFlickEnabledLiveMode": false,
+      "cursorAnimationDragToleranceMult": false,
+      "mouseFlickTickleSpeed": false,
+      "snapRepeatDuration": false,
+      "mouseFlickTargetMode": false,
+      "mouseFlickTargetPoint": false,
+      "mouseFlickRandomInterval": false,
+      "mouseFlickEnabled": false,
+      "mouseFlickScale": false,
+      "mouseFlickAnimSpeed": false,
+      "mouseFlickPositionSmoothing": false,
+      "mouseFlickRotationSmoothing": false,
+      "mouseFlickAngleOffset": false,
+      "mouseFlickHoldMaxSpeed": false,
+      "mouseFlickHoldMaxDuration": false,
+      "circleSize": false,
+      "circleX": false,
+      "circleY": false,
+      "circleColor": false,
+      "overstretchThinningReleaseDuration": false,
+      "clickIntensity": false,
+      "clickDistance": false,
+      "doubleClickDistance": false,
+      "growDistance": false,
+      "doubleClickThreshold": false,
+      "cutSpeed": false,
+      "endcapAtCutEnd": false,
+      "cutSweepColor": false,
+      "cutSweepThickness": false,
+      "ropeAttractionIntensity": false,
+      "ropeAttractionSpeed": false,
+      "ropeAttractionMaxReach": false,
+      "holdDistance": false,
+      "clickHoldMaxDuration": false,
+      "intensityCeiling": false,
+      "punchPowerAbsolute": false,
+      "ropeGrowthOnRopeHold": false,
+      "ropeGrowthHoldDistance": false,
+      "ropeGrowthRate": false,
+      "dragRopeEnabled": false,
+      "dragOverridesGrowOnRopeHold": false,
+      "dragRopeHoldDistance": false,
+      "dragMaxDistance": false,
+      "dragPickupDuration": false,
+      "mouseFlickDragSpeed": false,
+      "dragMouseSensitivity": false,
+      "dragOverstretchMinSensitivityCurve": false,
+      "overstretchEnabled": false,
+      "overstretchThinningEnabled": false,
+      "overstretchThinningSmoothness": false,
+      "overstretchTolerance": false,
+      "overstretchMaxThinDepth": false,
+      "overstretchThinningSharpness": false,
+      "overstretchBounceMaxAmplitude": false,
+      "overstretchBounceMinAmplitude": false,
+      "overstretchBounceStiffness": false,
+      "overstretchBounceDamping": false,
+      "bgRopeEndcapPauseHeight": true,
+      "mainEndcapGrowSpeed": true,
+      "bgRopeStartEndcapEnabled": true,
+      "bgRopeEndcapHeight": true,
+      "bgRopeEndcapGradientEnabled": true,
+      "bgRopeEndcapGradientColors": true,
+      "startupRiseGravity": true,
+      "detachWaitDuration": true,
+      "introRiseClearOffsetEnabled": true,
+      "bgRopeClipEnabled": true,
+      "debugShowRiseClearOffset": true,
+      "introExtendSpeed": true,
+      "introExtendSpeedTweenEnabled": true,
+      "introExtendStartSpeed": true,
+      "introEnabled": true,
+      "introWaitDuration": true,
+      "introRiseSpeed": true,
+      "introRiseClearOffset": true,
+      "introPauseDuration": true,
+      "detachPauseDuration": true,
+      "detachTipStartScale": true,
+      "detachTipGrowDuration": true,
+      "detachThicknessMultiplier": true,
+      "floorFriction": false,
+      "pieceFriction": false,
+      "floorEnabled": false,
+      "floorColor": false,
+      "floorThickness": false,
+      "floorHeight": false
     }
   },
   "order": {
@@ -345,7 +431,7 @@
     "groups": [
       {
         "key": "LOADING PAGE",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
@@ -504,7 +590,7 @@
             "type": "group",
             "group": {
               "key": "MECHANICS",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -521,7 +607,7 @@
             "type": "group",
             "group": {
               "key": "PANEL UI",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -553,7 +639,7 @@
             "type": "group",
             "group": {
               "key": "TEXT",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -563,7 +649,7 @@
                   "type": "group",
                   "group": {
                     "key": "Dev Panel Title",
-                    "collapsed": false,
+                    "collapsed": true,
                     "items": [
                       {
                         "type": "row",
@@ -610,7 +696,7 @@
                   "type": "group",
                   "group": {
                     "key": "Group Title",
-                    "collapsed": false,
+                    "collapsed": true,
                     "items": [
                       {
                         "type": "row",
@@ -657,7 +743,7 @@
                   "type": "group",
                   "group": {
                     "key": "Setting Title",
-                    "collapsed": false,
+                    "collapsed": true,
                     "items": [
                       {
                         "type": "row",
@@ -709,7 +795,7 @@
                   "type": "group",
                   "group": {
                     "key": "TABS",
-                    "collapsed": false,
+                    "collapsed": true,
                     "items": [
                       {
                         "type": "row",
@@ -751,7 +837,7 @@
                   "type": "group",
                   "group": {
                     "key": "BUTTONS",
-                    "collapsed": false,
+                    "collapsed": true,
                     "items": [
                       {
                         "type": "row",
@@ -801,7 +887,7 @@
               "subgroups": [
                 {
                   "key": "Dev Panel Title",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -845,7 +931,7 @@
                 },
                 {
                   "key": "Group Title",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -889,7 +975,7 @@
                 },
                 {
                   "key": "Setting Title",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -938,7 +1024,7 @@
                 },
                 {
                   "key": "TABS",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -977,7 +1063,7 @@
                 },
                 {
                   "key": "BUTTONS",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -1027,7 +1113,7 @@
         "subgroups": [
           {
             "key": "MECHANICS",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -1041,7 +1127,7 @@
           },
           {
             "key": "PANEL UI",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -1070,7 +1156,7 @@
           },
           {
             "key": "TEXT",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -1080,7 +1166,7 @@
                 "type": "group",
                 "group": {
                   "key": "Dev Panel Title",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -1127,7 +1213,7 @@
                 "type": "group",
                 "group": {
                   "key": "Group Title",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -1174,7 +1260,7 @@
                 "type": "group",
                 "group": {
                   "key": "Setting Title",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -1226,7 +1312,7 @@
                 "type": "group",
                 "group": {
                   "key": "TABS",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -1268,7 +1354,7 @@
                 "type": "group",
                 "group": {
                   "key": "BUTTONS",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -1318,7 +1404,7 @@
             "subgroups": [
               {
                 "key": "Dev Panel Title",
-                "collapsed": false,
+                "collapsed": true,
                 "items": [
                   {
                     "type": "row",
@@ -1362,7 +1448,7 @@
               },
               {
                 "key": "Group Title",
-                "collapsed": false,
+                "collapsed": true,
                 "items": [
                   {
                     "type": "row",
@@ -1406,7 +1492,7 @@
               },
               {
                 "key": "Setting Title",
-                "collapsed": false,
+                "collapsed": true,
                 "items": [
                   {
                     "type": "row",
@@ -1455,7 +1541,7 @@
               },
               {
                 "key": "TABS",
-                "collapsed": false,
+                "collapsed": true,
                 "items": [
                   {
                     "type": "row",
@@ -1494,7 +1580,7 @@
               },
               {
                 "key": "BUTTONS",
-                "collapsed": false,
+                "collapsed": true,
                 "items": [
                   {
                     "type": "row",
@@ -2413,7 +2499,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "group",
@@ -2579,7 +2665,7 @@
             "type": "group",
             "group": {
               "key": "New Group (7)",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -2899,7 +2985,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -3375,10 +3461,10 @@
       }
     },
     "mobile": {
-      "left": 1.1875,
-      "top": 87.5999984741211,
-      "width": 409.8000183105469,
-      "height": 642.0375366210938,
+      "left": 1.1845238208770752,
+      "top": 87.5952377319336,
+      "width": 409.7976379394531,
+      "height": 642.0357055664062,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
