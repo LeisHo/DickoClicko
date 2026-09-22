@@ -246,7 +246,7 @@
         },
         {
           "x": 1,
-          "y": 1
+          "y": 0
         }
       ],
       "cutSplatterFlightDurationVariance": 0.2,
@@ -379,22 +379,22 @@
       "ropeGrowthRate": false,
       "dragRopeEnabled": false,
       "dragOverridesGrowOnRopeHold": false,
-      "dragRopeHoldDistance": false,
-      "dragMaxDistance": false,
-      "dragPickupDuration": false,
-      "mouseFlickDragSpeed": false,
-      "dragMouseSensitivity": false,
-      "dragOverstretchMinSensitivityCurve": false,
-      "overstretchEnabled": false,
-      "overstretchThinningEnabled": false,
-      "overstretchThinningSmoothness": false,
-      "overstretchTolerance": false,
-      "overstretchMaxThinDepth": false,
-      "overstretchThinningSharpness": false,
-      "overstretchBounceMaxAmplitude": false,
-      "overstretchBounceMinAmplitude": false,
-      "overstretchBounceStiffness": false,
-      "overstretchBounceDamping": false,
+      "dragRopeHoldDistance": true,
+      "dragMaxDistance": true,
+      "dragPickupDuration": true,
+      "mouseFlickDragSpeed": true,
+      "dragMouseSensitivity": true,
+      "dragOverstretchMinSensitivityCurve": true,
+      "overstretchEnabled": true,
+      "overstretchThinningEnabled": true,
+      "overstretchThinningSmoothness": true,
+      "overstretchTolerance": true,
+      "overstretchMaxThinDepth": true,
+      "overstretchThinningSharpness": true,
+      "overstretchBounceMaxAmplitude": true,
+      "overstretchBounceMinAmplitude": true,
+      "overstretchBounceStiffness": true,
+      "overstretchBounceDamping": true,
       "bgRopeEndcapPauseHeight": true,
       "mainEndcapGrowSpeed": true,
       "bgRopeStartEndcapEnabled": true,
@@ -2499,7 +2499,7 @@
       },
       {
         "key": "New Group (6)",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "group",
@@ -2665,7 +2665,7 @@
             "type": "group",
             "group": {
               "key": "New Group (7)",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2985,7 +2985,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
@@ -3412,10 +3412,10 @@
   },
   "panelGeometry": {
     "desktop": {
-      "left": 42.91250228881836,
+      "left": 36.30952453613281,
       "top": 19.875,
-      "width": 374.6875,
-      "height": 642.0250244140625,
+      "width": 374.6845397949219,
+      "height": 642.0238037109375,
       "style": {
         "titleFontSize": 17,
         "tabFontSize": 12,
