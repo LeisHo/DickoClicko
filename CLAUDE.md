@@ -5876,3 +5876,63 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     rather than re-auditing the tangent-selection math again, which
     this pass already stress-tested thoroughly. Not live-browser-
     verified (this environment's recurring dev-server page-boot stall).
+- **Cursor Tangent -- ACTUAL ROOT CAUSE FOUND AND FIXED, 2026-09-21,
+  correctly diagnosed by the user directly.** Per direct report: "the
+  cursor tracking extends the tangent line in both directions. As in
+  if the cursor was behind the endcap, the endcap will always rotate
+  to look away from the cursor. I only want it in the front
+  direction." This retroactively explains BOTH earlier "doesn't
+  re-align" reports on this exact mechanism -- neither was actually
+  about smoothing, staleness, or re-trigger state (those fixes were
+  real, worthwhile improvements, but not the true root cause).
+  - **The actual bug**: candidate selection (deciding which of the 2
+    geometrically-valid tangent points to use) picked whichever was
+    angularly CLOSER to `loadingPageArcEndAngle`'s own CURRENT value --
+    a pure continuity heuristic with zero awareness of which side the
+    endcap would end up VISUALLY facing. Since the arc is always drawn
+    sweeping in the SAME rotational direction (increasing angle, per
+    `startAngleForSweep -> endAngle`), a given tangent point's own
+    FACING direction is fixed by that point alone -- of the 2 tangent
+    candidates, exactly ONE has that fixed facing direction actually
+    pointing toward the cursor; the other is a geometrically valid
+    tangent point too, but faces directly AWAY. The old heuristic could
+    -- and, per the report, reliably did -- lock onto the away-facing
+    candidate and STAY there, since continuity keeps reinforcing
+    whichever side it's already near regardless of whether that side
+    actually faces the cursor.
+  - **Fixed by replacing the whole "nearest to reference" heuristic
+    with a fully deterministic formula**: verified algebraically and
+    via a Node simulation (a full 360deg sweep of cursor positions,
+    checking the sign of `tangentDirection · vectorToCursor` for both
+    candidates at every sampled angle) that the front-facing candidate
+    is ALWAYS `theta - alpha`, never `theta + alpha`, given this file's
+    own increasing-angle sweep convention -- zero exceptions across the
+    full sweep. This requires NO history/continuity reference at all,
+    which also structurally eliminates the "stuck facing the wrong
+    way" failure mode as a side effect (there is no more "which side
+    was I on before" state left to get stuck on). Applied identically
+    in BOTH places that used to do candidate selection: `update()`'s
+    own Cursor Tangent block, and `resetLoadingPageArcTracking()`
+    (the Trigger-button re-arm path).
+  - **Verified via Node simulation extracting the ACTUAL shipped
+    code**: re-ran the SAME 15-simulated-second stress path (a spiral
+    crossing the boundary 6 times) used to investigate the earlier
+    reports, this time checking a genuine "does the endcap actually
+    face the cursor" test (the sign of `tangentDirection ·
+    vectorToCursor` at the LIVE, smoothed display angle, not just
+    whether the target itself was geometrically valid) -- only 2 of
+    900 sampled ticks showed the endcap transiently facing away
+    (0.22%, and only for 2 CONSECUTIVE ticks at most, ~0.03s), which
+    is ordinary smoothing-catch-up lag right at a target's
+    discontinuous jump at a boundary crossing, not a wrong-candidate
+    lock-in -- a dramatic improvement from the OLD logic's behavior on
+    the identical path. A separate full 360deg direction sweep (36
+    sampled directions, each run to full convergence) confirmed ZERO
+    mismatches -- the endcap faces the cursor in every single tested
+    direction, with no exceptions. Not live-browser-verified (this
+    environment's recurring dev-server page-boot stall) -- this is,
+    however, the first pass on this mechanism backed by a DIRECT
+    "does it actually face the cursor" verification rather than only
+    "does the math converge to a mathematically valid tangent," which
+    is precisely the gap that let the 2 earlier passes both miss the
+    real bug despite thorough stress-testing.

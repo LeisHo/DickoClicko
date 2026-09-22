@@ -15985,3 +15985,32 @@ is currently at or above the code default, so the separately-documented
 "partial fix only, ~44% reduction" caveat for the growth-direction
 low-pass filter at SHORT segment lengths is less likely to be a
 contributing factor this time.
+
+--------------------------------------------------------------------------------
+2026-09-21 (Cursor Tangent -- actual root cause found and fixed)
+
+The user correctly diagnosed the real bug behind both earlier "doesn't
+re-align" reports on this feature: "the cursor tracking extends the
+tangent line in both directions. As in if the cursor was behind the
+endcap, the endcap will always rotate to look away from the cursor. I
+only want it in the front direction." Candidate selection used to pick
+whichever of the 2 tangent points was angularly closer to the current
+display angle -- a pure continuity heuristic blind to which side the
+endcap would actually end up facing, which could lock onto the
+away-facing candidate and stay there.
+
+Fixed by replacing that heuristic with a fully deterministic formula:
+verified via a full 360-degree sweep that the front-facing candidate is
+always theta-alpha, never theta+alpha, given this file's own sweep
+direction convention. No history needed at all, which also eliminates
+the "stuck facing the wrong way" failure mode structurally. Applied in
+both the update() tangent block and the Trigger button's reset path.
+
+Verification: syntax-checked. Re-ran the same 15-second stress path
+used for the earlier (inconclusive) investigation, this time checking
+whether the endcap ACTUALLY faces the cursor (not just whether the
+target is a valid tangent) -- only 2 of 900 ticks showed transient
+facing-away, both ordinary smoothing lag at a boundary crossing, not a
+lock-in. A separate 360-degree sweep confirmed zero mismatches. Not
+live-browser-verified (this environment's recurring dev-server
+page-boot stall).
