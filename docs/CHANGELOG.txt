@@ -15964,3 +15964,24 @@ resetLoadingPageArcTracking(): snaps correctly to a true tangent when
 outside, to baseAngle when inside, and is provably unaffected by how
 wildly wrong the prior state was. Not live-browser-verified (this
 environment's recurring dev-server page-boot stall).
+
+--------------------------------------------------------------------------------
+2026-09-21 (Rope growth jitter -- data drift, 3rd occurrence)
+
+Direct question: "on rope growth, the growth is still jittery why is
+that." Checked the live dev-panel-settings.json against this project's
+own previously-measured-safe physics values (same precedent as the
+2026-09-15 and 2026-09-17 occurrences of this identical pattern) and
+found bendStiffness/damping/constraintIterations had again drifted well
+outside their safe ranges: bendStiffness 0.03 (safe: 0.15, and even
+below the 0.05 value already confirmed to cause visible instability),
+damping 0.98 (safe: 0.85, close to the original under-damped default
+that left punches visibly ringing for ~3.65s), constraintIterations 4
+(safe: 10, too few solver passes to fully resolve the distance/bend
+constraints each frame). Restored all 3 to their measured-safe values
+as a pure data change -- no code touched, confirmed no independent
+Mobile/Landscape overrides existed for these keys. segmentLength (2.95)
+is currently at or above the code default, so the separately-documented
+"partial fix only, ~44% reduction" caveat for the growth-direction
+low-pass filter at SHORT segment lengths is less likely to be a
+contributing factor this time.
