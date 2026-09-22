@@ -273,7 +273,7 @@
       "loadingPageMinDuration": 6,
       "loadingPageXOffset": 0,
       "loadingPageYOffset": 0,
-      "loadingPageScale": 24,
+      "loadingPageScale": 26,
       "loadingPageMinFramesRequired": 309,
       "loadingPageMaxFillProgress": 0.95,
       "loadingPageRotation": 0,
@@ -528,7 +528,7 @@
       },
       {
         "key": "LOADING PAGE",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
