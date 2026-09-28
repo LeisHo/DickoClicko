@@ -3547,5 +3547,5 @@
     "group:New Group (10)": "CUT PIECE",
     "row:punchPowerAbsolute": "Intensity Cap"
   },
-  "lockedGroups": []
+  "lockedGroups": ["DEV PANEL", "DEBUG"]
 }

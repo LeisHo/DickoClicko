@@ -32,7 +32,10 @@
   #devPanel.dp-collapsed .dp-resize { display:none; }
   .dp-header {
     padding:8px 10px;
-    background:#25253a; border-radius:8px 8px 0 0;
+    /* Own background, decoupled from the fixed #25253a it used to be --
+       Accent Color #2 (2026-09-28, ported from TEMPLATE_DEV_PANEL.html's
+       own identical decoupling). */
+    background:var(--dp-accent-2, #26253a); border-radius:8px 8px 0 0;
     cursor:grab; touch-action:none;
     display:flex; justify-content:space-between; align-items:center; gap:8px;
     flex:0 0 auto;
@@ -58,7 +61,11 @@
   .dp-icon-btn {
     flex:0 0 auto; width:18px; min-height:var(--dp-button-height, 18px); line-height:16px; text-align:center;
     display:flex; align-items:center; justify-content:center;
-    background:var(--dp-accent, #3a3a4a); color:#e8e8f0; border:none; border-radius:3px;
+    /* Decoupled from Accent Color to its own Button Color (2026-09-28,
+       ported from TEMPLATE_DEV_PANEL.html). Tab-active is deliberately
+       NOT included in this decoupling -- see .dp-tab-btn.active below,
+       which stays on --dp-accent, matching the template's own choice. */
+    background:var(--dp-button-color, #3a3a4a); color:#e8e8f0; border:none; border-radius:3px;
     cursor:pointer; font-size:12px; padding:0;
     letter-spacing:var(--dp-button-letter-spacing, 0);
   }
@@ -68,11 +75,20 @@
      a selection) state both read the same way: a visibly pressed/
      inverted look, distinct from the plain .dp-icon-btn default above. */
   .dp-icon-btn.active, .dp-icon-btn.armed { outline:2px solid #e8e8f0; outline-offset:-2px; }
-  .dp-header-buttons { display:flex; gap:4px; flex:0 0 auto; }
+  /* flex-wrap (not a viewport media query, per TEMPLATE_DEV_PANEL.html's
+     own mobile column-reverse split -- 2026-09-28 header reorg added 3
+     more buttons here, Copy/Reset/Redo, enough to risk overflowing a
+     narrow panel) -- this project's own panel width is user-resizable
+     independently of the viewport (the dp-resize handles), so a real
+     viewport breakpoint wouldn't actually track "is this row too
+     narrow" the way it does for the template's own fixed-width panel.
+     A natural wrap achieves the same practical goal (nothing gets cut
+     off/overlapped) without assuming any particular panel width. */
+  .dp-header-buttons { display:flex; gap:4px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; }
   .dp-body { padding:4px 8px 10px; overflow-y:auto; flex:1 1 auto; min-height:0; }
   .dp-actions { display:flex; gap:6px; padding:2px 2px 8px; }
   .dp-actions button {
-    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:var(--dp-accent, #3a3a4a); color:var(--dp-button-text-color, #e8e8f0); border:none; border-radius:4px;
+    flex:1 1 auto; min-height:var(--dp-button-height, auto); background:var(--dp-button-color, #3a3a4a); color:var(--dp-button-text-color, #e8e8f0); border:none; border-radius:4px;
     padding:var(--dp-button-text-border, 5px) 4px; font-size:var(--dp-button-font-size, 11px); cursor:pointer;
     letter-spacing:var(--dp-button-letter-spacing, 0); line-height:var(--dp-button-line-height, 1.2);
   }
@@ -163,8 +179,12 @@
   .dp-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 2px; }
   .dp-row label { flex:0 0 auto; width:112px; font-size:var(--dp-label-size, 11px); line-height:var(--dp-settings-line-height, 1.2); color:var(--dp-text-color, #c9c9d8); letter-spacing:var(--dp-settings-letter-spacing, 0); }
   .dp-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:var(--dp-slider-color, #7d8cff); }
+  /* Checkbox accent-color decoupled from Slider Color to its own Accent
+     Color #3 (2026-09-28, ported from TEMPLATE_DEV_PANEL.html) --
+     covers every checkbox in the panel, not just independence/
+     visibility (see the plain input[type=checkbox] rule below too). */
   .dp-indep-checkbox, .dp-indep-group-checkbox,
-  .dp-visible-checkbox, .dp-visible-group-checkbox { flex:0 0 auto; accent-color:var(--dp-slider-color, #7d8cff); cursor:pointer; margin-left:auto; }
+  .dp-visible-checkbox, .dp-visible-group-checkbox { flex:0 0 auto; accent-color:var(--dp-accent-3, #7ec8e3); cursor:pointer; margin-left:auto; }
   .dp-group-header .dp-indep-group-checkbox, .dp-group-header .dp-visible-group-checkbox { margin-left:auto; margin-right:4px; }
   /* Group Lock icon (2026-09-20, ported from TEMPLATE_DEV_PANEL.html,
      itself ported from a "Clicko" project's own feature) -- a normal
@@ -182,7 +202,7 @@
      a different panel... resized and drag and moved same as the dev
      panel." A plain flex child of .dp-group-header, same placement
      convention as the lock icon above. */
-  .dp-group-undock-btn { flex:0 0 auto; cursor:pointer; user-select:none; opacity:.6; font-size:11px; }
+  .dp-group-undock-btn { flex:0 0 auto; cursor:pointer; user-select:none; opacity:.6; font-size:11px; color:var(--dp-accent-3, #7ec8e3); }
   .dp-group-undock-btn:hover { opacity:1; }
   .dp-group.dp-group-undocked { opacity:.97; }
   /* The floating panel a group's content lives in while undocked --
@@ -218,7 +238,15 @@
   .dp-row input[type=color] {
     width:40px; height:22px; border:1px solid #3a3a4a; border-radius:4px; background:none; padding:0;
   }
-  .dp-row input[type=checkbox] { width:16px; height:16px; }
+  .dp-row input[type=checkbox] { width:16px; height:16px; accent-color:var(--dp-accent-3, #7ec8e3); }
+  /* Toggleable Settings Group (2026-09-28, ported from TEMPLATE_DEV_PANEL.html)
+     -- a group's own master "Enabled" checkbox relocated into its title
+     bar; hides the WHOLE content block as one unit (never per-child) so
+     a disabled group shows nothing when expanded, including any nested
+     subgroup, at any depth -- same reasoning as the template's own
+     direct correction. See makeDevGroupToggleable() for the JS side. */
+  .dp-group.dp-group-disabled > .dp-group-body { display:none !important; }
+  .dp-group-toggle-checkbox { margin-right:4px; cursor:pointer; flex-shrink:0; accent-color:var(--dp-accent-3, #7ec8e3); }
   /* Copy/Paste a color between any two color pickers in the panel --
      shared copiedColorValue, see its own comment. */
   .dp-color-copy, .dp-color-paste {
@@ -346,13 +374,28 @@
            setupDevPanelUndo() for the full mechanism, including the
            native-color-picker stuck-gesture fix. -->
       <button type="button" class="dp-icon-btn" id="dpUndoBtn" title="Undo (Ctrl+Z) -- undoes any dev panel change back to the last Save">↶</button>
+      <!-- Redo (2026-09-28, ported from TEMPLATE_DEV_PANEL.html) -- a
+           separate LIFO stack populated only by Undo/Redo themselves
+           (never by a real edit directly, which instead clears it -- a
+           genuine new edit invalidates any pending redo history). See
+           setupDevPanelUndo()'s own comment for the full mechanism. -->
+      <button type="button" class="dp-icon-btn" id="dpRedoBtn" title="Redo (Ctrl+Shift+Z / Ctrl+Y) -- redoes the last undone change">↷</button>
       <button type="button" class="dp-icon-btn" id="dpCollapseAllBtn" title="Collapse All Groups">⊟</button>
+      <!-- Copy/Save/Reset moved into the header (2026-09-28, ported from
+           TEMPLATE_DEV_PANEL.html, which reorganized these the same way
+           the same day) -- the standalone .dp-actions row below the tabs
+           that used to hold them is REMOVED entirely; every panel-level
+           action now lives in one place. Icon-based like every other
+           header button here. Copy/Save flash their icon+title briefly
+           (see copySettings()/saveSettings()); Reset has no flash of its
+           own, matching the template's own choice here -- its effect is
+           already visible in the panel updating. -->
+      <button type="button" class="dp-icon-btn" id="dpHeaderCopyBtn" title="Copy Settings">📋</button>
+      <button type="button" class="dp-icon-btn" id="dpHeaderResetBtn" title="Reset">↺</button>
       <!-- Header Sync (Save) button (2026-09-20, ported from
            TEMPLATE_DEV_PANEL.html) -- reachable without scrolling back
-           down to the #dpSaveBtn row below the tabs. Calls the SAME
-           saveSettings() the bottom button already does; both buttons'
-           own flash feedback is driven from the same closure inside
-           that function now (see its own comment). -->
+           down to the panel body. Its own flash feedback is driven from
+           a closure inside saveSettings() (see its own comment). -->
       <button type="button" class="dp-icon-btn" id="dpHeaderSaveBtn" title="Save Settings">💾</button>
       <button type="button" class="dp-icon-btn" id="dpCollapseBtn" title="Collapse">–</button>
     </div>
@@ -362,11 +405,6 @@
       <button type="button" class="dp-tab-btn" data-tab="desktop">Desktop</button>
       <button type="button" class="dp-tab-btn" data-tab="mobile">Mobile</button>
       <button type="button" class="dp-tab-btn" data-tab="landscape">Landscape</button>
-    </div>
-    <div class="dp-actions">
-      <button type="button" id="dpCopyBtn">Copy Settings</button>
-      <button type="button" id="dpSaveBtn">Save Settings</button>
-      <button type="button" id="dpResetBtn">Reset</button>
     </div>
     <!-- Search (2026-09-17) -- Ctrl+F-style finder for group/setting
          names. Live typing only updates the match count; Enter jumps
@@ -1613,6 +1651,17 @@ const PANEL_STYLE_CONTROLS = [
   { key:'bgColor',       type:'color',  label:'Dev Panel Background Color',      def:'#000000' },
   { key:'textColor',     type:'color',  label:'Dev Panel Non-Title Text Color',  def:'#ffffff' },
   { key:'accentColor',   type:'color',  label:'Dev Panel Accent Color',          def:'#005f8f' },
+  // 3 new colors (2026-09-28, ported from TEMPLATE_DEV_PANEL.html),
+  // decoupled from Accent Color: accentColor2 is the header bar's own
+  // background (previously just inherited from a fixed #25253a);
+  // buttonColor decouples every plain button's background (icon buttons,
+  // Saved Dev Settings' Save/Use/Delete/Set Default row) from Accent
+  // Color, which stays reserved for the active-tab highlight; accentColor3
+  // decouples checkbox accent-color (every checkbox in the panel) and the
+  // group-undock arrow's own color from Accent Color too.
+  { key:'accentColor2',  type:'color',  label:'Dev Panel Accent Color #2 (Header Background)', def:'#26253a' },
+  { key:'buttonColor',   type:'color',  label:'Dev Panel Button Color',          def:'#3a3a4a' },
+  { key:'accentColor3',  type:'color',  label:'Dev Panel Accent Color #3 (Checkboxes)', def:'#7ec8e3' },
   { key:'sliderColor',   type:'color',  label:'Dev Panel Slider Color',          def:'#ffffff' },
   { key:'fontFamily',    type:'dropdown', label:'Dev Panel Font (All Text)', def:'Helvetica, Arial, sans-serif', options:[
     { value:'-apple-system, Segoe UI, Roboto, sans-serif', label:'System Default' },
@@ -1710,6 +1759,10 @@ PANEL_STYLE_CONTROLS.forEach(c => panelStyle[c.key] = c.def);
 const PANEL_STYLE_SHARED_KEYS = [
   'groupLabelBgColor', 'groupTextColor', 'buttonTextColor', 'settingNumberColor', 'tabTextColor',
   'titleBold', 'groupBold', 'tabBold', 'buttonBold', 'settingsBold', 'titleCapitalize',
+  // 2026-09-28 additions -- same "desktop-only cosmetic" bucket as every
+  // other color in this list, matching the template's own
+  // DEV_PANEL_STYLE_SHARED_KEYS exactly.
+  'accentColor2', 'buttonColor', 'accentColor3',
 ];
 
 function hexToRgba(hex, alpha){
@@ -1739,6 +1792,9 @@ function applyPanelStyle(){
   panel.style.setProperty('--dp-title-color', panelStyle.titleColor);
   panel.style.setProperty('--dp-text-color', panelStyle.textColor);
   panel.style.setProperty('--dp-accent', panelStyle.accentColor);
+  panel.style.setProperty('--dp-accent-2', panelStyle.accentColor2);
+  panel.style.setProperty('--dp-button-color', panelStyle.buttonColor);
+  panel.style.setProperty('--dp-accent-3', panelStyle.accentColor3);
   panel.style.setProperty('--dp-slider-color', panelStyle.sliderColor);
   panel.style.setProperty('--dp-font-family', panelStyle.fontFamily);
   panel.style.setProperty('--dp-button-height', panelStyle.buttonHeight + 'px');
@@ -1921,14 +1977,14 @@ function applyDefaultDevPanelSubgroupOrder(){
     return sub;
   }
   makeSubgroup('MECHANICS', ['scrollStrength'], gb);
-  makeSubgroup('PANEL UI', ['bgColor', 'accentColor', 'sliderColor', 'opacity'], gb);
+  makeSubgroup('PANEL UI', ['bgColor', 'accentColor', 'accentColor2', 'accentColor3', 'sliderColor', 'opacity'], gb);
   const text = makeSubgroup('TEXT', ['fontFamily'], gb);
   const textBody = text.querySelector(':scope > .dp-group-body');
   makeSubgroup('Dev Panel Title', ['titleBold', 'titleCapitalize', 'titleFontSize', 'titleLetterSpacing', 'titleLineHeight', 'buttonTextBorder', 'titleColor'], textBody);
   makeSubgroup('Group Title', ['groupBold', 'capsGroupNames', 'groupFontSize', 'groupLetterSpacing', 'groupLineHeight', 'groupTextColor', 'groupLabelBgColor'], textBody);
   makeSubgroup('Setting Title', ['capsSettingsText', 'settingsBold', 'labelFontSize', 'valueFontSize', 'settingsLineHeight', 'settingsLetterSpacing', 'textColor', 'settingNumberColor'], textBody);
   makeSubgroup('TABS', ['tabBold', 'capsTabText', 'tabFontSize', 'tabLetterSpacing', 'tabLineHeight', 'tabTextColor'], textBody);
-  makeSubgroup('BUTTONS', ['buttonBold', 'capsButtonText', 'buttonFontSize', 'buttonLetterSpacing', 'buttonLineHeight', 'buttonTextColor', 'buttonHeight'], textBody);
+  makeSubgroup('BUTTONS', ['buttonBold', 'capsButtonText', 'buttonFontSize', 'buttonLetterSpacing', 'buttonLineHeight', 'buttonTextColor', 'buttonColor', 'buttonHeight'], textBody);
 }
 
 function applyPanelStyleValues(saved){
@@ -2200,7 +2256,20 @@ function buildGroupVisibilityCheckbox(groupEl){
 // dragged/reordered/nested as a whole; only its own settings can't be
 // reordered within it or dragged out. Enforced in makeReorderable()
 // (gated on itemClass==='dp-row') and findDevDeleteProtectionReason().
-let lockedDevGroups = new Set();
+// Dev Panel and Debug start locked by default (2026-09-28, ported from
+// TEMPLATE_DEV_PANEL.html: "by default set the lock mode on all default
+// setting groups to locked, such as the Dev panel settings group") --
+// these 2 are this project's own mandatory built-in groups
+// (findDevDeleteProtectionReason() already refuses to delete either
+// outright), so locking them protects against an accidental drag/delete
+// too. Only takes effect for a boot with no saved lockedGroups reachable
+// at all -- resetSettings()'s own restore below unconditionally replaces
+// this with whatever the live save says, same as every other restored
+// field, so the LIVE save file also needs these 2 added directly (a
+// pure data change, same "stale save predates a new default" precedent
+// as this project's other data-drift fixes) for the change to actually
+// be observable, not just a boot-time initial value.
+let lockedDevGroups = new Set(['DEV PANEL', 'DEBUG']);
 // Builds and appends one group's own lock-toggle icon as a plain child
 // of .dp-group-header (a normal flex child, not a positioned sibling of
 // the title like the template -- see that CSS rule's own comment).
@@ -2456,7 +2525,7 @@ function createGroupElement(name, opts){
   const gb = document.createElement('div');
   gb.className = 'dp-group-body';
   h.addEventListener('click', e => {
-    if (e.target.closest('.dp-drag-handle') || e.target.closest('.dp-indep-group-checkbox') || e.target.closest('.dp-visible-group-checkbox') || e.target.closest('.dp-group-lock-icon') || e.target.closest('.dp-group-undock-btn')) return;
+    if (e.target.closest('.dp-drag-handle') || e.target.closest('.dp-indep-group-checkbox') || e.target.closest('.dp-visible-group-checkbox') || e.target.closest('.dp-group-lock-icon') || e.target.closest('.dp-group-undock-btn') || e.target.closest('.dp-group-toggle-checkbox')) return;
     // Text Edit Mode takes over the WHOLE header click (not just the
     // title text) while it's on -- matches the template's own
     // toggleSection() behavior -- so collapse/expand is unreachable
@@ -2485,6 +2554,57 @@ function buildDevPanel(){
   // (see the single call site near this file's init sequence, after
   // buildPanelStyleGroup()/the ungrouped area both exist) -- not here,
   // per group -- so it isn't repeated here.
+}
+
+// Toggleable Settings Group (2026-09-28, ported from TEMPLATE_DEV_PANEL.html)
+// -- relocates an already-registered checkbox control's own real, live
+// <input> (never a clone -- it stays the single source of truth for
+// Copy/Save/Reset/Undo, exactly like every other control) from its own
+// row into the group's title bar, so the group's own "Enabled" checkbox
+// both TURNS OFF the feature (cfg[ctrl.key], unchanged) AND hides the
+// group's entire content area (as one unit -- never per-child, so an
+// otherwise-empty nested subgroup never shows through either) when
+// unchecked. Per the template's own direct correction: "it should show
+// nothing when expanded, even subgroups."
+//
+// The control's own row is REMOVED once relocated -- its own per-device
+// "Show in Mobile/Landscape"/"Independent from Desktop" checkboxes go
+// with it. This is the SAME accepted tradeoff the template's own version
+// makes (its own comment: "the control's own default row is now
+// redundant... the checkbox lives in the title instead") -- not
+// something newly introduced here.
+//
+// Giving the relocated checkbox its own `data-key` is load-bearing, not
+// cosmetic: applyValues()'s own generic checkbox-restore lookup (used by
+// EVERY Reset/Undo/boot-restore, not just this feature) falls back to
+// `.dp-group-toggle-checkbox[data-key=...]` once the original `.dp-row`
+// is gone -- without it, this control's checked state (and therefore its
+// whole group's visibility) would silently go stale the first time
+// anything restores a snapshot.
+//
+// Call AFTER buildDevPanel() has built the group and its controls.
+function makeDevGroupToggleable(groupTitleKey, ctrlKey){
+  const section = document.querySelector('#dpGroups > .dp-group[data-key="' + CSS.escape(groupTitleKey) + '"]');
+  const row = section && section.querySelector(':scope > .dp-group-body > .dp-row[data-key="' + CSS.escape(ctrlKey) + '"]');
+  const cb = row && row.querySelector('input[type=checkbox]');
+  const header = section && section.querySelector(':scope > .dp-group-header');
+  if (!section || !row || !cb || !header){
+    console.warn('makeDevGroupToggleable: group or checkbox not found', groupTitleKey, ctrlKey);
+    return;
+  }
+  cb.classList.add('dp-group-toggle-checkbox');
+  cb.dataset.key = ctrlKey;
+  cb.title = 'Enable/disable this whole group';
+  // Don't also collapse/expand the group via the header's own click
+  // handler -- belt-and-suspenders alongside that handler's own explicit
+  // '.dp-group-toggle-checkbox' exclusion (same double-coverage this
+  // project's lock icon/undock button already have).
+  cb.addEventListener('click', e => e.stopPropagation());
+  header.appendChild(cb);
+  row.remove();
+  function applyState(){ section.classList.toggle('dp-group-disabled', !cb.checked); }
+  cb.addEventListener('change', applyState);
+  applyState();
 }
 
 // "+ Add Group" (§12e/template parity, per explicit request: "I also
@@ -2821,17 +2941,41 @@ function pushDevPanelUndoSnapshot(){
 // its own contents, at any nesting depth) or a single setting row alike.
 function pushDevDeleteUndoEntry(node, parent, nextSibling){
   devUndoStack.push({ kind: 'delete', node, parent, nextSibling });
+  devRedoStack = []; // a genuine new edit invalidates any pending redo history
 }
+// Redo (2026-09-28, ported from TEMPLATE_DEV_PANEL.html) -- a separate
+// LIFO stack, populated only by undoDevPanelChange()/redoDevPanelChange()
+// themselves (never by a real edit directly -- see setupDevPanelUndo()'s
+// own pointerdown listener, which clears it instead). For a 'delete'
+// entry, undo and redo are exact mirror images of the same {node,
+// parent, nextSibling} descriptor -- reusing the SAME object for both
+// directions is correct by construction, since re-inserting then
+// re-removing the same node at the same anchor point is a well-defined,
+// reversible pair of DOM operations.
+let devRedoStack = [];
 function undoDevPanelChange(){
   if (!devUndoStack.length) return;
   const entry = devUndoStack.pop();
   if (entry.kind === 'delete'){
+    devRedoStack.push(entry); // redoing = deleting this same node again
     if (entry.nextSibling && entry.nextSibling.parentNode === entry.parent){
       entry.parent.insertBefore(entry.node, entry.nextSibling);
     } else {
       entry.parent.appendChild(entry.node);
     }
   } else {
+    devRedoStack.push({ kind: 'snapshot', data: JSON.parse(JSON.stringify(captureFullDevPanelState())) });
+    applySnapshotToPanel(entry.data, false);
+  }
+}
+function redoDevPanelChange(){
+  if (!devRedoStack.length) return;
+  const entry = devRedoStack.pop();
+  if (entry.kind === 'delete'){
+    devUndoStack.push(entry); // undoing the redo = re-inserting it again
+    entry.node.remove();
+  } else {
+    pushDevPanelUndoSnapshot();
     applySnapshotToPanel(entry.data, false);
   }
 }
@@ -2869,9 +3013,14 @@ function setupDevPanelUndo(){
     // that SAME just-pushed entry, restoring the current state onto
     // itself -- a complete no-op that leaves the user's real prior
     // change buried, untouched, one slot deeper on the stack.
-    if (e.target.closest('#dpUndoBtn')) return;
+    // Redo button needs the exact same self-push guard as Undo, for the
+    // identical reason (it's also inside devPanel).
+    if (e.target.closest('#dpUndoBtn') || e.target.closest('#dpRedoBtn')) return;
     devUndoGestureActive = true;
     pushDevPanelUndoSnapshot();
+    // A genuine new edit invalidates any pending redo history -- standard
+    // undo/redo semantics (2026-09-28).
+    devRedoStack = [];
     // Belt-and-suspenders reset, on top of the real pointerup/
     // pointercancel/focus listeners below.
     devUndoGestureTimer = setTimeout(resetDevUndoGesture, DEV_UNDO_GESTURE_TIMEOUT_MS);
@@ -2885,25 +3034,32 @@ function setupDevPanelUndo(){
   window.addEventListener('focus', resetDevUndoGesture);
   const undoBtn = document.getElementById('dpUndoBtn');
   if (undoBtn) undoBtn.addEventListener('click', undoDevPanelChange);
-  // Ctrl+Z -- standard undo shortcut, a SEPARATE listener from the
-  // existing D/R single-key shortcuts (not merged into that listener,
-  // to keep this feature's own diff isolated). Ignored while focus is
-  // in a genuine text-input context (a rename textarea, the search box)
-  // so it doesn't fight the browser/OS's own native text-field undo.
+  const redoBtn = document.getElementById('dpRedoBtn');
+  if (redoBtn) redoBtn.addEventListener('click', redoDevPanelChange);
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y -- standard undo/redo shortcuts (the
+  // 2 latter added 2026-09-28 alongside Redo itself), a SEPARATE listener
+  // from the existing D/R single-key shortcuts (not merged into that
+  // listener, to keep this feature's own diff isolated). Ignored while
+  // focus is in a genuine text-input context (a rename textarea, the
+  // search box) so it doesn't fight the browser/OS's own native
+  // text-field undo/redo.
   document.addEventListener('keydown', e => {
-    if (!(e.key === 'z' || e.key === 'Z') || !(e.ctrlKey || e.metaKey)) return;
+    if (!(e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y') || !(e.ctrlKey || e.metaKey)) return;
     const tag = document.activeElement ? document.activeElement.tagName : '';
     if (tag === 'TEXTAREA' || (tag === 'INPUT' && document.activeElement.type === 'text')) return;
     e.preventDefault();
-    undoDevPanelChange();
+    const isRedo = (e.key === 'y' || e.key === 'Y') || ((e.key === 'z' || e.key === 'Z') && e.shiftKey);
+    if (isRedo) redoDevPanelChange(); else undoDevPanelChange();
   });
 }
-// Clears the undo stack -- called from saveSettings() itself (per the
-// request's own explicit "until i click save, then it starts new
-// again"), so a real Save draws a hard line under everything before it
-// -- nothing before a genuinely successful Save is ever undoable after it.
+// Clears the undo AND redo stacks -- called from saveSettings() itself
+// (per the request's own explicit "until i click save, then it starts
+// new again"), so a real Save draws a hard line under everything before
+// it -- nothing before a genuinely successful Save is ever undoable OR
+// redoable after it.
 function clearDevPanelUndoStack(){
   devUndoStack = [];
+  devRedoStack = [];
 }
 
 // Any .dp-group-body ANYWHERE in the tree is a valid nest target, at
@@ -3183,6 +3339,53 @@ function catmullRomY(y0, y1, y2, y3, t){
   const t2 = t*t, t3 = t2*t;
   return 0.5 * ((2*y1) + (-y0+y2)*t + (2*y0-5*y1+4*y2-y3)*t2 + (-y0+3*y1-3*y2+y3)*t3);
 }
+// Monotone cubic Hermite (Fritsch-Carlson) -- 2026-09-28, ported from
+// TEMPLATE_DEV_PANEL.html's own curve-editor overhaul, which replaced
+// plain Catmull-Rom as the default per direct report ("in Photoshop...
+// it looks like a smooth interpolation. Ours right now doesnt"):
+// Catmull-Rom's tangent estimate ignores each segment's real X-spacing,
+// causing visible overshoot/kinks once points aren't evenly spaced --
+// which happens almost immediately, once you drag one. Unlike Catmull-
+// Rom, this weighs each side's slope by whether the curve is even
+// locally monotonic, and rescales tangents so the resulting curve never
+// exceeds the data's own min/max between any 2 points -- mathematically
+// guaranteed not to overshoot. catmullRomY() above is left in place,
+// unused by evaluateCurvePoints() now, purely as a documented fallback
+// (see that function's own comment) rather than deleted outright.
+function curveComputeMonotoneTangents(pts){
+  const n = pts.length;
+  const d = new Array(n-1);
+  for (let k = 0; k < n-1; k++){
+    const dx = pts[k+1].x - pts[k].x;
+    d[k] = dx === 0 ? 0 : (pts[k+1].y - pts[k].y) / dx;
+  }
+  const m = new Array(n);
+  m[0] = d[0] || 0;
+  m[n-1] = d[n-2] || 0;
+  for (let k = 1; k < n-1; k++){
+    m[k] = (d[k-1] === 0 || d[k] === 0 || (d[k-1] > 0) !== (d[k] > 0)) ? 0 : (d[k-1] + d[k]) / 2;
+  }
+  for (let k = 0; k < n-1; k++){
+    if (d[k] === 0){ m[k] = 0; m[k+1] = 0; continue; }
+    const a = m[k] / d[k], b = m[k+1] / d[k];
+    if (a < 0) m[k] = 0;
+    if (b < 0) m[k+1] = 0;
+    const s = a*a + b*b;
+    if (s > 9){
+      const tau = 3 / Math.sqrt(s);
+      m[k] = tau * a * d[k];
+      m[k+1] = tau * b * d[k];
+    }
+  }
+  return m;
+}
+function curveHermiteY(p1, p2, m1, m2, x){
+  const dx = p2.x - p1.x;
+  if (dx === 0) return p1.y;
+  const t = (x - p1.x) / dx, t2 = t*t, t3 = t2*t;
+  const h00 = 2*t3 - 3*t2 + 1, h10 = t3 - 2*t2 + t, h01 = -2*t3 + 3*t2, h11 = t3 - t2;
+  return h00*p1.y + h10*dx*m1 + h01*p2.y + h11*dx*m2;
+}
 function cubicBezier1D(p0, p1, p2, p3, t){
   const u = 1-t;
   return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
@@ -3210,18 +3413,23 @@ function evaluateCurvePoints(points, x){
   const sorted = points; // already kept sorted by x by the widget itself
   if (x <= sorted[0].x) return sorted[0].y;
   if (x >= sorted[sorted.length-1].x) return sorted[sorted.length-1].y;
+  // Monotone Hermite tangents (2026-09-28) computed once per call over
+  // every point -- cheap at this project's own point counts (a handful
+  // per curve), same "recompute, don't cache" simplicity the original
+  // Catmull-Rom version already had (it re-read neighbors fresh every
+  // call too).
+  const tangents = curveComputeMonotoneTangents(sorted);
   for (let i = 0; i < sorted.length-1; i++){
     const p1 = sorted[i], p2 = sorted[i+1];
     if (x >= p1.x && x <= p2.x){
+      // An explicit per-point Bezier handle always overrides the spline
+      // method for that one segment, unchanged from the original design.
       if (p1.h1 || p2.h2){
         const C1 = p1.h1 ? { x: p1.x + p1.h1.x, y: p1.y + p1.h1.y } : p1;
         const C2 = p2.h2 ? { x: p2.x + p2.h2.x, y: p2.y + p2.h2.y } : p2;
         return bezierSegmentY(p1, C1, C2, p2, x);
       }
-      const p0 = sorted[i-1] || p1;
-      const p3 = sorted[i+2] || p2;
-      const segT = p2.x === p1.x ? 0 : (x - p1.x) / (p2.x - p1.x);
-      return catmullRomY(p0.y, p1.y, p2.y, p3.y, segT);
+      return curveHermiteY(p1, p2, tangents[i], tangents[i+1], x);
     }
   }
   return sorted[sorted.length-1].y;
@@ -4227,8 +4435,22 @@ function applyValues(values){
       if (input) input.value = v;
     } else if (ctrl.type === 'checkbox'){
       cfg[ctrl.key] = v;
-      const input = document.querySelector('.dp-row[data-key="' + CSS.escape(ctrl.key) + '"] input[type=checkbox]');
-      if (input) input.checked = v;
+      // Falls back to a relocated Toggleable Settings Group checkbox
+      // (2026-09-28, makeDevGroupToggleable()) -- its own .dp-row no
+      // longer exists once relocated into the group's title bar, so the
+      // first selector alone would silently stop finding/restoring it.
+      const input = document.querySelector('.dp-row[data-key="' + CSS.escape(ctrl.key) + '"] input[type=checkbox]')
+        || document.querySelector('.dp-group-toggle-checkbox[data-key="' + CSS.escape(ctrl.key) + '"]');
+      if (input){
+        input.checked = v;
+        // Setting .checked programmatically never fires 'change' --
+        // applyState()'s own listener (which toggles dp-group-disabled)
+        // wouldn't otherwise re-run on a Reset/Undo restore.
+        if (input.classList.contains('dp-group-toggle-checkbox')){
+          const section = input.closest('.dp-group');
+          if (section) section.classList.toggle('dp-group-disabled', !v);
+        }
+      }
     } else if (ctrl.type === 'dropdown'){
       cfg[ctrl.key] = v;
       const select = document.querySelector('.dp-row[data-key="' + CSS.escape(ctrl.key) + '"] select');
@@ -4557,17 +4779,11 @@ function captureFullDevPanelState(){
 }
 async function saveSettings(){
   const snapshot = captureFullDevPanelState();
-  const btn = document.getElementById('dpSaveBtn');
-  // Header Sync button (2026-09-20, ported from TEMPLATE_DEV_PANEL.html) --
-  // flashed alongside the bottom #dpSaveBtn from this SAME closure, not a
-  // separate save path, so both buttons always agree on the outcome.
+  // The old standalone bottom Save button (#dpSaveBtn) is gone (2026-09-28
+  // header reorg -- Copy/Save/Reset all moved into the header); this
+  // header button (#dpHeaderSaveBtn) is now the only Save affordance.
   const headerBtn = document.getElementById('dpHeaderSaveBtn');
   const flash = (text, holdMs) => {
-    if (btn){
-      const orig = btn.textContent;
-      btn.textContent = text;
-      setTimeout(() => btn.textContent = orig, holdMs || 900);
-    }
     if (headerBtn){
       if (headerBtn._syncFlashTimeout) clearTimeout(headerBtn._syncFlashTimeout);
       const success = !/fail/i.test(text);
@@ -4842,12 +5058,21 @@ function initSavedDevPanelStates(){
 function copySettings(){
   const snapshot = captureFullDevPanelState();
   const text = JSON.stringify(snapshot, null, 2);
-  const btn = document.getElementById('dpCopyBtn');
-  const flash = msg => { const orig = btn.textContent; btn.textContent = msg; setTimeout(() => btn.textContent = orig, 900); };
+  // Moved into the header as an icon button (2026-09-28) -- icon+title
+  // flash instead of a textContent swap, same pattern Save's own header
+  // button already uses.
+  const btn = document.getElementById('dpHeaderCopyBtn');
+  const flash = (icon, title) => {
+    if (!btn) return;
+    if (btn._copyFlashTimeout) clearTimeout(btn._copyFlashTimeout);
+    btn.textContent = icon;
+    btn.title = title;
+    btn._copyFlashTimeout = setTimeout(() => { btn.textContent = '📋'; btn.title = 'Copy Settings'; }, 900);
+  };
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => flash('Copied!')).catch(() => flash('Copy failed'));
+    navigator.clipboard.writeText(text).then(() => flash('✅', 'Copied!')).catch(() => flash('❌', 'Copy failed'));
   } else {
-    flash('Copy failed');
+    flash('❌', 'Copy failed');
   }
 }
 
@@ -5037,10 +5262,9 @@ function initDeviceTabs(){
 
 function initDevPanelChrome(){
   initDevPanelSearch();
-  document.getElementById('dpCopyBtn').addEventListener('click', copySettings);
-  document.getElementById('dpSaveBtn').addEventListener('click', saveSettings);
+  document.getElementById('dpHeaderCopyBtn').addEventListener('click', copySettings);
   document.getElementById('dpHeaderSaveBtn').addEventListener('click', saveSettings);
-  document.getElementById('dpResetBtn').addEventListener('click', resetSettings);
+  document.getElementById('dpHeaderResetBtn').addEventListener('click', resetSettings);
   document.getElementById('dpClickLogCopy').addEventListener('click', copyClickLog);
   document.getElementById('dpClickLogClear').addEventListener('click', () => {
     const el = document.getElementById('dpClickLog');
@@ -14753,6 +14977,22 @@ introTimer = 0;
 if (DEV_MODE){
   document.getElementById('devPanel').classList.remove('hidden');
   buildDevPanel();
+  // Toggleable Settings Group (2026-09-28) -- applied to every top-level
+  // group in this project whose own single checkbox is genuinely the
+  // group's master on/off switch (its own first control, gating the
+  // WHOLE group's meaning) -- not the many sub-feature "*Enabled"
+  // checkboxes that live inside a broader group alongside other
+  // always-relevant settings (e.g. Drag Rope/Overstretch/Deformable
+  // Endcap inside CLICK/ROPE), which stay as ordinary rows since turning
+  // them off must never hide the rest of THEIR group too.
+  makeDevGroupToggleable('LOADING PAGE', 'loadingPageEnabled');
+  makeDevGroupToggleable('CUT SPLATTER', 'cutSplatterEnabled');
+  makeDevGroupToggleable('COLLISION SPLATTER', 'collisionSplatterEnabled');
+  makeDevGroupToggleable('END EMERGE', 'endEmergeEnabled');
+  makeDevGroupToggleable('FLOOR', 'floorEnabled');
+  makeDevGroupToggleable('WALLS', 'wallEnabled');
+  makeDevGroupToggleable('STARTUP ANIMATION', 'introEnabled');
+  makeDevGroupToggleable('CURSOR ANIMATION', 'mouseFlickEnabled');
   buildPanelStyleGroup();
   applyDefaultDevPanelSubgroupOrder();
   injectGroupLockIcons();

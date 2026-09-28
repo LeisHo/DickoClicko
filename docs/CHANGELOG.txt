@@ -16014,3 +16014,53 @@ facing-away, both ordinary smoothing lag at a boundary crossing, not a
 lock-in. A separate 360-degree sweep confirmed zero mismatches. Not
 live-browser-verified (this environment's recurring dev-server
 page-boot stall).
+
+2026-09-28 (Dev panel template sync -- largest pass since project start)
+
+Read TEMPLATE_DEV_PANEL.html in full and cross-referenced every
+2026-09-28-dated change against this project's own dev panel, per
+direct request. Implemented:
+
+- Header reorg: Copy/Save/Reset moved into the header (the old
+  standalone bottom button row is removed entirely), a new Redo button
+  added alongside Undo (separate LIFO stack, Ctrl+Shift+Z/Ctrl+Y,
+  cleared on a new edit or a real Save). Header buttons now wrap
+  (flex-wrap) instead of a viewport media query, since this project's
+  panel width is independently user-resizable.
+- 3 new Dev Panel colors: Accent Color #2 (header background), Button
+  Color (decoupled from Accent Color), Accent Color #3 (checkbox
+  accent-color + group-undock arrow color).
+- Dev Panel and Debug groups locked by default (code default + a data
+  fix to the live saved settings file, since a boot-time default alone
+  is a no-op once a live save already has the field).
+- New "Toggleable Settings Group" mechanism -- a group's own checkbox
+  moves into its title bar and hides the whole group when off. Applied
+  to the 8 groups whose one checkbox is genuinely the group's master
+  switch: LOADING PAGE, CUT SPLATTER, COLLISION SPLATTER, END EMERGE,
+  FLOOR, WALLS, STARTUP ANIMATION, CURSOR ANIMATION. Found and fixed a
+  real restore-path gap during this work: the relocated checkbox's own
+  row (which the generic Reset/Undo restore lookup depended on) is
+  removed, so that lookup needed a fallback plus an explicit visual
+  resync, or the group's shown/hidden state would go stale after any
+  future Reset/Undo.
+- Curve editor: swapped the Overstretch Sensitivity Curve widget's
+  default spline from plain Catmull-Rom to Monotone Cubic Hermite,
+  fixing a real, measured overshoot (old range dipped to -0.0372 below
+  the data's own 0 minimum; new range stays within 0.0000-0.9894). Did
+  NOT port the template's own interpolation-method dropdown or its
+  separate per-segment easing-curve system -- both are materially
+  larger features beyond the specific overshoot fix that was approved;
+  flagged to the user as a possible follow-up.
+- Declined per direct answer: the new range-bar (min/max slider)
+  control type (against this project's own decomposition convention,
+  no current use case) and the generalized Saved Presets UI (no current
+  preset-style feature here).
+
+Verification: full-file syntax check (brace balance 0), JSON validity
+on the edited settings file, and Node-level extraction of the actual
+shipped Undo/Redo functions (5 assertions, all passed) and the actual
+shipped curve-interpolation functions (3 assertions, all passed,
+including a concrete before/after overshoot measurement). Not
+live-browser-verified -- 2 fresh preview_stop/preview_start cycles both
+hit this environment's recurring dev-server page-boot stall
+(document.readyState stuck at 'loading').

@@ -5936,3 +5936,143 @@ collapsible group fits best (per §12g); create a new group only if none fit.
     "does the math converge to a mathematically valid tangent," which
     is precisely the gap that let the 2 earlier passes both miss the
     real bug despite thorough stress-testing.
+- **Dev panel template sync, 2026-09-28 -- the template dated nearly
+  every change to this exact day, the largest single sync pass since
+  the project's own initial build.** Per direct request ("check the dev
+  panel template. Many changes have been made. Implement. If there is
+  something you dont think is necessary to implement ask me"), read
+  `.claude/TEMPLATE_DEV_PANEL.html` in full and cross-referenced every
+  `2026-09-28`-dated change against this project's own current
+  implementation before touching anything.
+  - **Header reorganization + Redo.** Copy/Save/Reset moved from the
+    standalone `.dp-actions` row below the tabs (now REMOVED entirely)
+    into the header, alongside the pre-existing Sync/Undo icon buttons;
+    a new Redo button (`dpRedoBtn`, ↷) was added, mirroring
+    `undoDevPanelChange()`'s own existing mechanism with a SEPARATE
+    `devRedoStack` (Ctrl+Shift+Z / Ctrl+Y shortcuts, cleared on any
+    genuine new edit and on a real Save -- standard undo/redo
+    semantics). `copySettings()`/`saveSettings()`'s own flash feedback
+    was repointed at the new header icon buttons (icon+title swap,
+    matching Save's own pre-existing pattern); Reset intentionally has
+    no flash, matching the template's own choice (its effect is already
+    visible in the panel updating). `.dp-header-buttons` was changed to
+    `flex-wrap:wrap` rather than porting the template's own viewport
+    media-query-based mobile column-reverse split -- this project's
+    panel width is independently user-resizable (the `dp-resize`
+    handles), unlike the template's own fixed-width panel, so a real
+    viewport breakpoint wouldn't actually track "is this row too
+    narrow" the way it does there; a natural wrap achieves the same
+    goal (nothing cut off/overlapped) at any panel width.
+  - **3 new Dev Panel colors**, decoupled from Accent Color: Accent
+    Color #2 (the header bar's own background, previously a fixed
+    `#25253a`), Button Color (every plain button's background, leaving
+    Accent Color reserved for the active-tab highlight only), Accent
+    Color #3 (every checkbox's accent-color, plus the group-undock
+    arrow's color). Added to `PANEL_STYLE_CONTROLS`/
+    `PANEL_STYLE_SHARED_KEYS` (shared/desktop-authoritative, same
+    bucket as every other color in that group) and to
+    `applyDefaultDevPanelSubgroupOrder()`'s own PANEL UI/BUTTONS
+    subgroup lists -- per this file's own established gotcha, a field
+    left out of those lists silently floats ungrouped at the top of the
+    Dev Panel group, invisible until compared directly against the
+    template.
+  - **Dev Panel and Debug groups now locked by default.** Per direct
+    template request ("by default set the lock mode on all default
+    setting groups to locked, such as the Dev panel settings group").
+    Changed `lockedDevGroups`' own initial value AND, since
+    `resetSettings()`'s own restore unconditionally replaces it with
+    whatever the live save says (same as every other restored field),
+    added `["DEV PANEL", "DEBUG"]` directly to the live
+    `data/processed/dev-panel-settings.json`'s own `lockedGroups`
+    array too -- the same "a boot-time code default alone is a no-op
+    once a live save already has the field present" precedent this
+    file has already hit multiple times for other settings.
+  - **Toggleable Settings Group** (`makeDevGroupToggleable()`) -- a
+    NEW mechanism that relocates an already-registered checkbox
+    control's own real `<input>` (never a clone) from its own row into
+    its group's title bar, so checking/unchecking it both toggles
+    `cfg[key]` (unchanged) AND hides/shows the group's entire content
+    area as one unit (never per-child, so an otherwise-empty nested
+    subgroup never shows through either). Per direct choice ("apply to
+    all obvious Enabled-checkbox groups"), applied to the 8 top-level
+    groups whose own single checkbox is genuinely the group's master
+    on/off switch (its own first control, gating the group's WHOLE
+    meaning): LOADING PAGE (`loadingPageEnabled`), CUT SPLATTER
+    (`cutSplatterEnabled`), COLLISION SPLATTER
+    (`collisionSplatterEnabled`), END EMERGE (`endEmergeEnabled`),
+    FLOOR (`floorEnabled`), WALLS (`wallEnabled`), STARTUP ANIMATION
+    (`introEnabled`), CURSOR ANIMATION (`mouseFlickEnabled`).
+    Deliberately NOT applied to the many sub-feature `*Enabled`
+    checkboxes that live inside a broader group alongside other
+    always-relevant settings (Drag Rope/Overstretch/Deformable Endcap
+    inside CLICK/ROPE, the various Splatter sub-toggles inside their
+    own already-toggleable parent groups) -- moving those into their
+    group's title would incorrectly hide the REST of that broader
+    group's unrelated settings too.
+    **A real bug found and fixed before shipping, not just ported**:
+    the relocated checkbox's own `.dp-row` is removed (the control's
+    per-device independence/visibility checkboxes go with it -- the
+    SAME accepted tradeoff the template's own version makes), but the
+    ONE existing generic restore lookup for checkbox controls
+    (`applyValues()`) finds a checkbox via
+    `.dp-row[data-key="..."] input[type=checkbox]` -- which would
+    silently stop finding/restoring this ONE control on every future
+    Reset/Undo/boot-restore, the instant its row is gone. Fixed by
+    giving the relocated checkbox its own `data-key` and adding a
+    fallback lookup (`.dp-group-toggle-checkbox[data-key="..."]`) plus
+    an explicit `dp-group-disabled` class resync in that same branch
+    (setting `.checked` programmatically never fires a `change` event,
+    so `applyState()`'s own listener wouldn't otherwise re-run after a
+    restore). Traced by hand (Delete's own target-resolution only
+    matches `.dp-group-title` or `.dp-row`, so a click on this new
+    header-sibling checkbox is correctly a no-op for Delete; the
+    checkbox's own `stopPropagation()` plus an explicit exclusion in
+    the header's collapse-click handler both independently prevent it
+    from also toggling collapse/expand -- the same double-coverage this
+    project's lock icon/undock button already have) rather than a live
+    browser test, blocked by this environment's own recurring
+    dev-server page-boot stall (confirmed still present this session,
+    2 fresh `preview_stop`/`preview_start` cycles, both hung at
+    `document.readyState === 'loading'`).
+  - **Curve editor interpolation fix, narrower scope than approved,
+    disclosed rather than silently shipped.** The template's own curve
+    editor switched its default spline from plain Catmull-Rom to
+    Monotone Cubic Hermite (Fritsch-Carlson) -- Catmull-Rom's tangent
+    estimate ignores each segment's real X-spacing, producing a
+    genuine, measurable overshoot past the data's own min/max once
+    points aren't evenly spaced (confirmed via Node simulation on a
+    representative 3-point curve: OLD range -0.0372 to 0.9946 --
+    overshooting below the data's own 0 minimum -- vs. NEW range 0.0000
+    to 0.9894, safely within the data's own bounds). Ported
+    `curveComputeMonotoneTangents()`/`curveHermiteY()` and swapped
+    `evaluateCurvePoints()`'s own no-bezier-handle branch to use them --
+    a pure drop-in (same input/output shape, same bezier-handle-
+    override priority, `catmullRomY()` itself left in place unused, not
+    deleted) affecting the ONE existing curve control in this project
+    (Overstretch Sensitivity Curve). **Deliberately did NOT port** the
+    template's own interpolation-method dropdown (Linear/Catmull-Rom/
+    Natural Cubic Spline as selectable alternates to the new default)
+    or its separate per-segment easing-curve system (Sine/Bezier/
+    Linear/Constant/etc, a distinct feature layer on top of the spline
+    family) -- both are substantially larger, additive UI/data-shape
+    features beyond the specific "fixes a real overshoot artifact"
+    justification the upgrade was approved for. Flagged to the user as
+    a follow-up, not silently narrowed without saying so.
+  - **Explicitly declined, per direct answer, not silently skipped:**
+    the template's new `range-bar` (dual-handle min/max slider) control
+    type -- this project's own CLAUDE.md (workspace S12n) explicitly
+    says NOT to bundle min/max into one control, and no current setting
+    here needs one; and the generalized `list-picker`/"Saved Presets
+    UI" (S12r) -- no current camera/pose-style preset use case exists
+    in this project.
+  - Not live-browser-verified anywhere in this pass (the same
+    recurring dev-server page-boot stall, re-confirmed twice this
+    session) -- verified via a full-file syntax check (brace balance
+    0), JSON validity check on the edited settings file, and Node-level
+    extraction/simulation of the ACTUAL shipped Undo/Redo functions (5
+    assertions: a plain value edit's undo/redo round-trip, and a
+    delete-entry's undo/redo round-trip against a proper parentNode-
+    linked DOM mock -- all 5 passed exactly) and the ACTUAL shipped
+    curve-interpolation functions (the flat-default no-op, the
+    overshoot fix, and the bezier-handle-override priority -- all 3
+    passed).
