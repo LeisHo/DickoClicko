@@ -146,8 +146,8 @@
       "endEmergeTweening": "easeInOut",
       "floorEnabled": true,
       "floorColor": "#ffffff",
-      "floorThickness": 10,
-      "floorHeight": 5,
+      "floorThickness": 9.3,
+      "floorHeight": 4,
       "floorFriction": 1,
       "pieceFriction": 0,
       "wallEnabled": true,
@@ -186,7 +186,7 @@
       "introExtendSpeedTweenEnabled": true,
       "introExtendStartSpeed": 2,
       "detachWaitDuration": 1.1,
-      "detachPauseDuration": 0.4,
+      "detachPauseDuration": 3.2,
       "detachTipStartScale": 0.1,
       "detachTipGrowDuration": 0.8,
       "detachThicknessMultiplier": 1.02,
@@ -250,7 +250,7 @@
         }
       ],
       "cutSplatterFlightDurationVariance": 0.2,
-      "cutSplatterFullRopeCutEnabled": true,
+      "cutSplatterFullRopeCutEnabled": false,
       "cutSplatterHorizontalSprayVariance": 0.3,
       "cutSplatterVerticalSprayVariance": 0.2,
       "cutSplatterFadeEnabled": false,
@@ -2602,7 +2602,7 @@
             "type": "group",
             "group": {
               "key": "ROPE CUT",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2934,7 +2934,7 @@
           },
           {
             "key": "ROPE CUT",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
@@ -3347,7 +3347,7 @@
       },
       {
         "key": "FLOOR",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
@@ -3481,6 +3481,9 @@
         "bgColor": "#000000",
         "textColor": "#ffffff",
         "accentColor": "#005f8f",
+        "accentColor2": "#26253a",
+        "buttonColor": "#3a3a4a",
+        "accentColor3": "#7ec8e3",
         "sliderColor": "#ffffff",
         "fontFamily": "Helvetica, Arial, sans-serif",
         "buttonHeight": 21,
@@ -3512,10 +3515,7 @@
         "tabBold": true,
         "buttonBold": true,
         "settingsBold": false,
-        "titleCapitalize": false,
-        "accentColor2": "#26253a",
-        "buttonColor": "#3a3a4a",
-        "accentColor3": "#7ec8e3"
+        "titleCapitalize": false
       }
     },
     "mobile": {
