@@ -1883,7 +1883,7 @@
       },
       {
         "key": "ROPE",
-        "collapsed": false,
+        "collapsed": true,
         "items": [
           {
             "type": "row",
@@ -1984,7 +1984,7 @@
             "type": "group",
             "group": {
               "key": "New Group (3)",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -2315,7 +2315,7 @@
           },
           {
             "key": "New Group (3)",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -2735,7 +2735,7 @@
             "type": "group",
             "group": {
               "key": "New Group (7)",
-              "collapsed": false,
+              "collapsed": true,
               "items": [
                 {
                   "type": "row",
@@ -2773,7 +2773,7 @@
                   "type": "group",
                   "group": {
                     "key": "New Group (8)",
-                    "collapsed": false,
+                    "collapsed": true,
                     "items": [
                       {
                         "type": "row",
@@ -2845,7 +2845,7 @@
               "subgroups": [
                 {
                   "key": "New Group (8)",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -3055,7 +3055,7 @@
           },
           {
             "key": "New Group (7)",
-            "collapsed": false,
+            "collapsed": true,
             "items": [
               {
                 "type": "row",
@@ -3093,7 +3093,7 @@
                 "type": "group",
                 "group": {
                   "key": "New Group (8)",
-                  "collapsed": false,
+                  "collapsed": true,
                   "items": [
                     {
                       "type": "row",
@@ -3165,7 +3165,7 @@
             "subgroups": [
               {
                 "key": "New Group (8)",
-                "collapsed": false,
+                "collapsed": true,
                 "items": [
                   {
                     "type": "row",
@@ -3228,7 +3228,7 @@
       },
       {
         "key": "STARTUP ANIMATION",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
