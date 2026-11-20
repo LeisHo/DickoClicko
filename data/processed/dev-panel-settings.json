@@ -103,11 +103,11 @@
       "dragRopeHoldDistance": 20,
       "dragOverridesGrowOnRopeHold": true,
       "dragMaxDistance": 150,
-      "bendStiffness": 0.15,
+      "bendStiffness": 0,
       "ropeAnimSpeed": 1.1,
       "gravityStrength": 1.8,
-      "damping": 0.85,
-      "constraintIterations": 10,
+      "damping": 0.96,
+      "constraintIterations": 4,
       "ropeGrowthRate": 9,
       "ropeGrowthOnRopeHold": false,
       "ropeGrowthHoldDistance": 25,
@@ -1984,7 +1984,7 @@
             "type": "group",
             "group": {
               "key": "New Group (3)",
-              "collapsed": true,
+              "collapsed": false,
               "items": [
                 {
                   "type": "row",
@@ -2315,7 +2315,7 @@
           },
           {
             "key": "New Group (3)",
-            "collapsed": true,
+            "collapsed": false,
             "items": [
               {
                 "type": "row",
