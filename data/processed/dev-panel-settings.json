@@ -125,7 +125,7 @@
       "pieceDecayDelay": 10,
       "pieceDecaySpeed": 0.5,
       "pieceMinThickness": 1.2,
-      "cutSplatterEnabled": true,
+      "cutSplatterEnabled": false,
       "cutSplatterColor": "#ffffff",
       "cutSplatterHorizontalSpread": 69,
       "cutSplatterVerticalSpread": 69,
@@ -147,7 +147,7 @@
       "floorEnabled": true,
       "floorColor": "#ffffff",
       "floorThickness": 9.3,
-      "floorHeight": 4,
+      "floorHeight": 25,
       "floorFriction": 1,
       "pieceFriction": 0,
       "wallEnabled": true,
@@ -3381,7 +3381,7 @@
       },
       {
         "key": "CUT SPLATTER",
-        "collapsed": true,
+        "collapsed": false,
         "items": [
           {
             "type": "row",
